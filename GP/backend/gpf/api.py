@@ -243,13 +243,40 @@ def create_case(request: Request, body: CreateCase):
     return {"id": cid, "case": service.view(cid)}
 
 
+#: What a stored scan may be, by its first bytes, and the type it is served as. Anything else was
+#: kept under its own name and served inline on the portal's address through /gpf/ -- an .html
+#: or .js "specimen" became a page or a script there (audit 6 Oct 2026).
+_SCAN_TYPES = ((b"%PDF", "application/pdf"), (b"\xff\xd8\xff", "image/jpeg"), (b"\x89PNG", "image/png"),
+               (b"GIF8", "image/gif"), (b"II*\x00", "image/tiff"), (b"MM\x00*", "image/tiff"),
+               (b"BM", "image/bmp"))
+
+
+def _scan_type(head: bytes) -> str | None:
+    if head.startswith(b"RIFF") and head[8:12] == b"WEBP":
+        return "image/webp"
+    return next((t for magic, t in _SCAN_TYPES if head.startswith(magic)), None)
+
+
+def _serve_stored(path: Path) -> FileResponse:
+    """A stored scan as the image or PDF its bytes say it is; anything else only as a download."""
+    with path.open("rb") as fh:
+        media = _scan_type(fh.read(16))
+    headers = {"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"}
+    if media is None:
+        return FileResponse(path, media_type="application/octet-stream", filename=path.name, headers=headers)
+    return FileResponse(path, media_type=media, headers=headers)
+
+
 async def _store_scans(files: list[UploadFile]) -> list[str]:
-    """Save the upload and return the page refs, in the order they were sent."""
+    """Save the upload and return the page refs, in the order they were sent. Pages and specimen
+    signatures are scans: a PDF or an image, by content, or the request is refused."""
     import uuid as _uuid
     scan_id = "scan-" + _uuid.uuid4().hex[:8]
     refs = []
     for f in files:
         content = await f.read()
+        if _scan_type(content[:16]) is None:
+            raise HTTPException(status_code=422, detail=f"{f.filename or 'a file'} is not a PDF or an image")
         meta = docstore.save(scan_id, f.filename or "page", content)
         refs.append(str((DATA_DIR / "uploads" / meta["storedAs"])))
     return refs
@@ -416,7 +443,7 @@ def case_specimen(case_id: str, n: int):
     path = Path(spec[n - 1]["path"]).resolve()
     if not str(path).startswith(str(DATA_DIR.resolve()) + "/") or not path.is_file():
         raise HTTPException(status_code=404, detail="The specimen is no longer on the server.")
-    return FileResponse(path)
+    return _serve_stored(path)
 
 
 @app.get("/api/cases/{case_id}/pages/{page}")
@@ -429,7 +456,7 @@ def case_page(case_id: str, page: int):
     allowed = [DATA_DIR.resolve(), (REPO_ROOT.parent / "artifacts" / "cases").resolve()]
     if not any(str(path).startswith(str(a) + "/") for a in allowed) or not path.is_file():
         raise HTTPException(status_code=404, detail=f"Page {page} is no longer on the server.")
-    return FileResponse(path)
+    return _serve_stored(path)
 
 
 # ── SAP extracts ──────────────────────────────────────────────────────────────
