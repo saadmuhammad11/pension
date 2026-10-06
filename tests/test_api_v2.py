@@ -68,6 +68,9 @@ class V2Test(unittest.TestCase):
             mock.patch.object(runs, "execute", fake_execute),
             mock.patch.object(case_runs, "CASE_FILES", artifacts / "cases"),
             mock.patch.object(case_runs, "start_reconciler", lambda *a, **k: None),
+            # No reconciler here, so every read must sync at once (the request-path rate limit is
+            # its own test: tests/test_sync_throttle.py).
+            mock.patch.object(case_runs, "SYNC_MIN_INTERVAL_S", 0.0),
             mock.patch.dict("os.environ", {"PENSION_JWT_SECRET": "test-secret-for-the-case-system-fixture-0123456789"}),
             mock.patch.object(db, "SEED_PASSWORD", "Pension@2026"),
             mock.patch.object(db, "CREDENTIALS_CSV", root / "credentials.csv"),

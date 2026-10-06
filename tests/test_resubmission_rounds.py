@@ -401,6 +401,7 @@ class RoundsOverTheApi(unittest.TestCase):
             mock.patch.object(runs, "execute", fake_execute),
             mock.patch.object(case_runs, "CASE_FILES", artifacts / "cases"),
             mock.patch.object(case_runs, "start_reconciler", lambda *a, **k: None),
+            mock.patch.object(case_runs, "SYNC_MIN_INTERVAL_S", 0.0),      # no reconciler: every read syncs
             mock.patch.dict("os.environ", {"PENSION_JWT_SECRET": "test-secret"}),
             mock.patch.object(db, "SEED_PASSWORD", "Pension@2026"),
             mock.patch.object(db, "CREDENTIALS_CSV", root / "credentials.csv"),

@@ -439,13 +439,30 @@ def backfill_case_types(conn: sqlite3.Connection | None = None) -> int:
             conn.close()
 
 
-def sync_run_states(conn: sqlite3.Connection) -> int:
+#: How often the request paths may sync. Every case read and the 3-second poll of every open
+#: browser called sync_run_states, and a sync with a GP Fund examination pending asks the module
+#: (up to 10 s), so 88 browsers could tie the API up in GP Fund calls (audit 6 Oct 2026, later
+#: report item 8). Within this many seconds of the last sync a request-path call does nothing;
+#: the reconciler's own timer always syncs.
+SYNC_MIN_INTERVAL_S = float(os.environ.get("PENSION_SYNC_MIN_INTERVAL_S", "1.0") or 1.0)
+_LAST_SYNC = 0.0
+_SYNC_LOCK = threading.Lock()
+
+
+def sync_run_states(conn: sqlite3.Connection, *, force: bool = False) -> int:
     """Bring ``case_runs`` up to date with the pipeline and move cases on. Idempotent.
 
     Returns the number of runs whose row changed. Safe to call from a timer and from every
     case read at once: each finish is applied under ``UPDATE ... WHERE state IN (queued,
-    running)``, so two callers cannot both record it.
+    running)``, so two callers cannot both record it. Request-path calls are rate-limited
+    (SYNC_MIN_INTERVAL_S); ``force`` is the reconciler's.
     """
+    global _LAST_SYNC
+    with _SYNC_LOCK:
+        now = time.monotonic()
+        if not force and SYNC_MIN_INTERVAL_S > 0 and now - _LAST_SYNC < SYNC_MIN_INTERVAL_S:
+            return 0
+        _LAST_SYNC = now
     from api.runs import ARTIFACTS
     pending = conn.execute(
         "SELECT cr.*, c.status AS case_status FROM case_runs cr JOIN cases c ON c.id = cr.case_id "
@@ -678,7 +695,7 @@ def start_reconciler(interval_s: float = 3.0) -> None:
                 prune_registry()
                 conn = db.connect()
                 try:
-                    sync_run_states(conn)
+                    sync_run_states(conn, force=True)
                     # Disk housekeeping every ten minutes (api.runs.sweep_disk, R8): orphan run
                     # folders and stale upload staging files; never a run a case refers to.
                     if time.monotonic() - last_sweep > 600:
