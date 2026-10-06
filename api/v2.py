@@ -660,6 +660,22 @@ _MAGIC = {b"%PDF": "pdf", b"PK\x03\x04": "zip", b"\x89PNG": "image", b"\xff\xd8\
           b"II*\x00": "image", b"MM\x00*": "image", b"BM": "image", b"RIFF": "image", b"\xd0\xcf\x11\xe0": "office"}
 
 
+#: The names a file of each kind may carry. A PDF's magic bytes in front of HTML, saved as
+#: notice.html, passed the magic check and was then served -- and opened by the portal -- as a web
+#: page on the portal's own address (audit 6 Oct 2026). No extension at all is allowed: a scanner's
+#: "scan001" is still a PDF, and such a file is only ever served as a download.
+_KIND_EXT = {
+    "pdf": {".pdf"},
+    "image": {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".bmp", ".webp"},
+    "office": {".doc", ".xls", ".ppt"},
+    "zip": {".zip", ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp"},
+}
+#: What a stored document is served as, by its extension; everything else is a download.
+_SERVE_AS = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+             ".gif": "image/gif", ".webp": "image/webp", ".tif": "image/tiff", ".tiff": "image/tiff",
+             ".bmp": "image/bmp"}
+
+
 def _document_problem(name: str, body: bytes) -> str | None:
     """Why this upload is not a document the verification can read, or None. Checked at upload
     so the officer hears it now, by filename, rather than from a failed verification later.
@@ -676,6 +692,9 @@ def _document_problem(name: str, body: bytes) -> str | None:
     if kind == "image" and body.startswith(b"BM") and not lower.endswith(".bmp"):
         kind = None
     ext = os.path.splitext(lower)[1]
+    if kind is not None and ext and ext not in _KIND_EXT[kind]:
+        return (f"is a {'PDF' if kind == 'pdf' else kind} file but is named {ext}; save it with its proper "
+                f"extension ({', '.join(sorted(_KIND_EXT[kind]))})")
     from pipeline.bundle import OFFICE_EXT, office_problem
     if ext in OFFICE_EXT and (kind in ("office", "zip") or lower.endswith(_TEXT_EXT)):
         # Contents that match the name, and nothing loaded from outside (audit 6 Oct 2026, item 6).
@@ -1170,7 +1189,11 @@ def download_document(case_id: str, doc_id: str, user: User = Depends(current_us
     from pathlib import Path
     if not Path(doc["stored_path"]).is_file():
         raise HTTPException(410, f"{doc['filename']} is no longer on the server")
-    return FileResponse(doc["stored_path"], filename=doc["filename"])
+    # The type from a fixed list, never guessed from the name, and nothing the browser could run:
+    # a stored file is a PDF, an image or a download (audit 6 Oct 2026).
+    media = _SERVE_AS.get(os.path.splitext(doc["filename"].lower())[1], "application/octet-stream")
+    return FileResponse(doc["stored_path"], filename=doc["filename"], media_type=media,
+                        headers={"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"})
 
 
 @router.post("/cases/{case_id}/check", status_code=202)

@@ -42,6 +42,9 @@ export async function request<T>(
 /** Fired after every successful change through the API; the inventory store listens. */
 export const dataChanged = new EventTarget()
 
+/** What a tab may show from a blob. The server sends nothing else as viewable (api/v2 _SERVE_AS). */
+const VIEWABLE = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp'])
+
 /** Open a protected file in a new tab without putting the session token on the URL: the file is
  *  fetched with the Authorization header and shown from a blob. The tab is opened first, in the
  *  click, so a popup blocker does not eat it. */
@@ -54,8 +57,16 @@ export async function openProtected(url: string, filename?: string): Promise<voi
     if (!r.ok) throw new ApiError(r.status, await detailOf(r))
     const blob = await r.blob()
     const href = URL.createObjectURL(blob)
-    if (tab) { tab.location.href = href; if (filename) tab.document.title = filename }
-    else window.location.href = href
+    if (VIEWABLE.has(blob.type)) {
+      if (tab) { tab.location.href = href; if (filename) tab.document.title = filename }
+      else window.location.href = href
+    } else {
+      // Anything but a PDF or a picture is saved, never opened: a tab showing a blob runs on the
+      // portal's own address, with this session in reach (audit 6 Oct 2026).
+      tab?.close()
+      const a = Object.assign(document.createElement('a'), { href, download: filename || 'document' })
+      document.body.appendChild(a); a.click(); a.remove()
+    }
     setTimeout(() => URL.revokeObjectURL(href), 60_000)
   } catch (e) {
     tab?.close()
