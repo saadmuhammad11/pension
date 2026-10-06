@@ -1,0 +1,3943 @@
+{
+ "fp-non-gazetted": {
+  "slug": "fp-non-gazetted",
+  "key": "fp-non-gazetted",
+  "pageDims": {
+   "1": [
+    2298,
+    3252
+   ],
+   "2": [
+    2339,
+    3310
+   ],
+   "3": [
+    2422,
+    3427
+   ],
+   "4": [
+    2314,
+    3275
+   ],
+   "5": [
+    2422,
+    3427
+   ],
+   "6": [
+    2397,
+    3392
+   ],
+   "7": [
+    2414,
+    3415
+   ],
+   "8": [
+    3287,
+    2323
+   ],
+   "9": [
+    3322,
+    2347
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "Addressed to Accountant General Punjab Lahore;"
+   },
+   {
+    "p": 2,
+    "title": "Office of the Superintending Engineer, Highway Mechanical Circle, 02-Lake Road, Lahore."
+   },
+   {
+    "p": 3,
+    "title": "Page rotated 90 degrees."
+   },
+   {
+    "p": 4,
+    "title": "Page rotated 90 degrees."
+   },
+   {
+    "p": 5,
+    "title": "Office of the: stamp Executive Engineer Highway Mechanical Division Lahore;"
+   },
+   {
+    "p": 6,
+    "title": "SERVICE BOOK;"
+   },
+   {
+    "p": 7,
+    "title": "Name فضل دین;"
+   },
+   {
+    "p": 8,
+    "title": "Pers # 90000374, FAZAL DIN, DRIVER, CNIC 0000100001029, P Sec:002, Month: June 2026, LO5361 -XEN Highways Mechanical Di..."
+   },
+   {
+    "p": 9,
+    "title": "System PRP, User UMAIR RAZA, Date 10/09/2026, Time 14:52:35, Page 1;"
+   }
+  ],
+  "sap": {
+   "payslip": {
+    "page": 8,
+    "month": "June 2026",
+    "persNo": "90000374",
+    "name": "FAZAL DIN",
+    "designation": "DRIVER",
+    "cnic": "0000100001029",
+    "bps": "06",
+    "ddoCode": "LO5361 XEN Highways Mechanical Division",
+    "gpfNo": "UPDATED",
+    "oldGpfNo": "01700171471",
+    "gpfBalance": 74178,
+    "gpfSubscription": 1420,
+    "loanInstalment": null,
+    "loanBalance": null,
+    "basicPay": 40960,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 9,
+    "persNo": "90000374",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.1988",
+      "end": "30.06.1989",
+      "opening": 0,
+      "subscription": 75,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2,
+      "closing": 77
+     },
+     {
+      "start": "01.07.1989",
+      "end": "30.06.1990",
+      "opening": 77,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 50,
+      "closing": 427
+     },
+     {
+      "start": "01.07.1990",
+      "end": "30.06.1991",
+      "opening": 427,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 122,
+      "closing": 849
+     },
+     {
+      "start": "01.07.1991",
+      "end": "30.06.1992",
+      "opening": 849,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 209,
+      "closing": 1358
+     },
+     {
+      "start": "01.07.1992",
+      "end": "30.06.1993",
+      "opening": 1358,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 315,
+      "closing": 1973
+     },
+     {
+      "start": "01.07.1993",
+      "end": "30.06.1994",
+      "opening": 1973,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 431,
+      "closing": 2704
+     },
+     {
+      "start": "01.07.1994",
+      "end": "30.06.1995",
+      "opening": 2704,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 575,
+      "closing": 3579
+     },
+     {
+      "start": "01.07.1995",
+      "end": "30.06.1996",
+      "opening": 3579,
+      "subscription": 575,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 781,
+      "closing": 4935
+     },
+     {
+      "start": "01.07.1996",
+      "end": "30.06.1997",
+      "opening": 4935,
+      "subscription": 600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1146,
+      "closing": 6681
+     },
+     {
+      "start": "01.07.1997",
+      "end": "30.06.1998",
+      "opening": 6681,
+      "subscription": 600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1595,
+      "closing": 8876
+     },
+     {
+      "start": "01.07.1998",
+      "end": "30.06.1999",
+      "opening": 8876,
+      "subscription": 550,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2074,
+      "closing": 11500
+     },
+     {
+      "start": "01.07.1999",
+      "end": "30.06.2000",
+      "opening": 11500,
+      "subscription": 720,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2465,
+      "closing": 14685
+     },
+     {
+      "start": "01.07.2000",
+      "end": "30.06.2001",
+      "opening": 14685,
+      "subscription": 1080,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2291,
+      "closing": 18056
+     },
+     {
+      "start": "01.07.2001",
+      "end": "30.06.2002",
+      "opening": 18056,
+      "subscription": 1560,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2817,
+      "closing": 22433
+     },
+     {
+      "start": "01.07.2002",
+      "end": "30.06.2003",
+      "opening": 22433,
+      "subscription": 2040,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3413,
+      "closing": 27886
+     },
+     {
+      "start": "01.07.2003",
+      "end": "30.06.2004",
+      "opening": 27886,
+      "subscription": 2040,
+      "adjustments": 0,
+      "tempAdvance": 10000,
+      "recTempAdvance": 500,
+      "permanentAdvance": 0,
+      "interest": 3694,
+      "closing": 24120
+     },
+     {
+      "start": "01.07.2004",
+      "end": "30.06.2005",
+      "opening": 24120,
+      "subscription": 2040,
+      "adjustments": 670,
+      "tempAdvance": 0,
+      "recTempAdvance": 6000,
+      "permanentAdvance": 0,
+      "interest": 3497,
+      "closing": 36327
+     },
+     {
+      "start": "01.07.2005",
+      "end": "30.06.2006",
+      "opening": 36327,
+      "subscription": 2140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 3000,
+      "permanentAdvance": 0,
+      "interest": 4182,
+      "closing": 45649
+     },
+     {
+      "start": "01.07.2006",
+      "end": "30.06.2007",
+      "opening": 45649,
+      "subscription": 2280,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5157,
+      "closing": 53086
+     },
+     {
+      "start": "01.07.2007",
+      "end": "30.06.2008",
+      "opening": 53086,
+      "subscription": 2480,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 6802,
+      "closing": 62368
+     },
+     {
+      "start": "01.07.2008",
+      "end": "30.06.2009",
+      "opening": 62368,
+      "subscription": 3320,
+      "adjustments": 0,
+      "tempAdvance": 39600,
+      "recTempAdvance": 1100,
+      "permanentAdvance": 0,
+      "interest": 9134,
+      "closing": 36322
+     },
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 36322,
+      "subscription": 3480,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 13200,
+      "permanentAdvance": 0,
+      "interest": 6350,
+      "closing": 59352
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 59352,
+      "subscription": 3480,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 13200,
+      "permanentAdvance": 0,
+      "interest": 9711,
+      "closing": 85743
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 85743,
+      "subscription": 5405,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 12100,
+      "permanentAdvance": 0,
+      "interest": 13104,
+      "closing": 116352
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 116352,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 70000,
+      "interest": 8025,
+      "closing": 59957
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 59957,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8502,
+      "closing": 74039
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 74039,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 50000,
+      "interest": 6607,
+      "closing": 36226
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 36226,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 4357,
+      "closing": 46163
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 46163,
+      "subscription": 8237,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 35000,
+      "interest": 4044,
+      "closing": 23444
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 23444,
+      "subscription": 10535,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3403,
+      "closing": 37382
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 37382,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 6194,
+      "closing": 54256
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 54256,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 45000,
+      "interest": 4505,
+      "closing": 24441
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 24441,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2388,
+      "closing": 37509
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 37509,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5368,
+      "closing": 53557
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 53557,
+      "subscription": 14640,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8673,
+      "closing": 76870
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 76870,
+      "subscription": 15960,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 68000,
+      "interest": 11155,
+      "closing": 35985
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 35985,
+      "subscription": 16950,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5623,
+      "closing": 58558
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 58558,
+      "subscription": 17040,
+      "adjustments": -1420,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8154,
+      "closing": 82332
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 82332,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 74178,
+      "interest": 0,
+      "closing": 8154
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "verifications": {},
+  "custom": [
+   "NG-ADJUST",
+   "NG-PERIOD",
+   "NG-SCALE"
+  ],
+  "qr": [
+   {
+    "id": "cnic-barcode",
+    "page": 4,
+    "doc": "old-style CNIC back",
+    "symbology": "PDF417 barcode",
+    "decoded": false,
+    "why": "halftone photocopy",
+    "remedy": "Verify CNIC 00001-0000102-9 through NADRA Verisys, or upload a clear scan of the back of the card."
+   }
+  ],
+  "signatures": [
+   {
+    "id": "gpf10-ddo",
+    "page": 1,
+    "doc": "GPF-10 forwarding",
+    "role": "ddo",
+    "roleLabel": "DDO signature",
+    "authority": "Executive Engineer, Highway Mechanical Division, Lahore",
+    "signedBy": "Executive Engineer, Highway Mechanical Division",
+    "forMarker": false,
+    "crop": "fp-non-gazetted_p001_gpf10_ddo_ee_signature_stamp.png",
+    "bbox": [
+     1300,
+     2270,
+     2150,
+     2740
+    ]
+   }
+  ],
+  "thumbs": [],
+  "docs": {
+   "covering": {
+    "present": true,
+    "page": 1,
+    "author": "the Executive Engineer, Highway Mechanical Division, Lahore",
+    "nature": "Pre-printed forwarding endorsement at the foot of the GPF-10"
+   },
+   "gpf10": {
+    "present": true,
+    "page": 1,
+    "accountNo": "90000374",
+    "missing": [
+     "old GP Fund A/c number"
+    ],
+    "crop": "fp-non-gazetted_p001_gpf10_name_dor_account.png",
+    "corroboration": "The old number 017-00-171471 is on Form 06, the Service Book cover and the SAP pay slip (Old # 01700171471)"
+   },
+   "notification": {
+    "present": true,
+    "page": 2,
+    "label": "Retirement office order",
+    "no": "402/E/HMC",
+    "date": "03-06-2026",
+    "crop": "fp-non-gazetted_p002_office_order_402_body.png",
+    "note": "Driver (BS-05), retired w.e.f. 09-06-2026 (A.N.) on superannuation; attested by the Executive Engineer HMD Lahore."
+   },
+   "cnics": [
+    {
+     "page": 3,
+     "whose": "subscriber",
+     "type": "old",
+     "number": "00001-0000102-9",
+     "name": "Fazal Din",
+     "expiry": "lifetime",
+     "attested": true,
+     "attestedBy": "Executive Engineer, HMD Lahore"
+    }
+   ],
+   "changeForm": {
+    "present": true,
+    "label": "FORM PAY 06",
+    "page": 5,
+    "personalNo": "90000374",
+    "name": "Fazal Din",
+    "cnic": "00001-0000102-9",
+    "sigKind": "signature",
+    "ddoSigned": true,
+    "ddoStamp": "Executive Engineer, Highway Mechanical Division, Lahore",
+    "oldGpfNo": "017-00-171471",
+    "note": "100% of balance ticked. \"For the month of 08/2026\" is the processing month of the entry, not a deduction month."
+   },
+   "serviceBook": {
+    "present": true,
+    "pages": [
+     6,
+     7
+    ],
+    "entries": {
+     "dor": false,
+     "order": false,
+     "leave": false
+    },
+    "note": "cover No. 3194307 and the particulars page only"
+   }
+  },
+  "label": "Final Payment, Non-Gazetted",
+  "kind": "final",
+  "family": "FINAL_PAYMENT",
+  "sub": "Final payment on superannuation, non-gazetted",
+  "subject": "Fazal Din, Driver (BS-05/06)",
+  "dept": "Highway Mechanical Division, Lahore (C&W)",
+  "personnelNo": "90000374",
+  "pages": 9,
+  "diary": "214465 / 989082, 11-08-2026",
+  "gazetted": "non-gazetted",
+  "note": "Fazal Din, Driver, retired 09-06-2026. SAP pay slip and report in the case. Service Book pages lack the retirement entries; SAP shows an unexplained posting of Rs 74,178.",
+  "persNos": [
+   {
+    "doc": "GPF-10 (account no.)",
+    "page": 1,
+    "value": "90000374"
+   },
+   {
+    "doc": "FORM PAY 06",
+    "page": 5,
+    "value": "90000374"
+   },
+   {
+    "doc": "SAP pay slip, June 2026",
+    "page": 8,
+    "value": "90000374"
+   },
+   {
+    "doc": "GPF Final Re-calculation Report",
+    "page": 9,
+    "value": "90000374"
+   }
+  ],
+  "record": [
+   [
+    "Subscriber",
+    "Fazal Din s/o Qutab-ud-Din, Driver",
+    "GPF-10 · office order · CNIC · SAP",
+    0.98,
+    1
+   ],
+   [
+    "Personnel no. / GP Fund A/c",
+    "90000374",
+    "GPF-10 · Form 06 · Service Book · SAP",
+    0.99,
+    1
+   ],
+   [
+    "Old GP Fund A/c",
+    "017-00-171471 (SAP Old # 01700171471); not on the GPF-10",
+    "Form 06 · Service Book · pay slip",
+    0.97,
+    5
+   ],
+   [
+    "CNIC",
+    "00001-0000102-9 (old-style card, attested)",
+    "CNIC · Form 06 · pay slip",
+    0.97,
+    3
+   ],
+   [
+    "Retirement",
+    "09-06-2026 (A.N.), Office Order 402/E/HMC of 03-06-2026",
+    "Office order",
+    0.99,
+    2
+   ],
+   [
+    "Scale",
+    "BS-05 on the office order; 06 on Form 06 and the SAP pay slip",
+    "Office order · Form 06 · pay slip",
+    0.93,
+    2
+   ],
+   [
+    "DDO code",
+    "LO5361 (previous version misread it as 405361)",
+    "Form 06 · pay slip",
+    0.95,
+    5
+   ],
+   [
+    "SAP balance, June 2026 pay slip",
+    "Rs 74,178 (principal, before 2025-26 interest)",
+    "SAP pay slip",
+    0.98,
+    8
+   ],
+   [
+    "SAP closing 30-06-2026",
+    "Rs 82,332",
+    "SAP re-calculation report",
+    0.98,
+    9
+   ],
+   [
+    "SAP posting 2026-27",
+    "Permanent advance Rs 74,178, leaving Rs 8,154",
+    "SAP re-calculation report",
+    0.96,
+    9
+   ],
+   [
+    "Service Book",
+    "Cover and particulars page only",
+    "Pages 6 and 7",
+    0.95,
+    6
+   ]
+  ],
+  "claim": {
+   "amount": 74178,
+   "basis": "100% of the balance on Form 06, Rs 74,178 on the June 2026 SAP pay slip",
+   "residualMadeOf": "the 2025-26 interest (Rs 8,154), credited after the June pay slip was drawn"
+  }
+ },
+ "fp-death": {
+  "slug": "fp-death",
+  "key": "fp-death",
+  "pageDims": {
+   "1": [
+    2273,
+    3216
+   ],
+   "2": [
+    2455,
+    3474
+   ],
+   "3": [
+    2455,
+    3474
+   ],
+   "4": [
+    2480,
+    3509
+   ],
+   "5": [
+    2455,
+    3474
+   ],
+   "6": [
+    2471,
+    3497
+   ],
+   "7": [
+    2240,
+    3170
+   ],
+   "8": [
+    2447,
+    3462
+   ],
+   "9": [
+    2447,
+    3462
+   ],
+   "10": [
+    2339,
+    3310
+   ],
+   "11": [
+    2447,
+    3462
+   ],
+   "12": [
+    2174,
+    3076
+   ],
+   "13": [
+    3368,
+    2380
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "Revised G.P.F-10, Memo No."
+   },
+   {
+    "p": 2,
+    "title": "Govt."
+   },
+   {
+    "p": 3,
+    "title": "NADRA Decline Certificate under the Punjab Letters of Administration and Succession Certificates Act 2021."
+   },
+   {
+    "p": 4,
+    "title": "NADRA FRC for applicant Zubaida Bibi, citizen no."
+   },
+   {
+    "p": 5,
+    "title": "Front and back of the old-style (non-smart) CNIC of Yousaf Masih, 00001-0000107-1, year of birth 1976."
+   },
+   {
+    "p": 6,
+    "title": "Smart NIC of Zubaida Bibi, husband Yousaf Masih, F, identity no."
+   },
+   {
+    "p": 7,
+    "title": "In the Court of Senior Civil Judge Lahore."
+   },
+   {
+    "p": 8,
+    "title": "Prayer that petitioner No."
+   },
+   {
+    "p": 9,
+    "title": "Rs 100 stamp paper with a Notary Public stamp ('MUHAMMAD ..."
+   },
+   {
+    "p": 10,
+    "title": "Government of the Punjab Death Registration Certificate, Tracking Id 91100043919744 (last digits partly under a stamp)..."
+   },
+   {
+    "p": 11,
+    "title": "SAP pay slip for November 2023, S# 22, P Sec 018."
+   },
+   {
+    "p": 12,
+    "title": "FORM PAY 06, office of Govt Associate College Mustafabad Lahore, for the month of 7/25."
+   },
+   {
+    "p": 13,
+    "title": "SAP GPF Final Re-calculation Report, System PRP, User UMAIR RAZA, run 10.09.2026 at 14:54:03, employee number 90000417..."
+   }
+  ],
+  "sap": {
+   "payslip": {
+    "page": 11,
+    "month": "November 2023",
+    "persNo": "90000417",
+    "name": "YOUSAF MASIH",
+    "designation": "SWEEPER",
+    "cnic": "0000100001071",
+    "bps": "02",
+    "ddoCode": "L04734 Principal, Govt. Associate College (W) Mustafabad",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 50791,
+    "gpfSubscription": 1060,
+    "loanInstalment": 3000,
+    "loanBalance": 72000,
+    "basicPay": 20190,
+    "osdPost": "",
+    "attested": true
+   },
+   "recalc": {
+    "page": 13,
+    "persNo": "90000417",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 0,
+      "subscription": 650,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 23,
+      "closing": 673
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 673,
+      "subscription": 1560,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 216,
+      "closing": 2449
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 2449,
+      "subscription": 2462,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 513,
+      "closing": 5424
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 5424,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 816,
+      "closing": 8784
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 8784,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1372,
+      "closing": 12700
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 12700,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1654,
+      "closing": 16898
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 16898,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2029,
+      "closing": 21471
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 21471,
+      "subscription": 3730,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2642,
+      "closing": 27843
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 27843,
+      "subscription": 4737,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3554,
+      "closing": 36134
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 36134,
+      "subscription": 8210,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5803,
+      "closing": 50147
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 50147,
+      "subscription": 8520,
+      "adjustments": 0,
+      "tempAdvance": 36000,
+      "recTempAdvance": 9000,
+      "permanentAdvance": 0,
+      "interest": 3781,
+      "closing": 35448
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 35448,
+      "subscription": 8520,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 12000,
+      "permanentAdvance": 0,
+      "interest": 3678,
+      "closing": 59646
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 59646,
+      "subscription": 8520,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 12000,
+      "permanentAdvance": 0,
+      "interest": 8774,
+      "closing": 88940
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 88940,
+      "subscription": 11670,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 3000,
+      "permanentAdvance": 0,
+      "interest": 13881,
+      "closing": 117491
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 117491,
+      "subscription": 9540,
+      "adjustments": 0,
+      "tempAdvance": 78000,
+      "recTempAdvance": 18000,
+      "permanentAdvance": 0,
+      "interest": 10492,
+      "closing": 77523
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 77523,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 9659,
+      "closing": 87182
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 87182,
+      "subscription": 6360,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 92482,
+      "interest": 8071,
+      "closing": 9131
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 9131,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 0,
+      "closing": 9131
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "verifications": {},
+  "custom": [
+   "DEATH-PERSNO",
+   "DEATH-CLAIM",
+   "DEATH-POSTDEATH",
+   "DEATH-PERIOD"
+  ],
+  "qr": [
+   {
+    "id": "decline-qr",
+    "page": 3,
+    "doc": "NADRA succession decline certificate",
+    "symbology": "QR code",
+    "decoded": true,
+    "route": "online",
+    "host": "id.nadra.gov.pk",
+    "crop": "fp-death_p003_qr_decline_cert.png",
+    "payload": "https://id.nadra.gov.pk/e-succession_certificate?300101007531",
+    "compare": [
+     {
+      "field": "document number",
+      "qrVal": "300101007531",
+      "docVal": "300101007531",
+      "docLabel": "certificate and its Code 39 barcode",
+      "match": true
+     }
+    ],
+    "portal": {
+     "ok": false,
+     "checkedOn": "15-09-2026",
+     "result": "NADRA refused the request from outside its network, HTTP 403"
+    }
+   },
+   {
+    "id": "frc-qr",
+    "page": 4,
+    "doc": "NADRA family registration certificate",
+    "symbology": "QR code",
+    "decoded": true,
+    "route": "online",
+    "host": "id.nadra.gov.pk",
+    "crop": "fp-death_p004_qr_frc.png",
+    "payload": "https://id.nadra.gov.pk/e-frc/verifyFrcApplication?505295769494",
+    "compare": [
+     {
+      "field": "Code 39 document no.",
+      "qrVal": "EA80580288",
+      "docVal": "EA80580288",
+      "docLabel": "certificate",
+      "match": true
+     }
+    ],
+    "portal": {
+     "ok": false,
+     "checkedOn": "15-09-2026",
+     "result": "NADRA refused the request from outside its network, HTTP 403"
+    }
+   },
+   {
+    "id": "widow-cnic-qr",
+    "page": 6,
+    "doc": "widow’s smart CNIC back",
+    "symbology": "QR code",
+    "decoded": true,
+    "payload": "50459132685600001000010381",
+    "crop": "fp-death_p006_qr_smart_cnic_widow.png",
+    "compare": [
+     {
+      "field": "CNIC number",
+      "qrVal": "00001-0000103-8",
+      "docVal": "00001-0000103-8",
+      "docLabel": "card",
+      "match": true
+     }
+    ]
+   },
+   {
+    "id": "death-cert-qr",
+    "page": 10,
+    "doc": "NADRA death registration certificate",
+    "symbology": "QR code",
+    "decoded": true,
+    "route": "online",
+    "host": "crms.nadra.gov.pk",
+    "crop": "fp-death_p010_qr_death_registration.png",
+    "payload": "https://crms.nadra.gov.pk/verify?TrackingID=OxyaJaOyf6Rl2ZxYviapTA==",
+    "compare": [],
+    "portal": {
+     "ok": false,
+     "checkedOn": "15-09-2026",
+     "result": "the CRMS server refused the connection"
+    }
+   },
+   {
+    "id": "old-cnic-barcode",
+    "page": 5,
+    "doc": "deceased’s old CNIC back",
+    "symbology": "PDF417 barcode",
+    "decoded": false,
+    "why": "faded photocopy"
+   }
+  ],
+  "signatures": [
+   {
+    "id": "gpf10-ddo",
+    "page": 1,
+    "doc": "GPF-10",
+    "role": "ddo",
+    "roleLabel": "DDO signature",
+    "authority": "Principal, Govt. Associate College (W) Mustafabad, Lahore",
+    "signedBy": "Principal, Govt. Associate College (W) Mustafabad",
+    "forMarker": false,
+    "crop": "fp-death_p001_ddo_signature_stamp.png"
+   }
+  ],
+  "thumbs": [
+   {
+    "id": "gpf10",
+    "page": 1,
+    "doc": "GPF-10",
+    "whose": "The claimant (not named at the mark; presumably the widow)",
+    "crop": "fp-death_p001_thumb_gpf10.png"
+   },
+   {
+    "id": "form06",
+    "page": 12,
+    "doc": "FORM PAY 06, three impressions in the specimen signature block",
+    "whose": "The claimant (not named; the form names the widow as payee)",
+    "crop": "fp-death_p012_employee_specimen_thumbs.png"
+   }
+  ],
+  "docs": {
+   "covering": {
+    "present": true,
+    "page": 1,
+    "author": "the Principal, Govt. Associate College (W) Mustafabad",
+    "nature": "Revised GPF-10 issued under Memo No. 667/GACWM dated 24-07-2025 with the printed forwarding line"
+   },
+   "gpf10": {
+    "present": true,
+    "page": 1,
+    "accountNo": "90000417",
+    "crop": "fp-death_p001_item3_family_list_blank.png",
+    "missing": [
+     "item 3(ii), the family members entitled under Rule 1.34, the rule and their applications"
+    ]
+   },
+   "notification": {
+    "present": true,
+    "page": 2,
+    "label": "Obituary notification",
+    "no": "1612/GACWM",
+    "date": "06-04-2024",
+    "note": "Death on 03-04-2024; the NADRA death registration certificate agrees."
+   },
+   "cnics": [
+    {
+     "page": 5,
+     "whose": "deceased subscriber",
+     "type": "old",
+     "number": "00001-0000107-1",
+     "name": "Yousaf Masih",
+     "attested": true,
+     "attestedBy": "Principal, GAC (W) Mustafabad",
+     "crop": "fp-death_p005_cnic_subscriber_front.png"
+    },
+    {
+     "page": 6,
+     "whose": "widow",
+     "type": "smart",
+     "number": "00001-0000103-8",
+     "name": "Zubaida Bibi",
+     "attested": true,
+     "attestedBy": "Principal, GAC (W) Mustafabad",
+     "crop": "fp-death_p006_cnic_widow_front.png",
+     "sigCrop": "fp-death_p006_cnic_widow_holder_signature_box.png"
+    }
+   ],
+   "changeForm": {
+    "present": true,
+    "label": "FORM PAY 06",
+    "page": 12,
+    "personalNo": "30890417",
+    "name": "Yousaf Masih",
+    "sigKind": "thumb",
+    "ddoSigned": true,
+    "ddoStamp": "Principal, Govt. Associate College (W) Mustafabad",
+    "ddoCrop": "fp-death_p012_ddo_signature_stamp.png",
+    "crop": "fp-death_p012_loan_details_amount.png",
+    "oldGpfNo": "",
+    "oldGpfNoState": "written as what seems to read \"-nil-\"",
+    "note": "Payee noted as the widow, Mst Zubaida Bibi; amount Rs 92,482; annotated \"(Death case) OSD post created\"."
+   },
+   "serviceBook": {
+    "present": false
+   },
+   "death": {
+    "widowClaim": true,
+    "heirs": [
+     {
+      "name": "Zubaida Bibi",
+      "relation": "widow",
+      "cnicCopy": true
+     },
+     {
+      "name": "Javed Masih",
+      "relation": "son, born 17-08-2004",
+      "cnicCopy": false
+     },
+     {
+      "name": "Hina Yousaf",
+      "relation": "daughter, born 28-09-2007, 18 since 28-09-2025",
+      "cnicCopy": false
+     }
+    ],
+    "affidavit": {
+     "present": true,
+     "original": false,
+     "page": 9,
+     "label": "The undertaking on Rs 100 stamp paper",
+     "note": "It covers liability for Government dues, is worded for family pension, is undated, and the claimant has not signed it. The NADRA FRC and the court application support her status but are not the affidavit."
+    },
+    "successionRequired": false,
+    "successionNote": "one widow, and the heirs (widow, son, daughter) are all family, so circular A.2(vi) does not require a certificate. The case holds a NADRA decline, given because an heir was a minor, and a court application with no grant.",
+    "osdAnnotation": {
+     "page": 12,
+     "where": "Form 06 page 12",
+     "text": "(Death case) OSD post created",
+     "crop": "fp-death_p012_osd_post_annotation.png"
+    }
+   }
+  },
+  "label": "Final Payment, Death Case",
+  "kind": "death",
+  "family": "FINAL_PAYMENT",
+  "sub": "Final payment on death in service, claim by the widow",
+  "subject": "Yousaf Masih (deceased), Sweeper (BS-02)",
+  "dept": "Govt. Associate College (W) Mustafabad, Lahore (Education)",
+  "personnelNo": "90000417",
+  "pages": 13,
+  "diary": "20064, 24-02-2026",
+  "gazetted": "non-gazetted",
+  "note": "Yousaf Masih, Sweeper, died 03-04-2024. The Rs 92,482 claim reconciles to SAP. The widow thumbs; no affidavit for lawful widow, no Service Book, CNIC copies missing for two heirs, and Form 06 carries a personnel number one digit off.",
+  "persNos": [
+   {
+    "doc": "GPF-10 (account no.)",
+    "page": 1,
+    "value": "90000417"
+   },
+   {
+    "doc": "FORM PAY 06",
+    "page": 12,
+    "value": "30890417"
+   },
+   {
+    "doc": "SAP pay slip, November 2023",
+    "page": 11,
+    "value": "90000417"
+   },
+   {
+    "doc": "GPF Final Re-calculation Report",
+    "page": 13,
+    "value": "90000417"
+   }
+  ],
+  "record": [
+   [
+    "Deceased subscriber",
+    "Yousaf Masih s/o Bota Masih, Sweeper (BS-02)",
+    "GPF-10 · obituary · NADRA · SAP",
+    0.98,
+    1
+   ],
+   [
+    "Personnel no. / GP Fund A/c",
+    "90000417; Form 06 reads 30890417",
+    "GPF-10 · SAP · report · Form 06",
+    0.93,
+    12
+   ],
+   [
+    "CNIC",
+    "00001-0000107-1 (old card, attested; the faded copy reads ...071-1, NADRA documents and SAP give ...676-1)",
+    "CNIC · NADRA certificates · pay slip",
+    0.95,
+    5
+   ],
+   [
+    "Death",
+    "03-04-2024 in service; first entry into service 02-11-2008",
+    "Obituary No. 1612/GACWM · NADRA death certificate",
+    0.98,
+    2
+   ],
+   [
+    "Claimant",
+    "Mst Zubaida Bibi, widow, 00001-0000103-8 (smart card)",
+    "CNIC · FRC · Form 06",
+    0.96,
+    6
+   ],
+   [
+    "Legal heirs (NADRA FRC)",
+    "Widow; son Javed Masih (born 17-08-2004); daughter Hina Yousaf (born 28-09-2007, 18 since 28-09-2025)",
+    "FRC · decline certificate · court application",
+    0.95,
+    4
+   ],
+   [
+    "Claimed",
+    "Rs 92,482 on Form 06",
+    "Form 06",
+    0.97,
+    12
+   ],
+   [
+    "SAP basis of the claim",
+    "Closing 30-06-2025 Rs 87,182 plus five months at Rs 1,060",
+    "Re-calculation report",
+    0.97,
+    13
+   ],
+   [
+    "SAP posting",
+    "Permanent advance Rs 92,482 in 2025-26, leaving Rs 9,131",
+    "Re-calculation report",
+    0.97,
+    13
+   ],
+   [
+    "Advances",
+    "Rs 36,000 (2019-20) fully recovered; Rs 78,000 (2023-24) with Rs 60,000 unrecovered, already netted",
+    "Report · pay slip",
+    0.95,
+    13
+   ],
+   [
+    "OSD post",
+    "Form 06 annotated \"(Death case) OSD post created\"; NADRA decline lists \"Creation The OSD Post\"; pay slip on file predates the death",
+    "Form 06 · decline certificate",
+    0.9,
+    12
+   ],
+   [
+    "Succession",
+    "NADRA decline (a minor heir) and a court application; no grant",
+    "Pages 3, 7, 8",
+    0.95,
+    3
+   ]
+  ],
+  "claim": {
+   "amount": 92482,
+   "expected": 92482,
+   "page": 12,
+   "basis": "SAP closing balance at 30-06-2025 of Rs 87,182 plus five months at Rs 1,060",
+   "residualMadeOf": "the 2025-26 interest (Rs 8,071) and one further month’s subscription (Rs 1,060), neither in the claim"
+  }
+ },
+ "fp-dismissal": {
+  "slug": "fp-dismissal",
+  "key": "fp-dismissal",
+  "pageDims": {
+   "1": [
+    2380,
+    3368
+   ],
+   "2": [
+    2455,
+    3474
+   ],
+   "3": [
+    2471,
+    3497
+   ],
+   "4": [
+    2414,
+    3415
+   ],
+   "5": [
+    2994,
+    2116
+   ],
+   "6": [
+    2314,
+    3275
+   ],
+   "7": [
+    3252,
+    2298
+   ],
+   "8": [
+    3485,
+    2463
+   ],
+   "9": [
+    3392,
+    2397
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "FORM PAY 06 'PERMANENT LO[ANS/ADVANC]ES FORM (NEW & AMENDMEN[T])' (pink sticky note covers part of the title;"
+   },
+   {
+    "p": 2,
+    "title": "'APPLICATION FOR THE FINAL PAYMENT OF GP[F]' (revised form, FD letter No."
+   },
+   {
+    "p": 3,
+    "title": "Handwritten Urdu application to 'Janab-e-Aali' citing order 1823-33 PA-STO/S dated 30-12-23 and asking for release of ..."
+   },
+   {
+    "p": 4,
+    "title": "PUNISHMENT ORDER (left edge cropped), QR code at top."
+   },
+   {
+    "p": 5,
+    "title": "Continuation (landscape page)."
+   },
+   {
+    "p": 6,
+    "title": "E-STAMP paper;"
+   },
+   {
+    "p": 7,
+    "title": "SAP pay slip in payroll-register format, 01.12.2023-31.12.2023: 90000834 FAIZAN SIDDIQUI, Prev Pers No blank, Desig TRAFF..."
+   },
+   {
+    "p": 8,
+    "title": "The same December 2023 pay slip scanned again at an angle;"
+   },
+   {
+    "p": 9,
+    "title": "GPF Final Re-calculation Report, System PRP, User UMAIR RAZA, dated 10/09/2026 14:58:25."
+   }
+  ],
+  "sap": {
+   "payslip": {
+    "page": 7,
+    "month": "December 2023",
+    "persNo": "90000834",
+    "name": "FAIZAN SIDDIQUI",
+    "designation": "TRAFFIC WARDEN",
+    "cnic": "",
+    "bps": "14",
+    "ddoCode": "L04087 Chief Traffic Officer Lahore",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 445013,
+    "gpfSubscription": 3900,
+    "loanInstalment": 13000,
+    "loanBalance": 221000,
+    "basicPay": 52110,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 9,
+    "persNo": "90000834",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2008",
+      "end": "30.06.2009",
+      "opening": 0,
+      "subscription": 5100,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 223,
+      "closing": 5323
+     },
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 5323,
+      "subscription": 10200,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1519,
+      "closing": 17042
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 17042,
+      "subscription": 10200,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3205,
+      "closing": 30447
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 30447,
+      "subscription": 15942,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5321,
+      "closing": 51710
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 51710,
+      "subscription": 16464,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 7275,
+      "closing": 75449
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 75449,
+      "subscription": 6860,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 10633,
+      "closing": 92942
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 92942,
+      "subscription": 16464,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 11969,
+      "closing": 121375
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 121375,
+      "subscription": 16464,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 14463,
+      "closing": 152302
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 152302,
+      "subscription": 24249,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 18610,
+      "closing": 195161
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 195161,
+      "subscription": 31014,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 24777,
+      "closing": 250952
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 250952,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 38455,
+      "closing": 320847
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 320847,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 40545,
+      "closing": 392832
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 392832,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 32379,
+      "closing": 456651
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 456651,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 58736,
+      "closing": 546827
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 546827,
+      "subscription": 42960,
+      "adjustments": 0,
+      "tempAdvance": 390000,
+      "recTempAdvance": 91000,
+      "permanentAdvance": 0,
+      "interest": 52826,
+      "closing": 343613
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 343613,
+      "subscription": 23400,
+      "adjustments": 6052,
+      "tempAdvance": 0,
+      "recTempAdvance": 78000,
+      "permanentAdvance": 451065,
+      "interest": 17968,
+      "closing": 17968
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 17968,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2239,
+      "closing": 17968
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "verifications": {},
+  "custom": [
+   "DIS-APPEAL",
+   "DIS-CREDITS",
+   "DIS-INTEREST"
+  ],
+  "qr": [
+   {
+    "id": "estamp",
+    "page": 6,
+    "doc": "e-stamp affidavit",
+    "symbology": "QR code",
+    "decoded": true,
+    "route": "online",
+    "host": "es.punjab-zameen.gov.pk",
+    "crop": "fp-dismissal_p006_estamp_qr.png",
+    "payload": "Url: https://es.punjab-zameen.gov.pk/eStampCitizenPortal/GeneratePDF/Stamp_Receipt?id=PB-LHR-50661BB59AF39C23",
+    "compare": [
+     {
+      "field": "stamp id",
+      "qrVal": "PB-LHR-50661BB59AF39C23",
+      "docVal": "PB-LHR-50661BB59AF39C23",
+      "docLabel": "portal record",
+      "match": true
+     }
+    ],
+    "portal": {
+     "ok": true,
+     "checkedOn": "15-09-2026",
+     "result": "e-stamp PB-LHR-50661BB59AF39C23 found and valid, Rs 100, \"certificate or other document\", issued 22-04-2026 and usable to 29-04-2026, applicant Faizan Siddiqui, CNIC 00001-0000105-9, father Zulqarnain Butt. The affidavit is dated 22-04-2026, within validity, and name, CNIC and father name agree with the case."
+    }
+   },
+   {
+    "id": "order-qr",
+    "page": 4,
+    "doc": "punishment order",
+    "symbology": "QR code",
+    "decoded": false,
+    "why": "modules degraded by photocopying",
+    "crop": "fp-dismissal_p004_qr_punishment_order.png",
+    "remedy": "Scan the QR code on the original order, or obtain the department’s verification, and upload it."
+   },
+   {
+    "id": "cnic-back",
+    "page": 6,
+    "doc": "smart CNIC",
+    "symbology": "QR code",
+    "notSupplied": "Only the front of the smart CNIC is copied, on the e-stamp affidavit; the back, which carries the QR code, is not in the case.",
+    "remedy": "Upload a copy of the back of the CNIC."
+   }
+  ],
+  "signatures": [
+   {
+    "id": "form06-ddo",
+    "page": 1,
+    "doc": "FORM PAY 06",
+    "role": "ddo",
+    "roleLabel": "DDO signature",
+    "authority": "Chief Traffic Officer, Lahore",
+    "signedBy": "Chief Traffic Officer, Lahore",
+    "forMarker": false,
+    "crop": "fp-dismissal_p001_ddo_signature_cto_stamp.png"
+   }
+  ],
+  "thumbs": [],
+  "docs": {
+   "covering": {
+    "present": true,
+    "page": 2,
+    "author": "the Chief Traffic Officer, Lahore",
+    "nature": "Forwarding No. 7082/CTO/Acctt dated 04-05-2026 on the application"
+   },
+   "gpf10": {
+    "present": true,
+    "page": 2,
+    "accountNo": "90000834 (personnel no.)",
+    "missing": [],
+    "note": "Item 2(i) reads \"Rs nil\" while the December 2023 SAP pay slip shows a subscription of Rs 3,900; not a B2-i ground."
+   },
+   "notification": {
+    "present": true,
+    "page": 4,
+    "label": "Punishment order, dismissal from service",
+    "no": "1823-33/PA-STO/S",
+    "date": "30-12-2023",
+    "note": "Signed by Ikram Ullah Malik, Senior Traffic Officer, Saddar Division, Lahore; attested by the Accountant, City Traffic Police."
+   },
+   "cnics": [
+    {
+     "page": 6,
+     "whose": "subscriber",
+     "type": "smart",
+     "number": "00001-0000105-9",
+     "name": "Faizan Siddiqui",
+     "expiry": "07-08-2033",
+     "attested": false,
+     "crop": "fp-dismissal_p006_cnic_front_copy.png",
+     "sigCrop": "fp-dismissal_p006_cnic_holder_signature_area.png"
+    }
+   ],
+   "changeForm": {
+    "present": true,
+    "label": "FORM PAY 06",
+    "page": 1,
+    "personalNo": "90000834",
+    "name": "Faizan Siddiqui",
+    "cnic": "00001-0000105-9",
+    "sigKind": "signature",
+    "ddoSigned": true,
+    "ddoStamp": "Chief Traffic Officer, Lahore",
+    "ddoCrop": "fp-dismissal_p001_ddo_signature_cto_stamp.png",
+    "oldGpfNo": "",
+    "oldGpfNoState": "carrying only the AG token T.NO 983415",
+    "note": "The handwriting across the form (both computations, \"31-12-2023\") is the AG office’s own working, not a department entry."
+   },
+   "serviceBook": {
+    "present": false,
+    "reportedAttached": "The CTO’s forwarding note says the original service roll is attached."
+   }
+  },
+  "label": "Final Payment, Dismissal from Service",
+  "kind": "dismissal",
+  "family": "FINAL_PAYMENT",
+  "sub": "Final payment after dismissal from service",
+  "subject": "Faizan Siddiqui, Traffic Warden (BS-14)",
+  "dept": "City Traffic Police, Chief Traffic Officer, Lahore",
+  "personnelNo": "90000834",
+  "pages": 9,
+  "diary": "983415 / 208238, 21-05-2026",
+  "gazetted": "non-gazetted",
+  "note": "Faizan Siddiqui, dismissed 30-12-2023. Every circular document except the Service Book is in the scan. E-stamp verified on the Punjab portal; the punishment order QR cannot be read.",
+  "persNos": [
+   {
+    "doc": "FORM PAY 06",
+    "page": 1,
+    "value": "90000834"
+   },
+   {
+    "doc": "Application (GPF-10)",
+    "page": 2,
+    "value": "90000834"
+   },
+   {
+    "doc": "SAP pay slip, December 2023",
+    "page": 7,
+    "value": "90000834"
+   },
+   {
+    "doc": "GPF Final Re-calculation Report",
+    "page": 9,
+    "value": "90000834"
+   }
+  ],
+  "record": [
+   [
+    "Subscriber",
+    "Faizan Siddiqui s/o Zulqarnain Butt, Traffic Warden No. 2709/TW",
+    "Form 06 · application · CNIC · e-stamp",
+    0.97,
+    1
+   ],
+   [
+    "Personnel no.",
+    "90000834",
+    "Form 06 · application · SAP",
+    0.99,
+    1
+   ],
+   [
+    "CNIC",
+    "00001-0000105-9 (smart card, front only)",
+    "Form 06 · Urdu application · CNIC copy",
+    0.97,
+    6
+   ],
+   [
+    "Dismissal",
+    "30-12-2023, Order 1823-33/PA-STO/S of the Senior Traffic Officer, Saddar Division",
+    "Punishment order · application",
+    0.93,
+    4
+   ],
+   [
+    "Forwarding",
+    "CTO Lahore No. 7082/CTO/Acctt dated 04-05-2026",
+    "Application",
+    0.96,
+    2
+   ],
+   [
+    "E-stamp affidavit",
+    "PB-LHR-50661BB59AF39C23, dated 22-04-2026; verified on the Punjab e-Stamp portal",
+    "E-stamp · portal",
+    0.99,
+    6
+   ],
+   [
+    "SAP pay slip, December 2023",
+    "GPF balance Rs 445,013; earlier advance Rs 390,000, repaid Rs 169,000, balance Rs 221,000",
+    "SAP pay slip",
+    0.97,
+    7
+   ],
+   [
+    "SAP posting",
+    "Permanent advance Rs 451,065 in 2023-24 (the final payment)",
+    "SAP re-calculation report",
+    0.96,
+    9
+   ],
+   [
+    "Section working on Form 06",
+    "451,065 less Zakat 11,276, plus 16,900 interest: net Rs 456,689",
+    "Form 06 (office hand)",
+    0.88,
+    1
+   ],
+   [
+    "Thumb impressions",
+    "Beside the subscriber’s signatures on Form 06 and the affidavit; they accompany signatures, so R7 does not arise",
+    "Form 06 · affidavit",
+    0.95,
+    1
+   ]
+  ],
+  "claim": {
+   "amount": 451065,
+   "basis": "the balance on Form 06 before the section’s zakat and interest working",
+   "residualNote": "It is the 2023-24 interest, which the interest check covers."
+  }
+ },
+ "missing-credits": {
+  "slug": "missing-credits",
+  "key": "missing-credits",
+  "pageDims": {
+   "1": [
+    2414,
+    3415
+   ],
+   "2": [
+    2438,
+    3450
+   ],
+   "3": [
+    2422,
+    3427
+   ],
+   "4": [
+    2463,
+    3485
+   ],
+   "5": [
+    2463,
+    3485
+   ],
+   "6": [
+    2372,
+    3357
+   ],
+   "7": [
+    2438,
+    3450
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "Letter from Administrative Officer, Government Engineering Academy Punjab, Lahore (letterhead 'Punjab E[ngineering] Ac..."
+   },
+   {
+    "p": 2,
+    "title": "Challan Form No."
+   },
+   {
+    "p": 3,
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 4,
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 5,
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 6,
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 7,
+    "title": "Challan Form 32-A, schedule Sr."
+   }
+  ],
+  "sap": null,
+  "verifications": {},
+  "custom": [
+   "MC-NAME"
+  ],
+  "qr": [],
+  "signatures": [
+   {
+    "id": "treasury",
+    "page": 1,
+    "doc": "Treasury verification on the covering letter",
+    "role": "certifying",
+    "roleLabel": "Treasury verification",
+    "authority": "Treasury Office, Lahore",
+    "signedBy": "Deputy Treasury Officer, Lahore",
+    "forMarker": false,
+    "crop": "missing-credits_p001_treasury_verification_endorsement.png",
+    "bbox": [
+     420,
+     2280,
+     1480,
+     2920
+    ]
+   }
+  ],
+  "thumbs": [],
+  "docs": {
+   "covering": {
+    "present": true,
+    "page": 1,
+    "author": "the Administrative Officer, Government Engineering Academy Punjab",
+    "nature": "Request to the Treasury Officer to verify the challans",
+    "crop": "missing-credits_p001_covering_letter_signatory_admin_officer.png"
+   },
+   "challans": {
+    "period": "deputation period 01-07-2025 to 30-04-2026 (10 months at Rs 7,960)",
+    "toVerified": true,
+    "toPage": 1,
+    "toCrop": "missing-credits_p001_treasury_verification_endorsement.png",
+    "schedulePage": 1,
+    "scheduleCrop": "missing-credits_p001_schedule_7_challans.png",
+    "schedule": {
+     "count": 7,
+     "total": 79600,
+     "items": [
+      {
+       "sr": 1,
+       "period": "July 2025",
+       "amount": 7960,
+       "cheque": "8073758389"
+      },
+      {
+       "sr": 2,
+       "period": "August 2025",
+       "amount": 7960,
+       "cheque": "8073758395"
+      },
+      {
+       "sr": 3,
+       "period": "September to October 2025",
+       "amount": 15920,
+       "cheque": "8073770051"
+      },
+      {
+       "sr": 4,
+       "period": "November 2025",
+       "amount": 7960,
+       "cheque": "8073770058"
+      },
+      {
+       "sr": 5,
+       "period": "December 2025 to January 2026",
+       "amount": 15920,
+       "cheque": "8073770064"
+      },
+      {
+       "sr": 6,
+       "period": "February to March 2026",
+       "amount": 15920,
+       "cheque": "8073770076"
+      },
+      {
+       "sr": 7,
+       "period": "April 2026",
+       "amount": 7960,
+       "cheque": "8073770086"
+      }
+     ]
+    },
+    "copies": [
+     {
+      "page": 2,
+      "sr": 1,
+      "amount": 7960,
+      "bankStamp": true,
+      "stampFaint": true,
+      "crop": "missing-credits_p002_bank_stamp.png",
+      "stampNote": "Only \"...BANK OF PAKISTAN\" and \"...BANKING\" can be made out. The Treasury \"Challan verified Rs 7960/-\" mark dated 22-08-2025 agrees with the schedule."
+     },
+     {
+      "page": 3,
+      "sr": 2,
+      "amount": 7960,
+      "bankStamp": true,
+      "stampText": "NBP Islamic Banking Johar Town, 09 OCT 2025",
+      "crop": "missing-credits_p003_bank_stamp.png"
+     },
+     {
+      "page": 4,
+      "sr": 3,
+      "amount": 15920,
+      "bankStamp": true,
+      "stampText": "NBP Islamic Banking Johar Town, 25 NOV 2025",
+      "crop": "missing-credits_p004_bank_stamp.png"
+     },
+     {
+      "page": 5,
+      "sr": 5,
+      "amount": 15920,
+      "bankStamp": true,
+      "stampText": "NBP Aitemaad Johar Town, clearing, 16 FEB 2026",
+      "crop": "missing-credits_p005_bank_stamp.png"
+     },
+     {
+      "page": 6,
+      "sr": 6,
+      "amount": 15920,
+      "bankStamp": true,
+      "stampText": "NBP Aitemaad Johar Town, clearing, 29 APR 2026",
+      "crop": "missing-credits_p006_bank_stamp_clearing.png"
+     },
+     {
+      "page": 7,
+      "sr": 7,
+      "amount": 7960,
+      "bankStamp": true,
+      "stampText": "NBP Aitemaad Johar Town, 15 JUL 2026",
+      "crop": "missing-credits_p007_bank_stamp.png"
+     }
+    ]
+   }
+  },
+  "label": "Missing Credits, Challans",
+  "kind": "missing_credits",
+  "family": "MISSING_CREDITS",
+  "sub": "Missing credits for a deputation period, paid by challan",
+  "subject": "Dr Nauman Mushtaq, AP-II (on deputation)",
+  "dept": "Government Engineering Academy Punjab, Niaz Beg, Lahore",
+  "personnelNo": "90000043",
+  "pages": 7,
+  "diary": "Fd-2/K-851, 13-08-2026",
+  "gazetted": "unknown",
+  "gazettedEvidence": "designation \"AP-II\" and \"Officers on Deputation\" only",
+  "note": "Dr Nauman Mushtaq, deputation 07-2025 to 04-2026. Seven challans scheduled and Treasury-verified for Rs 79,600; six attached. No SAP extracts in the case.",
+  "persNos": [
+   {
+    "doc": "Covering letter schedule",
+    "page": 1,
+    "value": "90000043"
+   },
+   {
+    "doc": "Challans Sr. 1 to 7 (six attached)",
+    "page": 2,
+    "value": "90000043"
+   }
+  ],
+  "record": [
+   [
+    "Subscriber",
+    "Dr Nauman Mushtaq, AP-II (schedule spells \"Numan Mushtaq, AP\")",
+    "Schedule · challans",
+    0.95,
+    1
+   ],
+   [
+    "Personnel no.",
+    "90000043",
+    "Schedule · all six challans",
+    0.98,
+    2
+   ],
+   [
+    "Deputation period",
+    "01-07-2025 to 30-04-2026, 10 months at Rs 7,960",
+    "Covering letter",
+    0.97,
+    1
+   ],
+   [
+    "Covering letter",
+    "Administrative Officer GEA to Treasury Officer Lahore, 21-07-2026, \"Verification of challans\"",
+    "Covering letter",
+    0.97,
+    1
+   ],
+   [
+    "Treasury verification",
+    "\"Verified Rs 79600/-, under head G06103\", Deputy Treasury Officer Lahore",
+    "Covering letter endorsement",
+    0.95,
+    1
+   ],
+   [
+    "Challans scheduled",
+    "7, total Rs 79,600",
+    "Schedule",
+    0.99,
+    1
+   ],
+   [
+    "Challans attached",
+    "6 (Sr. 1, 2, 3, 5, 6, 7), total Rs 71,640",
+    "Pages 2 to 7",
+    0.99,
+    2
+   ],
+   [
+    "Missing challan",
+    "Sr. 4: November 2025, Rs 7,960, cheque 8073770058 of 17-12-2025, credited 02-01-2026",
+    "Schedule",
+    0.96,
+    1
+   ],
+   [
+    "Bank stamps",
+    "Present on all six; Sr. 1 too faint to read",
+    "Pages 2 to 7",
+    0.9,
+    2
+   ],
+   [
+    "BPS and gazetted status",
+    "Not stated anywhere in the case",
+    "",
+    0.99,
+    null
+   ]
+  ]
+ },
+ "residual": {
+  "slug": "residual",
+  "key": "residual",
+  "pageDims": {
+   "1": [
+    2471,
+    3497
+   ],
+   "2": [
+    2447,
+    3462
+   ],
+   "3": [
+    2438,
+    3450
+   ],
+   "4": [
+    3345,
+    2364
+   ],
+   "5": [
+    3252,
+    2298
+   ],
+   "6": [
+    3263,
+    2306
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "FORM PAY 06 'PERMANENT LOANS / ADVANCES FORM (..."
+   },
+   {
+    "p": 2,
+    "title": "Subscriber's application to the Accountant General Punjab, subject 'RESIDUAL PAYMENT OF G.P.FUND'."
+   },
+   {
+    "p": 3,
+    "title": "Government of the Punjab, Specialized Healthcare and Medical Education Department, Notification No."
+   },
+   {
+    "p": 4,
+    "title": "Smart CNIC (chip), front side only: Name Shabnam;"
+   },
+   {
+    "p": 5,
+    "title": "SAP 'Accounts Office Lahore PAYROLL REGISTER', page 211, date 01.11.2024, for the month of October 2024 (01.10.2024-31..."
+   },
+   {
+    "p": 6,
+    "title": "SAP 'GPF Final Re-calculation Report', Page 1, Date 10/09/2026, Time 15:00:22;"
+   }
+  ],
+  "sap": {
+   "payslip": {
+    "page": 5,
+    "month": "October 2024",
+    "persNo": "90000687",
+    "name": "SHABNAM",
+    "designation": "HEAD NURSE",
+    "cnic": "",
+    "bps": "17",
+    "ddoCode": "L04578 Punjab Institute of Mental Health",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 340330,
+    "gpfSubscription": 6350,
+    "loanInstalment": null,
+    "loanBalance": null,
+    "basicPay": 110050,
+    "osdPost": "",
+    "attested": true
+   },
+   "recalc": {
+    "page": 6,
+    "persNo": "90000687",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2007",
+      "end": "30.06.2008",
+      "opening": 0,
+      "subscription": 2280,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 48,
+      "closing": 2328
+     },
+     {
+      "start": "01.07.2008",
+      "end": "30.06.2009",
+      "opening": 2328,
+      "subscription": 12020,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1290,
+      "closing": 15638
+     },
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 15638,
+      "subscription": 12600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3145,
+      "closing": 31383
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 31383,
+      "subscription": 12600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5426,
+      "closing": 49409
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 49409,
+      "subscription": 20410,
+      "adjustments": 0,
+      "tempAdvance": 45000,
+      "recTempAdvance": 7500,
+      "permanentAdvance": 0,
+      "interest": 5927,
+      "closing": 38246
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 38246,
+      "subscription": 21120,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 18000,
+      "permanentAdvance": 0,
+      "interest": 7132,
+      "closing": 84498
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 84498,
+      "subscription": 21120,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 19500,
+      "permanentAdvance": 80000,
+      "interest": 10837,
+      "closing": 55955
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 55955,
+      "subscription": 21120,
+      "adjustments": 0,
+      "tempAdvance": 50000,
+      "recTempAdvance": 6000,
+      "permanentAdvance": 0,
+      "interest": 6078,
+      "closing": 39153
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 39153,
+      "subscription": 25920,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 24000,
+      "permanentAdvance": 0,
+      "interest": 7303,
+      "closing": 96376
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 96376,
+      "subscription": 39566,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 20000,
+      "permanentAdvance": 0,
+      "interest": 14588,
+      "closing": 170530
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 170530,
+      "subscription": 50549,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 23118,
+      "closing": 244197
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 244197,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 200000,
+      "interest": 19892,
+      "closing": 115329
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 115329,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 100000,
+      "interest": 13170,
+      "closing": 79739
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 79739,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 77000,
+      "interest": 5451,
+      "closing": 59430
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 59430,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 10811,
+      "closing": 121481
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 121481,
+      "subscription": 69960,
+      "adjustments": 0,
+      "tempAdvance": 100000,
+      "recTempAdvance": 27780,
+      "permanentAdvance": 0,
+      "interest": 17393,
+      "closing": 136614
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 136614,
+      "subscription": 76200,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 66672,
+      "permanentAdvance": 0,
+      "interest": 29896,
+      "closing": 309382
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 309382,
+      "subscription": 25400,
+      "adjustments": 31408,
+      "tempAdvance": 0,
+      "recTempAdvance": 5548,
+      "permanentAdvance": 712068,
+      "interest": 20807,
+      "closing": -340330
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "verifications": {},
+  "custom": [
+   "RES-RECON"
+  ],
+  "qr": [
+   {
+    "id": "notif-barcode",
+    "page": 3,
+    "doc": "retirement notification",
+    "symbology": "1-D barcode",
+    "decoded": false,
+    "why": "bars merged in the photocopy",
+    "crop": "residual_p003_barcode.png",
+    "readable": "\"*0000100001064R 2884*\", whose CNIC part agrees with the notification",
+    "remedy": "Upload a clean copy of the notification, or confirm it with the SHC&ME Department."
+   },
+   {
+    "id": "cnic-back",
+    "page": 4,
+    "doc": "smart CNIC",
+    "symbology": "QR code",
+    "notSupplied": "Only the front of the smart CNIC is copied; the back, which carries the QR code, is not in the case.",
+    "remedy": "Upload a copy of the back of the CNIC."
+   }
+  ],
+  "signatures": [
+   {
+    "id": "form06-ddo",
+    "page": 1,
+    "doc": "FORM PAY 06",
+    "role": "ddo",
+    "roleLabel": "DDO signature",
+    "authority": "Executive Director, Punjab Institute of Mental Health, Lahore",
+    "signedBy": "Executive Director, Punjab Institute of Mental Health",
+    "forMarker": false,
+    "crop": "residual_p001_ddo_signature_stamp.png",
+    "bbox": [
+     250,
+     2600,
+     850,
+     3150
+    ]
+   }
+  ],
+  "thumbs": [],
+  "docs": {
+   "covering": {
+    "present": true,
+    "page": 2,
+    "author": "the subscriber",
+    "nature": "Subscriber’s application to the AG for residual payment"
+   },
+   "gpf10": {
+    "present": false
+   },
+   "notification": {
+    "present": true,
+    "page": 3,
+    "label": "Retirement notification",
+    "no": "SO(NC)10-1/15",
+    "date": "03-09-2024",
+    "note": "Retirement w.e.f. 07-11-2024 on superannuation. Attested by the Office Superintendent, PIMH."
+   },
+   "cnics": [
+    {
+     "page": 4,
+     "whose": "subscriber",
+     "type": "smart",
+     "number": "00001-0000106-4",
+     "name": "Shabnam",
+     "expiry": "lifetime",
+     "attested": true,
+     "attestedBy": "Office Superintendent, PIMH",
+     "sigCrop": "residual_p004_cnic_holder_signature.png",
+     "crop": "residual_p004_cnic_front_only.png"
+    }
+   ],
+   "changeForm": {
+    "present": true,
+    "label": "FORM PAY 06",
+    "page": 1,
+    "personalNo": "90000687",
+    "name": "Shabnam",
+    "cnic": "00001-0000106-4",
+    "sigKind": "signature",
+    "sigCrop": "residual_p001_employee_specimen_signatures.png",
+    "ddoSigned": true,
+    "ddoStamp": "Executive Director, Punjab Institute of Mental Health",
+    "ddoCrop": "residual_p001_ddo_signature_stamp.png",
+    "oldGpfNo": "",
+    "oldGpfNoState": "blank",
+    "note": "The printed form number is under a blank pink note; the heading \"Permanent Loan Details\" identifies Form 06."
+   }
+  },
+  "label": "Residual Payment",
+  "kind": "residual",
+  "family": "FINAL_PAYMENT",
+  "sub": "Residual GP Fund payment after final payment drawn",
+  "subject": "Shabnam, Head Nurse (BS-17)",
+  "dept": "Punjab Institute of Mental Health, Lahore",
+  "personnelNo": "90000687",
+  "pages": 6,
+  "diary": "206984 / 982288",
+  "gazetted": "gazetted",
+  "note": "Mst Shabnam, retired 07-11-2024. Rs 31,408 residual. The SAP report now in the case shows a debit balance and a possible double posting. No Form 10.",
+  "persNos": [
+   {
+    "doc": "FORM PAY 06",
+    "page": 1,
+    "value": "90000687"
+   },
+   {
+    "doc": "Application",
+    "page": 2,
+    "value": "90000687"
+   },
+   {
+    "doc": "SAP payroll register, October 2024",
+    "page": 5,
+    "value": "90000687"
+   },
+   {
+    "doc": "GPF Final Re-calculation Report",
+    "page": 6,
+    "value": "90000687"
+   }
+  ],
+  "record": [
+   [
+    "Subscriber",
+    "Mst Shabnam w/o Abid Javed, Head Nurse (BS-17), gazetted",
+    "Form 06 · CNIC · SAP register",
+    0.97,
+    1
+   ],
+   [
+    "Personnel no.",
+    "90000687",
+    "Form 06 · application · SAP",
+    0.99,
+    1
+   ],
+   [
+    "CNIC",
+    "00001-0000106-4 (smart card, lifetime); front only",
+    "Form 06 · CNIC · notification",
+    0.97,
+    4
+   ],
+   [
+    "Retirement",
+    "07-11-2024 on superannuation, Notification SO(NC)10-1/15 of 03-09-2024",
+    "Notification",
+    0.97,
+    3
+   ],
+   [
+    "Claimed",
+    "Rs 31,408 residual, handwritten on Form 06",
+    "Form 06",
+    0.95,
+    1
+   ],
+   [
+    "GPF balance, October 2024 register",
+    "Rs 340,330, before the final payment",
+    "SAP payroll register",
+    0.97,
+    5
+   ],
+   [
+    "Report, 2024-25 row",
+    "Adjustment 31,408; permanent advance 712,068; interest 20,807; closing 340,330 debit",
+    "SAP re-calculation report",
+    0.93,
+    6
+   ],
+   [
+    "Form 10",
+    "Not in the case",
+    "",
+    0.99,
+    null
+   ],
+   [
+    "Zakat",
+    "\"No Zakat deducted (Christian)\" written on Form 06",
+    "Form 06",
+    0.9,
+    1
+   ]
+  ]
+ },
+ "refundable": {
+  "slug": "refundable",
+  "key": "refundable",
+  "pageDims": {
+   "1": [
+    2447,
+    3462
+   ],
+   "2": [
+    2389,
+    3380
+   ],
+   "3": [
+    3275,
+    2314
+   ],
+   "4": [
+    2405,
+    3404
+   ],
+   "5": [
+    3357,
+    2372
+   ],
+   "6": [
+    3368,
+    2380
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "Original sanction ORDER, Office of the Deputy Inspector General of Police, Operations, Lahore."
+   },
+   {
+    "p": 2,
+    "title": "Photocopy of the smart National Identity Card front, rotated 90 degrees: chip, Name Barkit Ali (Urdu برکت علی), Fath..."
+   },
+   {
+    "p": 3,
+    "title": "Photocopy of the smart NIC back: CNIC 00001-0000101-3 printed above the QR code;"
+   },
+   {
+    "p": 4,
+    "title": "FORM PAY05 Temporary Loans/Advances Form (New & Amendment)."
+   },
+   {
+    "p": 5,
+    "title": "SAP pay slip for August 2026, two copies side by side."
+   },
+   {
+    "p": 6,
+    "title": "SAP GPF Final Re-calculation Report."
+   }
+  ],
+  "sap": {
+   "payslip": {
+    "page": 5,
+    "month": "August 2026",
+    "persNo": "90000227",
+    "name": "BARKAT ALI",
+    "designation": "CONSTABLE",
+    "cnic": "0000100001013",
+    "bps": "07",
+    "ddoCode": "LO0056 DIG Special Protection Unit",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 19194,
+    "gpfSubscription": 1500,
+    "loanInstalment": 2000,
+    "loanBalance": 56000,
+    "basicPay": 22890,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 6,
+    "persNo": "90000227",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 0,
+      "subscription": 9000,
+      "adjustments": 919,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 384,
+      "closing": 10303
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 10303,
+      "subscription": 18000,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2801,
+      "closing": 31104
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 31104,
+      "subscription": 18000,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5090,
+      "closing": 54194
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 54194,
+      "subscription": 18000,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 7705,
+      "closing": 79899
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 79899,
+      "subscription": 3000,
+      "adjustments": 0,
+      "tempAdvance": 58000,
+      "recTempAdvance": 2000,
+      "permanentAdvance": 0,
+      "interest": 0,
+      "closing": 26899
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "verifications": {},
+  "custom": [
+   "REF-PAYROLL-UNIT"
+  ],
+  "qr": [
+   {
+    "id": "cnic-back",
+    "page": 3,
+    "doc": "smart CNIC back",
+    "symbology": "QR code",
+    "decoded": true,
+    "payload": "10826129086900001000010131",
+    "crop": "refundable_p003_cnic_back_qr.png",
+    "compare": [
+     {
+      "field": "CNIC number",
+      "qrVal": "00001-0000101-3",
+      "docVal": "00001-0000101-3",
+      "docLabel": "card",
+      "match": true
+     },
+     {
+      "field": "card number",
+      "qrVal": "108261290869",
+      "docVal": "108261290869",
+      "docLabel": "number printed under the code",
+      "match": true
+     }
+    ]
+   }
+  ],
+  "signatures": [
+   {
+    "id": "sanction",
+    "page": 1,
+    "doc": "sanction order",
+    "role": "sanctioning",
+    "roleLabel": "Sanctioning signature",
+    "authority": "Deputy Inspector General of Police, Operations, Lahore",
+    "signedBy": "SP Headquarters",
+    "forMarker": true,
+    "crop": "refundable_p001_sanction_signatory_for_dig.png",
+    "bbox": [
+     1395,
+     2165,
+     2225,
+     2480
+    ]
+   },
+   {
+    "id": "form05-ddo",
+    "page": 4,
+    "doc": "FORM PAY 05",
+    "role": "ddo",
+    "roleLabel": "DDO signature",
+    "authority": "Deputy Inspector General of Police, Operations, Lahore",
+    "signedBy": "SP Headquarters",
+    "forMarker": true,
+    "crop": "refundable_p004_form05_ddo_signatory_stamp.png"
+   }
+  ],
+  "thumbs": [],
+  "docs": {
+   "sanction": {
+    "present": true,
+    "page": 1,
+    "dept": "Punjab Police",
+    "printedAuthority": "Deputy Inspector General of Police, Operations, Lahore",
+    "orderNo": "1463/GPF-Ops",
+    "date": "07-08-2026",
+    "rule": "Rule 1.14(1)(a)(iv)(d)(i) of the Punjab GP Fund Rules 1978",
+    "reason": "Repair of house",
+    "amount": 58000,
+    "balanceStated": null,
+    "basicPay": 19040,
+    "limitClause": "1.14(1)(d)(i)",
+    "qrId": null,
+    "crop": "refundable_p001_sanction_order_text.png"
+   },
+   "changeForm": {
+    "present": true,
+    "label": "FORM PAY 05",
+    "page": 4,
+    "personalNo": "90000227",
+    "name": "Barkat Ali",
+    "cnic": "",
+    "sigKind": "signature",
+    "sigCrop": "refundable_p004_form05_employee_specimen_signatures.png",
+    "ddoSigned": true,
+    "ddoStamp": "SP Headquarters for DIG Operations, Lahore",
+    "ddoCrop": "refundable_p004_form05_ddo_signatory_stamp.png"
+   },
+   "cnics": [
+    {
+     "page": 2,
+     "whose": "subscriber",
+     "type": "smart",
+     "number": "00001-0000101-3",
+     "name": "Barkit Ali",
+     "expiry": "05-11-2030",
+     "attested": false,
+     "sigCrop": "refundable_p002_cnic_holder_signature.png",
+     "crop": "refundable_p002_cnic_front_details.png"
+    }
+   ]
+  },
+  "label": "Refundable Advance",
+  "kind": "refundable",
+  "family": "ADVANCE",
+  "sub": "Refundable advance for house repair, Rule 1.14(1)(a)(iv)",
+  "subject": "Barkat Ali, Constable (BS-07)",
+  "dept": "Punjab Police, Office of the DIG Operations, Lahore",
+  "personnelNo": "90000227",
+  "pages": 6,
+  "diary": "214253 / 988890, 10-08-2026",
+  "gazetted": "non-gazetted",
+  "note": "Constable Barkat Ali. Rs 58,000 for house repair, signed for the DIG Operations by SP Headquarters. Pay slip and re-calculation report already in the case.",
+  "nameNote": "The English spelling on the card is \"Barkit\"; the Urdu name is the same.",
+  "nameVariants": [
+   "Barkit Ali"
+  ],
+  "persNos": [
+   {
+    "doc": "Sanction order",
+    "page": 1,
+    "value": "90000227"
+   },
+   {
+    "doc": "FORM PAY 05",
+    "page": 4,
+    "value": "90000227"
+   },
+   {
+    "doc": "SAP pay slip, August 2026",
+    "page": 5,
+    "value": "90000227"
+   },
+   {
+    "doc": "GPF Final Re-calculation Report",
+    "page": 6,
+    "value": "90000227"
+   }
+  ],
+  "record": [
+   [
+    "Subscriber",
+    "Barkat Ali s/o Liaqat Ali, Constable No. 7156",
+    "Sanction · CNIC · SAP pay slip",
+    0.97,
+    1
+   ],
+   [
+    "Personnel no.",
+    "90000227",
+    "Sanction · Form 05 · pay slip · report",
+    0.99,
+    4
+   ],
+   [
+    "CNIC",
+    "00001-0000101-3 (smart card, valid to 05-11-2030)",
+    "CNIC front and back · QR · pay slip",
+    0.98,
+    2
+   ],
+   [
+    "Sanction",
+    "No. 1463/GPF-Ops dated 07-08-2026, Rs 58,000",
+    "Sanction order",
+    0.98,
+    1
+   ],
+   [
+    "Rule quoted",
+    "1.14(1)(a)(iv)(d)(i): house repair, limit 24 months’ pay or 80% of balance",
+    "Sanction order",
+    0.95,
+    1
+   ],
+   [
+    "Recovery",
+    "29 instalments of Rs 2,000",
+    "Sanction · Form 05",
+    0.96,
+    1
+   ],
+   [
+    "Basic pay",
+    "Rs 19,040 on the sanction; Rs 22,890 on the August 2026 SAP pay slip",
+    "Sanction · pay slip",
+    0.92,
+    5
+   ],
+   [
+    "GPF balance on pay slip",
+    "Rs 19,194, after this advance was posted",
+    "SAP pay slip, August 2026",
+    0.97,
+    5
+   ],
+   [
+    "Balance before the advance",
+    "Rs 79,899 at 01-07-2026",
+    "SAP re-calculation report",
+    0.98,
+    6
+   ],
+   [
+    "Advance posted in SAP",
+    "Rs 58,000 in 2026-27, Rs 2,000 recovered, balance Rs 56,000",
+    "Report · pay slip",
+    0.97,
+    6
+   ],
+   [
+    "Payroll unit in SAP",
+    "LO0056 DIG Special Protection Unit (sanction and Form 05: DIG Operations, DDO LO5313)",
+    "Pay slip · Form 05",
+    0.9,
+    5
+   ]
+  ]
+ },
+ "non-refundable": {
+  "slug": "non-refundable",
+  "key": "non-refundable",
+  "pageDims": {
+   "1": [
+    2463,
+    3485
+   ],
+   "2": [
+    2422,
+    3427
+   ],
+   "3": [
+    2422,
+    3427
+   ],
+   "4": [
+    2389,
+    3380
+   ],
+   "5": [
+    2372,
+    3357
+   ],
+   "6": [
+    2463,
+    3485
+   ],
+   "7": [
+    3193,
+    2257
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "Government of the Punjab, School Education Department, ORDER No."
+   },
+   {
+    "p": 2,
+    "title": "Photocopy of a smart CNIC front (chip visible), rotated 90 degrees."
+   },
+   {
+    "p": 3,
+    "title": "Photocopy of the smart CNIC back, rotated 90 degrees."
+   },
+   {
+    "p": 4,
+    "title": "FORM PAY 06, PERMANENT LOANS/ADVANCES FORM (NEW & AMENDMENT)."
+   },
+   {
+    "p": 5,
+    "title": "SAP pay slip, Lahore, P Sec 035, Month August 2026, LV6280 -GOVT."
+   },
+   {
+    "p": 6,
+    "title": "Second sheet of the same August 2026 SAP pay slip ('Sheet no."
+   },
+   {
+    "p": 7,
+    "title": "SAP GPF Final Re-calculation Report, Page 1, Date 10/09/2026, Time 14:49:25, for 90000216 RUBINA TARIQ ('No :' blank)."
+   }
+  ],
+  "sap": {
+   "payslip": {
+    "page": 5,
+    "month": "August 2026",
+    "persNo": "90000216",
+    "name": "RUBINA TARIQ",
+    "designation": "PRIMARY SCHOOL TEACHER",
+    "cnic": "0000100001044",
+    "bps": "14",
+    "ddoCode": "LV6280 Govt. Girls High School R.A. Bazar Lahore",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 260522,
+    "gpfSubscription": 3900,
+    "loanInstalment": null,
+    "loanBalance": null,
+    "basicPay": 50050,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 7,
+    "persNo": "90000216",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 0,
+      "subscription": 1460,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 43,
+      "closing": 1503
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 1503,
+      "subscription": 6680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 675,
+      "closing": 8858
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 8858,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1527,
+      "closing": 17525
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 17525,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2888,
+      "closing": 27553
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 27553,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3692,
+      "closing": 38385
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 38385,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 4690,
+      "closing": 50215
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 50215,
+      "subscription": 10519,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 6282,
+      "closing": 67016
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 67016,
+      "subscription": 22371,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8989,
+      "closing": 98376
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 98376,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 16561,
+      "closing": 146377
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 146377,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 19609,
+      "closing": 197426
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 197426,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 16942,
+      "closing": 245808
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 245808,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 32592,
+      "closing": 309840
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 309840,
+      "subscription": 42960,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 47163,
+      "closing": 399963
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 399963,
+      "subscription": 46800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 59416,
+      "closing": 506179
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 506179,
+      "subscription": 46800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 66229,
+      "closing": 619208
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 619208,
+      "subscription": 46800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 77669,
+      "closing": 743677
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 743677,
+      "subscription": 7800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 490955,
+      "interest": 0,
+      "closing": 260522
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "verifications": {},
+  "custom": [
+   "NR-OFFICE-ANNOT"
+  ],
+  "qr": [
+   {
+    "id": "sanction",
+    "page": 1,
+    "doc": "sanction order",
+    "symbology": "QR code",
+    "decoded": true,
+    "crop": "non-refundable_p001_sanction_qr.png",
+    "payload": "Rubina Tariq CNIC# 0000100001044 posted as a PST (BS-14), posted at GGHS  R.A. BAZAR, Tehsil CANTT, District LAHORE",
+    "compare": [
+     {
+      "field": "name",
+      "qrVal": "Rubina Tariq",
+      "docVal": "Mrs. Rubina Tariq",
+      "docLabel": "sanction",
+      "match": true
+     },
+     {
+      "field": "CNIC",
+      "qrVal": "0000100001044",
+      "docVal": "0000100001044",
+      "docLabel": "sanction",
+      "match": true
+     },
+     {
+      "field": "post",
+      "qrVal": "PST (BS-14)",
+      "docVal": "PST (BS-14)",
+      "docLabel": "sanction",
+      "match": true
+     },
+     {
+      "field": "school",
+      "qrVal": "GGHS R.A. Bazar, Lahore",
+      "docVal": "GGHS R.A. Bazar",
+      "docLabel": "sanction",
+      "match": true
+     }
+    ]
+   },
+   {
+    "id": "cnic-back",
+    "page": 3,
+    "doc": "smart CNIC back",
+    "symbology": "QR code",
+    "decoded": true,
+    "payload": "50529399118600001000010441",
+    "crop": "non-refundable_p003_cnic_back_qr.png",
+    "compare": [
+     {
+      "field": "CNIC number",
+      "qrVal": "00001-0000104-4",
+      "docVal": "00001-0000104-4",
+      "docLabel": "card",
+      "match": true
+     },
+     {
+      "field": "card number",
+      "qrVal": "505293991186",
+      "docVal": "505293991186",
+      "docLabel": "number printed under the code",
+      "match": true
+     }
+    ]
+   }
+  ],
+  "signatures": [
+   {
+    "id": "sanction",
+    "page": 1,
+    "doc": "sanction order",
+    "role": "sanctioning",
+    "roleLabel": "Sanctioning signature",
+    "authority": "Chief Executive Officer, District Education Authority Lahore",
+    "signedBy": "Assistant Director (Admin)",
+    "forMarker": true,
+    "crop": "non-refundable_p001_sanction_signatory_stamp.png",
+    "bbox": [
+     1660,
+     1950,
+     2330,
+     2650
+    ]
+   },
+   {
+    "id": "form06-ddo",
+    "page": 4,
+    "doc": "FORM PAY 06",
+    "role": "ddo",
+    "roleLabel": "DDO signature",
+    "authority": "Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore",
+    "signedBy": "Senior Headmistress",
+    "forMarker": false,
+    "crop": "non-refundable_p004_ddo_signature_stamp.png"
+   }
+  ],
+  "thumbs": [],
+  "docs": {
+   "sanction": {
+    "present": true,
+    "page": 1,
+    "dept": "School Education Department",
+    "printedAuthority": "Chief Executive Officer (DEA) Lahore",
+    "orderNo": "113909/LHR/2026",
+    "date": "14-07-2026",
+    "rule": "Rule 1.16 of the Punjab GP Fund Rules 1978, with FD notification FD-SR-1-2-1/2000 of 12-12-2002",
+    "reason": "Age over 45 (born 05-11-1974)",
+    "amount": 490955,
+    "balanceStated": 613694,
+    "limitClause": "1.16",
+    "ageAtSanction": {
+     "y": 51,
+     "m": 8
+    },
+    "qrId": "sanction",
+    "crop": "non-refundable_p001_sanction_signatory_stamp.png"
+   },
+   "changeForm": {
+    "present": true,
+    "label": "FORM PAY 06",
+    "page": 4,
+    "personalNo": "90000216",
+    "name": "Mrs. Rubina Tariq",
+    "cnic": "00010-0000104-4",
+    "cnicCrop": "non-refundable_p004_personal_no_and_cnic.png",
+    "sigKind": "signature",
+    "sigCrop": "non-refundable_p004_employee_specimen_signatures.png",
+    "ddoSigned": true,
+    "ddoStamp": "Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore",
+    "ddoCrop": "non-refundable_p004_ddo_signature_stamp.png"
+   },
+   "cnics": [
+    {
+     "page": 2,
+     "whose": "subscriber",
+     "type": "smart",
+     "number": "00001-0000104-4",
+     "name": "Rubina Tariq",
+     "expiry": "08-08-2032",
+     "attested": true,
+     "attestedBy": "Senior Headmistress, GGHS R.A. Bazar",
+     "sigCrop": "non-refundable_p002_cnic_holder_signature.png",
+     "crop": "non-refundable_p002_cnic_number_issue.png"
+    }
+   ]
+  },
+  "label": "Non-Refundable Advance",
+  "kind": "nonrefundable",
+  "family": "ADVANCE",
+  "sub": "Non-refundable advance at age 50 or over, Rule 1.16",
+  "subject": "Rubina Tariq, PST (BS-14)",
+  "dept": "School Education Department, GGHS R.A. Bazar, Lahore Cantt",
+  "personnelNo": "90000216",
+  "pages": 7,
+  "diary": "987752 / 212877, 23-07-2026",
+  "gazetted": "non-gazetted",
+  "note": "Mrs Rubina Tariq, PST. Rs 490,955 under Rule 1.16. QR-coded sanction and smart CNIC both scan and agree. CNIC digits transposed on Form 6-B.",
+  "persNos": [
+   {
+    "doc": "Sanction order",
+    "page": 1,
+    "value": "90000216"
+   },
+   {
+    "doc": "FORM PAY 06",
+    "page": 4,
+    "value": "90000216"
+   },
+   {
+    "doc": "SAP pay slip, August 2026",
+    "page": 5,
+    "value": "90000216"
+   },
+   {
+    "doc": "GPF Final Re-calculation Report",
+    "page": 7,
+    "value": "90000216"
+   }
+  ],
+  "record": [
+   [
+    "Subscriber",
+    "Mrs Rubina Tariq w/o Tariq Ur Rehman, Primary School Teacher",
+    "Sanction · CNIC · SAP pay slip",
+    0.97,
+    1
+   ],
+   [
+    "Personnel no.",
+    "90000216",
+    "Sanction · Form 06 · pay slip · report",
+    0.99,
+    4
+   ],
+   [
+    "CNIC",
+    "00001-0000104-4 (smart card); Form 06 writes 00010-0000104-4",
+    "Card · QR codes · pay slip · Form 06",
+    0.97,
+    2
+   ],
+   [
+    "Date of birth, age at sanction",
+    "05-11-1974; 51 years 8 months on 14-07-2026",
+    "Sanction · CNIC · pay slip",
+    0.98,
+    1
+   ],
+   [
+    "Sanction",
+    "No. 113909/LHR/2026 dated 14-07-2026, Rs 490,955",
+    "Sanction order",
+    0.98,
+    1
+   ],
+   [
+    "Rule quoted",
+    "1.16, with FD notification FD-SR-1-2-1/2000 of 12-12-2002",
+    "Sanction order",
+    0.96,
+    1
+   ],
+   [
+    "Balance stated on sanction",
+    "Rs 613,694 (Rs 490,955 is exactly 80% of it)",
+    "Sanction order",
+    0.95,
+    1
+   ],
+   [
+    "GPF balance on pay slip",
+    "Rs 260,522, after this advance was posted",
+    "SAP pay slip, August 2026",
+    0.98,
+    5
+   ],
+   [
+    "Balance before the advance",
+    "Rs 743,677 at 30-06-2026",
+    "SAP re-calculation report",
+    0.98,
+    7
+   ],
+   [
+    "Office annotation on Form 06",
+    "490,955 less 12,274 (2.5%), net Rs 478,681",
+    "Form 06 foot",
+    0.9,
+    4
+   ]
+  ]
+ },
+ "balance-transfer": {
+  "slug": "balance-transfer",
+  "key": "balance-transfer",
+  "pageDims": {
+   "1": [
+    2994,
+    2116
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "title": "The proforma regarding transfer of GP Fund balances, in landscape."
+   }
+  ],
+  "sap": null,
+  "verifications": {},
+  "custom": [],
+  "qr": [],
+  "signatures": [
+   {
+    "id": "ddo",
+    "page": 1,
+    "doc": "proforma",
+    "role": "ddo",
+    "roleLabel": "DDO signature",
+    "authority": "Director Public Relations, Faisalabad",
+    "signedBy": "unidentified signatory (no stamp, name or date)",
+    "forMarker": false,
+    "crop": "balance-transfer_p001_ddo_signature_no_stamp.png",
+    "bbox": [
+     2036,
+     1347,
+     2635,
+     1602
+    ]
+   },
+   {
+    "id": "dao",
+    "page": 1,
+    "doc": "DAO endorsement",
+    "role": "certifying",
+    "roleLabel": "DAO confirmation",
+    "authority": "District Accounts Office, Faisalabad",
+    "signedBy": "District Accounts Officer, Faisalabad",
+    "forMarker": false,
+    "crop": "balance-transfer_p001_dao_endorsement_stamp_signature.png",
+    "bbox": [
+     1527,
+     1168,
+     2215,
+     1677
+    ]
+   }
+  ],
+  "thumbs": [],
+  "docs": {
+   "covering": {
+    "present": true,
+    "page": 1,
+    "author": "the Director Public Relations Faisalabad and the DAO Faisalabad",
+    "nature": "Handwritten forwarding on the proforma and DAO endorsement",
+    "crop": "balance-transfer_p001_hod_forwarding_note.png"
+   },
+   "proforma": {
+    "page": 1,
+    "name": "Rafaqat Ahmad",
+    "father": "Mian Nawab",
+    "designation": "Director",
+    "oldAc": "Personal No:- 90000847",
+    "newAc": "Personal No:- 90000847",
+    "daoConfirmed": "The GP Fund A/C No: P# 90000847 Is Hereby Confirmed",
+    "lastDeduction": "",
+    "periods": "Lahore 24-04-1999 to March 2009, March 2011 to March 2013, October 2018 to August 2019, March 2021 to March 2025",
+    "crop": "balance-transfer_p001_particulars_name_father_designation.png",
+    "periodsCrop": "balance-transfer_p001_col7_period_of_posting.png",
+    "daoCrop": "balance-transfer_p001_dao_endorsement_stamp_signature.png"
+   }
+  },
+  "label": "Balance Transfer",
+  "kind": "balance_transfer",
+  "family": "BALANCE_TRANSFER",
+  "sub": "Transfer of GP Fund balances, Lahore postings to DAO Faisalabad",
+  "subject": "Rafaqat Ahmad, Director",
+  "dept": "Office of the Director Public Relations, Faisalabad",
+  "personnelNo": "90000847",
+  "pages": 1,
+  "diary": "14580 / 243780 / 988477, 03-08-2026",
+  "gazetted": "unknown",
+  "note": "Rafaqat Ahmad, Director PR Faisalabad. One-page proforma. The DAO has confirmed P# 90000847 as the GP Fund account; old account and last deduction to come from SAP.",
+  "persNos": [
+   {
+    "doc": "Proforma column 4",
+    "page": 1,
+    "value": "90000847"
+   },
+   {
+    "doc": "Proforma column 5",
+    "page": 1,
+    "value": "90000847"
+   },
+   {
+    "doc": "DAO Faisalabad endorsement",
+    "page": 1,
+    "value": "90000847"
+   }
+  ],
+  "record": [
+   [
+    "Subscriber",
+    "Rafaqat Ahmad s/o Mian Nawab, Director",
+    "Proforma columns 1 to 3",
+    0.97,
+    1
+   ],
+   [
+    "Office",
+    "Office of the Director Public Relations, Faisalabad",
+    "Proforma header",
+    0.97,
+    1
+   ],
+   [
+    "Old A/c no. (column 4)",
+    "\"Personal No:- 90000847\", the personnel number",
+    "Proforma",
+    0.99,
+    1
+   ],
+   [
+    "New A/c no. in DAO (column 5)",
+    "\"Personal No:- 90000847\", confirmed by DAO Faisalabad",
+    "Proforma · DAO endorsement",
+    0.98,
+    1
+   ],
+   [
+    "Last deduction (column 6)",
+    "Blank",
+    "Proforma",
+    0.99,
+    1
+   ],
+   [
+    "Column 7",
+    "Used for the posting periods; no advance figure or nil",
+    "Proforma",
+    0.95,
+    1
+   ],
+   [
+    "Posting periods",
+    "Lahore 24-04-1999 to 03-2009; 03-2011 to 03-2013; 10-2018 to 08-2019; 03-2021 to 03-2025",
+    "Proforma column 7",
+    0.93,
+    1
+   ],
+   [
+    "DAO endorsement",
+    "No. DAO/FSD/HM/212 dated 13-05-2026, forwarded to AG Punjab, \"GP Fund A/C No: P# 90000847 Is Hereby Confirmed\"",
+    "Proforma",
+    0.92,
+    1
+   ],
+   [
+    "DDO signature",
+    "Present; no office stamp, name or date",
+    "Proforma",
+    0.95,
+    1
+   ]
+  ]
+ }
+}

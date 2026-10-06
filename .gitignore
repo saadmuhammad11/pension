@@ -96,3 +96,12 @@ portals/dist-demo/
 
 # ---- Project documents (N9) ----
 !docs/*.md
+
+# ---- Data the code and its tests need from a clone (N12, 6 Oct 2026) ----
+# The whitelist above ignores every .json, so these were on the trial box only: a fresh clone
+# could not start the API (config/case_types.json) or run the GP suites. All pass the CNIC check.
+!config/*.json
+!GP/backend/gpf/fixtures/*.json
+!GP/backend/tests/ground_truth.json
+!GP/agofficegpfund/prototype/sap-samples/*.txt
+!GP/prototype
