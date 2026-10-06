@@ -368,6 +368,12 @@ def execute(run: Run) -> None:
     persist_intake(run)
     # A re-run that gets further than the last one must not carry the old refusal with it.
     (run.run_dir / DETERMINATION_GAP).unlink(missing_ok=True)
+    # Nor the old report. Unchanged papers re-run under the same run id, in the same folder, and a
+    # restart mid-run then adopted the PREVIOUS case_report.json as this run's finished result --
+    # which the reconciler approved or returned the case on (audit 6 Oct 2026). Kept, renamed.
+    previous = run.run_dir / "case_report.json"
+    if previous.exists():
+        previous.replace(run.run_dir / "case_report.previous.json")
     try:
         # Stage 0. A case that arrived as a zip of loose scans -- becomes one case file first. Skipped on a resume: the case
         # file is already on disk and rebuilding it would change nothing but the clock.
