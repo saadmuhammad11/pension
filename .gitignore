@@ -84,3 +84,12 @@ hesk_*.sql
 pension-portal.html
 pension-portal rd new.html
 demo/pension-demo.html
+
+# ---- Real claimant data (N4): never tracked, whatever the whitelist above lets through ----
+artifacts/
+GP/backend/data/
+GP/agofficegpfund/_wip-*/
+*.pdf
+*.rar
+agofficegpfund*.zip
+portals/dist-demo/
