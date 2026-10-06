@@ -8,7 +8,9 @@ GPF-O14).
 """
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Optional
 
 # (regex, replacement) — expand common designation abbreviations before matching.
@@ -76,12 +78,46 @@ def doa_find_signatory(sig_id: str):
     return None, None
 
 
+#: Where the register is kept between restarts (gpf.api sets it under GPF_DATA_DIR). The
+#: specimens an officer recorded and the signatories added lived only in this process and were
+#: gone at the next restart (audit 6 Oct 2026, G5). None: in memory only (tests).
+DOA_PATH: Optional[Path] = None
+
+
+def load_register(path: Optional[Path] = None) -> bool:
+    """Replace the provisional register with the saved one, where a saved one exists."""
+    target = path or DOA_PATH
+    if not target or not Path(target).is_file():
+        return False
+    try:
+        saved = json.loads(Path(target).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(saved, dict) or "authorities" not in saved:
+        return False
+    DOA.clear()
+    DOA.update(saved)
+    return True
+
+
+def _persist() -> None:
+    """Write the register after every change; a half-written file never replaces a whole one."""
+    if not DOA_PATH:
+        return
+    target = Path(DOA_PATH)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(json.dumps(DOA, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(target)
+
+
 def doa_set_specimen(sig_id: str, image_ref: str, *, by: str = "", at: str = "") -> bool:
     """Record a specimen signature against a signatory (spec §8.2). Register only."""
     _, g = doa_find_signatory(sig_id)
     if not g:
         return False
     g["specimen"] = {"imageRef": image_ref, "capturedBy": by, "capturedAt": at, "active": True}
+    _persist()
     return True
 
 
@@ -93,6 +129,7 @@ def doa_add_signatory(authority_id: str, post: str, *, name: str = "", may_for: 
     sig = {"id": authority_id + "-" + re.sub(r"[^a-z0-9]", "", post.lower())[:12],
            "post": post, "name": name, "mayFor": may_for, "powers": powers, "specimen": None}
     a["signatories"].append(sig)
+    _persist()
     return sig
 
 
@@ -101,6 +138,7 @@ def doa_finalize(published_by: str = "", published_at: str = "") -> None:
     DOA["status"] = "final"
     DOA["publishedBy"] = published_by
     DOA["publishedAt"] = published_at
+    _persist()
 
 
 def doa_status_text(m: dict) -> str:

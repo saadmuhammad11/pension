@@ -25,6 +25,7 @@ from .reading.jobs import JobRegistry
 from .reading.artefacts import CLASSIFY_HINTS
 from .reading.barcodes import NullBarcodeDecoder
 from .reference import rules_in_force
+from . import doa as doa_mod
 from .service import CaseService, ServiceError
 from .store import DEFAULT_DB, CaseRepository, DocumentStore, SqliteCaseRepository
 
@@ -32,6 +33,10 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BACKEND_DIR.parent          # the "GP Fund" project root
 DATA_DIR = Path(os.environ.get("GPF_DATA_DIR", BACKEND_DIR / "data"))
 WEB_DIR = BACKEND_DIR / "web"
+# The DOA register's saved copy: specimens recorded and signatories added survive a restart
+# (audit 6 Oct 2026, G5). Loaded now, before the service answers anything.
+doa_mod.DOA_PATH = DATA_DIR / "doa.json"
+doa_mod.load_register()
 PROTO = REPO_ROOT / "prototype"
 
 # ── singletons (swap the repository/connector for Postgres/RFC in production) ──
