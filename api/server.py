@@ -841,6 +841,11 @@ def _v2_startup() -> None:
     except Exception:                                 # noqa: BLE001
         # Loud, with the traceback: a silent failure here once left the service up with no seed.
         print("[v2] STARTUP FAILED -- the case system may be incomplete:\n" + traceback.format_exc(), flush=True)
+        if _settings.production():
+            # Production does not serve on a half-migrated or unseeded database: uvicorn exits when
+            # a start-up handler raises, and systemd's restart and the journal take it from there
+            # (audit 6 Oct 2026). The trial keeps running, as before, so a slip there is not an outage.
+            raise
     # The reconciler runs regardless: a case mid-verification must still be moved on.
     case_runs.start_reconciler()
 

@@ -152,7 +152,9 @@ def migrate(conn: sqlite3.Connection | None = None) -> list[str]:
             # CREATE statements are IF NOT EXISTS; an ALTER TABLE ADD COLUMN has no such form,
             # so a column a half-applied run already added is skipped rather than fatal.
             _apply_migration(conn, path.read_text(encoding="utf-8"))
-            conn.execute("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+            # OR IGNORE: the GP Fund module records 0005 itself (gpf/store.py), and the two
+            # starting together on a fresh database must not abort the migrations after it.
+            conn.execute("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                          (version, now()))
             applied.append(version)
         return applied
