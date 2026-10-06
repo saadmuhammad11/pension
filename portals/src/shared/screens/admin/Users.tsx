@@ -15,6 +15,11 @@ export function Users() {
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
+  // Disable and reset used to go through window.prompt: a password typed into a browser prompt is
+  // shown in clear, cannot be a password field, and the prompt is blocked by some browsers
+  // (audit 6 Oct 2026, L9). They are ordinary forms now, with the password masked.
+  const [ask, setAsk] = useState<{ kind: 'disable' | 'reset'; user: AdminUser } | null>(null)
+  const [answer, setAnswer] = useState('')
   const deptName = useMemo(() => Object.fromEntries(depts.map(d => [d.code, d.name])), [depts])
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase()
@@ -45,6 +50,15 @@ export function Users() {
     })
   }
 
+  function answerAsk(e: FormEvent) {
+    e.preventDefault()
+    if (!ask) return
+    const { kind, user } = ask
+    const value = answer
+    setAsk(null); setAnswer('')
+    run(() => kind === 'disable' ? disableUser(user.id, value) : resetPassword(user.id, value))
+  }
+
   return (
     <div className="screen container" style={{ paddingTop: 22 }}>
       <h1>Users</h1>
@@ -59,6 +73,21 @@ export function Users() {
         </select>
         <span className="register-count"><strong>{shown.length}</strong> of {users.length} accounts</span>
       </div>
+
+      {ask && (
+        <form className="card stack" style={{ marginTop: 'var(--s3)' }} onSubmit={answerAsk} aria-label={ask.kind === 'disable' ? 'Disable account' : 'Reset password'}>
+          <h3 style={{ margin: 0 }}>{ask.kind === 'disable' ? `Disable ${ask.user.username}` : `New password for ${ask.user.username}`}</h3>
+          {ask.kind === 'disable'
+            ? <div className="field"><label className="label" htmlFor="ask-reason">Reason (goes on the audit trail)</label>
+                <input id="ask-reason" autoFocus autoComplete="off" value={answer} onChange={e => setAnswer(e.target.value)} required /></div>
+            : <div className="field"><label className="label" htmlFor="ask-password">Password (8+ characters; the officer is asked to change it)</label>
+                <input id="ask-password" type="password" autoFocus autoComplete="new-password" value={answer} onChange={e => setAnswer(e.target.value)} required minLength={8} /></div>}
+          <div className="row" style={{ gap: 'var(--s2)' }}>
+            <button className="primary" type="submit" disabled={busy}>{ask.kind === 'disable' ? 'Disable account' : 'Set password'}</button>
+            <button type="button" onClick={() => { setAsk(null); setAnswer('') }}>Cancel</button>
+          </div>
+        </form>
+      )}
 
       <div className="side-grid" style={{ marginTop: 'var(--s3)' }}>
         <div className="card table-wrap" style={{ padding: 0 }}>
@@ -77,11 +106,11 @@ export function Users() {
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {u.active
                       ? <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
-                                onClick={() => { const r = window.prompt(`Disable ${u.username}? Reason:`); if (r !== null) run(() => disableUser(u.id, r)) }}>Disable</button>
+                                onClick={() => { setAsk({ kind: 'disable', user: u }); setAnswer('') }}>Disable</button>
                       : <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }} onClick={() => run(() => enableUser(u.id))}>Enable</button>}
                     {' '}
                     <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
-                            onClick={() => { const p = window.prompt(`New password for ${u.username} (8+ characters):`); if (p) run(() => resetPassword(u.id, p)) }}>Reset password</button>
+                            onClick={() => { setAsk({ kind: 'reset', user: u }); setAnswer('') }}>Reset password</button>
                   </td>
                 </tr>
               ))}
