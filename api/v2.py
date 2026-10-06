@@ -1340,15 +1340,18 @@ def _act(conn: sqlite3.Connection, user: User, case_id: str, action: str, body: 
         if action in ("APPROVE", "REJECT", "RETURN", "REQUEST_DOCS") and row["status"] == workflow.FORWARDED:
             workflow.transition(conn, row, "TAKE_UP", user, remark="", run_id=run_id)
             row = conn.execute("SELECT * FROM cases WHERE id = ?", (row["id"],)).fetchone()
+        within = None
+        if action == "OVERRIDE":
+            # The audit row is written in the override's own transaction: a crash or a refused
+            # insert between the two left an override with no audit line (audit 6 Oct 2026, C2).
+            def within(c: sqlite3.Connection, entry: dict, *, _row=row) -> None:
+                workflow.audit(c, actor=user, action="CASE_OVERRIDE", entity_type="case", entity_id=_row["id"],
+                               before={"status": _row["status"]}, after={"status": entry["to_status"]},
+                               reason=remark, ip=_client_address(request))
         entry = workflow.transition(conn, row, action, user, remark=remark, payload=payload, run_id=run_id,
-                                    to_status=body.get("to_status"))
+                                    to_status=body.get("to_status"), within=within)
     except workflow.WorkflowError as exc:
         _raise(exc)
-    if action == "OVERRIDE":
-        after = conn.execute("SELECT * FROM cases WHERE id = ?", (row["id"],)).fetchone()
-        workflow.audit(conn, actor=user, action="CASE_OVERRIDE", entity_type="case", entity_id=row["id"],
-                       before={"status": row["status"]}, after={"status": after["status"]},
-                       reason=remark, ip=_client_address(request))
     if mirror and run_id:
         # Keep the old register (api.cases) in agreement with what the AG decided here.
         case_runs.mirror_decision(run_id, mirror, user.display_name,

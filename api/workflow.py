@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any
+from typing import Any, Callable
 
 from api import db
 
@@ -171,11 +171,16 @@ def record_event(conn: sqlite3.Connection, case_id: str, *, action: str, from_st
 
 def transition(conn: sqlite3.Connection, case: sqlite3.Row, action: str, actor: Any, *,
                remark: str = "", payload: dict | None = None, run_id: str | None = None,
-               to_status: str | None = None) -> dict:
+               to_status: str | None = None,
+               within: Callable[[sqlite3.Connection, dict], None] | None = None) -> dict:
     """Move the case and write the history row, inside one transaction.
 
     ``actor`` is an ``api.auth.User`` or None for the system (the reconciler). The permission
     check is skipped for the system, whose actions are the SYSTEM_ACTIONS and nothing else.
+
+    ``within`` runs inside the same transaction, after the history row, with the new event: for
+    rows that must exist if and only if the move happened (the override's audit row, audit
+    6 Oct 2026). If it raises, the move is rolled back with it.
     """
     role = getattr(actor, "role", "")
     if actor is not None:
@@ -210,6 +215,8 @@ def transition(conn: sqlite3.Connection, case: sqlite3.Row, action: str, actor: 
         entry = record_event(conn, case["id"], action=action, from_status=case["status"],
                              to_status=new_status, actor=actor, remark=remark, payload=payload,
                              run_id=run_id)
+        if within is not None:
+            within(conn, entry)
     return entry
 
 
