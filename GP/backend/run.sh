@@ -157,8 +157,10 @@ tests() {
   # GPF_VLLM_URLS is exported at the top of this script for the SERVER. It must not reach the
   # suite: two tests assert what happens when there is no vision model, and with the real
   # endpoints visible they see a working one and fail. The suite configures its own model
-  # state per test, so it is run with the server's model settings removed.
-  ( cd "$ROOT" && exec env -u GPF_VLLM_URLS -u GPF_VLLM_TIMEOUT \
+  # state per test, so it is run with the server's model settings removed. GPF_DATA_DIR too: it
+  # points at the live data folder, and conftest.py only sends the suite to a temporary one
+  # when the variable is unset (a scan-read test once left its uploads among real cases).
+  ( cd "$ROOT" && exec env -u GPF_VLLM_URLS -u GPF_VLLM_TIMEOUT -u GPF_DATA_DIR \
       "$TEST_VENV/bin/python" -m pytest "${@}" )
 }
 

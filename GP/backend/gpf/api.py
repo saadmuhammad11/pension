@@ -256,7 +256,7 @@ def _read_scans(refs: list[str], kind: str, gazetted: str, officer: str,
     result = reading_pipeline.run(ingest_pages(refs), kind=kind, gazetted=gazetted,
                                   on_progress=on_progress, cache=cache, page_keys=page_keys)
     cid = service.create_case_from_facts(result.facts, meta={"label": f"{kind.title()} (from scans)"},
-                                         officer_id=_acting(request, officer))
+                                         officer_id=officer)  # callers resolve _acting() first
     # The case's own pages, in reading order, so its evidence can be shown (30 Sep 2026: every
     # scanned claim's evidence images were blank -- the screen looked for them among the demo cases').
     save_page_refs(cid, refs)
