@@ -56,6 +56,8 @@ from api import settings
 from api.departments import AG_PORTAL_PORT, AG_PORTAL_SLUG, BY_PORT, DEPARTMENTS, SINGLE_PORTAL
 from api.themes import theme_for
 
+MAX_REQUEST_BYTES = settings.MAX_REQUEST_BYTES
+
 ROOT = Path(__file__).resolve().parents[1]
 DIST = Path(os.environ.get("PENSION_PORTAL_DIST") or ROOT / "portals" / "dist")
 API = os.environ.get("PENSION_API_URL") or "http://127.0.0.1:8110"
@@ -347,6 +349,15 @@ class PortalApp:
         headers = {k: v for k, v in request.headers.items()
                    if k.lower() not in _HOP_BY_HOP and k.lower() not in _SERVER_SET}
         headers["X-Portal"] = cfg["slug"] or ""
+        # The length goes through (it is not hop-by-hop for a body passed on unchanged): without it
+        # the body went upstream chunked and the API's early size refusal never fired. Past the
+        # limit the request stops here (audit 6 Oct 2026).
+        length = request.headers.get("content-length", "")
+        if length.isdigit():
+            if int(length) > MAX_REQUEST_BYTES:
+                return JSONResponse({"detail": f"the request exceeds {MAX_REQUEST_BYTES // 1048576} MB"},
+                                    status_code=413)
+            headers["Content-Length"] = length
         headers["X-Forwarded-Host"] = request.headers.get("host", "")
         headers["X-Forwarded-Port"] = str(port)
         headers["X-Forwarded-For"] = request.client.host if request.client else ""

@@ -48,6 +48,11 @@ def min_password_length() -> int:
     return 10 if production() else 8
 
 
+#: The most a single request body may be (the upload caps plus multipart overhead). Refused from
+#: the Content-Length alone, before a byte of it is read: by the portal's proxy and by the API.
+MAX_REQUEST_BYTES = 520 * 1024 * 1024
+
+
 def max_bundle_pages() -> int:
     """Pages the merged case file may have, whatever it was uploaded as. The per-file limit above
     is checked at upload, where a zip's contents are not opened; a zip of PDFs reached the

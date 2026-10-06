@@ -750,9 +750,37 @@ app.include_router(_v2_router)
 #: routes the run script and the portals need stay open.
 _OPEN_V1 = ("/api/health", "/api/gpu", "/api/variants", "/api/v2/")
 
-#: The most a single request body may be (the upload caps plus multipart overhead); refused from
-#: the Content-Length alone, before a byte of it is read.
-MAX_REQUEST_BYTES = 520 * 1024 * 1024
+MAX_REQUEST_BYTES = _settings.MAX_REQUEST_BYTES
+
+
+@app.middleware("http")
+async def _uploads_need_a_session_first(request: Request, call_next):
+    """An upload to the case system is refused before its body is read unless it carries a live
+    session. FastAPI parses -- and spools to disk -- a multipart body before the route's own
+    sign-in check runs, so anyone could make the server take 520 MB per request on the way to a
+    401 (audit 6 Oct 2026). The old /api/* routes check the token first in their own middleware."""
+    if (request.method in ("POST", "PUT", "PATCH") and request.url.path.startswith("/api/v2/")
+            and request.headers.get("content-type", "").lower().startswith("multipart/")):
+        from starlette.concurrency import run_in_threadpool
+        from api import auth, db
+        header = request.headers.get("authorization", "")
+        token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+
+        def check() -> int | None:
+            if not token:
+                return 401
+            conn = db.connect()
+            try:
+                auth.user_for_token(token, conn)
+            except auth.AuthError as exc:
+                return exc.status
+            finally:
+                conn.close()
+            return None
+        refused = await run_in_threadpool(check)
+        if refused:
+            return JSONResponse({"detail": "sign in before uploading documents"}, status_code=refused)
+    return await call_next(request)
 
 
 @app.middleware("http")
