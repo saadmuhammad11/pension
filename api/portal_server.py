@@ -283,6 +283,21 @@ class PortalApp:
         self._gpf_ok[token] = (now + 30, officer)
         return officer
 
+    async def gpf_act_refused(self, request: Request, sub: str) -> Response | None:
+        """A change sent from the frame is passed on only if the API agrees this officer may act on
+        that examination now: never from the 30-second cache, because what decides it is the
+        portal case's status, which moves (audit 6 Oct 2026). Fails closed."""
+        try:
+            async with self.session.get(f"{self.api}/api/v2/auth/gpf-act-check",
+                                        headers={"X-GPF-Session": request.cookies.get(GPF_COOKIE, ""),
+                                                 "X-GPF-Path": sub}) as r:
+                if r.status == 200:
+                    return None
+                detail = str((await r.json(content_type=None) or {}).get("detail") or "not allowed")
+                return JSONResponse({"detail": detail}, status_code=r.status if r.status in (401, 403, 409) else 502)
+        except (aiohttp.ClientError, ValueError):
+            return JSONResponse({"detail": "the portal could not confirm this action; try again"}, status_code=502)
+
     @staticmethod
     def _gpf_refused() -> Response:
         return HTMLResponse("<!doctype html><meta charset=utf-8><title>Sign in</title><p style='font-family:sans-serif'>"
@@ -301,6 +316,10 @@ class PortalApp:
             return self._gpf_refused()
         assert self.session is not None
         sub = "/" + request.path_params.get("path", "")
+        if request.method not in ("GET", "HEAD", "OPTIONS") and not self.gpf_open():
+            refused = await self.gpf_act_refused(request, sub)
+            if refused is not None:
+                return refused
         url = f"{self.gpf}{sub}" + (f"?{request.url.query}" if request.url.query else "")
         # The module gets neither the portal's cookies (the frame's sign-in among them) nor its token,
         # and the officer it records is the signed-in account's: a browser's X-GPF-Officer is dropped.

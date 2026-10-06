@@ -153,18 +153,39 @@ def gpf_check(x_gpf_session: str | None = Header(default=None),
               conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """The portal server's question for each /gpf/ request: is this frame cookie a live sign-in
     of an AG or administrator account? 401/403 otherwise."""
+    user = _gpf_frame_user(x_gpf_session, conn)
+    # The officer band the module records this account's actions under; the portal server passes
+    # it on as X-GPF-Officer, and the module takes it over whatever the page claims.
+    return {"ok": True, "user": user.username, "officer": gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao")}
+
+
+def _gpf_frame_user(token: str | None, conn: sqlite3.Connection) -> User:
     from api.auth import GPF_SCOPE, user_for_token
-    if not x_gpf_session:
+    if not token:
         raise HTTPException(401, "sign in at the portal first")
     try:
-        user = user_for_token(x_gpf_session, conn, scope=GPF_SCOPE)
+        user = user_for_token(token, conn, scope=GPF_SCOPE)
     except AuthError as exc:
         _raise(exc)
     if user.role not in ("AG_REVIEWER", "ADMIN") or user.must_change_password:
         raise HTTPException(403, "this account may not open the GP Fund module")
-    # The officer band the module records this account's actions under; the portal server passes
-    # it on as X-GPF-Officer, and the module takes it over whatever the page claims.
-    return {"ok": True, "user": user.username, "officer": gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao")}
+    return user
+
+
+@router.get("/auth/gpf-act-check")
+def gpf_act_check(x_gpf_session: str | None = Header(default=None),
+                  x_gpf_path: str = Header(default=""),
+                  conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    """The portal server's question before passing a CHANGE to the module from the frame: may
+    this signed-in officer act on the examination that path names? 409 when its portal case is
+    not under review (_gpf_may_act). Module cases the portal never filed are not its to judge."""
+    _gpf_frame_user(x_gpf_session, conn)
+    match = _GPF_CASE_ROUTE.match(x_gpf_path or "")
+    if match:
+        row = conn.execute("SELECT case_no, status FROM cases WHERE gpf_case_id = ?", (match.group(1),)).fetchone()
+        if row is not None:
+            _gpf_may_act(row)
+    return {"ok": True}
 
 
 def capabilities(user: User) -> dict:
@@ -1245,11 +1266,30 @@ def override(case_id: str, request: Request, body: dict = Body(...),
 
 # -- the GP Fund module, behind the case's ownership check -------------------------------------
 
-def _gpf_case_or_404(conn: sqlite3.Connection, case_id: str, user: User) -> sqlite3.Row:
+def _gpf_case_or_404(conn: sqlite3.Connection, case_id: str, user: User, *, acting: bool = False) -> sqlite3.Row:
     row = _case_or_404(conn, case_id, user)
     if row["product"] != "GPF" or not row["gpf_case_id"]:
         raise HTTPException(404, "this GP Fund claim has not been examined yet")
+    if acting:
+        _gpf_may_act(row)
     return row
+
+
+def _gpf_may_act(row: sqlite3.Row) -> None:
+    """An officer acts on a GP Fund examination only while its case is with the AG for review.
+
+    The portal moves a case on the module's position only from UNDER_REVIEW (case_runs.
+    sync_gpf_case), so an action taken in any other status -- "pass for payment" on a case already
+    rejected or returned, or on the previous examination while a new one is running -- left the
+    module and the portal disagreeing about the same claim (audit 6 Oct 2026).
+    """
+    if row["status"] != workflow.UNDER_REVIEW:
+        raise HTTPException(409, f"case {row['case_no']} is {row['status']}; the GP Fund examination can be "
+                                 f"acted on only while the case is under the AG's review")
+
+
+#: A module route that changes one examination: /api/cases/<module case id>/<action>.
+_GPF_CASE_ROUTE = re.compile(r"^/api/cases/([^/]+)/")
 
 
 def _gpf_after(conn: sqlite3.Connection, row: sqlite3.Row, user: User, what: str, detail: dict) -> dict:
@@ -1272,7 +1312,7 @@ def case_gpf_action(case_id: str, action: str, body: dict = Body(default={}),
     verify (a verification task), dispositions (uphold / waive / correct / refer an observation),
     dispose (return / pay / part / refer / hold), sap (an extract pasted as text). Sent to the
     module under the officer's GP Fund identity; the module decides who may do what."""
-    row = _gpf_case_or_404(conn, case_id, user)
+    row = _gpf_case_or_404(conn, case_id, user, acting=True)
     officer = gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao")
     allowed = {"verify": ("vid", "ok", "note"), "dispositions": ("resultId", "action", "ground", "authority"),
                "dispose": ("disposal", "note"), "sap": ("filename", "text")}
@@ -1293,7 +1333,7 @@ async def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = F
                         user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
                         conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """Cure an examination item by a document or by values, through the module."""
-    row = _gpf_case_or_404(conn, case_id, user)
+    row = _gpf_case_or_404(conn, case_id, user, acting=True)
     try:
         parsed = json.loads(values or "{}")
     except ValueError:
