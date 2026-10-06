@@ -107,6 +107,15 @@ def page_images(files: list[Path], out_dir: Path, dpi: int = 200, *, with_keys: 
     return (pages, keys) if with_keys else pages
 
 
+def part_filename(name: str) -> str:
+    """A file name safe inside a multipart header: its base name, with the quote, backslash and
+    line-break characters that would end the header or the part replaced (audit 6 Oct 2026, L7).
+    The department's own name for the paper is kept in the case record; this is transport."""
+    base = Path(str(name or "")).name
+    cleaned = re.sub(r'["\\\r\n\x00-\x1f\x7f]', "_", base).strip() or "upload"
+    return cleaned[:200]
+
+
 def _multipart(fields: dict[str, str], files: list[Path], extra: dict[str, list[Path]] | None = None) -> tuple[bytes, str]:
     boundary = "----pension" + uuid.uuid4().hex
     out = bytearray()
@@ -115,7 +124,7 @@ def _multipart(fields: dict[str, str], files: list[Path], extra: dict[str, list[
     for field, group in (("files", files), *((extra or {}).items())):
         for f in group:
             ctype = "image/jpeg" if f.suffix.lower() in (".jpg", ".jpeg") else "application/octet-stream"
-            out += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{f.name}\"\r\n"
+            out += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{part_filename(f.name)}\"\r\n"
                     f"Content-Type: {ctype}\r\n\r\n").encode()
             out += f.read_bytes() + b"\r\n"
     out += f"--{boundary}--\r\n".encode()
@@ -200,7 +209,7 @@ def cure(gpf_case_id: str, result_id: str, officer: str, values: dict, file: tup
         out += f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode()
     if file is not None:
         name, content = file
-        out += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n"
+        out += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{part_filename(name)}\"\r\n"
                 f"Content-Type: application/octet-stream\r\n\r\n").encode() + content + b"\r\n"
     out += f"--{boundary}--\r\n".encode()
     return _request("POST", f"/api/cases/{gpf_case_id}/cure", body=bytes(out),
