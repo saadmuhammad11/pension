@@ -14,6 +14,7 @@
  */
 import { useEffect, useState } from 'react'
 import { dataChanged, get } from '../api/client'
+import { getToken } from '../auth/session'
 import type { CaseStatus, CaseSummary, Product } from '../api/cases'
 
 export interface DeptCount {
@@ -76,6 +77,7 @@ dataChanged.addEventListener('change', () => refreshAll(true))
 let polling: ReturnType<typeof setInterval> | null = null
 async function checkVersion() {
   if (document.visibilityState !== 'visible') return
+  if (!getToken()) return                       // signed out: nothing to keep current, nobody to ask as
   try {
     const { version: v } = await get<{ version: string }>('/api/v2/inventory/version')
     if (v && v !== version) { version = v; refreshAll(false) }
@@ -86,6 +88,17 @@ function ensurePolling() {
   polling = setInterval(checkVersion, 3000)
   document.addEventListener('visibilitychange', checkVersion)
   window.addEventListener('focus', checkVersion)
+}
+
+/** Sign-out's share of the work: stop asking the server and forget what this session saw.
+ *  The 3-second poll used to run on after sign-out, asking for the inventory as nobody and
+ *  keeping the last officer's rows in memory for the next person at the PC (audit 6 Oct 2026, L5). */
+export function stopInventoryPolling() {
+  if (polling) { clearInterval(polling); polling = null }
+  document.removeEventListener('visibilitychange', checkVersion)
+  window.removeEventListener('focus', checkVersion)
+  cache.clear()
+  version = ''
 }
 
 /** The inventory for one query, kept current. Same query in two views = the same object. */

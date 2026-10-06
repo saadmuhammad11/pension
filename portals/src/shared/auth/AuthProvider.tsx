@@ -8,6 +8,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ApiError, get, post } from '../api/client'
+import { stopInventoryPolling } from '../data/inventory'
 import { navigate } from '../router/hash'
 import { IDLE_MINUTES, IDLE_WARNING_MINUTES, PORTAL_SLUG, getToken, rememberNext, setToken, setUnauthorisedHandler, takeNext,
          type Capabilities, type SessionUser } from './session'
@@ -54,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // next person at a shared PC could open /gpf/ as this officer for two hours. Best effort.
     void fetch('/api/v2/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
     setToken(null); setUser(null); setCan(null); setWarning(null)
+    stopInventoryPolling()                      // no more 3-second asks, and this officer's rows are forgotten
+
     if (why) setNotice(why)
     navigate('/', { replace: true })
   }, [])
