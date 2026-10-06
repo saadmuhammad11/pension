@@ -58,8 +58,34 @@ MAX_FRAME_PIXELS = 50_000_000
 MAX_IMAGE_PIXELS = 400_000_000
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
+#: HTML is not among them: LibreOffice renders a web page by fetching every address in it, so
+#: one <img src=...> made the server request internal addresses and embed local files in the
+#: case PDF (audit 6 Oct 2026, item 6). An .html member is now "not a document".
 OFFICE_EXT = {".doc", ".docx", ".odt", ".rtf", ".txt", ".csv", ".xls", ".xlsx", ".ods",
-              ".ppt", ".pptx", ".odp", ".html", ".htm"}
+              ".ppt", ".pptx", ".odp"}
+#: The import filter each extension is opened with. Forced: left to itself LibreOffice decides
+#: the type from the content, and HTML saved as notice.doc or notice.rtf was opened as a web
+#: page and fetched its addresses all the same.
+_OFFICE_FILTERS = {
+    ".doc": "MS Word 97", ".docx": "MS Word 2007 XML", ".odt": "writer8",
+    ".rtf": "Rich Text Format", ".txt": "Text (encoded):UTF8", ".csv": "Text - txt - csv (StarCalc)",
+    ".xls": "MS Excel 97", ".xlsx": "Calc MS Excel 2007 XML", ".ods": "calc8",
+    ".ppt": "MS PowerPoint 97", ".pptx": "Impress MS PowerPoint 2007 XML", ".odp": "impress8",
+}
+_OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_OLE_EXT = {".doc", ".xls", ".ppt"}
+_PACKAGE_EXT = {".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp"}
+#: Field codes that make Word or LibreOffice load another file or address when the document
+#: is opened. Checked in ASCII and in UTF-16 (how .doc stores its text).
+_LOAD_FIELDS = re.compile(rb"INCLUDEPICTURE|INCLUDETEXT|\bLINK\s+\w+\.\w+|\bDDE(?:AUTO)?\b"
+                          rb"|\\objautlink|\\objlink|\\objupdate")
+#: An OOXML relationship to something outside the package. Hyperlinks are allowed: they are
+#: shown, never fetched on opening.
+_RELATIONSHIP = re.compile(rb"<Relationship\b[^>]*>", re.I)
+#: An OpenDocument element that loads what its xlink:href names, pointing outside the package.
+_ODF_LOADS = re.compile(rb"<(?:draw:image|draw:object|draw:object-ole|draw:fill-image|draw:plugin"
+                        rb"|draw:applet|text:section-source|style:background-image|form:\w+)\b"
+                        rb"[^>]*xlink:href=\"(?!#|\./|Pictures/|Object |ObjectReplacements/)[^\"]+\"")
 #: Junk that archivers add and that is never a pension document.
 JUNK_NAMES = {".ds_store", "thumbs.db", "desktop.ini"}
 
@@ -428,6 +454,55 @@ def _image_to_pdf(src: Path, dst: Path) -> str:
     return ""
 
 
+def office_problem(data: bytes, ext: str) -> str | None:
+    """Why this Office file must not be handed to LibreOffice; None if it may.
+
+    Its contents must be the kind its extension says -- a .doc that is really HTML is refused
+    rather than converted -- and it may not load anything from outside itself on opening: a
+    linked picture or object, an external template, an INCLUDEPICTURE/INCLUDETEXT/LINK/DDE
+    field. LibreOffice follows those to any address the server can reach, and to local files
+    (audit 6 Oct 2026, item 6). There is no sandbox to run it in on this host (unprivileged
+    namespaces are disabled), so the document is refused before it is opened.
+    """
+    ext = ext.casefold()
+    loads = "links to files or web addresses outside itself; save it as PDF and attach that"
+    mismatch = f"is not really a {ext} file; save it as PDF and attach that"
+    if ext in _OLE_EXT:
+        if not data.startswith(_OLE_MAGIC):
+            return mismatch
+        if _LOAD_FIELDS.search(data) or _LOAD_FIELDS.search(data.replace(b"\x00", b"")):
+            return loads
+    elif ext in _PACKAGE_EXT:
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile:
+            return mismatch
+        with zf:
+            budget = 0
+            for info in zf.infolist():
+                if not info.filename.endswith((".xml", ".rels")):
+                    continue
+                budget += info.file_size
+                if budget > MAX_UNCOMPRESSED:
+                    return "is too large to check"
+                xml = zf.read(info)
+                for rel in _RELATIONSHIP.findall(xml):
+                    if re.search(rb'TargetMode\s*=\s*"External"', rel, re.I) \
+                            and not re.search(rb'Type\s*=\s*"[^"]*/hyperlink"', rel, re.I):
+                        return loads
+                if _ODF_LOADS.search(xml) or _LOAD_FIELDS.search(xml):
+                    return loads
+    elif ext == ".rtf":
+        if not data.lstrip().startswith(b"{\\rtf"):
+            return mismatch
+        if _LOAD_FIELDS.search(data):
+            return loads
+    elif ext in (".txt", ".csv"):
+        if b"\x00" in data[:65536]:
+            return mismatch
+    return None
+
+
 def _office_to_pdf(src: Path, out_dir: Path, profile: Path) -> Path:
     """LibreOffice headless, in a throwaway profile so it never touches the user's own.
 
@@ -440,10 +515,15 @@ def _office_to_pdf(src: Path, out_dir: Path, profile: Path) -> Path:
     it and produced nothing. So it runs in a session of its own, the whole group is killed on
     a timeout, and the profile it may have left locked is thrown away for the next call.
     """
+    ext = src.suffix.casefold()
+    problem = office_problem(src.read_bytes(), ext)
+    if problem:
+        raise BundleError(f"{src.name} {problem}")
     if not shutil.which("soffice"):
         raise BundleError("LibreOffice (soffice) is not installed on this machine")
     proc = subprocess.Popen(
         ["soffice", "--headless", "--norestore", f"-env:UserInstallation=file://{profile}",
+         f"--infilter={_OFFICE_FILTERS[ext]}",
          "--convert-to", "pdf", "--outdir", str(out_dir), str(src)],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
     )

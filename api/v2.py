@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from datetime import date
@@ -614,6 +615,13 @@ def _document_problem(name: str, body: bytes) -> str | None:
         kind = None
     if kind == "image" and body.startswith(b"BM") and not lower.endswith(".bmp"):
         kind = None
+    ext = os.path.splitext(lower)[1]
+    from pipeline.bundle import OFFICE_EXT, office_problem
+    if ext in OFFICE_EXT and (kind in ("office", "zip") or lower.endswith(_TEXT_EXT)):
+        # Contents that match the name, and nothing loaded from outside (audit 6 Oct 2026, item 6).
+        problem = office_problem(body, ext)
+        if problem:
+            return problem
     if kind is None:
         if lower.endswith(_TEXT_EXT) and _is_text(body):
             return None
