@@ -676,7 +676,15 @@ _SERVE_AS = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg
              ".bmp": "image/bmp"}
 
 
-def _document_problem(name: str, body: bytes) -> str | None:
+class _Staged:
+    """An upload already on disk (``_read_uploads``): its name, path, first bytes, size and hash."""
+    __slots__ = ("name", "path", "head", "size", "sha256")
+
+    def __init__(self, name: str, path: Path, head: bytes, size: int, sha256: str) -> None:
+        self.name, self.path, self.head, self.size, self.sha256 = name, path, head, size, sha256
+
+
+def _document_problem(name: str, body: "bytes | _Staged") -> str | None:
     """Why this upload is not a document the verification can read, or None. Checked at upload
     so the officer hears it now, by filename, rather than from a failed verification later.
 
@@ -685,6 +693,10 @@ def _document_problem(name: str, body: bytes) -> str | None:
     is two letters many files can start with, so it passes only on a .bmp. A text file must be
     text. A PDF is refused past the page limit (api.settings.max_case_pages); an image past the
     pixel limits of pipeline.bundle, read from its headers."""
+    staged = body if isinstance(body, _Staged) else None
+    head = staged.head if staged else body
+    full = (lambda: staged.path.read_bytes()) if staged else (lambda: body)
+    body = head                                   # the checks below need only the first 64 KB
     kind = next((k for magic, k in _MAGIC.items() if body.startswith(magic)), None)
     lower = name.lower()
     if kind == "image" and body.startswith(b"RIFF") and body[8:12] != b"WEBP":
@@ -698,7 +710,7 @@ def _document_problem(name: str, body: bytes) -> str | None:
     from pipeline.bundle import OFFICE_EXT, office_problem
     if ext in OFFICE_EXT and (kind in ("office", "zip") or lower.endswith(_TEXT_EXT)):
         # Contents that match the name, and nothing loaded from outside (audit 6 Oct 2026, item 6).
-        problem = office_problem(body, ext)
+        problem = office_problem(full(), ext)
         if problem:
             return problem
     if kind is None:
@@ -706,14 +718,14 @@ def _document_problem(name: str, body: bytes) -> str | None:
             return None
         return "not a PDF, image, Office file or zip archive"
     if kind == "pdf":
-        pages = pdf_page_count(body)
+        pages = pdf_page_count(staged.path if staged else full())
         if pages is not None and pages > settings.max_case_pages():
             return f"has {pages} pages; the most one file may have is {settings.max_case_pages()}"
     if kind == "image":
         # Measured from its headers, before anything is decoded (audit 6 Oct 2026, item 5).
         import io
         from pipeline.bundle import image_problem
-        return image_problem(io.BytesIO(body))
+        return image_problem(staged.path if staged else io.BytesIO(full()))
     return None                                   # a PDF with no readable pages is the verification's finding
 
 
@@ -728,7 +740,7 @@ def _is_text(body: bytes) -> bool:
     return True
 
 
-def pdf_page_count(body: bytes) -> int | None:
+def pdf_page_count(body: "bytes | Path") -> int | None:
     """Pages in this PDF, from poppler's pdfinfo; None where it cannot say (the verification
     then reports the file as it finds it -- an unreadable PDF is not refused here)."""
     import shutil
@@ -736,6 +748,13 @@ def pdf_page_count(body: bytes) -> int | None:
     import tempfile
     if not shutil.which("pdfinfo"):
         return None
+    if isinstance(body, Path):
+        try:
+            out = subprocess.run(["pdfinfo", str(body)], capture_output=True, text=True, timeout=30).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        m = re.search(r"^Pages:\s+(\d+)", out, re.M)
+        return int(m.group(1)) if m else None
     with tempfile.NamedTemporaryFile(suffix=".pdf") as fh:
         fh.write(body)
         fh.flush()
@@ -747,46 +766,77 @@ def pdf_page_count(body: bytes) -> int | None:
     return int(m.group(1)) if m else None
 
 
-async def _read_uploads(files: list[UploadFile]) -> list[tuple[str, bytes]]:
-    """Read the uploads fully BEFORE any database transaction: a 256 MB upload must not hold
-    the write lock while it trickles in."""
+def _staging_dir() -> Path:
+    """Where uploads land while they are checked: beside the case files, so filing one is a rename."""
+    path = case_runs.CASE_FILES / ".incoming"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _read_uploads(files: list[UploadFile]) -> list[_Staged]:
+    """Stream every upload to a staging file and check it, BEFORE any database transaction.
+
+    Streamed, not read into memory: a request may carry 512 MB, and holding each one whole in the
+    API process let a few concurrent uploads exhaust the box (audit 6 Oct 2026). The hash is taken
+    on the way through. On any refusal every staged file is removed; the caller removes the rest
+    (``_discard_staged``) once they have been filed or the filing failed.
+    """
+    import tempfile
     if not files:
         raise HTTPException(422, "attach at least one document")
     if len(files) > MAX_FILES:
         raise HTTPException(413, f"at most {MAX_FILES} files in one upload")
-    out: list[tuple[str, bytes]] = []
+    out: list[_Staged] = []
     total = 0
-    for f in files:
-        chunks: list[bytes] = []
-        size = 0
-        while True:                                   # read in pieces: the limit stops the read, not the other way round
-            piece = await f.read(1 << 20)
-            if not piece:
-                break
-            size += len(piece); total += len(piece)
-            if size > MAX_UPLOAD:
-                raise HTTPException(413, f"{f.filename} exceeds {MAX_UPLOAD // 1048576} MB")
-            if total > MAX_UPLOAD_TOTAL:
-                raise HTTPException(413, f"the upload exceeds {MAX_UPLOAD_TOTAL // 1048576} MB in all")
-            chunks.append(piece)
-        body = b"".join(chunks)
-        if not body:
-            continue
-        name = (f.filename or "document").split("/")[-1]
-        problem = _document_problem(name, body)
-        if problem:
-            raise HTTPException(422, f"{name}: {problem}")
-        out.append((name, body))
+    try:
+        for f in files:
+            name = (f.filename or "document").split("/")[-1]
+            digest, size, head = hashlib.sha256(), 0, b""
+            with tempfile.NamedTemporaryFile(dir=_staging_dir(), prefix="up-", delete=False) as fh:
+                staged = _Staged(name, Path(fh.name), b"", 0, "")
+                out.append(staged)
+                while True:                           # in pieces: the limit stops the read, not the other way round
+                    piece = f.file.read(1 << 20)
+                    if not piece:
+                        break
+                    size += len(piece); total += len(piece)
+                    if size > MAX_UPLOAD:
+                        raise HTTPException(413, f"{f.filename} exceeds {MAX_UPLOAD // 1048576} MB")
+                    if total > MAX_UPLOAD_TOTAL:
+                        raise HTTPException(413, f"the upload exceeds {MAX_UPLOAD_TOTAL // 1048576} MB in all")
+                    if len(head) < 65536:
+                        head += piece[:65536 - len(head)]
+                    digest.update(piece)
+                    fh.write(piece)
+            staged.head, staged.size, staged.sha256 = head, size, digest.hexdigest()
+            if not size:
+                out.pop()
+                staged.path.unlink(missing_ok=True)
+                continue
+            problem = _document_problem(name, staged)
+            if problem:
+                raise HTTPException(422, f"{name}: {problem}")
+    except BaseException:
+        _discard_staged(out)
+        raise
     if not out:
         raise HTTPException(422, "every attached file was empty")
     return out
 
 
-def _store_files(conn: sqlite3.Connection, case: sqlite3.Row | dict, files: list[tuple[str, bytes]],
+def _discard_staged(uploads: list[_Staged]) -> None:
+    for u in uploads:
+        try:
+            u.path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _store_files(conn: sqlite3.Connection, case: sqlite3.Row | dict, files: list[_Staged],
                  user: User) -> list[dict]:
-    """Record each upload under the case's current submission. Caller holds the transaction; the
-    bytes were written to disk beforehand by ``_write_files`` so the write lock is held only for
-    the rows, and ``_discard_files`` removes them if the transaction does not go through."""
+    """Record each upload under the case's current submission. Caller holds the transaction. The
+    bytes are already on disk (``_read_uploads``), so under the write lock each file is only
+    renamed into place; ``_discard_files`` removes them if the transaction does not go through."""
     entries = _write_files(conn, case, files, user)
     for entry in entries:
         conn.execute(
@@ -796,24 +846,26 @@ def _store_files(conn: sqlite3.Connection, case: sqlite3.Row | dict, files: list
     return entries
 
 
-def _write_files(conn: sqlite3.Connection, case: sqlite3.Row | dict, files: list[tuple[str, bytes]],
+def _write_files(conn: sqlite3.Connection, case: sqlite3.Row | dict, files: list[_Staged],
                  user: User) -> list[dict]:
-    """The bytes to disk, numbered after the documents already on this submission."""
+    """The staged files into the case's folder, numbered after the documents already on this
+    submission. A rename on the same filesystem: nothing is copied while the lock is held."""
     from pipeline.bundle import looks_like_pdf, looks_like_zip
     target = case_runs.document_dir(case["id"], case["submission_no"])
     target.mkdir(parents=True, exist_ok=True)
     seq = conn.execute("SELECT COALESCE(MAX(seq), 0) FROM case_documents WHERE case_id = ? AND submission_no = ?",
                        (case["id"], case["submission_no"])).fetchone()[0]
     stored: list[dict] = []
-    for filename, body in files:
+    for upload in files:
         seq += 1
-        name = _SAFE_NAME.sub("_", filename) or "document"
+        name = _SAFE_NAME.sub("_", upload.name) or "document"
         path = target / f"{seq:02d}-{name}"
-        path.write_bytes(body)
+        os.replace(upload.path, path)
         stored.append({"id": db.new_id(), "case_id": case["id"], "submission_no": case["submission_no"],
-                       "seq": seq, "filename": name, "sha256": hashlib.sha256(body).hexdigest(),
-                       "bytes": len(body), "stored_path": str(path), "uploaded_by": user.id,
-                       "uploaded_at": db.now(), "kind": "pdf" if looks_like_pdf(body) else "zip" if looks_like_zip(body) else "other"})
+                       "seq": seq, "filename": name, "sha256": upload.sha256,
+                       "bytes": upload.size, "stored_path": str(path), "uploaded_by": user.id,
+                       "uploaded_at": db.now(),
+                       "kind": "pdf" if looks_like_pdf(upload.head) else "zip" if looks_like_zip(upload.head) else "other"})
     return stored
 
 
@@ -826,7 +878,7 @@ def _discard_files(entries: list[dict]) -> None:
 
 
 @router.post("/cases", status_code=201)
-async def create_case(
+def create_case(
     files: list[UploadFile] = File(default=[]),
     department_code: str | None = Form(default=None),
     claimant_name: str | None = Form(default=None),
@@ -876,7 +928,17 @@ async def create_case(
     if not department_code or department_code == LEGACY_DEPARTMENT[0] or not conn.execute(
             "SELECT 1 FROM departments WHERE code = ? AND active = 1", (department_code,)).fetchone():
         raise HTTPException(422, "choose the department the case belongs to")
-    uploads = await _read_uploads(files)
+    uploads = _read_uploads(files)
+    try:
+        return _create_case(conn, user, uploads, department_code, claimant_name, variant, annual_pay,
+                            commutation_percent, retirement_date, pension_in_payment, date_of_death,
+                            product, gpf_kind, gazetted, declared)
+    finally:
+        _discard_staged(uploads)                      # whatever was not filed
+
+
+def _create_case(conn, user, uploads, department_code, claimant_name, variant, annual_pay, commutation_percent,
+                 retirement_date, pension_in_payment, date_of_death, product, gpf_kind, gazetted, declared) -> dict:
     # The same validation the old intake applies (desk permissions aside: the role decides here).
     from api.server import _intake_choices
     if product == "GPF":
@@ -897,21 +959,26 @@ async def create_case(
             "case_type": declared, "case_type_source": "DECLARED" if declared else None,
             "intake_json": json.dumps({k: v for k, v in choices.items() if k != "variant"}),
             "submission_no": 1, "current_run_id": None, "created_at": now, "updated_at": now}
-    with db.transaction(conn):
-        case["case_no"] = _next_case_no(conn)
-        conn.execute(
-            "INSERT INTO cases(id, case_no, department_code, created_via, product, created_by, status, "
-            "claimant_name, variant, case_type, case_type_source, intake_json, submission_no, current_run_id, "
-            "created_at, updated_at) "
-            "VALUES (:id, :case_no, :department_code, :created_via, :product, :created_by, :status, :claimant_name, "
-            ":variant, :case_type, :case_type_source, :intake_json, :submission_no, :current_run_id, "
-            ":created_at, :updated_at)", case)
-        stored = _store_files(conn, case, uploads, user)
-        workflow.record_event(conn, case["id"], action="CREATE", from_status=None,
-                              to_status=workflow.DRAFT, actor=user,
-                              payload={"documents": [s["filename"] for s in stored],
-                                       "department": department_code, "product": product,
-                                       "case_type": declared, "variant": choices["variant"]})
+    stored: list[dict] = []
+    try:
+        with db.transaction(conn):
+            case["case_no"] = _next_case_no(conn)
+            conn.execute(
+                "INSERT INTO cases(id, case_no, department_code, created_via, product, created_by, status, "
+                "claimant_name, variant, case_type, case_type_source, intake_json, submission_no, current_run_id, "
+                "created_at, updated_at) "
+                "VALUES (:id, :case_no, :department_code, :created_via, :product, :created_by, :status, :claimant_name, "
+                ":variant, :case_type, :case_type_source, :intake_json, :submission_no, :current_run_id, "
+                ":created_at, :updated_at)", case)
+            stored = _store_files(conn, case, uploads, user)
+            workflow.record_event(conn, case["id"], action="CREATE", from_status=None,
+                                  to_status=workflow.DRAFT, actor=user,
+                                  payload={"documents": [s["filename"] for s in stored],
+                                           "department": department_code, "product": product,
+                                           "case_type": declared, "variant": choices["variant"]})
+    except Exception:
+        _discard_files(stored)                        # the rows rolled back; the bytes must not stay behind
+        raise
     row = conn.execute("SELECT * FROM cases WHERE id = ?", (case["id"],)).fetchone()
     if not stored:
         raise HTTPException(422, "attach at least one document")
@@ -1038,13 +1105,20 @@ def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
 
 
 @router.post("/cases/{case_id}/documents", status_code=201)
-async def add_documents(case_id: str, files: list[UploadFile] = File(default=[]),
+def add_documents(case_id: str, files: list[UploadFile] = File(default=[]),
                         user: User = Depends(require_roles("DEPT_OFFICER", "ADMIN")),
                         conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """More papers on the case. After an AG return this opens the next round of submission, and the
     case goes to DRAFT ("not yet resubmitted"), so the next document added does not open yet
     another round; the officer then resubmits it to the Accountant General."""
-    uploads = await _read_uploads(files)
+    uploads = _read_uploads(files)
+    try:
+        return _add_documents(conn, user, case_id, uploads)
+    finally:
+        _discard_staged(uploads)
+
+
+def _add_documents(conn: sqlite3.Connection, user: User, case_id: str, uploads: list[_Staged]) -> dict:
     case_runs.sync_run_states(conn)
     row = _case_or_404(conn, case_id, user)
     _own_side_or_403(user, row)
@@ -1111,7 +1185,7 @@ def _request_items_or_422(conn: sqlite3.Connection, row: sqlite3.Row, items: Any
 
 
 @router.post("/cases/{case_id}/documents/{doc_id}/replace", status_code=201)
-async def replace_document(case_id: str, doc_id: str, files: list[UploadFile] = File(default=[]),
+def replace_document(case_id: str, doc_id: str, files: list[UploadFile] = File(default=[]),
                            user: User = Depends(require_roles("DEPT_OFFICER", "ADMIN")),
                            conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """Put a corrected paper in place of one already filed (30 Sep 2026).
@@ -1121,7 +1195,15 @@ async def replace_document(case_id: str, doc_id: str, files: list[UploadFile] = 
     round's verification reads the replacement and reuses everything else. Opens the next round
     after a return, exactly as adding a paper does.
     """
-    uploads = await _read_uploads(files)
+    uploads = _read_uploads(files)
+    try:
+        return _replace_document(conn, user, case_id, doc_id, uploads)
+    finally:
+        _discard_staged(uploads)
+
+
+def _replace_document(conn: sqlite3.Connection, user: User, case_id: str, doc_id: str,
+                      uploads: list[_Staged]) -> dict:
     if len(uploads) != 1:
         raise HTTPException(422, "attach exactly one file to put in place of the document")
     case_runs.sync_run_states(conn)
@@ -1390,7 +1472,7 @@ def case_gpf_action(case_id: str, action: str, body: dict = Body(default={}),
 
 
 @router.post("/cases/{case_id}/gpf-cure")
-async def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = Form("{}"),
+def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = Form("{}"),
                         file: UploadFile | None = File(default=None),
                         user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
                         conn: sqlite3.Connection = Depends(get_conn)) -> dict:
@@ -1400,7 +1482,12 @@ async def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = F
         parsed = json.loads(values or "{}")
     except ValueError:
         raise HTTPException(422, "values must be JSON") from None
-    content = (file.filename or "document", await file.read()) if file is not None else None
+    content = None
+    if file is not None:
+        body = file.file.read(MAX_UPLOAD + 1)
+        if len(body) > MAX_UPLOAD:
+            raise HTTPException(413, f"{file.filename} exceeds {MAX_UPLOAD // 1048576} MB")
+        content = (file.filename or "document", body)
     try:
         res = gpf_bridge.cure(row["gpf_case_id"], resultId, gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao"), parsed, content)
     except gpf_bridge.GpfError as exc:
