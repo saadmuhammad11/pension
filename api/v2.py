@@ -1882,10 +1882,16 @@ def disable_user(request: Request, user_id: str, body: dict = Body(default={}), 
 def enable_user(request: Request, user_id: str, user: User = Depends(require_roles("ADMIN")),
                 conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     row = _user_row(conn, user_id)
+    # An account disabled during the trial comes back with the trial's password. In production
+    # that password is replaced at the next sign-in, as every seeded or reset one is (F1); the
+    # start-up sweep only sees accounts that are active when the API starts (audit 6 Oct 2026, L4).
+    must_change = 1 if settings.production() else int(row["must_change_password"] or 0)
     with db.transaction(conn):
-        conn.execute("UPDATE users SET active = 1, updated_at = ? WHERE id = ?", (db.now(), row["id"]))
+        conn.execute("UPDATE users SET active = 1, must_change_password = ?, updated_at = ? WHERE id = ?",
+                     (must_change, db.now(), row["id"]))
         workflow.audit(conn, actor=user, action="USER_ENABLE", entity_type="user", entity_id=row["id"], ip=_client_address(request),
-                       before={"active": bool(row["active"])}, after={"active": True})
+                       before={"active": bool(row["active"])},
+                       after={"active": True, "must_change_password": bool(must_change)})
     return _public_user(_user_row(conn, row["id"]))
 
 
