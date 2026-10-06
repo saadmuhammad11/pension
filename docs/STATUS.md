@@ -8,7 +8,7 @@ Severity and numbering follow the audit report of 6 October 2026: M = critical f
 S/R/C/G/D/L = medium and low by area, N = new items raised while fixing. The last re-check against the
 code ran all three suites: pension 777 OK, GP backend 83 passed, GP Fund engine OK.
 
-**Totals.** Earlier audit (69 items): 25 fixed, 3 partly fixed, 15 need a business decision, 26 not
+**Totals.** Earlier audit (69 items): 26 fixed, 2 partly fixed, 15 need a business decision, 26 not
 fixed. New items (11): 5 fixed, 1 needs a business decision, 5 not fixed.
 
 ## Real claimant data (M8 / N2 / N4 / N6)
@@ -80,7 +80,7 @@ fixed. New items (11): 5 fixed, 1 needs a business decision, 5 not fixed.
 | G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **NEEDS BUSINESS DECISION** | `"ADMIN": "dag"` unchanged |
 | G7 | Medium | No locking on GP Fund case state | **NOT FIXED** | |
 | D1 | Medium | Release files owned by uid 1000 | **NOT FIXED** | |
-| D2 | Medium | PyJWT 2.13 advisories | **PARTLY FIXED** | Pinned to 2.15.0 in `8011f41` (HS256 with a string `sub`: compatible). 2.13.0 is still installed in the services' venv; install and restart are on the deploy checklist (§8.1) |
+| D2 | Medium | PyJWT 2.13 advisories | **FIXED** (6 Oct 2026) | Pinned to 2.15.0 in `8011f41` (HS256 with a string `sub`: compatible). Installed into the services' venv (`uv pip install --no-deps`, 2.13.0 → 2.15.0) and API, portal and GP Fund restarted 16:28 with no run in progress; all three health checks OK, GP Fund `mode: vllm`; sign-in as the AG reviewer and `/auth/me` on the new token both 200. The production server gets it from the checklist (§8.1) |
 | D3 | Medium | `numpy`/`opencv`/`zxingcpp` missing from requirements | **NOT FIXED** | |
 | N4 | Medium | **New:** local copies of real data remain | **FIXED** (6 Oct 2026) | 306 MB shredded: `artifacts/backup-pii-scrub-20261006/` (`originals.tar`, `pre-scrub.bundle`), `dist-release/pension-1.0.0-rc1.tgz`, two session scratchpads under `/tmp/claude-1000`, `~/pension_check-backup-2026-09-09.tgz`, `artifacts/backup-flags-ocr-20260925/`, `artifacts/archive-ediary-bridge-20260925/`, both `ediary-hesk-*.sql`, `backup-portal-db-2026092{5,9}/` and `-20260930/`. Re-check after: repo clean, `/tmp/claude-1000` clean, fresh release build passes the CNIC check; only the live trial data (above) is still flagged. Live data is git-ignored, excluded from the release, and set to 700/600 |
 | N5 | Medium | **New:** uncommitted `deploy/` edits of unknown owner | **FIXED** (6 Oct 2026) | Owner found: the audit session of 6 Oct (13:18–13:21). Reviewed and all three kept, committed separately: nginx redirect `e5018b9`, PyJWT pin `8011f41`, firewall script `5e15060` |
@@ -106,6 +106,6 @@ fixed. New items (11): 5 fixed, 1 needs a business decision, 5 not fixed.
 ## Action items
 
 1. Merge and deploy the two branches (N1); until then, none of the FIXED rows is live.
-2. At deploy: `pip install PyJWT==2.15.0` into the services' venv and restart them (D2); switch the model units to `--host 127.0.0.1` plus the API key (M7). Both are on the go-live checklist, `docs/DEPLOYMENT.md` §8.1.
+2. At deploy: switch the model units to `--host 127.0.0.1` plus the API key (M7), and install PyJWT 2.15.0 on the production server (done on the trial box, D2). Both are on the go-live checklist, `docs/DEPLOYMENT.md` §8.1.
 3. Settle the business-decision items (decision sheet: `docs/pension-rules-decisions.md`).
 4. When the fix work is complete, purge the session transcripts (N11) and decide what to do with the demos (N6).
