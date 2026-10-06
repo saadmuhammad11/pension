@@ -522,6 +522,13 @@ def _adv_active(facts: Facts) -> dict[str, Any]:
                                 "advance still outstanding."),
                     "cure": {"kind": "sap"}}
         outstanding = num(payslip.get("loanBalance"))
+        if outstanding is None:
+            # Unread is not nil: a balance nobody could read was passed as "no advance
+            # outstanding" (audit 6 Oct 2026, G4). It is a verification task until it is read.
+            return {"status": CONF,
+                    "finding": ("The SAP pay slip's GPF advance balance could not be read, so it cannot "
+                                "be told whether an earlier advance is still outstanding."),
+                    "cure": {"kind": "sap"}}
         if not outstanding:
             return {"status": OK,
                     "finding": "The SAP pay slip shows no GPF advance outstanding."}
