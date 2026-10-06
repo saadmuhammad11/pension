@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import copy
 import datetime
+import hashlib
+import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -230,14 +232,47 @@ def run_case(s: CaseState, reason: str = "") -> Optional[dict]:
         "resolved": len(s.last_diff["resolved"]) if (s.last_diff and s.version > 1) else 0,
         "raised": len(s.last_diff["raised"]) if (s.last_diff and s.version > 1) else 0,
     })
-    # dispositions on observations that no longer exist are kept, marked cured
+    reconcile_dispositions(s, nxt)
+    return s.last_diff
+
+
+def fingerprint(result: dict) -> str:
+    """What a disposition was given against: the observation's severity and wording, which carry
+    its figures. A waiver of "Rs 50,000 over the limit" does not cover "Rs 250,000 over the limit"."""
+    return hashlib.sha1(json.dumps({"status": result.get("status"), "finding": result.get("finding")},
+                                   sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def reconcile_dispositions(s: "CaseState", nxt: list) -> None:
+    """Carry the officers' dispositions across a re-run, honestly.
+
+    A disposition on an observation that no longer exists is kept, marked cured. One whose
+    observation is still open but now says something else -- the amount changed after a cure or
+    a corrected reading -- is kept for the record but marked stale, and counts as open again
+    until an officer disposes of the new finding (audit 6 Oct 2026, G2). Before this a waiver
+    granted on one figure silently covered any figure the item later showed.
+    """
     for rid in list(s.disp.keys()):
+        d = s.disp[rid]
         r = next((x for x in nxt if x["id"] == rid), None)
         if not r or not is_issue(r["status"]):
-            s.disp[rid]["cured"] = True
+            d["cured"] = True
+            continue
+        d.pop("cured", None)
+        given_against = d.get("fingerprint")
+        if given_against and given_against != fingerprint(r):
+            d["stale"] = True
+            d["staleSince"] = d.get("staleSince") or _stamp()
         else:
-            s.disp[rid].pop("cured", None)
-    return s.last_diff
+            d.pop("stale", None)
+            d.pop("staleSince", None)
+
+
+def disposition_in_force(d: Optional[dict]) -> Optional[dict]:
+    """The disposition that applies to an observation now: none if it has gone stale."""
+    if d and not d.get("stale"):
+        return d
+    return None
 
 
 def position(s: CaseState) -> dict:
@@ -245,7 +280,7 @@ def position(s: CaseState) -> dict:
     L = lists(s.results)
     hard = adv = waived = corrected = referred = open_ = 0
     for o in L["obs"]:
-        d = s.disp.get(o["id"])
+        d = disposition_in_force(s.disp.get(o["id"]))
         if d and d.get("action") == "waive":
             waived += 1
             continue

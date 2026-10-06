@@ -18,7 +18,7 @@ import uuid
 from typing import Optional
 
 from . import doa as doa_mod
-from .engine import (CaseState, OFFICERS, is_issue, lists, may, position, run_case,
+from .engine import (CaseState, OFFICERS, disposition_in_force, fingerprint, is_issue, lists, may, position, run_case,
                      who_can)
 from .fixtures import CASES, all_case_keys, load_case
 from .rules_family import CURES, fund_position
@@ -313,7 +313,10 @@ class CaseService:
         if action == "waive" and not (ground and authority):
             raise ServiceError("A waiver needs both a ground and the authority relied on.", 400)
         s.disp[result_id] = {"action": action, "ground": ground, "authority": authority,
-                             "by": officer["name"], "desig": officer["desig"], "at": _now()}
+                             "by": officer["name"], "desig": officer["desig"], "at": _now(),
+                             # What the officer saw when deciding; a re-run that changes the
+                             # observation marks this disposition stale (engine.reconcile_dispositions).
+                             "fingerprint": fingerprint(r)}
         s.log_audit("Disposition", {"item": result_id, "action": action, "ground": ground, "authority": authority})
         self.repo.save(case_id, s)
         return {"disposition": s.disp[result_id], "position": position(s)}
@@ -385,9 +388,9 @@ class CaseService:
         s = self._require(case_id)
         c = self._meta(s)
         L = lists(s.results)
-        rejection = [self._result_view(r, s) for r in L["hard"] if s.disp.get(r["id"], {}).get("action") != "waive"]
-        advisory = [self._result_view(r, s) for r in L["adv"] if s.disp.get(r["id"], {}).get("action") != "waive"]
-        waived = [{**self._result_view(r, s)} for r in L["obs"] if s.disp.get(r["id"], {}).get("action") == "waive"]
+        rejection = [self._result_view(r, s) for r in L["hard"] if (disposition_in_force(s.disp.get(r["id"])) or {}).get("action") != "waive"]
+        advisory = [self._result_view(r, s) for r in L["adv"] if (disposition_in_force(s.disp.get(r["id"])) or {}).get("action") != "waive"]
+        waived = [{**self._result_view(r, s)} for r in L["obs"] if (disposition_in_force(s.disp.get(r["id"])) or {}).get("action") == "waive"]
         return {
             "case": {"id": case_id, "label": c.get("label"), "subject": c.get("subject"),
                      "personnelNo": c.get("personnelNo"), "dept": c.get("dept"), "diary": c.get("diary")},
