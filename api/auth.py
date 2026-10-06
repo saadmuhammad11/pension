@@ -272,6 +272,14 @@ def authenticate(username: str, password: str, portal: str | None, conn: sqlite3
     user = user_from_row(row)
     if not user.active:
         raise AuthError(403, "this account has been disabled; ask the administrator")
+    from api import settings
+    if settings.production() and password_problem(password, user.username):
+        # A database carried over from the trial: the start-up sweep marks these accounts to
+        # change their password, but the change screen takes "1234" as the current password, so
+        # whoever typed it first -- an attacker included -- chose the new one (audit 6 Oct 2026).
+        # The trial password opens nothing in production; the administrator hands out a new one.
+        raise AuthError(403, "this account's trial password is no longer accepted; "
+                             "ask the administrator for a new password")
     if user.portal is None:
         raise AuthError(403, "this account has no department and cannot sign in; ask the administrator")
     if not portal:
