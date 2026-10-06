@@ -87,7 +87,7 @@ ExecStart=/home/tmc/vllm_env/bin/vllm serve /models/qwen3guard-gen-4b \
   --gpu-memory-utilization 0.15 \
   --enable-prefix-caching \
   --safetensors-load-strategy prefetch \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port 8095
 
 # Health gate, inlined. systemd's "-" prefix makes a non-zero exit non-fatal, so a slow or wedged

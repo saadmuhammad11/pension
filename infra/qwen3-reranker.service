@@ -38,6 +38,12 @@ Environment=CUDA_HOME=/usr/local/cuda
 Environment=HF_HOME=/home/tmc/.cache/huggingface
 Environment=HF_HUB_OFFLINE=1
 Environment=TRANSFORMERS_OFFLINE=1
+
+# The model key (audit 6 Oct 2026, N7). This server is called from the pension box over the LAN,
+# so it cannot listen on loopback; vLLM reads VLLM_API_KEY from the environment and refuses /v1
+# requests without it (/health stays open for the probe). Same file and value as the other units.
+EnvironmentFile=/etc/pension/models.env
+ExecStartPre=/bin/bash -c 'k="$${VLLM_API_KEY:-}"; [ $${#k} -ge 32 ] && [ "$${k#*CHANGE_ME}" = "$$k" ] || { echo "VLLM_API_KEY missing, placeholder or short: set it in /etc/pension/models.env" >&2; exit 1; }'
 Environment=HF_DATASETS_OFFLINE=1
 Environment=HF_HUB_DISABLE_TELEMETRY=1
 Environment=VLLM_NO_USAGE_STATS=1
