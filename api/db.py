@@ -17,6 +17,7 @@ that migration itself if it starts first. WAL mode plus a busy timeout is enough
     python3 -m api.db credentials        # rebuild artifacts/credentials/credentials.html from the CSV
     python3 -m api.db reset-department-password <slug>   # new generated password for one department
     python3 -m api.db reset-password <username> [<new password>]
+    python3 -m api.db refresh-credentials <password>   # sheet rows for every account on this password; changes nothing
     python3 -m api.db forget-credentials   # delete the plaintext sheet once passwords are handed out
 
 Production (PENSION_ENV=production, api.settings): PENSION_SEED_PASSWORD is refused, every
@@ -425,6 +426,33 @@ def set_all_passwords(password: str, conn: sqlite3.Connection | None = None) -> 
             conn.close()
 
 
+def refresh_credentials(password: str, conn: sqlite3.Connection | None = None) -> list[str]:
+    """Bring the sign-in sheet back in step with the accounts, without touching any account.
+
+    The sheet is written when passwords are generated or set; after the trial's accounts were
+    put on one password by hand, the sheet still showed the generated ones and sent the first
+    reader to a locked account (6 Oct 2026). This checks every active account against the
+    password given and records a sheet row for each that matches. Nothing is changed in the
+    database and no session ends. Returns the usernames recorded.
+    """
+    from api.auth import verify_password
+    from api.departments import portal_for
+    own = conn is None
+    conn = conn or connect()
+    try:
+        users = conn.execute("SELECT * FROM users WHERE active = 1 ORDER BY username").fetchall()
+        matched = [u for u in users if verify_password(password, u["password_hash"])]
+        if matched:
+            _record_credentials([{"portal": portal_for(u["role"], u["department_code"]) or "",
+                                  "department": _dept_name(conn, u["department_code"]), "username": u["username"],
+                                  "password": password, "role": u["role"], "department_code": u["department_code"] or ""}
+                                 for u in matched])
+        return [u["username"] for u in matched]
+    finally:
+        if own:
+            conn.close()
+
+
 def reset_password(username: str, password: str, conn: sqlite3.Connection | None = None) -> bool:
     """Set a user's password from the command line; their existing tokens stop working.
 
@@ -488,6 +516,11 @@ def main(argv: list[str]) -> int:
             return 1
         print(f"{n} accounts now use the given password; sheet: {CREDENTIALS_HTML}")
         return 0
+    if cmd == "refresh-credentials" and len(argv) >= 3:
+        migrate()
+        names = refresh_credentials(argv[2])
+        print(f"{len(names)} account(s) are on the given password; sheet rewritten: {CREDENTIALS_HTML}")
+        return 0 if names else 1
     if cmd == "reset-password" and len(argv) >= 3:
         import getpass
         password = argv[3] if len(argv) > 3 else getpass.getpass("new password: ")
