@@ -835,10 +835,16 @@ async def _v1_requires_a_token(request: Request, call_next):
     if path.startswith("/api/") and not any(path == p or path.startswith(p) for p in _OPEN_V1):
         from api import db as _db
         from api.auth import AuthError, _bearer, user_for_token
-        token = _bearer(request.headers.get("authorization")) or request.query_params.get("token")
+        token = _bearer(request.headers.get("authorization"))
+        # ``?token=`` exists for <img> and EventSource, which cannot send a header: reads only. A
+        # token on the address of a write lands in proxy and browser history and in any log of
+        # the address, and a link alone could then record a decision (audit 6 Oct 2026, L12).
+        if not token and request.method in ("GET", "HEAD"):
+            token = request.query_params.get("token")
         if not token:
-            return JSONResponse({"detail": "sign in at your portal; this address needs a case-system token"},
-                                status_code=401)
+            detail = ("sign in at your portal; this address needs a case-system token" if request.method in ("GET", "HEAD")
+                      else "a change needs the token in the Authorization header, not on the address")
+            return JSONResponse({"detail": detail}, status_code=401)
         conn = _db.connect()
         try:
             user = user_for_token(token, conn)
