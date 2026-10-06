@@ -141,10 +141,13 @@ def gpf_session(request: Request, user: User = Depends(require_roles("AG_REVIEWE
     from fastapi.responses import JSONResponse
     from api.auth import GPF_SCOPE, GPF_TOKEN_TTL, issue_scoped_token
     response = JSONResponse({"ok": True, "expires_in": int(GPF_TOKEN_TTL.total_seconds())})
+    # Secure whenever the request came over HTTPS, and always in production, where nginx is the
+    # only way in: a browser then never sends the cookie over plain HTTP, whatever a proxy header
+    # says (audit 6 Oct 2026, L2). The trial, served over plain HTTP, keeps a cookie it can use.
     https = (request.headers.get("x-forwarded-proto") or request.url.scheme) == "https"
     response.set_cookie(GPF_COOKIE, issue_scoped_token(user, GPF_SCOPE, GPF_TOKEN_TTL),
                         max_age=int(GPF_TOKEN_TTL.total_seconds()), path="/gpf", httponly=True,
-                        samesite="strict", secure=https)
+                        samesite="strict", secure=https or settings.production())
     return response
 
 
