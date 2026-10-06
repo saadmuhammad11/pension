@@ -51,21 +51,6 @@ BLOCK_INSTRUCTION = (
     "countersignature. Fill the schema from that block only; a value not printed there is null."
 )
 
-def specimen_sheet(spec: specimens.Specimen):
-    """The specimen's images stacked into one, because the vision server takes two per request."""
-    from PIL import Image
-    parts = [Image.open(p).convert("RGB") for p in spec.images if p.exists()]
-    if not parts:
-        raise FileNotFoundError(f"specimen {spec.id} has no images on disk")
-    width = max(p.width for p in parts)
-    sheet = Image.new("RGB", (width, sum(p.height for p in parts) + 12 * (len(parts) - 1)), "white")
-    y = 0
-    for p in parts:
-        sheet.paste(p, (0, y))
-        y += p.height + 12
-    return sheet
-
-
 def read_block(image: Path) -> dict:
     ext = extract_page(image, "PSA_SIGNATURE_BLOCK", max_tokens=1024, timeout_s=180,
                        instruction_override=BLOCK_INSTRUCTION)

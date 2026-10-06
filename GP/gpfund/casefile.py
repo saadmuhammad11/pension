@@ -21,16 +21,15 @@ the same reason (§15 reproducibility).
 
 from __future__ import annotations
 
-import copy
 import hashlib
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping
 
 from .contracts import Facts, Lists, Result, is_issue
 from .cures import apply_cure
 from .engine import RULE_SET_VERSION, RunDiff, diff_runs, evaluate, lists
 from .params import MIN_JUSTIFICATION, may, who_may
-from .sap import SapExtract, SapExtractRejected
+from .sap import SapExtract
 
 
 class NotPermitted(PermissionError):

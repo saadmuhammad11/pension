@@ -22,8 +22,6 @@ export const CASE_TYPE_LIST: CaseTypeDef[] = CFG.case_types
 const BY_ID = new Map(CASE_TYPE_LIST.map(t => [t.id, t]))
 const PIPELINE_LABELS = new Map(CFG.pipeline_types.map(t => [t.id, t.label]))
 const ALIASES: Record<string, string> = CFG.aliases ?? {}
-
-export const caseTypeDef = (id: string | null | undefined): CaseTypeDef | undefined => id ? BY_ID.get(id) : undefined
 /** A label for either kind of id: an office case type, or the pipeline path the AI detected. */
 export const anyCaseTypeLabel = (id: string | null | undefined): string | undefined =>
   id ? (BY_ID.get(id)?.label ?? PIPELINE_LABELS.get(ALIASES[id] ?? id)) : undefined

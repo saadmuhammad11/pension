@@ -143,16 +143,6 @@ export interface DepartmentCount {
   by_status: Partial<Record<CaseStatus, number>>
 }
 
-export const listCases = (q: { status?: string; department?: string; product?: Product; pension_section?: string } = {}) => {
-  const p = new URLSearchParams()
-  if (q.pension_section) p.set('pension_section', q.pension_section)
-  if (q.status) p.set('status_filter', q.status)
-  if (q.department) p.set('department', q.department)
-  if (q.product) p.set('product', q.product)
-  const qs = p.toString()
-  return get<CaseSummary[]>('/api/v2/cases' + (qs ? `?${qs}` : ''))
-}
-
 export const getCase = (id: string) => get<CaseFull>(`/api/v2/cases/${encodeURIComponent(id)}`)
 
 export interface NewCaseFields {
@@ -252,7 +242,6 @@ export const act = (caseId: string, action: keyof typeof PATH, body: { remark?: 
   post<{ event: CaseEvent; case: CaseFull }>(`/api/v2/cases/${encodeURIComponent(caseId)}/${PATH[action]}`, body)
 
 export const departments = () => get<Department[]>('/api/v2/departments')
-export const departmentCounts = (product?: Product) => get<DepartmentCount[]>('/api/v2/departments/counts' + (product ? `?product=${product}` : ''))
 
 /** What the GP Fund module holds for a case (AG only): the reading job, its case, the frame's address. */
 export interface GpfState {

@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .checklist import COMPLETE, DEFECTIVE, Checklist, MISSING
-from .flags import HIGH, Flag
+from .flags import Flag
 from .types import Determination
 
 FORWARD = "FORWARD"

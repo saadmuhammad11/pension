@@ -24,8 +24,8 @@ check that could mutate the facts it is judging is a check that can disagree wit
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, field, replace
-from typing import Any, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Mapping
 
 # -- the status vocabulary, §4.4 -----------------------------------------------------------
 #

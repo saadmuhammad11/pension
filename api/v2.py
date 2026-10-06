@@ -26,9 +26,8 @@ from api.artefacts import bundle as run_bundle
 from api.artefacts import event_stream, get_run, page_image, report, signature_image, status
 from api.auth import (AuthError, User, authenticate, current_user, current_user_q, get_conn,
                       hash_password, issue_token, password_problem, require_roles)
-from api.departments import (AG_PORTAL_PORT, AG_PORTAL_SLUG, BY_SLUG, DEPARTMENTS, DEPARTMENT_NAMES,
-                             PENSION_SECTION_OF, PENSION_SECTION_ORDER,
-                             LEGACY_DEPARTMENT, ROLES, SINGLE_PORTAL, portal_for)
+from api.departments import (AG_PORTAL_PORT, AG_PORTAL_SLUG, DEPARTMENTS, DEPARTMENT_NAMES,
+                             PENSION_SECTION_ORDER, LEGACY_DEPARTMENT, ROLES, SINGLE_PORTAL, portal_for)
 from api.themes import theme_for
 from rules.case_type import (OFFICE_CASE_TYPES, canonical_office_type, case_type_label, load_case_types,
                              variants_for_case_type)
@@ -234,13 +233,6 @@ def department_counts(product: str | None = None, user: User = Depends(require_r
 
 
 # -- statistics for the dashboards -------------------------------------------------------------
-
-def _scope_where(user: User) -> tuple[str, list]:
-    """The SQL restriction that gives a user exactly the cases they may see."""
-    if user.role == "DEPT_OFFICER":
-        return "c.department_code = ?", [user.department_code]
-    return "1 = 1", []
-
 
 AGE_BUCKETS = (("0-3", 3), ("4-7", 7), ("8-14", 14), ("15+", None))
 
@@ -1437,7 +1429,6 @@ async def case_events(case_id: str, run_id: str, request: Request, user: User = 
 @router.get("/cases/{case_id}/runs/{run_id}/dispositions")
 def case_dispositions(case_id: str, run_id: str, user: User = Depends(current_user),
                       conn: sqlite3.Connection = Depends(get_conn)) -> dict:
-    from api.checklist_actions import apply
     from api.dispositions import calculation_gate, current, history
     run = _run_for(conn, user, case_id, run_id)
     rep = report(run)

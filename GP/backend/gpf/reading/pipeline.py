@@ -23,7 +23,6 @@ from typing import Callable, Optional
 from ..clients.model_client import ExtractedField, ModelClient
 from .artefacts import Artefact
 from .barcodes import BarcodeDecoder, DecodedCode, NullBarcodeDecoder
-from .schemas import field_map
 
 
 # ── stage 1: ingest ───────────────────────────────────────────────────────────

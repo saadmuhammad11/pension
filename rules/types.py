@@ -24,7 +24,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from .money import Numeric, exact, fmt, money, rupees
+from .money import exact, fmt, money, rupees
 
 
 class AmbiguityCollapseError(RuntimeError):

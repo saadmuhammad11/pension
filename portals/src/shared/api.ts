@@ -24,25 +24,6 @@ export interface RunEvent {
 /** Kept as a string so the copied components compile; the server reads the role off the token. */
 export type Role = string
 
-export async function apiAvailable(): Promise<boolean> {
-  try {
-    const r = await fetch('/api/health', { signal: AbortSignal.timeout(3000) })
-    return r.ok
-  } catch { return false }
-}
-
-export type VariantFamily = {
-  id: string
-  label: string
-  variants: { id: string; label: string; documents: number }[]
-}
-
-export async function fetchVariants(): Promise<VariantFamily[]> {
-  const r = await fetch('/api/variants')
-  if (!r.ok) throw new Error(`HTTP ${r.status}`)
-  return (await r.json()).families
-}
-
 /** Subscribe to a run's stage events. Returns an unsubscribe function. */
 export function subscribe(
   runId: string,

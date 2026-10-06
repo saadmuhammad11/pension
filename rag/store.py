@@ -183,45 +183,6 @@ _TABLE_ROW = re.compile(r"^\s*\|(.+)\|\s*$")
 _TABLE_RULE = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
 
 
-def split_table_rows(chunk: Chunk, min_rows: int = 3) -> list[Chunk]:
-    """Emit each data row of a rule table as its own chunk, alongside the whole table.
-
-    Several sections of this corpus ARE tables where every row is a separate rule -- §8.3's
-    precedence hierarchy, §9.1's QS-* rules, §14's BLOCKING register. Retrieved whole, the
-    table answers "what is the precedence hierarchy" but not "which record governs a personnel
-    number": both F-1 and F-2 cited the same §8.3 chunk, correct but generic, because the row
-    that actually decides each one was buried among five others.
-
-    The whole-table chunk is KEPT as well as the rows. A broad question still wants the table;
-    a specific one wants the row. Each row carries the section heading and the table's own
-    header row, without which "| Recoveries and demands | LPC | ... |" is three words with no
-    subject.
-    """
-    lines = chunk.text.splitlines()
-    header = None
-    rows: list[str] = []
-    for i, line in enumerate(lines):
-        if _TABLE_RULE.match(line):
-            if i and _TABLE_ROW.match(lines[i - 1]):
-                header = lines[i - 1].strip()
-            continue
-        if header and _TABLE_ROW.match(line) and line.strip() != header:
-            rows.append(line.strip())
-
-    if header is None or len(rows) < min_rows:
-        return [chunk]
-
-    out = [chunk]
-    for n, row in enumerate(rows):
-        out.append(Chunk(
-            id=f"{chunk.id}r{n}",
-            text=f"{chunk.heading}\n{header}\n{row}",
-            source=chunk.source,
-            heading=chunk.heading,
-        ))
-    return out
-
-
 def build_corpus(root: Path | None = None) -> list[Chunk]:
     base = root or ROOT
     out: list[Chunk] = []

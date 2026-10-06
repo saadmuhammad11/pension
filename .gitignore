@@ -64,12 +64,6 @@ __pycache__/
 *credentials*.json
 *service-account*.json
 secrets/
-# Legacy e-diary files with hard-coded DB / SMTP / RabbitMQ / SMS credentials
-Codebase e diary/hesk_settings.inc.php
-Codebase e diary/api/config.php
-Codebase e diary/inc/sms.inc.php
-Codebase e diary/admin/new_ticket*.php
-Codebase e diary/admin/New folder/
 
 # ---- Data dumps ----
 hesk_*.sql
@@ -86,7 +80,6 @@ hesk_*.sql
 *.gguf
 *.wav
 *.mp3
-Codebase e diary/api/push_test_sed.php
 # Single-file demos with embedded document scans
 pension-portal.html
 pension-portal rd new.html

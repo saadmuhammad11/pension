@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from .confirmations import AUTHORISED_DESKS, confirmed_values
-from .money import exact, fmt, money, rupees
+from .money import exact, money, rupees
 from .types import Ambiguity, Determination, Reading, Step
 
 CONFIG_PATH = Path(__file__).parent / "family_pension_dii.yaml"

@@ -52,13 +52,6 @@ def arrow(ax, x1, y1, x2, y2):
     ))
 
 
-def elbow(ax, x1, y1, x2, y2, y_mid):
-    """Orthogonal connector: down, across, then down into the target."""
-    ax.plot([x1, x1], [y1, y_mid], color=EDGE, lw=1.15, zorder=2)
-    ax.plot([x1, x2], [y_mid, y_mid], color=EDGE, lw=1.15, zorder=2)
-    arrow(ax, x2, y_mid, x2, y2)
-
-
 def build() -> Path:
     fig = plt.figure(figsize=(W, H), facecolor=BG_TOP)
     # Axes fill the whole figure, so the gradient reaches every edge. With a tight bbox and a

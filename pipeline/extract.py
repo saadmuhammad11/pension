@@ -31,7 +31,7 @@ from typing import Any, Callable
 
 from pipeline.ingest import atomic_write_text, read_checkpoint
 from extraction.classify import classify_pay_label
-from extraction.client import ExtractionError, extract_page, extract_page_confirmed
+from extraction.client import ExtractionError, extract_page_confirmed
 from rules import PayComponent, reckon, select_pack
 from rules.engine import DeathInServiceCase, determine_family_pension_death_in_service
 from rules.money import fmt
@@ -556,30 +556,6 @@ def pay_scale_from_ocr(run: Path, page: int) -> int:
         f"OCR found {sorted(found) or 'no'} pay-scale token(s) on page {page}; "
         "the grade cannot be established from this page alone. Route to human verification."
     )
-
-
-def _parse_pay_scale(field: ExtractedField) -> int:
-    """Parse 'BS-19' to 19, refusing anything that is not a printed scale token.
-
-    The regex is the verification: a model that answers "12-10-2021", or a bare "12", fails
-    it and the case routes to a human instead of silently selecting the wrong
-    medical-allowance band.
-    """
-    if not field.usable:
-        raise ExtractionGap(
-            f"pay scale not readable (value={field.value!r}, "
-            f"reason={field.unreadable_reason!r}). Route to human verification."
-        )
-    m = _SCALE.search(field.value or "")
-    if not m:
-        raise ExtractionGap(
-            f"pay scale {field.value!r} is not a printed BS/BPS token. Refusing to infer a "
-            "grade: it selects the medical-allowance rate (ADD-02)."
-        )
-    scale = int(m.group(1))
-    if not 1 <= scale <= 22:
-        raise ExtractionGap(f"pay scale BS-{scale} is outside the 1-22 range")
-    return scale
 
 
 def _opt_date(fields: list[dict], name: str) -> "date | None":

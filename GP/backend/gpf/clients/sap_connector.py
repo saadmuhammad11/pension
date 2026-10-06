@@ -12,7 +12,7 @@ pay slip and GPF report programs (open item GPF-O19).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
 from ..sap import check_sap_against_case, parse_sap_file

@@ -11,7 +11,7 @@ anomalies register into CUSTOM_CHECKS and are attached to a case by its facts
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 CHECKS: list["Check"] = []

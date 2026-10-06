@@ -133,5 +133,3 @@ export function byText(selector: string, text: string, root: ParentNode = docume
 }
 
 export const q = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector<T>(sel)
-export const parkCursor = () => moveTo(window.innerWidth * 0.62, window.innerHeight * 0.55, 500)
-export const isPaused = () => paused

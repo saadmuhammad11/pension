@@ -9,8 +9,7 @@ another component parses (spec §0 rule 2).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 from .artefacts import Artefact
 

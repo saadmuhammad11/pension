@@ -18,8 +18,8 @@ import uuid
 from typing import Optional
 
 from . import doa as doa_mod
-from .engine import (CaseState, OFFICERS, evaluate, is_issue, lists, may, position,
-                     run_case, who_can)
+from .engine import (CaseState, OFFICERS, is_issue, lists, may, position, run_case,
+                     who_can)
 from .fixtures import CASES, all_case_keys, load_case
 from .rules_family import CURES, fund_position
 from .store import CaseRepository, DocumentStore

@@ -366,35 +366,6 @@ def verify_with_ocr(
     return tuple(out)
 
 
-def _norm_form(value: str | None) -> str:
-    """Normalise a printed form number for comparison.
-
-    Both sides go through this, which is the bit an earlier version got wrong: stripping
-    hyphens from only the expected side made a correctly printed "D-II" fail its own check.
-    Roman numerals stay distinct after normalisation -- DI, DII, BI, BII, BIII, BIV.
-    """
-    if not value:
-        return ""
-    out = value.upper()
-    for token in ("FORM", " ", "-", ".", "_"):
-        out = out.replace(token, "")
-    return out
-
-
-def identify_bundle(
-    images: Sequence[str | Path],
-    *,
-    first_page_no: int = 1,
-    **kwargs: Any,
-) -> tuple[PageIdentity, ...]:
-    """Identify every page in a bundle, in order."""
-    return tuple(
-        identify_page(img, page=first_page_no + i, **kwargs)
-        for i, img in enumerate(images)
-    )
-
-
-
 #: Printed headings that name a checklist document beyond doubt, as the office's own sheet
 #: names them. Deliberately narrow: each pattern is a TITLE a department prints at the head
 #: of a page, not a phrase that could occur in the body of another document. "Death

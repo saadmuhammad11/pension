@@ -18,7 +18,6 @@ import json
 import re
 import os
 import subprocess
-import tempfile
 import urllib.error
 import urllib.request
 import uuid

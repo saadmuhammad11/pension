@@ -26,7 +26,7 @@ from __future__ import annotations
 from typing import Any
 
 from .contracts import CONF, NA, OK, Facts
-from .engine import check, ev, fmt, num, verified, verified_result
+from .engine import check, fmt, num, verified, verified_result
 
 #: Section 4(2) of the Provident Funds Act 1925: below this the Accounts Officer may pay
 #: without probate. The figure is the Act's and is carried here as an effective-dated

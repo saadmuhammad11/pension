@@ -22,7 +22,6 @@ from typing import Any
 
 from .contracts import ADV, CONF, HARD, OK, SAP, SUB, Facts
 from .engine import check, digits, ev, fmt, num
-from .params import ADVANCE_LIMITS
 
 
 def _doc_cure(doc_type: str, apply: str, fields: list[dict[str, Any]] | None = None) -> dict[str, Any]:

@@ -19,7 +19,7 @@ is deliberately no mark-as-resolved path, because one would drift from the rules
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from .contracts import (
     ADV,

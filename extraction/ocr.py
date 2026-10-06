@@ -368,35 +368,6 @@ def _designations_in(text: str) -> list[str]:
     return found
 
 
-def attestation_marks_on(page_text: PageText) -> tuple[str, ...]:
-    """Evidence of a THIRD-PARTY attestation on this page, per OCR. SOP §5.
-
-    The second reader for ``PageIdentity.attested``. The vision model's own answer cannot
-    corroborate itself -- the same attested CNIC read True in one run and False in the next,
-    because the field asked whether there was "a stamp or signature" and a CNIC card prints
-    the holder's own signature.
-
-    What this looks for is the thing that distinguishes an attestation from a signature: a
-    stated OFFICE. An officer attesting a copy writes their designation under the signature,
-    because the certification is worth nothing without it. A holder signing their own card
-    does not.
-
-    Returns the marks found, so a caller can show an officer what the evidence was rather
-    than asserting a verdict. Empty means OCR saw no attestation, which is evidence of
-    absence only as far as OCR goes -- a handwritten designation may not survive the scan.
-    """
-    if looks_degenerate(page_text):
-        return ()
-    text = re.sub(r"\s+", " ", page_text.normalised.upper())
-    found: list[str] = []
-    for word in _ATTEST_WORDS:
-        if word.upper() in text and word.upper() not in found:
-            found.append(word.upper())
-    for role in _designations_in(text):
-        if role not in found:
-            found.append(role)
-    return tuple(found)
-
 def looks_degenerate(page_text: PageText) -> bool:
     """Has the OCR model fallen into a repetition loop? Then its text is not evidence.
 
@@ -463,72 +434,6 @@ def ocr_card_page(image: str | Path, page: int, **kw: Any) -> PageText:
         raise OcrError(f"page {page}: neither half of the card produced usable text")
     return PageText(page=page, text="\n".join(pieces), model=OCR_MODEL,
                     finish_reason="length" if truncated else "stop")
-
-
-def ocr_page_banded(
-    image: str | Path,
-    page: int,
-    *,
-    bands: int = 2,
-    max_tokens: int = 2048,
-    **kw: Any,
-) -> PageText:
-    """Read a page in horizontal bands, so the FOOT of it is always reached.
-
-    ``ocr_page`` sends the whole page and takes what comes back. On a dense scan -- a CNIC
-    with Urdu on both halves, a service-book spread -- the reader exhausts its budget partway
-    down and stops, and the response says so with ``finish_reason="length"``. Everything below
-    that point is simply never transcribed.
-
-    That is fatal for one question in particular. An attestation is written at the FOOT of
-    the copy it certifies: the officer signs under the document and states their office. It
-    is the last thing on the page and therefore the first thing lost. Two real CNIC pages
-    both stopped midway down the card, and both in fact carried a Headmistress's stamp below
-    the cut -- so the page read as unattested when it was nothing of the kind.
-
-    Splitting the page gives each band its own budget, and the band carrying the foot starts
-    at the foot. The bands overlap so a stamp across a cut survives in one piece.
-
-    The result reads as one page. ``finish_reason`` is "length" if ANY band ran out, because
-    the guarantee the caller needs is that the whole page was transcribed, not most of it.
-    """
-    from PIL import Image
-
-    src = Path(image)
-    with Image.open(src) as im:
-        width, height = im.size
-        step = height / bands
-        margin = int(height * _BAND_OVERLAP)
-        pieces: list[str] = []
-        truncated = False
-        for i in range(bands):
-            top = max(0, int(i * step) - margin)
-            bottom = min(height, int((i + 1) * step) + margin)
-            crop = im.crop((0, top, width, bottom))
-            with tempfile.NamedTemporaryFile(suffix=src.suffix or ".png", delete=False) as fh:
-                tmp = Path(fh.name)
-            try:
-                crop.save(tmp)
-                part = ocr_page(tmp, page, max_tokens=max_tokens, **kw)
-            except OcrError:
-                # One unreadable band must not lose the others. The page is marked
-                # incomplete, which is the honest description of what happened.
-                truncated = True
-                continue
-            finally:
-                tmp.unlink(missing_ok=True)
-            truncated = truncated or not part.complete
-            if not looks_degenerate(part):
-                pieces.append(part.text)
-
-    if not pieces:
-        raise OcrError(f"page {page}: no band produced usable text")
-    return PageText(
-        page=page,
-        text="\n".join(pieces),
-        model=OCR_MODEL,
-        finish_reason="length" if truncated else "stop",
-    )
 
 
 @dataclass(frozen=True)

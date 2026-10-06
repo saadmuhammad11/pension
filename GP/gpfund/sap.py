@@ -28,7 +28,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
 
 from .contracts import Facts
 from .engine import digits, num

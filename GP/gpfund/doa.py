@@ -24,8 +24,8 @@ every signature becomes a verification task.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Mapping
 
 PROVISIONAL = "provisional"
 FINAL = "final"

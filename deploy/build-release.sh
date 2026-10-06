@@ -36,7 +36,10 @@ mkdir -p "$REL/portals" "$REL/GP/backend" "$REL/docs" "$REL/artifacts/rag"
 copy() { rsync -a --exclude '__pycache__' --exclude '*.pyc' "$@"; }
 copy "$ROOT/api" "$ROOT/rules" "$ROOT/pipeline" "$ROOT/extraction" "$ROOT/rag" "$ROOT/config" "$REL/"
 copy "$ROOT/portals/dist" "$REL/portals/"
-copy "$ROOT/GP/backend/gpf" "$ROOT/GP/backend/web" "$ROOT/GP/backend/pyproject.toml" \
+# The GP module's own working data (cases, page cache, uploads) is real claimant data and stays
+# on the box it was made on; the fixtures it ships are synthetic (checked below).
+copy --exclude 'data/' --exclude 'page_cache/' --exclude 'uploads/' --exclude '*.jsonl' \
+     "$ROOT/GP/backend/gpf" "$ROOT/GP/backend/web" "$ROOT/GP/backend/pyproject.toml" \
      "$ROOT/GP/backend/requirements.txt" "$REL/GP/backend/"
 copy "$ROOT/deploy" "$REL/"
 cp "$ROOT/docs/DEPLOYMENT.md" "$REL/docs/"
@@ -53,6 +56,11 @@ bad=$(cd "$REL" && find . \( -iname 'credentials*' -o -name '*.sqlite3*' -o -nam
 if [[ -n "$bad" ]]; then
   echo "refusing: the release would carry trial files:" >&2; echo "$bad" >&2; exit 1
 fi
+
+echo "== checking for claimant data"
+# File names catch the trial files above; this reads the contents. Any CNIC that is not one of
+# the synthetic or placeholder numbers stops the build (the hits are printed masked).
+"$PY" "$ROOT/deploy/check-release-pii.py" "$REL"
 
 mkdir -p "$OUT"
 tar czf "$OUT/pension-$VERSION.tgz" -C "$STAGE" "pension-$VERSION"

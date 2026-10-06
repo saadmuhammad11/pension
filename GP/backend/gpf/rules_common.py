@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 from .doa import DOA, doa_lookup, doa_status_text
-from .format import ADVANCES, FINALS, D, KIND, digits, ev, fmt, same_name
+from .format import ADVANCES, FINALS, D, KIND, digits, ev, fmt
 from .registry import check, verified, verified_result
 
 

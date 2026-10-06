@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from .contracts import ADV, CONF, HARD, OK, SAP, Facts
-from .engine import check, digits, ev, fmt, num, same_name, verified
+from .engine import check, digits, ev, fmt, num, same_name
 from .params import ADVANCE_LIMITS, OFFICE_CAP_PCT
 
 ADVANCES = ("refundable", "nonrefundable")

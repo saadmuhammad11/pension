@@ -25,13 +25,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import date, datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
-from .ingest import (SourcePage, atomic_write_text, ingest, load_manifest,
-                     read_checkpoint, source_pages)
+from .ingest import (SourcePage, atomic_write_text, load_manifest, read_checkpoint,
+                     source_pages)
 
 #: How many pages to read at once. Matched to the vision server's --max-num-seqs: asking for
 #: more than it will batch just queues requests inside vLLM and adds latency to each.
@@ -374,29 +373,3 @@ def classification_eval(run_dir: str | Path) -> dict:
     }
 
 
-def run_all(
-    pdf_path: str | Path,
-    run_dir: str | Path,
-    *,
-    progress: Callable[[str], None] | None = None,
-    limit: int | None = None,
-) -> dict:
-    """Stages 1 -> 3c. Returns a summary; artefacts are on disk in ``run_dir``."""
-    run = Path(run_dir)
-    manifest = ingest(pdf_path, run)
-    if progress:
-        progress(f"stage 1  ingested {manifest['source_pages']} source pages")
-    stage_identify(run, progress=progress, limit=limit)
-    stage_verify_forms(run, progress=progress)
-    docs = stage_assemble(run)
-    if progress:
-        progress(f"stage 3b assembled {len(docs)} documents")
-    case_type = stage_classify(run)
-    if progress:
-        progress(f"stage 3c case type: {case_type['case_type']} ({case_type['case_type_confidence']})")
-    return {
-        "manifest": {k: v for k, v in manifest.items() if k != "pages"},
-        "documents": docs,
-        "case_type": case_type,
-        "classification_eval": classification_eval(run),
-    }

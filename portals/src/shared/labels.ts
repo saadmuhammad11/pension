@@ -125,11 +125,3 @@ export const titleCase = (s: string) =>
   s === s.toUpperCase() && /[A-Z]{4,}/.test(s)
     ? s.toLowerCase().replace(/[\p{L}&']+/gu, w => ACRONYMS.has(w.toUpperCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))
     : s
-
-/** A case reference an officer can quote down a telephone.
- *
- *  The run id is a content hash -- stable and useful to us, meaningless to a registry. Where
- *  the department's own diary number is known it is the reference; otherwise the hash is
- *  shown in a form that at least looks like a reference rather than a fragment of a path. */
-export const caseNumber = (diary: string | null | undefined, runRef: string) =>
-  diary ?? runRef.replace(/^run-/, '').toUpperCase()

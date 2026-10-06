@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from .format import KIND, ev, fmt
+from .format import ev, fmt
 from .registry import check, verified, verified_result
 
 

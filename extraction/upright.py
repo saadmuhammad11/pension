@@ -98,7 +98,6 @@ def text_axis(image_path: str | Path) -> tuple[str, int, int]:
     just what was concluded.
     """
     import cv2
-    import numpy as np
 
     img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
     if img is None:
@@ -188,17 +187,6 @@ def tidy_line_starts(image_path: str | Path) -> float:
     spread_of_starts = max(float(np.std(lefts)), floor)
     spread_of_ends = max(float(np.std(rights)), floor)
     return spread_of_ends / spread_of_starts
-
-
-def _readable_characters(text: str) -> int:
-    """How much of a transcription looks like language rather than noise.
-
-    Letters and digits in runs of two or more. An OCR pass over sideways text returns plenty
-    of characters -- stray marks read as punctuation and single letters -- so counting
-    everything would make both rotations look equally good.
-    """
-    import re
-    return sum(len(w) for w in re.findall(r"[A-Za-z؀-ۿ0-9]{2,}", text or ""))
 
 
 def decide(

@@ -13,7 +13,7 @@ Comparison against the document is the rules engine's job, not the decoder's.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
 

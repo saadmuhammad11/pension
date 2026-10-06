@@ -31,61 +31,11 @@ import math
 import os
 import re
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, TypeVar
+from typing import Any
 
 MANIFEST_NAME = "manifest.json"
-
-#: How many model reads may be in flight at once. The vision server is started with
-#: --max-num-seqs 4, so beyond four the requests queue on the server instead of here and
-#: nothing is gained. Set PENSION_READ_CONCURRENCY to 1 to get the old serial behaviour
-#: back, or higher where a differently configured server is in front of it.
-READ_CONCURRENCY = max(1, int(os.environ.get("PENSION_READ_CONCURRENCY", "4") or 1))
-
-_T = TypeVar("_T")
-_R = TypeVar("_R")
-
-
-def map_reads(
-    items: Iterable[_T],
-    work: Callable[[_T], _R],
-    *,
-    workers: int | None = None,
-) -> Iterator[tuple[_T, _R | None, Exception | None]]:
-    """Run ``work`` over ``items`` concurrently, yielding ``(item, result, error)`` IN ORDER.
-
-    A page read is an HTTP call to the model server: it releases the GIL and spends its
-    whole life waiting, so threads are the right tool and the server batches what arrives.
-
-    Results are yielded in the order of ``items``, never completion order. BUILD §6.2
-    requires the same inputs and rule pack to reproduce the same output forever, and a
-    stage whose artefact depended on which read happened to finish first would not. An
-    exception is handed back with its item rather than raised, because every caller here
-    records an unreadable page as a finding instead of abandoning the sweep.
-
-    A crash can now lose the reads that finished but had not yet been consumed -- at most
-    ``workers`` of them, against the whole run that a serial sweep used to risk.
-    """
-    items = list(items)
-    if not items:
-        return
-    count = min(workers or READ_CONCURRENCY, len(items))
-    if count <= 1:
-        for item in items:
-            try:
-                yield item, work(item), None
-            except Exception as exc:                 # noqa: BLE001
-                yield item, None, exc
-        return
-    with ThreadPoolExecutor(max_workers=count, thread_name_prefix="read") as pool:
-        futures = [pool.submit(work, item) for item in items]
-        for item, future in zip(items, futures):
-            try:
-                yield item, future.result(), None
-            except Exception as exc:                 # noqa: BLE001
-                yield item, None, exc
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -186,7 +136,6 @@ def _quality(image_path: Path) -> tuple[float, int, int]:
         contrast = math.sqrt(max(0.0, ImageStat.Stat(grey).var[0])) / 128.0
         edges = ImageStat.Stat(grey.filter(ImageFilter.FIND_EDGES)).mean[0] / 64.0
     return round(min(1.0, contrast * 0.5 + min(1.0, edges) * 0.5), 3), w, h
-
 
 
 #: Target long edge, in pixels, for a rendered page. Chosen so a dense typed form stays

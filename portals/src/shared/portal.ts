@@ -58,8 +58,6 @@ export function portal(): PortalConfig {
   return resolved ?? AG_FALLBACK
 }
 
-export const isDepartmentPortal = () => portal().kind === 'department'
-
 /** The self-running demo switches portals on one page; nothing in the served system calls this. */
 export function setPortalForDemo(p: PortalConfig): void {
   resolved = p

@@ -509,13 +509,6 @@ FORMS_WITHOUT_A_CHECKLIST_COLUMN = {
     "FORM_B_III": "final pension where anticipatory was already paid",
 }
 
-def family_of(variant: str) -> str:
-    for family, variants in CASE_FAMILY_VARIANTS.items():
-        if variant in variants:
-            return family
-    raise KeyError(f"unknown case variant {variant!r}; have {ALL_VARIANTS}")
-
-
 #: How old a NADRA Family Registration Certificate may be when the case is submitted. AG
 #: Punjab office practice, stated by the office on 17 September 2026: an FRC is a snapshot
 #: of a family that changes -- deaths, marriages, births -- and one issued more than six

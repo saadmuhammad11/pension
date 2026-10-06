@@ -17,7 +17,7 @@ guesses an account number, CNIC, date or amount.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional, Protocol, runtime_checkable
 
 # Confidence thresholds by field class (spec §4.5). Effective-dated config.
