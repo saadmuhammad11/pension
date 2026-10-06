@@ -132,6 +132,86 @@ def _registry_keep_min() -> int:
         return 60
 
 
+def _min_free_gb() -> float:
+    try:
+        return max(0.0, float(os.environ.get("PENSION_MIN_FREE_GB", "5")))
+    except ValueError:
+        return 5.0
+
+
+def disk_shortfall(path: Path | None = None) -> str | None:
+    """Why new work must wait, or None: the artefact disk has less than PENSION_MIN_FREE_GB free.
+
+    A case bundle can be 500 MB and a run writes every page as an image; with no check, the
+    disk filled mid-run and the half-written artefacts were taken for the run's result (audit
+    6 Oct 2026, R8). Checked before an upload is accepted and before a verification starts.
+    """
+    import shutil
+    target = path or ARTIFACTS
+    probe = target
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    try:
+        free = shutil.disk_usage(probe).free
+    except OSError:
+        return None                                        # a disk that cannot be asked is not refused
+    need = _min_free_gb() * 1024 ** 3
+    if free < need:
+        return (f"the server has {free / 1024 ** 3:.1f} GB free for case files, below the "
+                f"{_min_free_gb():g} GB it keeps in reserve; ask the administrator to make room")
+    return None
+
+
+def _orphan_days() -> int:
+    try:
+        return max(1, int(os.environ.get("PENSION_RUN_ORPHAN_DAYS", "7")))
+    except ValueError:
+        return 7
+
+
+def sweep_disk(referenced: set[str], now: datetime | None = None) -> dict[str, list[str]]:
+    """Remove what no case will ever ask for again (audit 6 Oct 2026, R8).
+
+    - run folders that never produced a report, belong to no case (``referenced`` is the set of
+      run ids ``case_runs`` knows) and are not in this process, once PENSION_RUN_ORPHAN_DAYS (7)
+      old: a crashed or abandoned run of the old register, with the uploads that fed it;
+    - upload staging files (``.incoming``) older than a day: an upload the request never filed.
+
+    A run folder with a report, or one a case refers to, is never touched: it is the record.
+    Returns what was removed, for the log.
+    """
+    import shutil
+    now = now or datetime.now()
+    removed: dict[str, list[str]] = {"runs": [], "staging": []}
+    if ARTIFACTS.is_dir():
+        cutoff = (now - timedelta(days=_orphan_days())).timestamp()
+        for d in ARTIFACTS.glob("run-*"):
+            run_id = d.name[len("run-"):]
+            if not d.is_dir() or (d / "case_report.json").exists() or run_id in referenced or run_id in RUNS:
+                continue
+            try:
+                newest = max([d.stat().st_mtime] + [p.stat().st_mtime for p in d.rglob("*")])
+            except OSError:
+                continue
+            if newest >= cutoff:
+                continue
+            shutil.rmtree(d, ignore_errors=True)
+            for upload in (UPLOADS.glob(f"{run_id}-*") if UPLOADS.is_dir() else []):
+                upload.unlink(missing_ok=True)
+            removed["runs"].append(run_id)
+    incoming = ARTIFACTS / "cases" / ".incoming"
+    if incoming.is_dir():
+        stale = (now - timedelta(days=1)).timestamp()
+        for f in incoming.iterdir():
+            try:
+                if f.is_file() and f.stat().st_mtime < stale:
+                    f.unlink()
+                    removed["staging"].append(f.name)
+            except OSError:
+                continue
+    return removed
+
+
 def prune_registry(now: datetime | None = None) -> list[str]:
     """Drop finished runs from the registry once they are old enough to be served from disk.
 

@@ -23,7 +23,7 @@ from pathlib import Path
 
 from api import db, gpf_bridge, rounds, workflow
 from api.artefacts import report_dict
-from api.runs import RUNS, adopt_from_disk, past_deadline, prune_registry, start_run
+from api.runs import RUNS, adopt_from_disk, disk_shortfall, past_deadline, prune_registry, start_run, sweep_disk
 
 #: A GP Fund examination is a reading job of the GP Fund module, not a pipeline run; its id on
 #: case_runs carries this prefix so the reconciler knows whom to ask.
@@ -111,6 +111,9 @@ def _start_check(conn: sqlite3.Connection, case: sqlite3.Row, user) -> dict:
     running.
     """
     from api import rounds
+    short = disk_shortfall()
+    if short:
+        raise workflow.WorkflowError(507, short)           # before the case is moved (audit 6 Oct 2026, R8)
     body, docs = bundle_bytes(conn, case["id"])
     intake = json.loads(case["intake_json"] or "{}")
     # A resubmission reuses the earlier round's reading of every paper it has not changed
@@ -355,6 +358,11 @@ def _gpf_job_state(run_id: str, started_at: str | None = None) -> tuple[str, str
 def gpf_issues_for_case(gpf_case_id: str) -> dict:
     """The module's current view of its case, in the shape the case system moves cases by."""
     return gpf_bridge.issues(gpf_bridge.case(gpf_case_id))
+
+
+def referenced_run_ids(conn: sqlite3.Connection) -> set[str]:
+    """Every run id a case has ever been verified under: never swept from disk."""
+    return {r["run_id"] for r in conn.execute("SELECT run_id FROM case_runs")}
 
 
 def _run_state(run_id: str) -> tuple[str, str | None]:
@@ -660,7 +668,10 @@ def start_reconciler(interval_s: float = 3.0) -> None:
     if _SYNC_THREAD and _SYNC_THREAD.is_alive():
         return
 
+    last_sweep = 0.0
+
     def loop() -> None:
+        nonlocal last_sweep
         while True:
             time.sleep(interval_s)
             try:
@@ -668,6 +679,14 @@ def start_reconciler(interval_s: float = 3.0) -> None:
                 conn = db.connect()
                 try:
                     sync_run_states(conn)
+                    # Disk housekeeping every ten minutes (api.runs.sweep_disk, R8): orphan run
+                    # folders and stale upload staging files; never a run a case refers to.
+                    if time.monotonic() - last_sweep > 600:
+                        last_sweep = time.monotonic()
+                        removed = sweep_disk(referenced_run_ids(conn))
+                        if removed["runs"] or removed["staging"]:
+                            print(f"[case_runs] swept {len(removed['runs'])} orphan run(s), "
+                                  f"{len(removed['staging'])} stale upload(s)")
                 finally:
                     conn.close()
             except Exception as exc:                        # noqa: BLE001

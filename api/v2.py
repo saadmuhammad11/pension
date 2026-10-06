@@ -785,10 +785,14 @@ def _read_uploads(files: list[UploadFile]) -> list[_Staged]:
     (``_discard_staged``) once they have been filed or the filing failed.
     """
     import tempfile
+    from api.runs import disk_shortfall
     if not files:
         raise HTTPException(422, "attach at least one document")
     if len(files) > MAX_FILES:
         raise HTTPException(413, f"at most {MAX_FILES} files in one upload")
+    short = disk_shortfall(case_runs.CASE_FILES)
+    if short:
+        raise HTTPException(507, short)                      # Insufficient Storage (audit 6 Oct 2026, R8)
     out: list[_Staged] = []
     total = 0
     try:
