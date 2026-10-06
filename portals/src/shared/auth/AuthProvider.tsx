@@ -50,6 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Whatever ended the session, the next sign-in opens the main page (29 Sep 2026); the
     // address is forgotten so the next person at this screen does not land on a case.
     void comeBack; takeNext()
+    // The GP Fund frame's cookie is HttpOnly, so only the server can clear it; without this the
+    // next person at a shared PC could open /gpf/ as this officer for two hours. Best effort.
+    void fetch('/api/v2/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
     setToken(null); setUser(null); setCan(null); setWarning(null)
     if (why) setNotice(why)
     navigate('/', { replace: true })

@@ -836,7 +836,8 @@ class V2Test(unittest.TestCase):
         token -- cases, documents, stats, findings, admin. Walks the router so a new route cannot
         be added open by mistake."""
         from api.v2 import router
-        open_paths = {"/api/v2/auth/login", "/api/v2/portals"}
+        # Sign-out only clears the GP Fund frame cookie, and must work after the session has gone.
+        open_paths = {"/api/v2/auth/login", "/api/v2/portals", "/api/v2/auth/logout"}
         seen = 0
         for route in router.routes:
             path = getattr(route, "path", "")

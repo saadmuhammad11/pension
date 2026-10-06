@@ -148,6 +148,21 @@ def gpf_session(request: Request, user: User = Depends(require_roles("AG_REVIEWE
     return response
 
 
+@router.post("/auth/logout")
+def logout() -> Any:
+    """Sign-out's server half: clear the GP Fund frame cookie in this browser.
+
+    The portal's own session is a token in the tab and ends when the tab drops it, but the frame
+    cookie is HttpOnly, path /gpf and lives two hours: on a shared office PC the next person could
+    open /gpf/ as the officer who had just signed out or been timed out (audit 6 Oct 2026). Needs
+    no session, because the idle timeout and a refused token call it after the session is gone.
+    """
+    from fastapi.responses import JSONResponse
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(GPF_COOKIE, path="/gpf", httponly=True, samesite="strict")
+    return response
+
+
 @router.get("/auth/gpf-check")
 def gpf_check(x_gpf_session: str | None = Header(default=None),
               conn: sqlite3.Connection = Depends(get_conn)) -> dict:
