@@ -1,21 +1,22 @@
 # Audit status — `fix/high-findings`
 
-Reconciled status of every audit item, as of **6 October 2026** (evening). Statuses describe the
+Reconciled status of every audit item, as of **6 October 2026** (night). Statuses describe the
 code on the branch `fix/high-findings` plus the data-handling work done on this box today. Nothing
 on the branch is pushed, merged or deployed yet (see N1), so none of the FIXED rows is live until it is.
 
 Severity and numbering follow the audit report of 6 October 2026: M = critical findings, H = high,
-S/R/C/G/D/L = medium and low by area, N = new items raised while fixing. The last re-check against the
-code ran all three suites: pension 777 OK, GP backend 83 passed, GP Fund engine OK.
+S/R/C/G/D/L = medium and low by area, N = new items raised while fixing (N12–N17 added in the
+evening pass, which also reconciled the later report of 6 Oct, 13:22, items 1–11). Every commit on
+the branch passed all three suites (pension, GP Fund engine, GP Fund backend), run on a snapshot of
+that commit; the portal type-checks.
 
-**Totals.** Earlier audit (69 items): 26 fixed, 2 partly fixed, 15 need a business decision, 26 not
-fixed. New items (11): 5 fixed, 1 needs a business decision, 5 not fixed.
+**Totals.** Earlier audit (57 items): 42 fixed, 1 partly fixed, 13 need a business decision, 1 not fixed. New items (17): 11 fixed, 2 need a decision, 4 not fixed. Remaining open across both: 5 not fixed (N1, N6, L1, N11, N15), 1 partly fixed (M7), 15 awaiting a decision.
 
 ## Real claimant data (M8 / N2 / N4 / N6)
 
-- **Code and history: clean.** All 21 commits pass `deploy/check-release-pii.py`; none of the 128
-  real values appears anywhere in local history. The local object store (1,145 blobs) was scanned
-  blob by blob on 6 Oct: no hit.
+- **Code and history: clean.** Every commit passes `deploy/check-release-pii.py`; none of the 128
+  real values appears anywhere in local history. The local object store was scanned blob by blob
+  on 6 Oct: no hit.
 - **GitHub: clean.** The repository was deleted and recreated on 6 Oct. `main` there is `f329438`;
   the pre-scrub commit `63185d3` returns "No commit found" from the GitHub API.
 - **Local copies: removed.** On 6 Oct the leftover copies were shredded (`shred -u`, 306 MB): the
@@ -29,19 +30,23 @@ fixed. New items (11): 5 fixed, 1 needs a business decision, 5 not fixed.
   `deploy/build-release.sh`, owned by `tmc` (the user every service runs as) and set to owner-only
   access (700/600). The single-file demos (N6) and the Claude session transcripts (N11) are the two
   remaining copies that need handling.
+- **Sign-in sheet (6 Oct, evening):** `artifacts/credentials/credentials.csv` and `.html` were stale
+  (generated passwords from 25 Sep; every trial account is on `1234`). Rewritten with
+  `python3 -m api.db refresh-credentials 1234` (`599efc5`): 88 accounts, owner-only files, no
+  account or session touched. The sheet is removed before production (`forget-credentials`, F7).
 
 ## Status table
 
 | # | Sev | Item | Status | Evidence / what remains |
 |---|---|---|---|---|
-| M1 | Critical | Auto-approval ignores the engine's verdict | **NEEDS BUSINESS DECISION** | `outcome()` still has no verdict check. Decision sheet item 1 |
+| M1 | Critical | Auto-approval ignores the engine's verdict | **NEEDS BUSINESS DECISION** | `outcome()` still has no verdict check. Decision sheet item 1. (Later report item 1.) |
 | M2 | Critical | `CHANGE_ME`/short JWT secret accepted | **FIXED** | `2280c44`. `tests/test_production_hardening.py` F11 (4 tests, including the real process exiting with code 1) |
 | M3 | Critical | Qualifying service loses a year at 6 months | **NEEDS BUSINESS DECISION** | Re-run today: still `29y 5m 30d`. Decision sheet item 2 |
 | M4 | Critical | Every GP Fund scan read crashed (NameError) | **FIXED** | `b519e24`. `GP/backend/tests/test_scan_read_e2e.py` (failed before, passes after). The running GP module hasn't been restarted |
 | M5 | Critical | TIFF/GIF image bomb runs the server out of memory | **FIXED** | `d3577df`. `tests/test_image_limits.py` (200-frame bomb refused; 133 MB peak) |
 | M6 | Critical | LibreOffice fetches addresses / reads local files | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` (live listener receives no requests). Content checks; no sandbox is possible on this box |
-| M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** (stop-gap live 6 Oct 2026) | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live:** `deploy/lock-model-ports.sh` (`5e15060`) applied and persisted on the trial box (`/usr/local/sbin/lock-model-ports.sh`, `pension-model-ports.service`): 8011/8012/8093 answer on loopback (HTTP 200) and time out from a laptop. The lasting fix, `--host 127.0.0.1` plus an API key in `infra/*.service`, rolls out at deploy (checklist §8.1) |
-| M8 | Critical | Real CNICs and names in code and history | **FIXED** (6 Oct 2026) | Code: `f329438`, plus `deploy/check-release-pii.py` (passes on all 21 commits and on every blob in the local object store). History rewritten; GitHub recreated clean, `63185d3` no longer served (N2). Local copies shredded (N4). Remaining copies: the demos (N6) and the session transcripts (N11) |
+| M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** (stop-gap live 6 Oct 2026) | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live:** `deploy/lock-model-ports.sh` (`5e15060`) applied and persisted on the trial box (`/usr/local/sbin/lock-model-ports.sh`, `pension-model-ports.service`): 8011/8012/8093 answer on loopback (HTTP 200) and time out from a laptop. The lasting fix, `--host 127.0.0.1` plus an API key in `infra/*.service`, rolls out at deploy (checklist §8.1). (Later report item 4.) |
+| M8 | Critical | Real CNICs and names in code and history | **FIXED** (6 Oct 2026) | Code: `f329438`, plus `deploy/check-release-pii.py` (passes on every commit and on every blob in the local object store). History rewritten; GitHub recreated clean, `63185d3` no longer served (N2). Local copies shredded (N4). Remaining copies: the demos (N6) and the session transcripts (N11) |
 | H1 | High | Two reads of a page disagree, figures used anyway | **NEEDS BUSINESS DECISION** | The agreement result is stored but never read. Item 3 |
 | H2 | High | Pay lines from several documents summed; §8.4 check never called | **NEEDS BUSINESS DECISION** | `reconcile_*` still has no callers. Item 4 |
 | H3 | High | Form D-I dates not cross-checked; no 10-year minimum | **NEEDS BUSINESS DECISION** | Item 5 |
@@ -53,59 +58,67 @@ fixed. New items (11): 5 fixed, 1 needs a business decision, 5 not fixed.
 | H9 | High | Re-verify race (old run's result applied) | **FIXED** | `ef18463`. `tests/test_reverify_race.py` (fails without the fix) |
 | H10 | High | Waivers and approvals not on the audit trail | **FIXED** | `fab85f4`. `tests/test_clearance_audit.py`. Waivers carried into a resubmission are a policy question (item 11) |
 | H11 | High | GP Fund actions on rejected or returned cases | **FIXED** | `a861ade`. `tests/test_gpf_actions_follow_status.py` |
-| N1 | High | **New:** none of today's fixes is live | **NOT FIXED** | API and GP module started 5 Oct; portal bundle not rebuilt; branches not merged or pushed |
+| N1 | High | **New:** none of today's fixes is live | **NOT FIXED** | API, portal and GP module restarted 6 Oct 16:28 for PyJWT only (D2); the branch is not merged, pushed or deployed; the portal bundle is not rebuilt |
 | N2 | High | **New:** GitHub still serves the pre-scrub commit | **FIXED** (6 Oct 2026) | Repository deleted and recreated. `git ls-remote origin main` = `f329438`; `gh api repos/…/commits/63185d3` → "No commit found for SHA" (HTTP 422) |
 | N3 | High | **New:** HTML renamed `.doc`/`.rtf` and `.docx` linked images also made LibreOffice fetch | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` |
-| S1 | Medium | Session tokens written to nginx's access log | **NOT FIXED** | No `log_format` change. No longer blocked: the `deploy/` edits are committed (N5) |
+| N13 | High | **New (later report 2):** in production, the first person to type `1234` takes the account | **FIXED** (6 Oct 2026) | `2cc3476`. In production a weak password signs nobody in (403 "trial password is no longer accepted"); the administrator's reset hands out a password the officer replaces at first sign-in. `tests/test_trial_password_refused_in_production.py` |
+| S1 | Medium | Session tokens written to nginx's access log | **FIXED** (6 Oct 2026) | `72a5666`. `log_format pension` with the request line rewritten to `token=[redacted]`, used by both server blocks. The API runs without an access log and the portal server logs at warning level, so nginx was the only copy. `tests/test_nginx_access_log_redacts_token.py`. (Later report item 6; the bearer token outliving sign-out is N15.) |
 | S2 | Medium | Uploaded HTML/SVG opens on the portal's address | **FIXED** | `ae9ce8b`. `tests/test_documents_cannot_run.py` |
 | S3 | Medium | GP Fund uploads served inline (`.html`/`.js`) | **FIXED** | `0afba15`. `GP/backend/tests/test_scan_types.py` |
 | S4 | Medium | GP Fund cookie survives sign-out | **FIXED** | `dd2acef`. `tests/test_signout_clears_gpf.py`. Takes effect on the next portal rebuild |
-| S5 | Medium | AI output reaches departments | **FIXED** | `fd0c172`. `tests/test_ddo_sees_no_ai_output.py` |
+| S5 | Medium | AI output reaches departments | **FIXED** | `fd0c172`. `tests/test_ddo_sees_no_ai_output.py`. Re-checked 6 Oct for the later report's "departments see total activity counts": `/api/v2/stats` is computed over `inventory.scope(user)`, so a DDO's numbers are their own department's only |
 | R1 | Medium | Upload handlers block the server; whole upload in memory; files written under the DB lock | **FIXED** | `39d9437`. `tests/test_upload_streaming.py` (200 MB upload, 4.3 MB peak) |
 | R2 | Medium | Size guard dead behind the proxy (A-15 regression); anonymous uploads parsed | **FIXED** | `6e2491b`. `tests/test_upload_early_refusals.py` |
 | R3 | Medium | Zip page-cap bypass; `pdftoppm` has no timeout | **FIXED** | `b7e5aae`. `tests/test_pdf_limits.py` |
 | R4 | Medium | One slow GP Fund status check fails the examination | **FIXED** | `2965d29`. `tests/test_gpf_poll_resilience.py` |
 | R5 | Medium | Restart during re-verify approves on the old report | **FIXED** | `ad09087`. `tests/test_restart_mid_rerun.py` |
 | R6 | Medium | Failed migration doesn't stop the server | **FIXED** | `2c1f512`. `tests/test_startup_failure.py` |
-| R7 | Medium | No limit on runs reaching the GPU | **PARTLY FIXED** | Cap in `6d6679a`, `tests/test_run_concurrency.py`. Still no overall run deadline, and the in-memory run list grows without bound |
-| R8 | Medium | No disk quota or cleanup of old runs | **NOT FIXED** | |
+| R7 | Medium | No limit on runs reaching the GPU | **FIXED** (6 Oct 2026) | Cap in `6d6679a` (`tests/test_run_concurrency.py`). Remainder in `631e29f`: a run past `PENSION_RUN_DEADLINE_MIN` (90) is reported failed by the reconciler and stops itself at its next stage boundary; finished runs leave the in-memory registry after `PENSION_RUN_REGISTRY_KEEP_MIN` (60) minutes and are rebuilt from disk on demand. `tests/test_run_deadline_and_registry.py` |
+| R8 | Medium | No disk quota or cleanup of old runs | **FIXED** (6 Oct 2026) | `fc4e96c`. Uploads and verifications refused (507) below `PENSION_MIN_FREE_GB` (5) free, before the case is moved; the reconciler sweeps run folders with no report and no case after `PENSION_RUN_ORPHAN_DAYS` (7), with their uploads, and stale upload staging files. A run a case refers to is never touched. `tests/test_disk_quota_and_cleanup.py` |
 | C1 | Medium | No maker-checker; shared `ag.reviewer` account | **NEEDS BUSINESS DECISION** | `ADMIN` is still on both sides |
-| C2 | Medium | Admin override's audit row written outside its transaction | **NOT FIXED** | |
-| C3 | Medium | Old `/api` recompute can change the report behind an approved case | **NOT FIXED** | No status guard |
+| C2 | Medium | Admin override's audit row written outside its transaction | **FIXED** (6 Oct 2026) | `c5e88b9`. `transition()` takes a callback run inside its transaction; the override's audit row is written there, so the move and the row happen together or not at all. `tests/test_override_audit_atomic.py` |
+| C3 | Medium | Old `/api` recompute can change the report behind an approved case | **FIXED** (6 Oct 2026) | `a878c73`. Refused (409) when the run's case is approved or rejected, or when the case has moved on to a newer run; runs with no case unaffected. `tests/test_old_recompute_guard.py` |
 | G1 | Medium | Accounts Officer clears a hard stop with "correct" | **NEEDS BUSINESS DECISION** | Still allowed from level 2 (AO) |
-| G2 | Medium | GP Fund waivers stay attached after the amount changes | **NOT FIXED** | |
-| G3 | Medium | SAP trailing minus read as positive | **NOT FIXED** | `num("1,234.00-")` gives 1234 today |
-| G4 | Medium | Unread advance balance means "no advance outstanding" | **NOT FIXED** | |
-| G5 | Medium | Signature-authority register lost on restart | **NOT FIXED** | |
+| G2 | Medium | GP Fund waivers stay attached after the amount changes | **FIXED** (6 Oct 2026) | `2e6ab7c`. A disposition records what it was given against; a re-run that changes the observation marks it stale, keeps it for the record, and the item counts as open until an officer disposes of the new finding. Old dispositions (no fingerprint) are not disturbed. `GP/backend/tests/test_waiver_goes_stale_on_change.py` |
+| G3 | Medium | SAP trailing minus read as positive | **FIXED** (6 Oct 2026) | `7e3ec96`. `num("1,234.00-")` is −1,234; `"1,234/-"` stays positive. `GP/backend/tests/test_format_num.py` |
+| G4 | Medium | Unread advance balance means "no advance outstanding" | **FIXED** (6 Oct 2026) | `4d8e721`. An unread balance is a verification task with the SAP cure; zero still passes. `GP/gpfund/tests/test_unread_advance_balance.py` |
+| G5 | Medium | Signature-authority register lost on restart | **FIXED** (6 Oct 2026) | `69eeefb`. Every change written to `GPF_DATA_DIR/doa.json` (whole file, renamed into place) and loaded at start. `GP/backend/tests/test_doa_register_persists.py` |
 | G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **NEEDS BUSINESS DECISION** | `"ADMIN": "dag"` unchanged |
-| G7 | Medium | No locking on GP Fund case state | **NOT FIXED** | |
-| D1 | Medium | Release files owned by uid 1000 | **NOT FIXED** | |
-| D2 | Medium | PyJWT 2.13 advisories | **FIXED** (6 Oct 2026) | Pinned to 2.15.0 in `8011f41` (HS256 with a string `sub`: compatible). Installed into the services' venv (`uv pip install --no-deps`, 2.13.0 → 2.15.0) and API, portal and GP Fund restarted 16:28 with no run in progress; all three health checks OK, GP Fund `mode: vllm`; sign-in as the AG reviewer and `/auth/me` on the new token both 200. The production server gets it from the checklist (§8.1) |
-| D3 | Medium | `numpy`/`opencv`/`zxingcpp` missing from requirements | **NOT FIXED** | |
+| G7 | Medium | No locking on GP Fund case state | **FIXED** (6 Oct 2026) | `6ecb0b3`. One re-entrant lock per case around every mutating service method; other cases not held up. `GP/backend/tests/test_case_lock.py` |
+| D1 | Medium | Release files owned by uid 1000 | **FIXED** (6 Oct 2026) | `4054f55`. `tar --owner=0 --group=0 --numeric-owner`; the test packs a stand-in stage with the script's own flags and reads the entries back. `tests/test_release_archive_ownership.py` |
+| D2 | Medium | PyJWT 2.13 advisories | **FIXED** (6 Oct 2026) | Pinned to 2.15.0 in `8011f41`. Installed into the services' venv (`uv pip install --no-deps`) and API, portal and GP Fund restarted 16:28 with no run in progress; all three health checks OK; sign-in and `/auth/me` on the new token both 200. The production server gets it from the checklist (§8.1). (Later report item 7.) |
+| D3 | Medium | `numpy`/`opencv`/`zxingcpp` missing from requirements | **FIXED** (6 Oct 2026) | `c901d96`. `numpy==2.3.5`, `opencv-python-headless==5.0.0.93`, `zxing-cpp==3.1.1`; a test maps the shipped code's imports to distributions and expects each pinned. `tests/test_requirements_cover_imports.py` |
 | N4 | Medium | **New:** local copies of real data remain | **FIXED** (6 Oct 2026) | 306 MB shredded: `artifacts/backup-pii-scrub-20261006/` (`originals.tar`, `pre-scrub.bundle`), `dist-release/pension-1.0.0-rc1.tgz`, two session scratchpads under `/tmp/claude-1000`, `~/pension_check-backup-2026-09-09.tgz`, `artifacts/backup-flags-ocr-20260925/`, `artifacts/archive-ediary-bridge-20260925/`, both `ediary-hesk-*.sql`, `backup-portal-db-2026092{5,9}/` and `-20260930/`. Re-check after: repo clean, `/tmp/claude-1000` clean, fresh release build passes the CNIC check; only the live trial data (above) is still flagged. Live data is git-ignored, excluded from the release, and set to 700/600 |
 | N5 | Medium | **New:** uncommitted `deploy/` edits of unknown owner | **FIXED** (6 Oct 2026) | Owner found: the audit session of 6 Oct (13:18–13:21). Reviewed and all three kept, committed separately: nginx redirect `e5018b9`, PyJWT pin `8011f41`, firewall script `5e15060` |
 | N6 | Medium | **New:** single-file demos contain real CNICs | **NOT FIXED** | `pension-portal.html`, `pension-portal rd new.html`, `demo/pension-demo.html` and `portals/dist-demo/` each embed real scans; the CNIC check finds 7 real numbers in each (28 hits). Untracked, git-ignored, never shipped; the scans can't be faked. **Do not share these files outside the team.** |
+| N12 | Medium | **New:** `config/case_types.json`, the GP fixtures and the GP test data were not in git | **FIXED** (6 Oct 2026) | `664ce02`. The code-extension whitelist ignored every `.json`, so a fresh clone could not start the API or run the GP suites (the release build worked only because it copies from the working tree). Tracked now (all pass the CNIC check); `tests/test_clone_has_what_the_code_needs.py` keeps them so |
+| N14 | Medium | **New (later report 5):** the old HESK helpdesk containers still run, MariaDB on 3306/3307 and RabbitMQ on 5672/15672 open to the network | **NEEDS DECISION (operations)** | Re-checked 6 Oct night: `agpension-hesk-web-1` (:8080), `agpension-hesk-db-1` (0.0.0.0:3306, :3307), `agpension-hesk-rabbitmq-1` (0.0.0.0:5672, :5673, :15672, :15673) are up. They belong to the abandoned e-diary stack (`~/Desktop/Pension-AG/Code Pension`), not to this repository; nothing here uses them. Stopping them is an operations action on a shared box: `docker compose down` in that folder, or at least publish those ports on 127.0.0.1 only |
+| N16 | Medium | **New (later report 8):** every open browser's 3-second poll made the API call GP Fund | **FIXED** (6 Oct 2026) | `7c5f435`. Request-path syncs do nothing within `PENSION_SYNC_MIN_INTERVAL_S` (1 s) of the last; the reconciler's timer always syncs. `tests/test_sync_throttle.py` |
+| N17 | Medium | **New (later report 11):** `/api/health` checked nothing | **FIXED** (6 Oct 2026) | `77bf493`. 503 when the database cannot be read or the artefact disk is below its reserve; the model servers and GP Fund reported as `degraded`, probed at most every 30 s with a 2 s timeout. `tests/test_health_checks_something.py` |
 | L1 | Low | 2-digit years read as 20xx | **NOT FIXED** | Fails safe |
-| L2 | Low | GP Fund cookie never gets `Secure` | **NOT FIXED** | |
-| L3 | Low | nginx and the app send conflicting headers | **NOT FIXED** | |
-| L4 | Low | Re-enabled trial account keeps its 1234 password | **NOT FIXED** | |
-| L5 | Low | 3-second poll still fires after sign-out | **NOT FIXED** | |
-| L6 | Low | Zip member name collisions | **NOT FIXED** | |
-| L7 | Low | GP bridge doesn't escape upload filenames | **NOT FIXED** | |
+| L2 | Low | GP Fund cookie never gets `Secure` | **FIXED** (6 Oct 2026) | `b347792`. Secure over HTTPS and always in production; the HTTP-only trial unchanged. `tests/test_gpf_cookie_secure.py` |
+| L3 | Low | nginx and the app send conflicting headers | **FIXED** (6 Oct 2026) | `8e11d0b`. nginx adds only HSTS; the portal server sets the rest. `tests/test_headers_single_source.py` |
+| L4 | Low | Re-enabled trial account keeps its 1234 password | **FIXED** (6 Oct 2026) | `b8706de`. Enabling an account in production sets `must_change_password`; the trial unchanged. `tests/test_reenabled_account_changes_password.py` |
+| L5 | Low | 3-second poll still fires after sign-out | **FIXED** (6 Oct 2026) | `34dd3c5`. Every way a session ends stops the poll and clears the rows; the poll asks nothing without a token. `tests/test_polling_stops_at_sign_out.py`; `tsc --noEmit` passes |
+| L6 | Low | Zip member name collisions | **FIXED** (6 Oct 2026) | `837b26d`. Each member gets its own file (`a (2).pdf`); the manifest keeps the archive's name. `tests/test_zip_name_collisions.py` |
+| L7 | Low | GP bridge doesn't escape upload filenames | **FIXED** (6 Oct 2026) | `8cb3e9e`. Base name with quote, backslash and line-break characters replaced; the multipart body parses as exactly the parts intended. `tests/test_gpf_bridge_filenames.py` |
 | L8 | Low | GP tests write into the live data folder | **FIXED** | `b519e24` (`run.sh` unsets `GPF_DATA_DIR`); full GP suite run wrote 0 files. No unit test |
-| L9 | Low | Admin password reset uses `window.prompt` | **NOT FIXED** | |
-| L10 | Low | systemd/nginx hardening gaps | **NOT FIXED** | |
-| L11 | Low | GP Fund sign-in check cached 30 s | **NOT FIXED** | |
-| L12 | Low | Old API accepts the session token on the URL for writes | **NOT FIXED** | |
-| N7 | Low | **New:** reranker/guard units still on `0.0.0.0` | **NOT FIXED** | Out of scope for item 7 |
-| N8 | Low | **New:** new settings missing from `pension.env.example` | **NOT FIXED** | `PENSION_MAX_BUNDLE_PAGES`, `PENSION_MAX_CONCURRENT_RUNS`, `PENSION_PDF_TOOL_TIMEOUT`, `PENSION_GPF_JOB_DEADLINE_MIN` |
+| L9 | Low | Admin password reset uses `window.prompt` | **FIXED** (6 Oct 2026) | `ee1d8c1`. Disable (with reason) and reset are forms; the password in a masked field with the 8-character minimum. `tests/test_admin_screen_has_no_browser_prompts.py`; `tsc --noEmit` passes |
+| L10 | Low | systemd/nginx hardening gaps | **FIXED** (6 Oct 2026) | `a0d5780`. All three units: no capabilities, kernel tunables/modules/logs/cgroups hidden, clock and hostname protected, no namespaces, own processes only, IP and Unix sockets only, `@system-service` call set minus privileged and resource calls, `UMask=0077`. `tests/test_systemd_hardening.py` |
+| L11 | Low | GP Fund sign-in check cached 30 s | **FIXED** (6 Oct 2026) | `4123b86`. 10 s, and a sign-out through the portal forgets the cookie's entry at once. `tests/test_gpf_frame_check_cache.py` |
+| L12 | Low | Old API accepts the session token on the URL for writes | **FIXED** (6 Oct 2026) | `125974e`. `?token=` accepted for GET/HEAD only; writes need the Authorization header. `tests/test_token_on_url_reads_only.py` |
+| N7 | Low | **New:** reranker/guard units still on `0.0.0.0` | **FIXED** (6 Oct 2026) | `f50a40c`. Guard on 127.0.0.1 (unused here). The reranker serves this box from Spark-1 over the LAN, so it cannot be loopback: it loads `/etc/pension/models.env` and refuses to start without a proper key, as the other units do. `tests/test_model_units_gated.py` |
+| N8 | Low | **New:** new settings missing from `pension.env.example` | **FIXED** (6 Oct 2026) | `b5e602e`. Every `PENSION_*`/`GPF_*` the code reads is listed with what it does; `tests/test_env_example_is_complete.py` fails on a missing or stale one |
 | N9 | Low | **New:** `docs/*.md` not tracked in git | **FIXED** (6 Oct 2026) | `docs/STATUS.md`, `docs/DEPLOYMENT.md` and `docs/pension-rules-decisions.md` tracked on `fix/high-findings`; `.gitignore` whitelists `docs/*.md` |
 | N10 | Low | **New:** domain brief wrongly says day-counting is "immaterial" | **NEEDS BUSINESS DECISION** | Settled together with M3 |
 | N11 | Low | **New:** Claude session transcripts hold real CNICs | **NOT FIXED** (deliberate) | `~/.claude/projects/-home-tmc-Desktop-pension/` (~2,060 hits in 50 transcripts, 293 MB) plus a few in neighbouring project folders. `~/.claude` set to owner-only (700/600) on 6 Oct. **Purge the transcripts after the fix work is complete**; they are the working history of the fixes until then |
+| N15 | Low | **New (later report 6b):** sign-out ends the tab's copy of the token, not the token | **NOT FIXED** | `/api/v2/auth/logout` clears the GP Fund frame cookie only; the bearer token stays valid until its 12-hour expiry. Ending it needs either a token_version bump (ends every session of that officer, all devices) or a server-side list of signed-out tokens. Low: the token lives in the tab, never in a cookie or on disk |
 
 ## Action items
 
-1. Merge and deploy the two branches (N1); until then, none of the FIXED rows is live.
+1. Merge and deploy the branch (N1); until then, none of the FIXED rows is live. Rebuild the portal bundle (S4, L5, L9 take effect then).
 2. At deploy: switch the model units to `--host 127.0.0.1` plus the API key (M7), and install PyJWT 2.15.0 on the production server (done on the trial box, D2). Both are on the go-live checklist, `docs/DEPLOYMENT.md` §8.1.
-3. Settle the business-decision items (decision sheet: `docs/pension-rules-decisions.md`).
-4. When the fix work is complete, purge the session transcripts (N11) and decide what to do with the demos (N6).
+3. Decide on the HESK containers (N14): stop them, or publish 3306/3307/5672/15672 on 127.0.0.1 only.
+4. Settle the business-decision items (decision sheet: `docs/pension-rules-decisions.md`).
+5. When the fix work is complete, purge the session transcripts (N11) and decide what to do with the demos (N6).
+6. Remaining low items: L1 (fails safe), N15 (sign-out and the bearer token).
