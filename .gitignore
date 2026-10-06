@@ -93,3 +93,6 @@ GP/agofficegpfund/_wip-*/
 *.rar
 agofficegpfund*.zip
 portals/dist-demo/
+
+# ---- Project documents (N9) ----
+!docs/*.md
