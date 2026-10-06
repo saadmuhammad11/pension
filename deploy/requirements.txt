@@ -11,3 +11,10 @@ aiohttp==3.14.3
 # 2.15.0: 2.13.0 carries 14 advisories (pip-audit, 6 Oct 2026); we use HS256 only, so few applied.
 PyJWT==2.15.0
 pillow==12.3.0
+# Page orientation (extraction/upright.py) reads the page with OpenCV and numpy; the GP Fund
+# module decodes QR codes with zxing-cpp (gpf/reading/barcodes.py). All three were installed on
+# the trial box by hand and missing here, so a fresh server could not read a rotated page or a QR
+# code and said nothing (audit 6 Oct 2026, D3). Headless OpenCV: no display libraries on a server.
+numpy==2.3.5
+opencv-python-headless==5.0.0.93
+zxing-cpp==3.1.1
