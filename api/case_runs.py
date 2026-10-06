@@ -12,6 +12,7 @@ at the AG, and approved by itself once the officer has cleared the last one (:fu
 from __future__ import annotations
 
 import io
+import os
 import json
 from datetime import datetime
 import sqlite3
@@ -314,13 +315,35 @@ def settle(conn: sqlite3.Connection, case: sqlite3.Row, run_id: str, gate: dict,
     return entry
 
 
-def _gpf_job_state(run_id: str) -> tuple[str, str | None, dict | None]:
-    """(state, error, view) of a GP Fund reading job. A job the module no longer remembers (it
-    keeps them fifteen minutes) or a module that is down is a failed run: verify again."""
+#: How long a GP Fund reading may go unconfirmed (module down, slow, restarting) before it is
+#: failed. Until then a poll that gets no answer is not an answer (audit 6 Oct 2026).
+GPF_JOB_DEADLINE_MIN = int(os.environ.get("PENSION_GPF_JOB_DEADLINE_MIN", "120") or 120)
+
+
+def _gpf_job_state(run_id: str, started_at: str | None = None) -> tuple[str, str | None, dict | None]:
+    """(state, error, view) of a GP Fund reading job.
+
+    Failed only on an answer: the module says the job failed, or no longer knows it (404 -- it
+    keeps jobs fifteen minutes, and forgets them on a restart). A poll that gets no answer -- the
+    module busy past the 10 s timeout, restarting, briefly down -- used to fail the examination
+    for good while the module went on reading, and the case it then opened was never linked. Now
+    that is "still running", until GPF_JOB_DEADLINE_MIN after ``started_at``.
+    """
     try:
         view = gpf_bridge.job(run_id[len(GPF_RUN_PREFIX):])
     except gpf_bridge.GpfError as exc:
-        return "failed", exc.detail, None
+        if exc.status == 404:
+            return "failed", exc.detail, None
+        age_min = None
+        if started_at:
+            try:
+                age_min = (datetime.now() - datetime.fromisoformat(started_at)).total_seconds() / 60
+            except ValueError:
+                age_min = None
+        if age_min is not None and age_min > GPF_JOB_DEADLINE_MIN:
+            return "failed", (f"the GP Fund module has not confirmed the reading for {int(age_min)} minutes: "
+                              f"{exc.detail}"), None
+        return "running", None, None
     state = view.get("state")
     if state == "error":
         return "failed", view.get("detail") or "the GP Fund module could not read the pages", view
@@ -419,7 +442,7 @@ def sync_run_states(conn: sqlite3.Connection) -> int:
     for row in pending:
         gpf_view = None
         if row["run_id"].startswith(GPF_RUN_PREFIX):
-            state, error, gpf_view = _gpf_job_state(row["run_id"])
+            state, error, gpf_view = _gpf_job_state(row["run_id"], row["started_at"])
         else:
             state, error = _run_state(row["run_id"])
         if state in ("queued", "running"):
