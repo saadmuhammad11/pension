@@ -384,8 +384,8 @@ export interface Stats {
   by_status: Record<CaseStatus, number>
   weeks: { week: string; filed: number; decided: number }[]
   by_department: { code: string; name: string; total: number; awaiting: number; approved: number; rejected?: number; sent_back: number }[]
-  verdicts: { FORWARD: number; RETURN_FOR_CORRECTION: number; HOLD: number; NONE: number }
-  high_flags: { '0': number; '1': number; '2': number; '3+': number }
+  verdicts?: { FORWARD: number; RETURN_FOR_CORRECTION: number; HOLD: number; NONE: number }   // AG and admin only
+  high_flags?: { '0': number; '1': number; '2': number; '3+': number }   // AG and admin only
   checks_total: number
   avg_verification_minutes: number | null
   avg_days_to_decision: number | null

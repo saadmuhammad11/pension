@@ -648,9 +648,12 @@ class V2Test(unittest.TestCase):
         self.assertEqual(st["by_status"]["FORWARDED"], 1)
         self.assertEqual(len(st["weeks"]), 12)
         self.assertEqual(st["weeks"][-1]["filed"], 1)
-        self.assertEqual(st["verdicts"]["FORWARD"], 0)                # nothing verified yet
+        # The engine's verdicts and findings are AI output: never in a department's statistics.
+        for key in ("verdicts", "high_flags", "deficiencies"):
+            self.assertNotIn(key, st)
         rev = self.login("ag.reviewer", "ag")
         st = self.client.get("/api/v2/stats", headers=rev).json()
+        self.assertEqual(st["verdicts"]["FORWARD"], 0)                # nothing verified yet
         self.assertEqual(st["total"], 2)
         self.assertEqual({d["code"] for d in st["by_department"]}, {"PUNJAB_POLICE", "SCHOOL_EDUCATION"})
         st = self.client.get("/api/v2/stats?department=PUNJAB_POLICE", headers=rev).json()

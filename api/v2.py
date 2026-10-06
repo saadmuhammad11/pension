@@ -451,6 +451,11 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
         "decision_target_days": DECISION_TARGET_DAYS,
         "decided_within_target": sum(1 for d in days if d <= DECISION_TARGET_DAYS),
     }
+    if user.role == "DEPT_OFFICER":
+        # The engine's verdicts, its findings histogram and the papers it found missing across the
+        # department's cases are AI output; a department sees none of it (28 Sep 2026).
+        for key in ("verdicts", "high_flags", "deficiencies"):
+            out.pop(key, None)
     if user.role == "ADMIN":
         out["users_by_role"] = {r["role"]: r["n"] for r in conn.execute("SELECT role, COUNT(*) n FROM users WHERE active = 1 GROUP BY role")}
         out["audit_by_day"] = [dict(r) for r in conn.execute(
@@ -490,6 +495,29 @@ def _own_side_or_403(user: User, case: sqlite3.Row) -> None:
 _RUN_PUBLIC = ("id", "case_id", "run_id", "submission_no", "started_at", "finished_at", "state", "auto_forward")
 
 
+#: What a department reads in place of the verification's own summary line, which states the engine's
+#: verdict and its count of findings (28 Sep 2026: departments see no AI output).
+_DEPT_REMARKS = {
+    "CHECK_DONE": "The verification is complete; the case is with the Accountant General.",
+}
+
+
+def _redact_event(e: dict) -> None:
+    action = e.get("action")
+    if action in _DEPT_REMARKS:
+        e["remark"] = _DEPT_REMARKS[action]
+    if "payload" not in e:
+        return
+    if action in ("CHECK_DONE", "AUTO_APPROVE"):
+        e["payload"] = {k: v for k, v in e["payload"].items() if k in ("auto",)}
+    elif action == "SET_CASE_TYPE":
+        e["payload"] = {k: v for k, v in e["payload"].items() if k != "detected_case_type"}
+    elif action in ("AUTO_RETURN", "RETURN") and e["payload"].get("auto"):
+        # The GP Fund module's automatic return carried its whole examination; the department
+        # gets what it must act on (audit 6 Oct 2026).
+        e["payload"] = {k: v for k, v in e["payload"].items() if k in ("auto", "missing_checklist", "items")}
+
+
 def _redact(d: dict, user: User) -> dict:
     """The case as a department officer may see it: no verdicts, flag counts or forwarded issues."""
     if user.role != "DEPT_OFFICER":
@@ -500,14 +528,10 @@ def _redact(d: dict, user: User) -> dict:
         d["latest_run"] = {k: d["latest_run"].get(k) for k in _RUN_PUBLIC}
     if "runs" in d:
         d["runs"] = [{k: r.get(k) for k in _RUN_PUBLIC} for r in d["runs"]]
-    if "events" in d:
-        for e in d["events"]:
-            if e.get("action") in ("CHECK_DONE", "AUTO_APPROVE"):
-                e["payload"] = {k: v for k, v in e["payload"].items() if k in ("auto",)}
-            elif e.get("action") == "SET_CASE_TYPE":
-                e["payload"] = {k: v for k, v in e["payload"].items() if k != "detected_case_type"}
-            elif e.get("action") == "AUTO_RETURN":
-                e["payload"] = {k: v for k, v in e["payload"].items() if k in ("auto", "missing_checklist")}
+    for e in d.get("events") or []:
+        _redact_event(e)
+    if d.get("last_event"):
+        _redact_event(d["last_event"])
     return d
 
 
