@@ -95,7 +95,41 @@ def password_problem(password: str, username: str = "") -> str | None:
 
 # -- tokens ------------------------------------------------------------------------------------
 
+#: The signing key's floor in production: HS256 wants at least 32 bytes (RFC 7518 §3.2).
+MIN_SECRET_LENGTH = 32
+
+#: Values that are not secrets: deploy/pension.env.example ships CHANGE_ME, and a server left on
+#: it signs sessions anyone who has read that file can forge (audit 6 Oct 2026, item 2).
+_PLACEHOLDER_SECRETS = {"change_me", "changeme", "change-me", "secret", "test-secret", "password"}
+
+
+class InsecureSecret(RuntimeError):
+    """Production was asked to sign sessions with a missing, placeholder or short key."""
+
+
+def production_secret_problem() -> str | None:
+    """Why PENSION_JWT_SECRET is not fit for production, or None when it is."""
+    given = os.environ.get("PENSION_JWT_SECRET", "").strip()
+    if not given:
+        return "PENSION_JWT_SECRET is not set"
+    if given.lower() in _PLACEHOLDER_SECRETS or "change_me" in given.lower():
+        return "PENSION_JWT_SECRET is still the placeholder from pension.env.example"
+    if len(given) < MIN_SECRET_LENGTH:
+        return f"PENSION_JWT_SECRET is {len(given)} characters; production needs at least {MIN_SECRET_LENGTH}"
+    return None
+
+
+def require_production_secret() -> None:
+    problem = production_secret_problem()
+    if problem:
+        raise InsecureSecret(f"{problem}. Generate one with `openssl rand -base64 48` and set it in "
+                             f"/etc/pension/pension.env (docs/DEPLOYMENT.md).")
+
+
 def _secret() -> str:
+    if settings.production():
+        # Never sign or check a token with a key production would refuse, however we got here.
+        require_production_secret()
     given = os.environ.get("PENSION_JWT_SECRET")
     if given:
         return given

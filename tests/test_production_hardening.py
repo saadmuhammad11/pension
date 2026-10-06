@@ -132,6 +132,63 @@ class F3NoApiDescriptionInProduction(unittest.TestCase):
             self.assertTrue(settings.api_docs())
 
 
+class F11SigningKeyInProduction(unittest.TestCase):
+    """Audit 6 Oct 2026 item 2: production refuses a missing, placeholder or short JWT secret."""
+    GOOD = "k" * 20 + "Q7vX2pL9mR4tW8yB3nD6"           # 40 characters, not a placeholder
+    BAD = {"missing": None, "placeholder": "CHANGE_ME", "short": "only-twenty-chars-xx"}
+
+    def _env(self, secret):
+        env = {k: v for k, v in os.environ.items() if k != "PENSION_JWT_SECRET"}
+        env["PENSION_ENV"] = "production"
+        if secret is not None:
+            env["PENSION_JWT_SECRET"] = secret
+        return env
+
+    def test_the_rule(self) -> None:
+        for name, secret in self.BAD.items():
+            with mock.patch.dict(os.environ, self._env(secret), clear=True):
+                self.assertIsNotNone(auth.production_secret_problem(), name)
+        with mock.patch.dict(os.environ, self._env(self.GOOD), clear=True):
+            self.assertIsNone(auth.production_secret_problem())
+
+    def test_no_token_is_signed_with_a_refused_key_in_production(self) -> None:
+        with mock.patch.dict(os.environ, self._env("CHANGE_ME"), clear=True):
+            with self.assertRaises(auth.InsecureSecret):
+                auth._secret()
+        with mock.patch.dict(os.environ, {**self._env(self.GOOD)}, clear=True):
+            self.assertEqual(auth._secret(), self.GOOD)
+        # The trial keeps working on its short key.
+        with mock.patch.dict(os.environ, {"PENSION_ENV": "", "PENSION_JWT_SECRET": "CHANGE_ME"}):
+            self.assertEqual(auth._secret(), "CHANGE_ME")
+
+    def test_the_server_process_refuses_to_start(self) -> None:
+        import subprocess
+        import sys
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        for name, secret in self.BAD.items():
+            proc = subprocess.run([sys.executable, "-m", "api.server", "0"], cwd=root, env=self._env(secret),
+                                  capture_output=True, text=True, timeout=120)
+            self.assertEqual(proc.returncode, 1, f"{name}: {proc.stderr[-500:]}")
+            self.assertIn("refusing to start", proc.stderr, name)
+
+    def test_a_start_up_that_skips_the_entry_point_is_refused_too(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from fastapi.testclient import TestClient
+        from api import case_runs
+        from api.server import app
+        # A scratch database, so a regression here could never migrate the live one.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        with mock.patch.dict(os.environ, self._env("CHANGE_ME"), clear=True), \
+                mock.patch.object(db, "DB_PATH", Path(tmp.name) / "portal.sqlite3"), \
+                mock.patch.object(case_runs, "start_reconciler", lambda *a, **k: None):
+            with self.assertRaises(auth.InsecureSecret):
+                with TestClient(app):
+                    pass
+
+
 class F4ModelAddressesFromTheEnvironment(unittest.TestCase):
     def test_each_endpoint_reads_its_variable(self) -> None:
         import importlib

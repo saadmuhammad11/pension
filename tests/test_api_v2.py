@@ -68,7 +68,7 @@ class V2Test(unittest.TestCase):
             mock.patch.object(runs, "execute", fake_execute),
             mock.patch.object(case_runs, "CASE_FILES", artifacts / "cases"),
             mock.patch.object(case_runs, "start_reconciler", lambda *a, **k: None),
-            mock.patch.dict("os.environ", {"PENSION_JWT_SECRET": "test-secret"}),
+            mock.patch.dict("os.environ", {"PENSION_JWT_SECRET": "test-secret-for-the-case-system-fixture-0123456789"}),
             mock.patch.object(db, "SEED_PASSWORD", "Pension@2026"),
             mock.patch.object(db, "CREDENTIALS_CSV", root / "credentials.csv"),
             mock.patch.object(db, "CREDENTIALS_HTML", root / "credentials.html"),

@@ -811,7 +811,11 @@ def _v2_startup() -> None:
     Nothing here touches the old portal's routes or artefacts.
     """
     import traceback
-    from api import case_runs, db, legacy
+    from api import auth, case_runs, db, legacy
+    if _settings.production():
+        # Outside the try below on purpose: a server that would sign forgeable sessions must not
+        # come up at all (uvicorn exits when a start-up handler raises).
+        auth.require_production_secret()
     try:
         db.migrate()
         db.seed()
@@ -855,15 +859,20 @@ def _production_startup_checks() -> None:
     if db.CREDENTIALS_CSV.exists():
         print(f"[v2] production: the plaintext sign-in sheet {db.CREDENTIALS_CSV} is still on disk; hand the "
               f"passwords out, then run `python3 -m api.db forget-credentials`", flush=True)
-    if not os.environ.get("PENSION_JWT_SECRET"):
-        print("[v2] production: PENSION_JWT_SECRET is not set; using the generated secret in artifacts/.jwt_secret",
-              flush=True)
 
 
 if __name__ == "__main__":
     import sys
 
     import uvicorn
+
+    if _settings.production():
+        from api import auth
+        try:
+            auth.require_production_secret()
+        except auth.InsecureSecret as exc:
+            print(f"[v2] production: refusing to start: {exc}", file=sys.stderr, flush=True)
+            sys.exit(1)
 
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8110
     # No access log: document and event URLs carry the session token on the query string, and an
