@@ -1,0 +1,93 @@
+# ---- Code-only whitelist: ignore everything, then allow code/config ----
+*
+!*/
+!*.py
+!*.php
+!*.js
+!*.jsx
+!*.mjs
+!*.cjs
+!*.ts
+!*.tsx
+!*.vue
+!*.css
+!*.scss
+!*.html
+!*.htm
+!*.sh
+!*.sql
+!*.service
+!*.conf
+!*.toml
+!*.yml
+!*.yaml
+!*.ini
+!requirements*.txt
+!package.json
+!package-lock.json
+!composer.json
+!tsconfig*.json
+!Dockerfile
+!Makefile
+!README.md
+!*.env.example
+!.gitignore
+
+# ---- Build output, deps, backups, run outputs, local tooling ----
+artifacts/
+dist-release/
+**/dist/
+**/dist-*/
+**/build/
+**/node_modules/
+**/vendor/
+**/*.egg-info/
+**/logs/
+**/cache/
+**/attachments/
+agofficegpfund (2)/
+*.zip
+*.map
+.claude/
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# ---- Secrets ----
+.env
+.env.*
+!*.env.example
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+secrets/
+# Legacy e-diary files with hard-coded DB / SMTP / RabbitMQ / SMS credentials
+Codebase e diary/hesk_settings.inc.php
+Codebase e diary/api/config.php
+Codebase e diary/inc/sms.inc.php
+Codebase e diary/admin/new_ticket*.php
+Codebase e diary/admin/New folder/
+
+# ---- Data dumps ----
+hesk_*.sql
+*.sqlite3
+*.db
+
+# ---- Weights / audio ----
+*.pt
+*.pth
+*.bin
+*.ckpt
+*.safetensors
+*.onnx
+*.gguf
+*.wav
+*.mp3
+Codebase e diary/api/push_test_sed.php
+# Single-file demos with embedded document scans
+pension-portal.html
+pension-portal rd new.html
+demo/pension-demo.html

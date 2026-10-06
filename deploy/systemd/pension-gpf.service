@@ -1,0 +1,24 @@
+[Unit]
+Description=GP Fund module (:8201, loopback)
+Documentation=file:/opt/pension/current/docs/DEPLOYMENT.md
+# After the vision model: started before it, the module falls back to stub mode and reads nothing.
+After=network-online.target vllm-qwen3-vl.service pension-api.service
+
+[Service]
+Type=simple
+User=pension
+Group=pension
+WorkingDirectory=/opt/pension/current/GP/backend
+EnvironmentFile=/etc/pension/pension.env
+Environment=HOME=/var/lib/pension
+ExecStart=/opt/pension/venv/bin/python3 -m uvicorn gpf.api:app --host 127.0.0.1 --port 8201
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pension /var/log/pension
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

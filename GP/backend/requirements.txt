@@ -1,0 +1,7 @@
+# Web layer only — the rules engine has no runtime dependencies.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+# dev/test
+pytest>=7
+httpx

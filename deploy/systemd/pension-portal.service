@@ -1,0 +1,25 @@
+[Unit]
+Description=AG Punjab Pension portal server (:5184, loopback behind nginx)
+Documentation=file:/opt/pension/current/docs/DEPLOYMENT.md
+After=pension-api.service
+Requires=pension-api.service
+
+[Service]
+Type=simple
+User=pension
+Group=pension
+WorkingDirectory=/opt/pension/current
+EnvironmentFile=/etc/pension/pension.env
+ExecStart=/opt/pension/venv/bin/python3 -m api.portal_server
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+# The portal server reads the database for the sign-in sheet in the trial only; read-only here.
+ReadOnlyPaths=/var/lib/pension
+ReadWritePaths=/var/log/pension
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

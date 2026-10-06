@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Pension Portal — Accountant General Punjab (Prototype)</title>
+<style>
+  :root{
+    --green:#1B4332; --green2:#2D6A4F; --green3:#40916C;
+    --sage:#EDF4EE; --sage2:#DCEADF; --gold:#C9A227; --gold2:#E7C55B;
+    --ink:#1F2937; --muted:#6B7280; --line:#E2E8E3;
+    --red:#B42318; --redbg:#FEF0EE; --amber:#B54708; --amberbg:#FFF6E6;
+    --ok:#1E7B4F; --okbg:#E9F6EF;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:"Segoe UI", system-ui, -apple-system, Arial, sans-serif; color:var(--ink); background:#F4F7F4; min-height:100vh;}
+  .urdu{font-family:"Jameel Noori Nastaleeq","Noto Nastaliq Urdu","Urdu Typesetting", serif; direction:rtl;}
+
+  /* ---------- header ---------- */
+  header{background:var(--green); color:#fff; padding:10px 26px; display:flex; align-items:center; gap:16px; box-shadow:0 2px 8px rgba(0,0,0,.18);}
+  header .crest{width:58px; height:58px; flex:none;}
+  header .t1{font-size:19px; font-weight:700; letter-spacing:.2px;}
+  header .t2{font-size:12px; color:#CFE3D6; margin-top:2px;}
+  header .spacer{flex:1;}
+  .envbadge{background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25); color:#EDE3BC; font-size:11px; padding:5px 12px; border-radius:999px; letter-spacing:.6px;}
+  .userchip{display:flex; align-items:center; gap:9px; background:rgba(255,255,255,.08); padding:6px 12px; border-radius:10px; font-size:12.5px;}
+  .userchip .av{width:28px;height:28px;border-radius:50%;background:var(--gold);color:var(--green);display:flex;align-items:center;justify-content:center;font-weight:800;}
+
+  /* ---------- stepper ---------- */
+  .stepper{display:flex; justify-content:center; gap:0; background:#fff; border-bottom:1px solid var(--line); padding:14px 10px;}
+  .step{display:flex; align-items:center; gap:9px; padding:0 22px; position:relative; color:var(--muted); font-size:13.5px;}
+  .step .dot{width:30px;height:30px;border-radius:50%;background:#E7EEE8;color:var(--muted);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #D6E2D9;}
+  .step.active{color:var(--green); font-weight:700;}
+  .step.active .dot{background:var(--green); border-color:var(--green); color:#fff;}
+  .step.done .dot{background:var(--okbg); border-color:var(--green3); color:var(--ok);}
+  .step:not(:last-child):after{content:""; width:60px; height:2px; background:#D6E2D9; margin-left:22px;}
+
+  main{max-width:1180px; margin:0 auto; padding:26px 22px 60px;}
+  .screen{display:none;}
+  .screen.on{display:block; animation:fade .35s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+
+  h1.pagetitle{font-size:23px; color:var(--green); margin-bottom:4px;}
+  .pagesub{color:var(--muted); font-size:13.5px; margin-bottom:22px;}
+
+  .card{background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+
+  /* ---------- upload ---------- */
+  .drop{border:2.5px dashed #B9CDBF; border-radius:14px; background:#fff; padding:52px 30px; text-align:center; cursor:pointer; transition:.2s;}
+  .drop:hover,.drop.drag{border-color:var(--green3); background:var(--sage);}
+  .drop .big{font-size:17px; font-weight:700; color:var(--green); margin:12px 0 6px;}
+  .drop .small{color:var(--muted); font-size:12.5px;}
+  .btn{display:inline-flex; align-items:center; gap:8px; background:var(--green); color:#fff; border:none; border-radius:10px; padding:11px 22px; font-size:14px; font-weight:600; cursor:pointer; transition:.15s;}
+  .btn:hover{background:var(--green2);}
+  .btn.gold{background:var(--gold); color:#2d2405;}
+  .btn.gold:hover{background:var(--gold2);}
+  .btn.ghost{background:#fff; color:var(--green); border:1.5px solid var(--green2);}
+  .btn.ghost:hover{background:var(--sage);}
+  .btn:disabled{opacity:.45; cursor:not-allowed;}
+  .filechip{display:flex; align-items:center; gap:12px; background:var(--sage); border:1px solid var(--sage2); border-radius:12px; padding:13px 16px; margin-top:16px;}
+  .filechip .ic{width:38px;height:38px;border-radius:9px;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;}
+  .casemeta{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:18px;}
+  .casemeta label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; display:block; margin-bottom:5px;}
+  .casemeta select,.casemeta input{width:100%; padding:9px 11px; border:1.5px solid var(--line); border-radius:9px; font-size:13.5px; background:#fff; color:var(--ink);}
+
+  /* ---------- processing ---------- */
+  .pipe{display:grid; grid-template-columns:340px 1fr; gap:18px;}
+  .stagelist .stage{display:flex; gap:12px; padding:13px 14px; border-radius:11px; margin-bottom:8px; border:1px solid transparent; align-items:flex-start;}
+  .stage .sic{width:30px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;background:#EDF1EE;color:var(--muted);}
+  .stage.run{background:var(--sage); border-color:var(--sage2);}
+  .stage.run .sic{background:var(--gold); color:#2d2405;}
+  .stage.ok .sic{background:var(--okbg); color:var(--ok);}
+  .stage .sn{font-weight:700; font-size:13.5px; color:var(--ink);}
+  .stage .sd{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .spin{animation:rot 1s linear infinite; display:inline-block;}
+  @keyframes rot{to{transform:rotate(360deg);}}
+  .console{background:#0F1D16; border-radius:12px; color:#B9E4C9; font-family:Consolas,Menlo,monospace; font-size:12px; padding:16px; height:430px; overflow-y:auto; line-height:1.75;}
+  .console .t{color:#5F8A6F;}
+  .console .hl{color:#E7C55B;}
+  .console .warn{color:#F0A47C;}
+  .pbar{height:9px; background:#E4ECE6; border-radius:99px; overflow:hidden; margin:14px 0 6px;}
+  .pbar>i{display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--green3),var(--green)); border-radius:99px; transition:width .3s;}
+
+  /* ---------- review tabs ---------- */
+  .verdict{display:flex; gap:16px; align-items:center; border-radius:14px; padding:18px 22px; margin-bottom:20px; border:1.5px solid;}
+  .verdict.warn{background:var(--amberbg); border-color:#F2D5A8;}
+  .verdict .vic{width:46px;height:46px;border-radius:50%;background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;font-size:21px;flex:none;}
+  .verdict b{font-size:16px; color:#7A3608;}
+  .verdict p{font-size:13px; color:#8A5A2B; margin-top:3px;}
+  .tabs{display:flex; gap:4px; border-bottom:2px solid var(--line); margin-bottom:18px; flex-wrap:wrap;}
+  .tab{padding:10px 18px; font-size:13.5px; font-weight:600; color:var(--muted); cursor:pointer; border-radius:9px 9px 0 0; border-bottom:3px solid transparent; margin-bottom:-2px;}
+  .tab:hover{background:var(--sage); color:var(--green);}
+  .tab.on{color:var(--green); border-bottom-color:var(--gold); background:#fff;}
+  .tab .n{background:var(--redbg); color:var(--red); font-size:11px; padding:1px 7px; border-radius:99px; margin-left:6px; font-weight:800;}
+  .pane{display:none;}
+  .pane.on{display:block; animation:fade .25s ease;}
+
+  table.dt{width:100%; border-collapse:collapse; font-size:13px;}
+  table.dt th{background:var(--sage); color:var(--green); text-align:left; padding:9px 12px; font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--sage2);}
+  table.dt td{padding:9px 12px; border-bottom:1px solid #EFF3EF; vertical-align:top;}
+  table.dt tr:hover td{background:#FAFCFA;}
+  .conf{font-size:11px; padding:2px 9px; border-radius:99px; font-weight:700; white-space:nowrap;}
+  .conf.h{background:var(--okbg); color:var(--ok);}
+  .conf.m{background:var(--amberbg); color:var(--amber);}
+  .pg{font-size:11px; color:var(--green2); background:var(--sage); padding:2px 8px; border-radius:6px; white-space:nowrap; cursor:pointer;}
+  .pg:hover{background:var(--sage2);}
+  .ok-ic{color:var(--ok); font-weight:800;}
+
+  .flag{border:1.5px solid; border-radius:13px; padding:16px 18px; margin-bottom:14px;}
+  .flag.hi{border-color:#F1C1BA; background:var(--redbg);}
+  .flag.md{border-color:#F2D5A8; background:var(--amberbg);}
+  .flag.lo{border-color:var(--sage2); background:var(--sage);}
+  .flag .fh{display:flex; align-items:center; gap:10px; margin-bottom:7px;}
+  .sev{font-size:10.5px; font-weight:800; letter-spacing:.7px; padding:3px 10px; border-radius:99px;}
+  .sev.hi{background:var(--red); color:#fff;} .sev.md{background:var(--amber); color:#fff;} .sev.lo{background:var(--green3); color:#fff;}
+  .flag b.ft{font-size:14px; color:var(--ink);}
+  .flag p{font-size:13px; color:#4B5563; line-height:1.55;}
+  .flag .fa{margin-top:9px; font-size:12.5px; color:var(--green); font-weight:600;}
+  .evd{font-size:11.5px; color:var(--muted); margin-top:7px;}
+
+  .calcbox{background:var(--green); color:#fff; border-radius:14px; padding:22px;}
+  .calcbox h3{color:var(--gold); font-size:12px; letter-spacing:1.5px; margin-bottom:14px;}
+  .crow{display:flex; justify-content:space-between; align-items:baseline; padding:9px 0; border-bottom:1px solid rgba(255,255,255,.12); font-size:13.5px;}
+  .crow .cv{font-size:17px; font-weight:800; color:#fff;}
+  .crow.total .cv{color:var(--gold2); font-size:22px;}
+  .crow .cf{color:#BFD8C8; font-size:11.5px;}
+  .rulecite{font-size:11px; color:#9FC3AC; margin-top:3px;}
+
+  .actionbar{display:flex; gap:12px; margin-top:22px; flex-wrap:wrap;}
+  .smsbox{background:#fff; border:1.5px dashed var(--sage2); border-radius:12px; padding:15px 17px; font-size:13px; color:#374151; margin-top:14px; line-height:1.6;}
+  .audit{font-family:Consolas,Menlo,monospace; font-size:11.5px; background:#F7FAF7; border:1px solid var(--line); border-radius:11px; padding:14px 16px; color:#3D5245; line-height:1.9; max-height:230px; overflow:auto;}
+
+  .toast{position:fixed; bottom:26px; right:26px; background:var(--green); color:#fff; padding:14px 20px; border-radius:12px; font-size:13.5px; box-shadow:0 8px 30px rgba(0,0,0,.25); display:none; z-index:50;}
+  footer{text-align:center; color:var(--muted); font-size:11.5px; padding:18px; border-top:1px solid var(--line); background:#fff;}
+  .note{font-size:11.5px; color:var(--muted); margin-top:10px;}
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px;}
+  .kpi{background:#fff; border:1px solid var(--line); border-radius:13px; padding:15px 17px;}
+  .kpi .kv{font-size:22px; font-weight:800; color:var(--green);}
+  .kpi .kl{font-size:11.5px; color:var(--muted); margin-top:3px;}
+</style>
+</head>
+<body>
+
+<header>
+  <!-- Government of the Punjab crest (stylized SVG: crescent-star over shield with the five rivers and wheat wreath) -->
+  <svg class="crest" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-label="Government of the Punjab">
+    <circle cx="60" cy="60" r="57" fill="#FFFFFF"/>
+    <circle cx="60" cy="60" r="57" fill="none" stroke="#C9A227" stroke-width="4"/>
+    <circle cx="60" cy="60" r="49" fill="#1B4332"/>
+    <!-- wheat wreath -->
+    <g stroke="#C9A227" stroke-width="2.4" fill="none" stroke-linecap="round">
+      <path d="M28 88 C20 72 20 52 30 36"/>
+      <path d="M92 88 C100 72 100 52 90 36"/>
+    </g>
+    <g fill="#C9A227">
+      <ellipse cx="27" cy="80" rx="4.5" ry="2.2" transform="rotate(-55 27 80)"/>
+      <ellipse cx="23.5" cy="68" rx="4.5" ry="2.2" transform="rotate(-75 23.5 68)"/>
+      <ellipse cx="23" cy="56" rx="4.5" ry="2.2" transform="rotate(-88 23 56)"/>
+      <ellipse cx="25" cy="44" rx="4.5" ry="2.2" transform="rotate(-105 25 44)"/>
+      <ellipse cx="93" cy="80" rx="4.5" ry="2.2" transform="rotate(55 93 80)"/>
+      <ellipse cx="96.5" cy="68" rx="4.5" ry="2.2" transform="rotate(75 96.5 68)"/>
+      <ellipse cx="97" cy="56" rx="4.5" ry="2.2" transform="rotate(88 97 56)"/>
+      <ellipse cx="95" cy="44" rx="4.5" ry="2.2" transform="rotate(105 95 44)"/>
+    </g>
+    <!-- crescent & star -->
+    <path d="M52 30 A13 13 0 1 0 68 26 A10.5 10.5 0 1 1 52 30" fill="#FFFFFF"/>
+    <path d="M70 22 l1.9 4.4 4.8 .4 -3.6 3.1 1.1 4.7 -4.2 -2.5 -4.2 2.5 1.1 -4.7 -3.6 -3.1 4.8 -.4 z" fill="#FFFFFF"/>
+    <!-- shield with five rivers -->
+    <path d="M40 52 h40 v18 c0 12 -9 19 -20 23 c-11 -4 -20 -11 -20 -23 z" fill="#FFFFFF"/>
+    <g stroke="#1B4332" stroke-width="2.6" fill="none" stroke-linecap="round">
+      <path d="M44 58 q4 -3 8 0 t8 0 t8 0 t8 0"/>
+      <path d="M44 65 q4 -3 8 0 t8 0 t8 0 t8 0"/>
+      <path d="M45.5 72 q4 -3 8 0 t8 0 t8 0 t5 0"/>
+      <path d="M48 79 q4 -3 8 0 t8 0 t6.5 0"/>
+      <path d="M52 85.5 q4 -3 8 0 t7 0"/>
+    </g>
+  </svg>
+  <div>
+    <div class="t1">AI Pension Portal</div>
+    <div class="t2">Government of the Punjab · Accountant General Office, Lahore &nbsp;·&nbsp; <span class="urdu">اے آئی پنشن پورٹل</span></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="envbadge">PILOT · SOVEREIGN AI · DGX SPARK</div>
+  <div class="userchip"><div class="av">SH</div><div>Syed Haider<br><span style="color:#BFD8C8;font-size:11px">Auditor, Pension-III (P3)</span></div></div>
+</header>
+
+<div class="stepper" id="stepper">
+  <div class="step active" data-s="1"><div class="dot">1</div>Case Intake</div>
+  <div class="step" data-s="2"><div class="dot">2</div>AI Analysis</div>
+  <div class="step" data-s="3"><div class="dot">3</div>Review Findings</div>
+  <div class="step" data-s="4"><div class="dot">4</div>Decision &amp; Dispatch</div>
+</div>
+
+<main>
+
+<!-- ============ SCREEN 1 : INTAKE ============ -->
+<section class="screen on" id="s1">
+  <h1 class="pagetitle">New Pension Case — Intake</h1>
+  <p class="pagesub">Upload the scanned case file received from the Administrative Department (Dashboard / SAP). The AI will read every page, verify the checklist, and prepare the case for your review.</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="kv">14</div><div class="kl">Cases in my queue</div></div>
+    <div class="kpi"><div class="kv">6</div><div class="kl">Awaiting department correction</div></div>
+    <div class="kpi"><div class="kv">92%</div><div class="kl">First-pass checklist completeness (30 days)</div></div>
+    <div class="kpi"><div class="kv">3.2 days</div><div class="kl">Median intake → determination</div></div>
+  </div>
+
+  <div class="card">
+    <div class="drop" id="drop" onclick="document.getElementById('fi').click()">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="1.7"><path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a1.5 1.5 0 001.5 1.5h13A1.5 1.5 0 0020 19v-2" stroke-linecap="round"/></svg>
+      <div class="big">Drop the scanned case file here, or click to browse</div>
+      <div class="small">PDF · up to 46+ pages · CamScanner-grade scans accepted &nbsp;·&nbsp; <span class="urdu">فائل یہاں اپ لوڈ کریں</span></div>
+    </div>
+    <input type="file" id="fi" accept=".pdf,image/*" style="display:none" onchange="fileChosen(this)">
+    <div id="filechip" style="display:none" class="filechip">
+      <div class="ic">PDF</div>
+      <div style="flex:1"><b id="fname">—</b><div style="font-size:11.5px;color:var(--muted)" id="fmeta">—</div></div>
+      <span class="conf h">received</span>
+    </div>
+
+    <div class="casemeta">
+      <div><label>Forwarding department</label>
+        <select><option>School Education Department</option><option>Health Department</option><option>Higher Education</option><option>Police</option><option>Irrigation</option></select></div>
+      <div><label>Case type (AI will confirm)</label>
+        <select><option>Auto-detect</option><option>Superannuation (B-I)</option><option>Anticipatory (B-II)</option><option>Invalid / compulsory (B-IV)</option><option>Family — death in service (D-I)</option><option>Family — death of pensioner (D-II)</option></select></div>
+      <div><label>Diary No.</label><input value="41759 / 03-06-2026"></div>
+    </div>
+
+    <div class="actionbar">
+      <button class="btn" id="startBtn" disabled onclick="startAnalysis()">▶ &nbsp;Start AI Analysis</button>
+      <button class="btn ghost" onclick="loadSample()">Use sample case (Nargas Waqar — 46 pages)</button>
+    </div>
+    <div class="note">Prototype note: analysis below replays the genuine output produced for the real 46-page sample case. In production this runs on the AG office's own DGX Spark — no document ever leaves the premises.</div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2 : PROCESSING ============ -->
+<section class="screen" id="s2">
+  <h1 class="pagetitle">AI Analysis in progress</h1>
+  <p class="pagesub" id="procsub">Reading the case file…</p>
+  <div class="pbar"><i id="pfill"></i></div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:16px"><span id="ppct">0%</span> &nbsp;·&nbsp; <span id="pstage">Queued</span></div>
+  <div class="pipe">
+    <div class="stagelist card" style="padding:14px">
+      <div class="stage" id="st0"><div class="sic">1</div><div><div class="sn">Ingest &amp; page triage</div><div class="sd">46 pages · deskew · quality scoring</div></div></div>
+      <div class="stage" id="st1"><div class="sic">2</div><div><div class="sn">OCR &amp; layout parsing</div><div class="sd">PaddleOCR-VL + Qwen3-VL · EN/UR</div></div></div>
+      <div class="stage" id="st2"><div class="sic">3</div><div><div class="sn">Document classification</div><div class="sd">16 document types identified</div></div></div>
+      <div class="stage" id="st3"><div class="sic">4</div><div><div class="sn">Field extraction</div><div class="sd">Structured case record + confidence</div></div></div>
+      <div class="stage" id="st4"><div class="sic">5</div><div><div class="sn">Identity verification</div><div class="sd">CNIC · FRC · bank title · NADRA status</div></div></div>
+      <div class="stage" id="st5"><div class="sic">6</div><div><div class="sn">Checklist &amp; consistency</div><div class="sd">FD checklist · cross-document checks</div></div></div>
+      <div class="stage" id="st6"><div class="sic">7</div><div><div class="sn">Pension calculation</div><div class="sd">Rules engine · versioned notifications</div></div></div>
+      <div class="stage" id="st7"><div class="sic">8</div><div><div class="sn">Fraud screening</div><div class="sd">Duplicates · roll cross-match</div></div></div>
+    </div>
+    <div class="console" id="console"></div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3 : REVIEW ============ -->
+<section class="screen" id="s3">
+  <h1 class="pagetitle">Case No. 41759 — AI Findings</h1>
+  <p class="pagesub">Family pension (death in service, Form D-I) · Mst. Nargas Waqar, Principal (BS-19), School Education Department · Claimant: Mr. Waqar Abdul Basit (widower)</p>
+
+  <div class="verdict warn">
+    <div class="vic">!</div>
+    <div style="flex:1">
+      <b>RETURN FOR CORRECTION — 3 defects require the department's action</b>
+      <p>Checklist is complete (16/16 documents present). Pension is fully calculable. Three data defects (F-1, F-2, F-3) must be corrected before PPO issuance. AI recommendation only — decision rests with the Auditor / AG.</p>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on" onclick="tab(this,'p-sum')">Summary</div>
+    <div class="tab" onclick="tab(this,'p-ext')">Extracted Data</div>
+    <div class="tab" onclick="tab(this,'p-chk')">Checklist <span style="color:var(--ok);font-weight:800">16/16</span></div>
+    <div class="tab" onclick="tab(this,'p-flag')">Flags <span class="n">3</span></div>
+    <div class="tab" onclick="tab(this,'p-calc')">Calculation</div>
+    <div class="tab" onclick="tab(this,'p-id')">Identity</div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="pane on" id="p-sum">
+    <div class="grid2">
+      <div class="card">
+        <h3 style="color:var(--green);font-size:14px;margin-bottom:12px">Deceased Government Servant</h3>
+        <table class="dt">
+          <tr><td style="width:45%;color:var(--muted)">Name</td><td><b>Mst. Nargas Waqar</b> <span class="pg">maiden: Nargis Kamal · name-change order 1995 · p.40</span></td></tr>
+          <tr><td style="color:var(--muted)">CNIC</td><td>00001-0000109-2</td></tr>
+          <tr><td style="color:var(--muted)">Date of birth</td><td>19-02-1966 <span class="conf h">4 sources agree</span></td></tr>
+          <tr><td style="color:var(--muted)">Last post</td><td>Principal (BS-19) → OSD, Govt. Mussarat Girls High School, Bund Road, Lahore</td></tr>
+          <tr><td style="color:var(--muted)">First entry</td><td>08-12-1993 (PPSC, DPI order 07-12-1993)</td></tr>
+          <tr><td style="color:var(--muted)">Died in service</td><td>29-07-2021 (NADRA cert U14208053)</td></tr>
+          <tr><td style="color:var(--muted)">Notional superannuation</td><td>18-02-2026 (A/N) — pay continued to family via OSD post per FD.SR-1/3-10/2004 (15-08-2017)</td></tr>
+          <tr><td style="color:var(--muted)">Total service</td><td>32y 2m 11d → <b>30 years reckonable (cap)</b></td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="color:var(--green);font-size:14px;margin-bottom:12px">Claimant (Family Pensioner)</h3>
+        <table class="dt">
+          <tr><td style="width:45%;color:var(--muted)">Name</td><td><b>Mr. Waqar Abdul Basit</b> (husband / widower)</td></tr>
+          <tr><td style="color:var(--muted)">CNIC</td><td>00001-0000108-3 <span class="conf h">consistent ×12 docs</span></td></tr>
+          <tr><td style="color:var(--muted)">Age</td><td>64 (b. 17-02-1962)</td></tr>
+          <tr><td style="color:var(--muted)">NADRA marital status</td><td>Widowed · UC non-remarriage certificate · affidavit on oath</td></tr>
+          <tr><td style="color:var(--muted)">Family (FRC)</td><td>Amber (daughter, married) · Asad (son, married) · Ayesha (daughter, unmarried)</td></tr>
+          <tr><td style="color:var(--muted)">Bank</td><td>BOP Central Model Lower Mall (0172) · PK23 BPUN 6510 0545 7870 0017 · title verified by branch manager</td></tr>
+          <tr><td style="color:var(--muted)">Entitlement</td><td>Family pension for life (subject to biannual life certificate; non-remarriage)</td></tr>
+          <tr><td style="color:var(--muted)">Contact</td><td>0300-0000001</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXTRACTED -->
+  <div class="pane" id="p-ext">
+    <div class="card">
+      <h3 style="color:var(--green);font-size:14px;margin-bottom:12px">Last emoluments — LPC &amp; Feb-2026 salary statement (mutually consistent)</h3>
+      <table class="dt">
+        <tr><th>Component</th><th>Rs./month</th><th>Reckonable for pension</th><th>Source</th><th>Confidence</th></tr>
+        <tr><td>Basic pay (BS-19, stage 20)</td><td><b>178,440</b></td><td class="ok-ic">✓ yes</td><td><span class="pg">p.6 LPC</span> <span class="pg">p.15 salary stmt</span></td><td><span class="conf h">99%</span></td></tr>
+        <tr><td>Personal pay (maximum of grade)</td><td><b>13,590</b></td><td class="ok-ic">✓ yes</td><td><span class="pg">p.6</span> <span class="pg">p.19 D-I</span></td><td><span class="conf h">99%</span></td></tr>
+        <tr><td>House rent 45% · Medical 15% · Special Allow 25% · Adhoc reliefs 2022–25</td><td>160,362</td><td style="color:var(--muted)">✗ allowances — excluded</td><td><span class="pg">p.6</span></td><td><span class="conf h">98%</span></td></tr>
+        <tr style="background:var(--sage)"><td><b>Pension-reckonable emoluments</b></td><td><b>192,030</b></td><td class="ok-ic">✓ matches Form D-I total</td><td><span class="pg">p.19</span></td><td><span class="conf h">✓ reconciled</span></td></tr>
+      </table>
+      <h3 style="color:var(--green);font-size:14px;margin:20px 0 12px">Key extracted fields (46 pages → 214 fields; showing highlights)</h3>
+      <table class="dt">
+        <tr><th>Field</th><th>Value</th><th>Source page</th><th>Confidence</th></tr>
+        <tr><td>Personal number (payroll/SAP)</td><td>90000853</td><td><span class="pg">p.6</span> <span class="pg">p.9</span> <span class="pg">p.11</span> <span class="pg">p.15</span> <span class="pg">p.35</span></td><td><span class="conf h">98%</span></td></tr>
+        <tr><td>Personal number (cover &amp; Form D-I)</td><td style="color:var(--red)"><b>90000857</b> — conflict → F-1</td><td><span class="pg">p.2</span> <span class="pg">p.19</span></td><td><span class="conf m">flagged</span></td></tr>
+        <tr><td>Recovery recorded on LPC (ROP 19–28 Feb 2026)</td><td style="color:var(--red)"><b>Rs. 126,355</b> → F-3</td><td><span class="pg">p.6</span></td><td><span class="conf h">97%</span></td></tr>
+        <tr><td>GPF balance (provisional; separate stream)</td><td>Rs. 62,336</td><td><span class="pg">p.15</span></td><td><span class="conf m">87%</span></td></tr>
+        <tr><td>Succession certificate heirs/shares (estate items only)</td><td>spouse ¼ · son ½ rem. · daughters ¼ rem. each</td><td><span class="pg">p.36</span></td><td><span class="conf h">95%</span></td></tr>
+        <tr><td>OSD post creation (Governor's sanction)</td><td>29-07-2021 → 18-02-2026, Grant 16, DEA Lahore</td><td><span class="pg">p.14</span></td><td><span class="conf h">96%</span></td></tr>
+      </table>
+      <div class="note">Every field stores its bounding-box region on the source page — click a page chip in production to see the scan region beside the value.</div>
+    </div>
+  </div>
+
+  <!-- CHECKLIST -->
+  <div class="pane" id="p-chk">
+    <div class="card">
+      <table class="dt">
+        <tr><th>FD checklist — family pension (in-service death)</th><th>Status</th><th>Located at</th></tr>
+        <tr><td>Form D-I signed by Pension Sanctioning Authority (Addl. Secretary Admn, SED)</td><td class="ok-ic">✓ present</td><td><span class="pg">pp.19–20</span></td></tr>
+        <tr><td>Annex-A — descriptive roll, undertaking, entitlement declaration (attested)</td><td class="ok-ic">✓ present · 1 defect → F-2</td><td><span class="pg">pp.21–22</span></td></tr>
+        <tr><td>Death certificate (NADRA)</td><td class="ok-ic">✓ present</td><td><span class="pg">p.17</span></td></tr>
+        <tr><td>Last computer pay slip + LPC (attested)</td><td class="ok-ic">✓ present</td><td><span class="pg">p.6, p.15</span></td></tr>
+        <tr><td>CNICs — deceased &amp; claimant (attested)</td><td class="ok-ic">✓ present</td><td><span class="pg">pp.4–5</span></td></tr>
+        <tr><td>Service record for gazetted servant (service statement + posting profile)</td><td class="ok-ic">✓ present — full history 1993–2026 incl. DAO Sheikhupura LPC</td><td><span class="pg">p.9, pp.37–46</span></td></tr>
+        <tr><td>Photographs, specimen signature, thumb impressions (attested)</td><td class="ok-ic">✓ present</td><td><span class="pg">p.18, p.22</span></td></tr>
+        <tr><td>Non-remarriage evidence (UC certificate + affidavit + FRC)</td><td class="ok-ic">✓ present</td><td><span class="pg">p.7, p.10, p.23</span></td></tr>
+        <tr><td>Bank option form (branch-verified) + indemnity bond (e-stamp)</td><td class="ok-ic">✓ present</td><td><span class="pg">pp.11–12</span></td></tr>
+        <tr><td>NDC / No-Enquiry / No-Audit-Para / No-Punishment — all 5 duty stations + Estate Office</td><td class="ok-ic">✓ present</td><td><span class="pg">pp.24–35</span></td></tr>
+        <tr><td>Department's own 16-item enclosure list (forwarding letter)</td><td class="ok-ic">✓ all 16 located, incl. matric certificate, obituary, OSD order</td><td><span class="pg">p.1 vs file</span></td></tr>
+        <tr><td>Deputation pension-contribution challans</td><td style="color:var(--muted)">n/a — no deputation in service record</td><td>—</td></tr>
+      </table>
+      <div style="margin-top:14px;padding:12px 16px;background:var(--okbg);border-radius:10px;color:var(--ok);font-weight:700;font-size:13.5px">✓ CHECKLIST COMPLETE — no missing document. Defects found are data inconsistencies (see Flags), not absent papers.</div>
+    </div>
+  </div>
+
+  <!-- FLAGS -->
+  <div class="pane" id="p-flag">
+    <div class="flag hi">
+      <div class="fh"><span class="sev hi">F-1 · HIGH</span><b class="ft">Personal-number mismatch: 90000857 vs 90000853</b></div>
+      <p>The file cover and the sanction document (Form D-I ¶1) record Personnel No. <b>90000857</b>, while the LPC, salary statement, AG service statement, bank option form and ACS NDC all record <b>90000853</b>. The sanction must carry the correct SAP personnel number before a PPO can issue.</p>
+      <div class="evd">Evidence: p.2, p.19 (90000857) vs p.6, p.9, p.11, p.15, p.35 (90000853) · Production: automatic SAP HR master lookup resolves this in seconds.</div>
+      <div class="fa">→ Action: return to department for correction of Form D-I / cover; verify against SAP master.</div>
+    </div>
+    <div class="flag hi">
+      <div class="fh"><span class="sev hi">F-2 · HIGH</span><b class="ft">Descriptive Roll (Annex-A) contradicts NADRA FRC</b></div>
+      <p>Annex-A lists <b>Usman Waqar</b> as "<b>Daughter, Un-Married</b>". The NADRA Family Registration Certificate records him as <b>son, married</b>. The attested legal declaration must match NADRA before sanction.</p>
+      <div class="evd">Evidence: p.21 (descriptive roll) vs p.10 (FRC) · Entitlement outcome unaffected (spouse precedes children), but the attested record must be corrected.</div>
+      <div class="fa">→ Action: department to correct and re-attest Annex-A.</div>
+    </div>
+    <div class="flag hi">
+      <div class="fh"><span class="sev hi">F-3 · HIGH</span><b class="ft">Recovery of Rs. 126,355 not recorded in the sanction</b></div>
+      <p>The LPC records <b>Rs. 126,355 recoverable</b> — pay disbursed 19-02-2026 → 28-02-2026, i.e. beyond the notional superannuation date (18-02-2026). Form D-I ¶5 asserts "<b>No Demand / Recovery was due</b>". The claimant's recovery undertaking is on file, so adjustment at source is available.</p>
+      <div class="evd">Evidence: p.6 (LPC ROP) vs p.19 (D-I ¶5).</div>
+      <div class="fa">→ Action: note recovery in the sanction or adjust Rs. 126,355 against gratuity / first payment.</div>
+    </div>
+    <div class="flag md">
+      <div class="fh"><span class="sev md">F-4 · MEDIUM</span><b class="ft">Qualifying service stated as "32 years" — 30-year cap applies</b></div>
+      <p>D-I ¶3(iv) states 32 years; pension is calculable on a maximum of 30 years of qualifying service. The rules engine has applied the cap; AG determination should confirm.</p>
+    </div>
+    <div class="flag md">
+      <div class="fh"><span class="sev md">F-5 · MEDIUM</span><b class="ft">FD sanction timeline exceeded (monitoring only)</b></div>
+      <p>Annex-A 18-03-2026 → D-I countersigned ≈20-04-2026 (~33 days vs the 15-day requirement) → received at AG 02-06-2026. Logged to the disposal dashboard; no case defect.</p>
+    </div>
+    <div class="flag lo">
+      <div class="fh"><span class="sev lo">F-6/F-7 · LOW</span><b class="ft">Resolved aliases &amp; succession-certificate scope</b></div>
+      <p>Name variants (Nargas/Nargis; maiden name Nargis Kamal) resolved via the 1995 name-change order and father's-name match. Succession-certificate shares apply to estate items (group insurance, financial assistance, 4-month salary, GPF) — <b>not</b> to the monthly family pension, which vests in the widower under the Pension Rules.</p>
+    </div>
+  </div>
+
+  <!-- CALCULATION -->
+  <div class="pane" id="p-calc">
+    <div class="grid2">
+      <div class="calcbox">
+        <h3>DETERMINATION — RULES ENGINE (FOR OFFICER CONFIRMATION)</h3>
+        <div class="crow"><div>Reckonable emoluments<div class="rulecite">basic 178,440 + personal pay 13,590 · Note 2, Form D-I</div></div><div class="cv">Rs. 192,030</div></div>
+        <div class="crow"><div>Qualifying service<div class="rulecite">08-12-1993 → 18-02-2026 = 32y 2m 11d → cap 30y</div></div><div class="cv">30 years</div></div>
+        <div class="crow"><div>Gross pension<div class="rulecite">192,030 × 30 × 7 ÷ 300</div></div><div class="cv">Rs. 134,421</div></div>
+        <div class="crow total"><div>Family pension (75% of gross)<div class="rulecite">FD relief package — death in service</div></div><div class="cv">Rs. 100,816 /mo</div></div>
+        <div class="crow"><div>Gratuity (25% × 12 × 12.3719)<div class="rulecite">age next birthday 60 · commutation table</div></div><div class="cv">≈ Rs. 4,989,130</div></div>
+        <div class="crow"><div>Medical allowance (20%, BS-16+)<div class="rulecite">FD notification 2010</div></div><div class="cv">≈ Rs. 20,163 /mo</div></div>
+        <div class="crow"><div>Commencement<div class="rulecite">day after notional superannuation</div></div><div class="cv">19-02-2026</div></div>
+        <div class="crow"><div>Less: recovery (LPC ROP)<div class="rulecite">salary overpaid 19–28 Feb 2026 · undertaking on file</div></div><div class="cv" style="color:#F5B7A8">− Rs. 126,355</div></div>
+      </div>
+      <div class="card">
+        <h3 style="color:var(--green);font-size:14px;margin-bottom:12px">Engine notes &amp; caveats (printed with every determination)</h3>
+        <table class="dt">
+          <tr><td style="color:var(--muted);width:38%">AI vs rules</td><td>AI extracted the inputs; <b>every rupee above was computed deterministically</b> by the versioned rules engine — the model never estimates amounts.</td></tr>
+          <tr><td style="color:var(--muted)">Increases</td><td>Ad-hoc pension increases notified after 01-03-2026 to be applied at PPO per FD notifications in force.</td></tr>
+          <tr><td style="color:var(--muted)">Caveats</td><td>Gratuity capitalization factor and increase eligibility for OSD-continuation cases are subject to AG determination under the Pension Rules.</td></tr>
+          <tr><td style="color:var(--muted)">GPF</td><td>Rs. 62,336 (provisional) + interest — separate payment stream, not part of pension.</td></tr>
+          <tr><td style="color:var(--muted)">Life-cycle</td><td>Biannual life certificate; non-remarriage condition; NADRA re-verification each cycle via PFC.</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- IDENTITY -->
+  <div class="pane" id="p-id">
+    <div class="card">
+      <table class="dt">
+        <tr><th>Verification</th><th>Result</th><th>Method</th></tr>
+        <tr><td>Claimant CNIC 00001-0000108-3 (lifetime validity)</td><td class="ok-ic">✓ consistent across 12 documents</td><td>Cross-document match · NADRA API in production</td></tr>
+        <tr><td>Deceased CNIC 00001-0000109-2 / DOB 19-02-1966</td><td class="ok-ic">✓ CNIC = FRC = matric (1982) = salary stmt = D-I</td><td>Cross-document match</td></tr>
+        <tr><td>Death 29-07-2021</td><td class="ok-ic">✓ NADRA cert U14208053 (reg. 06-08-2021) = obituary = D-I = OSD order</td><td>NADRA CRMS verify (QR on certificate)</td></tr>
+        <tr><td>Claimant marital status</td><td class="ok-ic">✓ FRC "Widowed" + UC-116 EME certificate + affidavit on oath</td><td>NADRA FRC + Union Council</td></tr>
+        <tr><td>Bank account title vs claimant name</td><td class="ok-ic">✓ WAQAR ABDUL BASIT · verified by BOP branch manager · indemnity bond on e-stamp (verifiable QR)</td><td>Branch verification · e-stamp registry</td></tr>
+        <tr><td>Personnel number vs SAP payroll master</td><td style="color:var(--red)"><b>✗ unresolved — two numbers in file (F-1)</b></td><td>SAP HR lookup (simulated)</td></tr>
+        <tr><td>Duplicate beneficiary / multi-pension screen</td><td class="ok-ic">✓ no match on CNIC or bank account across pension roll</td><td>Roll cross-match (simulated)</td></tr>
+        <tr><td>Biometric verification of claimant</td><td style="color:var(--amber)">Pending — to be captured at PFC before first payment</td><td>NADRA biometric</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="actionbar">
+    <button class="btn gold" onclick="go(4)">Proceed to Decision →</button>
+    <button class="btn ghost" onclick="toast('Full 46-page extraction JSON + audit bundle exported (simulated).')">Export audit bundle</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 4 : DECISION ============ -->
+<section class="screen" id="s4">
+  <h1 class="pagetitle">Decision &amp; Dispatch</h1>
+  <p class="pagesub">The AI recommends; the officer decides. Every action below is logged to the append-only audit trail.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3 style="color:var(--green);font-size:14px;margin-bottom:14px">Officer decision</h3>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn" style="justify-content:flex-start" onclick="decide('return')">↩ &nbsp;Return to department for correction (F-1, F-2, F-3) — recommended</button>
+        <button class="btn ghost" style="justify-content:flex-start" onclick="decide('forward')">✓ &nbsp;Override &amp; forward to AG determination queue (record justification)</button>
+        <button class="btn ghost" style="justify-content:flex-start" onclick="decide('hold')">⏸ &nbsp;Place on hold (exceptional-case lane)</button>
+      </div>
+      <div id="decidedNote" style="display:none;margin-top:14px" class="smsbox"></div>
+      <h3 style="color:var(--green);font-size:14px;margin:18px 0 8px">Notification preview — SMS / portal</h3>
+      <div class="smsbox">
+        <b>To department (SED, SO Pension):</b> Case 41759 (Mst. Nargas Waqar) — 3 corrections required: (1) Personnel No. on Form D-I &amp; cover — file shows 90000857 vs payroll 90000853; (2) Annex-A: Usman Waqar is son/married per NADRA FRC — correct &amp; re-attest; (3) record recovery Rs. 126,355 (LPC ROP) in sanction. Resubmit via portal; case auto-revalidates.<br><br>
+        <b>To claimant (0300-0000001):</b> آپ کا فیملی پنشن کیس (ڈائری 41759) چیک کر لیا گیا ہے۔ محکمہ سکول ایجوکیشن سے تین درستگیاں درکار ہیں جن سے آج آگاہ کر دیا گیا ہے۔ آپ کو کچھ کرنے کی ضرورت نہیں۔ — Your family pension case has been checked; three corrections are needed from the department. No action is required from you.
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--green);font-size:14px;margin-bottom:14px">Append-only audit trail</h3>
+      <div class="audit" id="audit">
+02-06-2026 09:14:03 · INTAKE · case 41759 received from SED via Dashboard/SAP · user SO(P) B.Tahir<br>
+03-06-2026 11:02:47 · SCAN · 46 pages ingested · sha256 9f3a…c1e2 · quality avg 0.83<br>
+03-06-2026 11:04:12 · AI · extraction complete · 214 fields · 16 document types · model qwen3.6-35b-a3b@fp4 pinned v2026.04<br>
+03-06-2026 11:04:15 · RULES · calc pack PB-2026.02 applied · gross 134,421 · family 100,816 · gratuity 4,989,130<br>
+03-06-2026 11:04:16 · CHECK · checklist 16/16 · flags F1,F2,F3 (high) F4,F5 (med) F6,F7 (low)<br>
+03-06-2026 11:09:31 · REVIEW · case opened by Auditor P3 S.Haider · review screen v1.4<br>
+      </div>
+      <h3 style="color:var(--green);font-size:14px;margin:18px 0 8px">On resubmission</h3>
+      <p style="font-size:13px;color:#4B5563;line-height:1.65">The corrected case re-enters at Intake, auto-revalidates in minutes, and — if clean — moves to the AG determination queue with all figures pre-filled. PPO issues through CTS; payment flows through the pension roll / Direct Credit System to the verified BOP account. The pensioner is notified at every state change.</p>
+      <div class="actionbar">
+        <button class="btn ghost" onclick="restart()">⟲ Start a new case</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Prototype · AI Pension Portal for the Accountant General Office, Punjab · Sovereign deployment (DGX Spark pilot → TMC data center) · Simulated data from the genuine 46-page sample case · TMC 2026
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  var steps = document.querySelectorAll('#stepper .step');
+  function go(n){
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+    document.getElementById('s'+n).classList.add('on');
+    steps.forEach(function(st){
+      var v = +st.dataset.s;
+      st.classList.toggle('active', v===n);
+      st.classList.toggle('done', v<n);
+    });
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+  function toast(m){
+    var t=document.getElementById('toast'); t.textContent=m; t.style.display='block';
+    clearTimeout(t._h); t._h=setTimeout(function(){t.style.display='none';},3800);
+  }
+
+  /* ---- intake ---- */
+  var haveFile=false;
+  function fileChosen(inp){
+    if(!inp.files.length) return;
+    var f=inp.files[0];
+    showFile(f.name,(f.size/1048576).toFixed(1)+' MB · uploaded just now');
+  }
+  function loadSample(){
+    showFile('CamScanner 08102026 13.47.pdf','27.6 MB · 46 pages · SED diary SO(PENSION)7-62/2026');
+  }
+  function showFile(name,meta){
+    haveFile=true;
+    document.getElementById('filechip').style.display='flex';
+    document.getElementById('fname').textContent=name;
+    document.getElementById('fmeta').textContent=meta;
+    document.getElementById('startBtn').disabled=false;
+    toast('Case file received. Ready for AI analysis.');
+  }
+  var drop=document.getElementById('drop');
+  ['dragover','dragenter'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.add('drag');});});
+  ['dragleave','drop'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.remove('drag');});});
+  drop.addEventListener('drop',function(ev){ if(ev.dataTransfer.files.length){ var f=ev.dataTransfer.files[0]; showFile(f.name,(f.size/1048576).toFixed(1)+' MB · uploaded just now'); }});
+
+  /* ---- processing simulation ---- */
+  var LOG=[
+    [0,0,"ingest: 46 pages · deskew + denoise · avg quality score 0.83 (CamScanner)"],
+    [0,4,"page triage: 44 printed EN · 2 mixed EN/UR (CNIC, death cert) · 0 handwritten-only"],
+    [1,8,"ocr: PaddleOCR-VL first pass … 46/46 pages · 11,204 tokens of text recovered"],
+    [1,14,"vision: Qwen3-VL layout parse · tables, stamps, signatures, QR codes located"],
+    [2,20,"classify: 16 document types → D-I, Annex-A, death cert (NADRA), FRC, succession cert, LPC, salary stmt, service stmt, CNIC ×2, NDCs ×12, bank option, indemnity bond, OSD order, obituary, matric cert, posting orders 1993–2014"],
+    [2,26,"case type: FAMILY PENSION — DEATH IN SERVICE (Form D-I) · confidence 0.97"],
+    [3,34,"extract: deceased Mst. Nargas Waqar · CNIC 00001-0000109-2 · DOB 19-02-1966 (4 sources agree)"],
+    [3,40,"extract: emoluments — basic 178,440 + personal pay 13,590 = 192,030 reckonable ✓ reconciles with D-I"],
+    [3,46,"extract: service 08-12-1993 → 18-02-2026 · death in service 29-07-2021 · OSD salary continuation per FD.SR-1/3-10/2004"],
+    [4,54,"identity: claimant CNIC 00001-0000108-3 consistent ×12 docs · FRC 'Widowed' · bank title verified (BOP 0172)"],
+    [4,58,"identity: <span class='warn'>personnel number CONFLICT — 90000853 (payroll ×5) vs 90000857 (cover, Form D-I)</span>"],
+    [5,66,"checklist: 16/16 documents present · station-wise NDCs cover full service 1993–2026 ✓"],
+    [5,72,"consistency: <span class='warn'>Annex-A lists Usman Waqar as 'Daughter/Un-Married' — NADRA FRC says son/married</span>"],
+    [5,76,"consistency: <span class='warn'>LPC recovery Rs 126,355 (ROP 19–28 Feb 2026) not recorded in D-I ¶5</span>"],
+    [6,84,"rules engine [pack PB-2026.02]: QS 32y2m11d → cap 30y · gross = 192,030 × 30 × 7/300 = <span class='hl'>Rs 134,421</span>"],
+    [6,90,"rules engine: family pension 75% = <span class='hl'>Rs 100,816/mo</span> · gratuity 25% ×12 ×12.3719 ≈ <span class='hl'>Rs 4,989,130</span> · commence 19-02-2026"],
+    [7,96,"fraud screen: CNIC + bank account vs pension roll — no duplicate · no multi-pension identity · certificates carry verifiable QRs"],
+    [7,100,"done: verdict RETURN FOR CORRECTION (3 high flags) · full trail written to audit log"]
+  ];
+  function startAnalysis(){
+    go(2);
+    var con=document.getElementById('console'); con.innerHTML='';
+    var fill=document.getElementById('pfill'), pct=document.getElementById('ppct'), pst=document.getElementById('pstage');
+    var names=["Ingest & page triage","OCR & layout parsing","Document classification","Field extraction","Identity verification","Checklist & consistency","Pension calculation","Fraud screening"];
+    for(var i=0;i<8;i++){var el=document.getElementById('st'+i); el.className='stage'; el.querySelector('.sic').textContent=i+1;}
+    var idx=0, cur=-1;
+    function tick(){
+      if(idx>=LOG.length){
+        for(var j=0;j<8;j++){var e=document.getElementById('st'+j); e.className='stage ok'; e.querySelector('.sic').textContent='✓';}
+        pst.textContent='Complete'; fill.style.width='100%'; pct.textContent='100%';
+        setTimeout(function(){ go(3); toast('Analysis complete — 3 high-severity flags for your review.'); }, 900);
+        return;
+      }
+      var row=LOG[idx]; var st=row[0], p=row[1], msg=row[2];
+      if(st!==cur){
+        if(cur>=0){var pe=document.getElementById('st'+cur); pe.className='stage ok'; pe.querySelector('.sic').textContent='✓';}
+        cur=st; var ce=document.getElementById('st'+st); ce.className='stage run'; ce.querySelector('.sic').innerHTML='<span class="spin">◐</span>';
+        pst.textContent=names[st];
+      }
+      var t=new Date(); var ts=('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2)+':'+('0'+t.getSeconds()).slice(-2);
+      con.innerHTML+='<div><span class="t">'+ts+'</span> &nbsp;'+msg+'</div>';
+      con.scrollTop=con.scrollHeight;
+      fill.style.width=p+'%'; pct.textContent=p+'%';
+      idx++;
+      setTimeout(tick, 420 + Math.random()*520);
+    }
+    setTimeout(tick, 400);
+  }
+
+  /* ---- review tabs ---- */
+  function tab(el,id){
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on');});
+    document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('on');});
+    el.classList.add('on'); document.getElementById(id).classList.add('on');
+  }
+
+  /* ---- decision ---- */
+  function decide(kind){
+    var n=document.getElementById('decidedNote'); n.style.display='block';
+    var t=new Date(); var ts=('0'+t.getDate()).slice(-2)+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+t.getFullYear()+' '+('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2);
+    var audit=document.getElementById('audit');
+    if(kind==='return'){
+      n.innerHTML='<b style="color:var(--ok)">✓ Decision recorded:</b> Case 41759 returned to School Education Department for correction of F-1, F-2, F-3. Correction memo + SMS dispatched. The case will auto-revalidate on resubmission.';
+      audit.innerHTML+= ts+' · DECISION · RETURN for correction (F1,F2,F3) · officer S.Haider (P3) · memo + SMS dispatched<br>';
+      toast('Case returned to department. Notifications sent.');
+    } else if(kind==='forward'){
+      n.innerHTML='<b style="color:var(--amber)">⚠ Override recorded:</b> forwarded to AG determination queue with 3 open flags. Justification is mandatory and has been logged; flags remain attached to the case for the determining officer.';
+      audit.innerHTML+= ts+' · DECISION · OVERRIDE-FORWARD with open flags · justification logged · officer S.Haider (P3)<br>';
+      toast('Override logged. Case forwarded with open flags.');
+    } else {
+      n.innerHTML='<b style="color:var(--amber)">⏸ Hold recorded:</b> case moved to the exceptional-case lane for supervisory review.';
+      audit.innerHTML+= ts+' · DECISION · HOLD (exceptional lane) · officer S.Haider (P3)<br>';
+      toast('Case placed on hold.');
+    }
+    audit.scrollTop=audit.scrollHeight;
+  }
+  function restart(){
+    haveFile=false;
+    document.getElementById('filechip').style.display='none';
+    document.getElementById('startBtn').disabled=true;
+    document.getElementById('fi').value='';
+    document.getElementById('decidedNote').style.display='none';
+    go(1);
+  }
+</script>
+</body>
+</html>

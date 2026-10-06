@@ -1,0 +1,71 @@
+[Unit]
+Description=Qwen3-VL-30B-A3B-FP8 document vision (vLLM, OpenAI API) on :8011
+Documentation=file:/home/tmc/Desktop/Pension-AG/infra/serve-qwen3-vl.sh
+After=network-online.target
+Wants=network-online.target
+
+# Weights live on /models, an x-systemd.automount NFS export from spark-46ef
+# (192.168.100.10). Without this the boot-time start races the automount and the
+# script's own preflight dies with "model path not found".
+RequiresMountsFor=/models
+
+# AGPB-BUILD footprint: vision 0.35 + reasoning 0.40 + voice ~0.55 exceeds the 121GB
+# unified memory. Running both vLLM services on this box is the 2026-07-15 OOM-freeze
+# configuration, so they are made mutually exclusive rather than left to chance.
+Conflicts=vllm-qwen36.service
+
+[Service]
+Type=simple
+User=tmc
+Group=tmc
+WorkingDirectory=/home/tmc/Desktop/Pension-AG/infra
+
+Environment=HOME=/home/tmc
+Environment=CUDA_HOME=/usr/local/cuda
+Environment=HF_HOME=/home/tmc/.cache/huggingface
+Environment=PATH=/usr/local/cuda/bin:/home/tmc/vllm_env/bin:/usr/local/bin:/usr/bin:/bin
+
+# Measured 2026-09-03, 6 cold runs with the page cache evicted before each (see
+# bench-load-strategy.sh, results in load-strategy-bench.tsv):
+#     prefetch  40.51 s mean   <-- chosen
+#     eager     53.05 s mean
+#     default   60.89 s mean
+# The vLLM default does nothing here: /models is reached through x-systemd.automount and appears
+# twice in /proc/mounts under the same mount point, autofs before nfs4. vLLM's _get_fs_type keeps
+# the first longest-prefix match, so it reads the checkpoint filesystem as AUTOFS and skips the
+# auto-prefetch it would otherwise apply on NFS. This forces it back on.
+#
+# Caveat on the numbers: measured with the voice services stopped (105-115 GiB free). Production
+# runs nearer 80 GiB, where the same strategy is ~10% slower. Ordering holds; magnitude shrinks.
+#
+# Watch this if free memory ever falls below ~33 GiB: prefetch pulls the full 30.04 GiB into the
+# page cache and, when the checkpoint no longer fits in 90% of MemAvailable, vLLM logs
+# "may cause out-of-memory errors" and prefetches anyway.
+Environment=LOAD_STRATEGY=prefetch
+
+# Run the script, not an inlined vllm command: it carries the preflight that must not be
+# bypassed (architecture check, upstream shard-byte match, weights fingerprint, offline
+# enforcement). It ends in `exec vllm serve`, so the main PID is the engine itself.
+ExecStart=/home/tmc/Desktop/Pension-AG/infra/serve-qwen3-vl.sh
+
+# The first request per schema after a restart returns all amounts null (reproduced across
+# two restarts on 2026-09-02). With Restart=always an unwarmed automatic restart would
+# re-arm that defect unattended, so warmup is part of starting, not a separate step.
+# The script polls /health on its own and always exits 0, so it cannot fail the unit;
+# the unit therefore reports active only once the service is warm.
+ExecStartPost=/home/tmc/Desktop/Pension-AG/infra/warmup-vision.sh
+
+Restart=always
+RestartSec=10
+TimeoutStartSec=0
+KillMode=mixed
+
+# Under unified-memory pressure prefer killing vision over the co-hosted voice services,
+# which belong to a separate project on this box.
+OOMScoreAdjust=200
+
+LimitNOFILE=1048576
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

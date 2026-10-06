@@ -1,0 +1,563 @@
+"""Pipeline stage 3: identify document types and boundaries across the bundle. BRAIN §5, §4.1.
+
+A real case file is "a scanned bundle in no reliable order, at CamScanner quality: skewed,
+variable lighting, mixed English and Urdu, handwritten annotations, rubber stamps over text,
+photographs of photographs. **Page order does not imply document boundaries** -- one document
+may span pages 19-20 while pages 24-36 are twelve separate certificates."
+
+Two halves, deliberately separated:
+
+*   :func:`identify_page` is a **reading** task -- "what is printed at the top of this page" --
+    and runs on the vision model against a closed enum of document types.
+*   :func:`assemble_documents` is a **rule** -- how identified pages group into documents --
+    and is plain Python with no model in it.
+
+The case type is then derived from the assembled documents by ``rules.case_type``, which is
+also pure code, because §4.1 rule 1 makes it a lookup rather than a judgement: the PSA form
+present in the file is decisive.
+
+Why the enum is closed
+----------------------
+An open ``document_type`` string invites a plausible near-miss -- "Form D1", "Death Cert" --
+that no downstream lookup matches. The checklist would then report a document missing that is
+sitting in the file, and the case would go back to a department that did nothing wrong. A page
+that fits nothing is ``OTHER`` and reaches a human; the model never coins a type.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Iterable, Sequence
+
+from rules.caserecord import Document
+
+from .client import DEFAULT_ENDPOINT, DEFAULT_MODEL, Extraction, extract_page
+from .schemas import DOCUMENT_TYPE_GLOSS
+
+#: Below this, a page identification is not acted on: it is surfaced for human confirmation.
+#: BRAIN §5.3 puts the silent-accept floor at 0.80, and a misidentified document is not a
+#: field-level error -- it removes a whole requirement from the checklist or invents one.
+IDENTIFY_ACCEPT_THRESHOLD = 0.80
+
+#: Replaces the pay-extraction default rather than appending to it. See client.py's
+#: instruction_override: prepending five lines about reckonable pay to an identification task
+#: made this call confidently wrong.
+IDENTIFY_INSTRUCTION = (
+    "Your only task is to identify which document this scanned page belongs to.\n"
+    "Ignore any monetary figures on the page. Do not extract pay components.\n"
+    "Work from the printed heading, the form number, and any official stamp. Quote what you "
+    "read as your evidence; do not describe the page.\n"
+    "A prescribed form (B-I, B-II, B-III, B-IV, D-I, D-II) is identified by its printed form "
+    "number, not by what the page is about.\n"
+    "If the page carries no heading and continues the previous document, set "
+    "is_first_page_of_document false — but STILL classify it by its content. Pages of one "
+    "document are scattered through the bundle, so the page before it is usually unrelated. "
+    "A headless continuation of a service order is still POSTING_ORDER, not a letter.\n"
+    "Many pages are wholly or partly in URDU. A page you cannot read word for word is still "
+    "identifiable from its heading, its stamps and its layout, and answering OTHER because "
+    "the body is in Urdu drops a document the case needs. The widow's affidavit in the "
+    "September case was headed 'بیان حلفی' over an oath commissioner's stamp and was "
+    "answered OTHER, so the case was returned for an affidavit that was in the bundle.\n"
+    "If the page fits none of the listed types, answer OTHER. Never invent a type.\n"
+    "A CNIC card is CNIC. Put the name printed on it in person_named. Do NOT decide whether "
+    "it belongs to the deceased or to the claimant -- you cannot know that from the card.\n"
+    "One sheet often carries two or three separate documents -- a death certificate beside "
+    "the FRC, several certificates on one sworn page. Put the main one in document_type and "
+    "list every other one, by its own printed heading or layout, in other_documents_on_page. "
+    "Leave it empty for a page with one document; never list a document the page only "
+    "mentions, refers to or asks for.\n"
+    "\n"
+    "Answer document_type with the TOKEN on the left of these pairs:\n"
+    + "\n".join(f"  {k} = {v}" for k, v in DOCUMENT_TYPE_GLOSS.items())
+)
+
+
+@dataclass(frozen=True)
+class PageIdentity:
+    """One page's identification."""
+
+    page: int
+    document_type: str
+    confidence: float
+    evidence: str
+    is_first_page: bool
+    signed_by_psa: bool | None = None
+    attested: bool | None = None
+    printed_form_number: str | None = None
+    person_named: str | None = None
+    #: Set when a FORM_* claim was rejected because no matching form number was printed.
+    downgraded_from: str | None = None
+    #: Set when that rejection was followed by a successful re-read of what the page IS.
+    reclassified: bool = False
+    #: Further separate documents printed on the same sheet (two certificates on one page).
+    also_on_page: tuple[str, ...] = ()
+
+    @property
+    def needs_human(self) -> bool:
+        return self.confidence < IDENTIFY_ACCEPT_THRESHOLD or self.document_type == "OTHER"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "page": self.page,
+            "document_type": self.document_type,
+            "confidence": self.confidence,
+            "evidence": self.evidence,
+            "is_first_page_of_document": self.is_first_page,
+            "signed_by_psa": self.signed_by_psa,
+            "printed_form_number": self.printed_form_number,
+            "person_named": self.person_named,
+            "downgraded_from": self.downgraded_from,
+            "attested": self.attested,
+            "other_documents_on_page": list(self.also_on_page),
+            "needs_human": self.needs_human,
+        }
+
+
+def identify_page(
+    image: str | Path,
+    page: int,
+    *,
+    endpoint: str = DEFAULT_ENDPOINT,
+    model: str = DEFAULT_MODEL,
+    timeout_s: int = 300,
+    extra_instruction: str | None = None,
+) -> PageIdentity:
+    """Identify one page. Raises rather than returning something doubtful.
+
+    Cheap relative to field extraction -- the schema is six fields, so this runs over every
+    page in the bundle before the expensive per-document extraction narrows to the pages that
+    matter.
+    """
+    ext: Extraction = extract_page(
+        image,
+        schema_name="PAGE_IDENTITY",
+        endpoint=endpoint,
+        model=model,
+        max_tokens=800,   # six fields; 512 truncated on dense pages (source page 24)
+        timeout_s=timeout_s,
+        instruction_override=(
+            IDENTIFY_INSTRUCTION + "\n\n" + extra_instruction if extra_instruction
+            else IDENTIFY_INSTRUCTION
+        ),
+    )
+    d = ext.data
+    return PageIdentity(
+        page=page,
+        document_type=d["document_type"],
+        confidence=float(d["document_type_confidence"]),
+        evidence=d.get("evidence") or "",
+        is_first_page=bool(d.get("is_first_page_of_document")),
+        signed_by_psa=d.get("signed_by_psa"),
+        attested=d.get("attested"),
+        printed_form_number=d.get("printed_form_number"),
+        person_named=(d.get("person_named") or None),
+        also_on_page=tuple(dict.fromkeys(
+            t for t in (d.get("other_documents_on_page") or ())
+            if t and t not in ("OTHER", d["document_type"]))),
+    )
+
+
+#: A FORM_* token is only accepted when the page actually prints that form number.
+_FORM_NUMBER = {
+    "FORM_B_I": ("B-I", "B1"), "FORM_B_II": ("B-II", "B2"),
+    "FORM_B_III": ("B-III", "B3"), "FORM_B_IV": ("B-IV", "B4"),
+    "FORM_D_I": ("D-I", "D1"), "FORM_D_II": ("D-II", "D2"),
+}
+
+
+def _verify_form_claim(
+    ident: PageIdentity,
+    ocr_forms: tuple[str, ...] | None = None,
+    ocr_titles: tuple[str, ...] | None = None,
+) -> PageIdentity:
+    """Reject a prescribed-form classification that OCR cannot corroborate. BRAIN §4.1 rule 1.
+
+    ``ocr_forms`` is the set of form numbers an INDEPENDENT reader (PaddleOCR, stage 2) found
+    printed on the page. Pass ``None`` to skip verification.
+
+    An earlier version of this check asked the vision model itself to quote the printed form
+    number, and it failed for the reason such checks always fail: on the real case file the
+    model classified an "Entitlement Declaration" as FORM_D_II *and* asserted that "FORM D-II"
+    was printed on it. A model that will misclassify a page will also supply the evidence for
+    its own misclassification, so its self-report corroborates nothing. Only a second reader
+    counts.
+
+    The consequence is larger than one mislabelled page: the PSA form decides the case type,
+    so two fabricated forms in one bundle routed a determinable case to manual classification.
+
+    ``ocr_titles`` is the fallback, and it exists because the check was also wrong in the
+    other direction. Many departmental forms print no form number -- the family-pension case
+    of 9 September carried a genuine Form D-II headed only "FAMILY PENSION FORM (To be
+    forwarded ... in the event of death of the pensioner)". OCR found no number, so a CORRECT
+    classification was withdrawn and the sanction form dropped out of the bundle, taking three
+    checklist lines with it. A form that states its scenario in words has identified itself as
+    surely as one that prints a number.
+
+    The ordering is what keeps this safe. A number OCR did find always wins; titles are read
+    only when the page prints no form number at all. So a page headed as one form and numbered
+    as another is still denied, which is the case this check was built for.
+    """
+    expected = _FORM_NUMBER.get(ident.document_type)
+    if expected is None or ocr_forms is None:
+        return ident
+    if ident.document_type in ocr_forms:
+        return ident
+    # A number OCR found for a DIFFERENT form is positive evidence against this claim, and
+    # no title may talk it round. Only silence -- no number printed at all -- opens the door
+    # to the weaker corroboration below.
+    if not ocr_forms and ident.document_type in (ocr_titles or ()):
+        return ident
+    return PageIdentity(
+        page=ident.page,
+        document_type="OTHER",
+        confidence=ident.confidence,
+        evidence=ident.evidence,
+        is_first_page=ident.is_first_page,
+        signed_by_psa=ident.signed_by_psa,
+        attested=ident.attested,
+        printed_form_number=ident.printed_form_number,
+        downgraded_from=ident.document_type,
+        also_on_page=ident.also_on_page,
+    )
+
+
+def _reclassify_after_denial(
+    ident: PageIdentity,
+    image: str | Path,
+    ocr_text: str,
+) -> PageIdentity:
+    """Ask what the page IS, having established what it is not.
+
+    The re-read is told the denied type and why, and is given the second reader's own
+    transcription -- so it is not simply the same question asked twice, which would invite
+    the same answer. If it still cannot place the page, the denial stands and the page stays
+    OTHER for a human: an unidentified page must never become a document that satisfies a
+    requirement.
+    """
+    denied = ident.downgraded_from or ""
+    try:
+        again = identify_page(
+            image,
+            page=ident.page,
+            extra_instruction=(
+                f"A second reader has checked this page and it is NOT {denied}: no such form "
+                f"number is printed on it. Do not answer {denied}. Identify what the page "
+                f"actually is from its heading. This is its transcribed text:\n{ocr_text}"
+            ),
+        )
+    except Exception:                                   # noqa: BLE001
+        return ident
+    if again.document_type in ("OTHER", denied):
+        return ident
+    # A re-read that names ANOTHER prescribed form must clear the same bar the first claim
+    # failed. Accepting it on the model's word alone lets the re-read walk past the very
+    # guard it sits behind: on a real case an "APPLICATION FOR PENSION AND/OR GRATUITY" was
+    # denied as Form B-I, came back as Form B-III, was accepted -- and the bundle then held
+    # two prescribed forms, so §4.1 refused to type the case at all.
+    if again.document_type in _FORM_NUMBER:
+        from .ocr import form_titles_on, forms_printed_on
+        corroborating = PageIdentity(
+            page=ident.page, document_type=again.document_type, confidence=again.confidence,
+            evidence=again.evidence, is_first_page=again.is_first_page,
+        )
+        text = ocr_page(image, ident.page)
+        checked = _verify_form_claim(
+            corroborating, forms_printed_on(text), form_titles_on(text),
+        )
+        if checked.document_type == "OTHER":
+            return ident
+    return PageIdentity(
+        page=ident.page,
+        document_type=again.document_type,
+        confidence=again.confidence,
+        evidence=again.evidence,
+        is_first_page=again.is_first_page,
+        signed_by_psa=again.signed_by_psa,
+        attested=again.attested,
+        printed_form_number=again.printed_form_number,
+        downgraded_from=denied,
+        reclassified=True,
+        also_on_page=again.also_on_page,
+    )
+
+
+#: Types read for their pay figures. A page filed as one of these reaches stage 4.
+_PAY_DOCUMENT_TYPES = ("LPC", "SALARY_STATEMENT", "PENSION_SLIP")
+
+
+def _deny_pay_claim_on_a_card(ident: PageIdentity, image: str | Path) -> PageIdentity:
+    """Withdraw a pay-document claim where the second reader says the page is an ID card.
+
+    Mirrors ``_verify_form_claim``: the vision model's own evidence for its own claim
+    corroborates nothing, so OCR decides. Denied pages become OTHER carrying
+    ``downgraded_from``, exactly as a denied form does, and are picked up by the same
+    reclassification path rather than being silently dropped.
+    """
+    from .ocr import looks_like_identity_card, ocr_page
+
+    try:
+        text = ocr_page(image, ident.page)
+    except Exception:                                    # noqa: BLE001
+        return ident                                     # no second reader, no denial
+    if not looks_like_identity_card(text):
+        return ident
+    return PageIdentity(
+        page=ident.page,
+        document_type="OTHER",
+        confidence=ident.confidence,
+        evidence=(f"{ident.evidence} -- WITHDRAWN: the second reader finds an identity card "
+                  f"on this page and no pay vocabulary at all."),
+        is_first_page=ident.is_first_page,
+        signed_by_psa=ident.signed_by_psa,
+        attested=ident.attested,
+        printed_form_number=ident.printed_form_number,
+        downgraded_from=ident.document_type,
+        also_on_page=ident.also_on_page,
+    )
+
+
+def verify_with_ocr(
+    identities: Sequence[PageIdentity],
+    image_for: Callable[[int], str | Path],
+) -> tuple[PageIdentity, ...]:
+    """Second-read every page claimed to be a prescribed form, and drop the ones OCR denies.
+
+    Only form claims are re-read -- typically three or four pages out of forty-odd -- because
+    those are the ones that select a pension formula. Everything else is a field-level risk
+    the checklist and the flag battery already cover.
+    """
+    from .ocr import form_titles_on, forms_printed_on, ocr_page
+
+    out: list[PageIdentity] = []
+    form_text: dict[int, str] = {}
+    for ident in identities:
+        # A pay-document claim gets the same second reader a form claim gets. The model
+        # answered LPC, at confidence 1.00, for the REVERSE of a CNIC -- and justified it
+        # with the card's own serial and number. An LPC is read for its pay figures, so a
+        # CNIC filed as one puts an identity card into the determination path.
+        if ident.document_type in _PAY_DOCUMENT_TYPES:
+            out.append(_deny_pay_claim_on_a_card(ident, image_for(ident.page)))
+            continue
+        if ident.document_type not in _FORM_NUMBER:
+            out.append(ident)
+            continue
+        text = ocr_page(image_for(ident.page), ident.page)
+        verified = _verify_form_claim(ident, forms_printed_on(text), form_titles_on(text))
+        # A denial says what the page is NOT. Filing it as OTHER then drops it from the
+        # bundle, so a correct rejection still costs the office a document: on the real
+        # cases an "Application for Grant of Family Pension", an "Entitlement Declaration"
+        # and a "Superannuation Notification" all vanished this way, and three checklist
+        # lines reported missing papers that were in the file. Ask again, told plainly what
+        # the page is not, and keep whatever comes back.
+        if verified.document_type == "OTHER" and verified.downgraded_from:
+            verified = _reclassify_after_denial(
+                verified, image_for(ident.page), text.text[:1200],
+            )
+        # Keep what the second reader saw. The prescribed form states which family member is
+        # claiming -- "IN RESPECT OF MST. GHULAM ZAINAB WIDOW OF ..." -- and that is what
+        # separates the seven Form D-II checklist columns from one another.
+        # 8,000 rather than 2,000: a Form B-I runs to ~3,600 characters of OCR and its
+        # retirement date, average pay and qualifying service all sat past the old cut.
+        form_text[verified.page] = text.text[:8000]
+        out.append(verified)
+    verify_with_ocr.form_text = form_text          # noqa: B010 - read by stage_verify_forms
+    return tuple(out)
+
+
+def _norm_form(value: str | None) -> str:
+    """Normalise a printed form number for comparison.
+
+    Both sides go through this, which is the bit an earlier version got wrong: stripping
+    hyphens from only the expected side made a correctly printed "D-II" fail its own check.
+    Roman numerals stay distinct after normalisation -- DI, DII, BI, BII, BIII, BIV.
+    """
+    if not value:
+        return ""
+    out = value.upper()
+    for token in ("FORM", " ", "-", ".", "_"):
+        out = out.replace(token, "")
+    return out
+
+
+def identify_bundle(
+    images: Sequence[str | Path],
+    *,
+    first_page_no: int = 1,
+    **kwargs: Any,
+) -> tuple[PageIdentity, ...]:
+    """Identify every page in a bundle, in order."""
+    return tuple(
+        identify_page(img, page=first_page_no + i, **kwargs)
+        for i, img in enumerate(images)
+    )
+
+
+
+#: Printed headings that name a checklist document beyond doubt, as the office's own sheet
+#: names them. Deliberately narrow: each pattern is a TITLE a department prints at the head
+#: of a page, not a phrase that could occur in the body of another document. "Death
+#: certificate" is absent for that reason -- Form D-II's own text says "death certificate is
+#: attached" -- and so is anything a covering letter routinely mentions.
+NO_INCOME_TITLE = (
+    r"non?[\s-]*(?:regular\s+)?source\s+of\s+income"
+    r"|no[\s-]*(?:regular\s+)?income\s+certificate"
+    r"|certificate\s+of\s+no\s+(?:regular\s+)?(?:source\s+of\s+)?income"
+    r"|no[\s-]*(?:regular|independent)\s+(?:source\s+of\s+)?income"
+    r"|ذریعہ\s*آمدن|ذریعہ\s*معاش|آمدنی\s*کا\s*کوئی"
+)
+#: The same certificate proved by its content: a sworn or signed statement that the claimant
+#: has no regular or independent source of income, wherever it is printed.
+NO_INCOME_STATEMENT = (
+    r"(?:has|have|having|possess(?:es)?)\s+no\s+(?:other\s+)?(?:regular\s+|independent\s+|permanent\s+)*"
+    r"(?:source\s+of\s+)?(?:income|livelihood|earning)"
+    r"|(?:not|no)\s+(?:having\s+)?any\s+(?:regular\s+|independent\s+)*source\s+of\s+(?:income|livelihood)"
+    r"|کوئی\s*ذریعہ\s*آمدن\s*نہیں|ذریعہ\s*آمدن\s*نہ"
+)
+
+DOCUMENT_TITLES: tuple[tuple[str, str], ...] = (
+    (r"list\s+of\s+family\s+members|descriptive\s+roll", "ANNEX_A"),
+    (r"sole\s+(?:family|widow)\s+certificate|sole\s+and\s+lawful\s+widow"
+     r"|lawful\s+widow\s+certificate", "SOLE_WIDOW_CERTIFICATE"),
+    (r"entitlement\s+of\s+arrears", "ARREARS_ENTITLEMENT_CERTIFICATE"),
+    # Matched by meaning (office rule, 30 Sep 2026): departments title this certificate a dozen
+    # ways -- "Non Source of Income", "No Source of Income", "No Income Certificate",
+    # "Certificate of No Regular Income" -- and in Urdu; all are the same paper.
+    (NO_INCOME_TITLE, "NO_REGULAR_INCOME_CERTIFICATE"),
+    (r"non[\s-]*re[\s-]*marriage\s+certificate|no[\s-]*marriage\s+certificate",
+     "NON_REMARRIAGE_CERTIFICATE"),
+    (r"reason\s+for\s+late\s+submission", "LATE_SUBMISSION_REASON"),
+    (r"no\s+demand\s+certificate", "NDC"),
+)
+
+#: Labels that say only "this page is a page". A page carrying one of these is the only kind
+#: this reconciliation reads, and even then its label is kept -- see ``titles_on_page``.
+GENERIC_LABELS = frozenset({"OTHER", "AFFIDAVIT"})
+
+#: Statements a SPECIFICALLY labelled page may also prove, by the words printed on it. The
+#: office's Annexure-A (descriptive roll and undertaking) carries the pensioner's option for
+#: commutation as its own printed section -- "I hereby opt full pension without commutation /
+#: commutation @ ..." -- and the identifier rightly files the page as ANNEX_A; the checklist's
+#: "Option for commutation" line then read MISSING while the option sat on page 6 (Agriculture,
+#: 29 Sep 2026). The option is the pensioner's own declaration, not a mention of one, so an
+#: Annexure-A page printing it satisfies both lines it belongs to.
+STATEMENTS_ON_LABELLED_PAGES: dict[str, tuple[tuple[str, str], ...]] = {
+    # A sworn sheet filed as one certificate often states, in its body, that the claimant has no
+    # source of income: that statement is the no-income certificate (office rule, 30 Sep 2026).
+    **{label: ((NO_INCOME_TITLE + "|" + NO_INCOME_STATEMENT, "NO_REGULAR_INCOME_CERTIFICATE"),)
+       for label in ("SOLE_WIDOW_CERTIFICATE", "ARREARS_ENTITLEMENT_CERTIFICATE", "NON_REMARRIAGE_CERTIFICATE",
+                     "LATE_SUBMISSION_REASON")},
+    "ANNEX_A": (
+        (r"opt\w*\s+(?:for\s+)?(?:full\s+)?pension\s+(?:with|without)\s+commutation"
+         r"|option\s+for\s+commutation|commutation\s+@|hereby\s+opt\w*\s.{0,60}commutation",
+         "COMMUTATION_OPTION"),
+    ),
+}
+
+
+def statements_on_page(label: str, text: str) -> tuple[str, ...]:
+    """Checklist documents a page labelled ``label`` also proves by a statement printed on it."""
+    flat = re.sub(r"\s+", " ", (text or "")).lower()
+    return tuple(sorted({doc for pattern, doc in STATEMENTS_ON_LABELLED_PAGES.get(label, ()) if re.search(pattern, flat)}))
+
+
+def titles_on_page(text: str) -> tuple[str, ...]:
+    """Checklist documents whose printed TITLE appears in a page's OCR text.
+
+    Every one that does. Departments put two and three certificates on one sheet -- page 12
+    of case 71b639daac14 is one sworn page headed sole-widow certificate, no-regular-income
+    certificate and entitlement-of-arrears certificate -- and this used to answer nothing for
+    such a page, so all three read MISSING and the officer was asked to approve papers that
+    were in the bundle. Only ``OTHER`` and ``AFFIDAVIT`` pages are read this way (see
+    ``pipeline.run.documents_named_by_their_own_heading``), which is what keeps a form that
+    merely mentions a certificate from counting as one.
+    """
+    flat = re.sub(r"\s+", " ", (text or "")).lower()
+    found = {doc for pattern, doc in DOCUMENT_TITLES if re.search(pattern, flat)}
+    if re.search(NO_INCOME_STATEMENT, flat):
+        found.add("NO_REGULAR_INCOME_CERTIFICATE")
+    return tuple(sorted(found))
+
+
+def title_found(doc_type: str, text: str) -> str | None:
+    """The heading a page actually prints for a checklist document, for "found as ..." (30 Sep 2026)."""
+    patterns = [p for p, d in DOCUMENT_TITLES if d == doc_type]
+    if doc_type == "NO_REGULAR_INCOME_CERTIFICATE":
+        patterns.append(NO_INCOME_STATEMENT)
+    for line in (text or "").splitlines():
+        flat = re.sub(r"\s+", " ", line).strip()
+        if flat and any(re.search(p, flat.lower()) for p in patterns):
+            return flat[:90]
+    return None
+
+
+def assemble_documents(identities: Iterable[PageIdentity]) -> tuple[Document, ...]:
+    """Group identified pages into documents. Deterministic; no model.
+
+    A new document starts when the type changes, **or** when a page declares itself a first
+    page. That second condition is what handles pp.24-36 of the golden case: twelve separate
+    NDC certificates, all the same type, back to back. Grouping on type alone would merge
+    them into one thirteen-page document and lose the count; grouping on the declared heading
+    keeps them apart.
+
+    ``OTHER`` pages are dropped rather than assembled -- an unidentified page must not become
+    a document that satisfies a checklist requirement. They remain in the ``PageIdentity``
+    list for a human to look at.
+    """
+    docs: list[Document] = []
+    run_type: str | None = None
+    run_pages: list[int] = []
+    run_signed: bool | None = None
+    run_attested: bool | None = None
+    run_person: str | None = None
+
+    def flush() -> None:
+        nonlocal run_type, run_pages, run_signed, run_attested, run_person
+        if run_type is not None and run_pages:
+            docs.append(
+                Document(
+                    type=run_type,
+                    pages=tuple(run_pages),
+                    present=True,
+                    signatory_is_psa=run_signed,
+                    attested=run_attested,
+                    person_named=run_person,
+                )
+            )
+        run_type, run_pages, run_signed, run_attested, run_person = None, [], None, None, None
+
+    for ident in identities:
+        if ident.document_type == "OTHER":
+            flush()
+            continue
+        starts_new = ident.document_type != run_type or (ident.is_first_page and run_pages)
+        if starts_new:
+            flush()
+            run_type = ident.document_type
+        run_pages.append(ident.page)
+        # A signature or attestation anywhere in a document applies to the document.
+        if ident.signed_by_psa is not None:
+            run_signed = bool(run_signed) or ident.signed_by_psa
+        if ident.attested is not None:
+            run_attested = bool(run_attested) or ident.attested
+        if run_person is None and ident.person_named:
+            run_person = ident.person_named
+
+    flush()
+    return tuple(docs)
+
+
+def low_confidence_pages(
+    identities: Iterable[PageIdentity],
+    threshold: float = IDENTIFY_ACCEPT_THRESHOLD,
+) -> tuple[PageIdentity, ...]:
+    """Pages a human must confirm before the checklist is trusted.
+
+    Surfaced separately from the assembled documents because the consequence is different in
+    kind: a low-confidence *field* is one wrong value, a low-confidence *document* silently
+    adds or removes an entire checklist requirement.
+    """
+    return tuple(
+        i for i in identities if i.confidence < threshold or i.document_type == "OTHER"
+    )

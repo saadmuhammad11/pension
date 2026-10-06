@@ -1,0 +1,163 @@
+# Family pension on the death of a PENSIONER (Form D-II / Proforma D-II).
+#
+# STATUS: PROVISIONAL. Every value below that is not UNSET is taken from the project's own
+# documentation and is marked as such -- it is NOT a confirmed Punjab Finance Department rule.
+# The calculator (rules/dii.py) computes on these values but marks every determination that
+# uses one PROVISIONAL, engages BLOCKING-07, and says in the caveats which value is
+# unconfirmed and who confirms it. It never falls back to the Form D-I arithmetic -- a death in
+# service accrues a fresh pension from pay and service, and this does not.
+#
+# HOW A VALUE BECOMES CONFIRMED. Not by editing this file. A Deputy Accountant General
+# (Pension) or the reference-data administrator records a confirmation in the portal (or via
+# POST /api/rules/confirm), citing the notification. The confirmation is appended to
+# artifacts/rules/confirmations.jsonl, overlays the value here, and from then on determinations
+# using it are final. This is BRAIN §14.1 rule 4 -- "a default is a placeholder awaiting an
+# authority, and every use of one is logged as such" -- with the authority's own entry as the
+# log. See rules/confirmations.py. The 2 December 2024 amendment notification on file
+# (FD.SR-III-4-244/2023(B)) restricts the spouse's family pension to ten years or remarriage and
+# says nothing about the share, so the share stays open here.
+#
+# Format: a deliberately restricted subset -- `key: value`, two-space nesting, `#` comments,
+# and the bare word UNSET. Parsed by rules/dii.py with the standard library only, because
+# BUILD §6.2 requires an auditor to recompute a determination years later with this file and
+# a Python interpreter and nothing else. No PyYAML, though it happens to be installed.
+
+id: PB-DII-2026.09-provisional
+jurisdiction: PUNJAB
+# provisional | confirmed. "confirmed" is only ever written here once AG Punjab has confirmed
+# EVERY value in the file in writing; individual values are confirmed through the log above.
+status: provisional
+# Where the provisional figures come from. Quoted on every provisional determination.
+provisional_source: BRAIN 9.8 FAM-AR-02 (Punjab FD FAQ - 75 percent of gross or net pension as applicable); FD relief-package table item 2 (Family pension = Gross Pension x 75/100); the two sample bundles' own departmental working (75 percent)
+effective_from: UNSET
+effective_to: UNSET
+
+# --------------------------------------------------------------------------------------
+# 1. THE SHARE
+# --------------------------------------------------------------------------------------
+share:
+  # Share of the base (below) payable to a widow or widower on the death of the pensioner.
+  # PROVISIONAL 75: FAM-AR-02 / FD FAQ. CONFIRM: the percentage and the notification.
+  widow_percent: 75
+
+  # Share payable on a RE-GRANT to a divorced or widowed daughter after the death of the
+  # widow who was herself drawing the family pension.
+  # PROVISIONAL 75: the documents state one family-pension rate and no separate re-grant
+  # rate. CONFIRM: whether the daughter takes the same share, a different share, or the
+  # share is recomputed from the original pensioner's own pension.
+  regrant_daughter_percent: 75
+
+  # Other eligible classes under the same form. PROVISIONAL 75 on the same basis: the
+  # relief-package table states one rate for "family pension" and no class distinction.
+  # CONFIRM: each class, and whether the form covers them at all.
+  unmarried_child_percent: 75
+  parent_percent: 75
+  disabled_child_percent: 75
+  sister_percent: 75
+
+# --------------------------------------------------------------------------------------
+# 2. THE BASE THE SHARE APPLIES TO
+# --------------------------------------------------------------------------------------
+base:
+  # Which figure the share is taken on. The candidates are genuinely different numbers on
+  # the sample bundles, by thousands of rupees a month:
+  #   pension_in_payment   - what the form states beside "drawing pension @" (the pension
+  #                          actually being paid, i.e. after every ADD-01 increase)
+  #   net_pension          - the "Net Pension" line (the original pension after commutation)
+  # UNSET is deliberate and is HANDLED: where the form prints both figures and they differ,
+  # the engine emits the family pension on each as two labelled readings (BLOCKING-07) and
+  # chooses neither; where it prints one, that one is used and named. Confirming this key
+  # (value: pension_in_payment | net_pension) collapses the readings to one.
+  definition: UNSET
+
+  # Whether the pension increases notified since the pensioner retired are inside the base
+  # or applied afterwards to the family pension. On the widow bundle the difference is
+  # between a base of 2,512.51 and one of 40,419.37.
+  # CONFIRM: true or false.
+  includes_post_retirement_increases: UNSET
+
+  # Whether the medical allowance the pensioner was drawing forms part of the base.
+  # CONFIRM: true or false.
+  includes_medical_allowance: UNSET
+
+  # Whether orderly allowance, where the form declares one, forms part of the base.
+  # CONFIRM: true or false.
+  includes_orderly_allowance: UNSET
+
+# --------------------------------------------------------------------------------------
+# 3. COMMENCEMENT
+# --------------------------------------------------------------------------------------
+commencement:
+  # When the family pension begins on the death of the pensioner. PROVISIONAL day_after_death:
+  # the pension is paid to and including the date of death, which is the practice every
+  # sample bundle follows. CONFIRM: one of: date_of_death | day_after_death
+  on_death_of_pensioner: day_after_death
+
+  # When a RE-GRANT begins. On the divorced-daughter bundle three dates compete: the death
+  # of the widow (30.01.2018), the date of the divorce (05.09.2023), and the date of the
+  # daughter's application (17.07.2026). The papers cite FD-SR-III-4-101/2020 on arrears,
+  # which suggests the answer is not simply the application date. UNSET is HANDLED: the
+  # engine states the dates on the papers and no commencement, and marks the determination
+  # provisional. CONFIRM: one of: death_of_prior_pensioner | date_of_eligibility |
+  # date_of_application
+  on_regrant: UNSET
+
+  # Whether arrears run from the commencement date or from a later cutoff.
+  # CONFIRM: true or false, and any cutoff rule.
+  arrears_payable_from_commencement: UNSET
+
+# --------------------------------------------------------------------------------------
+# 4. ELIGIBILITY  (not consumed by the calculator; recorded for the checklist and the officer)
+# --------------------------------------------------------------------------------------
+eligibility:
+  # Whether a daughter must be divorced or widowed AND without a source of income, or
+  # whether either alone suffices.
+  # CONFIRM: the conditions, and the evidence each requires.
+  daughter_requires_no_source_of_income: UNSET
+
+  # Whether the divorce must have taken effect before or after the death of the pensioner,
+  # or whether the timing is immaterial. On the sample the pensioner died 23.05.2010 and the
+  # divorce took effect 05.09.2023 -- thirteen years later.
+  # CONFIRM: the rule on timing.
+  divorce_timing_rule: UNSET
+
+  # Whether a re-grant is available only where the prior family pensioner has died, or also
+  # on remarriage or other cessation.
+  # CONFIRM.
+  regrant_requires_death_of_prior_pensioner: UNSET
+
+# --------------------------------------------------------------------------------------
+# 5. CESSATION  (not consumed by the calculator)
+# --------------------------------------------------------------------------------------
+cessation:
+  # The 2 December 2024 amendment (FD.SR-III-4-244/2023(B), rule 4.10(1) as substituted,
+  # on file as "Amendmant Rules.pdf"): a spouse's family pension is restricted to ten years
+  # or till re-marriage, whichever is earlier; an issueless spouse draws for life or till
+  # re-marriage; more than one widow share equally. The calculator states the term as a
+  # dated step (FAM-AR-06) for a SPOUSE whose pensioner died on or after the date below.
+  # The notification says "with immediate effect" and nothing about earlier deaths, so for
+  # a death before that date the step says the amendment postdates the death and applies
+  # no term. CONFIRM: whether the amendment reaches earlier deaths, by moving the date.
+  spouse_term_years: 10
+  spouse_term_ends_on_remarriage: true
+  issueless_spouse_for_life: true
+  spouse_term_applies_to_deaths_from: 2024-12-02
+
+  # When a divorced daughter's family pension ceases -- remarriage, a source of income,
+  # a fixed term, or for life.
+  # CONFIRM.
+  daughter_ceases_on: UNSET
+
+# --------------------------------------------------------------------------------------
+# 6. AUTHORITY
+# --------------------------------------------------------------------------------------
+authority:
+  # The notification(s) the values above are taken from. Recorded on every determination
+  # under FMT-04, so a figure can be traced to its rule years later.
+  # The sample bundles cite, without this being confirmation of the values:
+  #   FD-SR-III-4-57/2013  dated 15-05-2013
+  #   FD-SR-III-4-302/2015 dated 19-07-2018
+  #   FD-SR-III-4-101/2020 dated 08-09-2020
+  #   rule 4.6(3) and 4.10, Punjab Civil Services Pension Rules
+  # CONFIRM: which of these govern, and supply the operative text.
+  citation: UNSET

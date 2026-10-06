@@ -1,0 +1,105 @@
+# /etc/systemd/system/qwen3-embedding.service
+#
+# Qwen3-Embedding-4B — retrieval embeddings for the pension document corpus.
+# Last-token pooling, 2560 dims (MRL-truncatable to 32), 32k context.
+# Endpoint: POST /v1/embeddings  (OpenAI-compatible)
+#
+# Query side must carry an instruction or retrieval quality drops 1-5%:
+#   "Instruct: {task_description}\nQuery:{query}"
+# Documents are embedded verbatim, with no instruction prefix.
+[Unit]
+Description=Qwen3-Embedding-4B (vLLM, OpenAI API) on :8093
+After=network-online.target remote-fs.target
+Wants=network-online.target
+# /models is an NFS export from spark-46ef reached through x-systemd.automount.
+#
+# Deliberately NOT a hard mount requirement. That is a Requires= on models.mount, and on
+# 2026-09-04 the boot-time mount lost its race with 46ef/the network and exited 32; systemd then
+# cancelled this unit's start job outright with "Dependency failed". A cancelled job is not a
+# failed service, so Restart=always never fired and the box sat with everything down until someone
+# noticed. /models itself mounted fine 2.5 h later, the moment updatedb happened to touch it.
+#
+# Wants= is soft: a mount that is not ready yet delays this unit instead of killing it, and the
+# ExecStartPre below turns "weights not there" into an ordinary start failure that Restart=always
+# retries every 10 s until 46ef is serving. Reading the path also triggers the automount.
+Wants=models.mount
+After=models.mount
+
+# Starts last of the three, because it is the one that loses the cold-start memory race: at 32k
+# context it needs 4.5 GiB of KV, and on 2026-09-03 it crash-looped twice at boot
+# ("KV cache is needed, which is larger than the available KV cache memory") before Restart=always
+# happened to catch it on the third attempt. qwen3guard.service reports active only once it is
+# serving (its ExecStartPost polls /health), so this After= is a real wait, not just an ordering
+# hint. Ordering only -- no Requires= -- so embedding still starts if guard is stopped or absent.
+After=qwen3guard.service
+
+# Retries may run for minutes if 46ef is slow to boot, so do not rate-limit them:
+# the default 5-starts-per-10s would latch the unit into failed state and defeat the
+# whole point of the retry loop above.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=tmc
+Group=tmc
+WorkingDirectory=/home/tmc/Desktop/Pension-AG/infra
+
+Environment=HOME=/home/tmc
+Environment=HF_HOME=/home/tmc/.cache/huggingface
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_DATASETS_OFFLINE=1
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+Environment=VLLM_NO_USAGE_STATS=1
+Environment=DO_NOT_TRACK=1
+Environment=PATH=/home/tmc/vllm_env/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin
+
+# --runner pooling --convert embed turns the Qwen3ForCausalLM checkpoint into an
+# embedding model; vLLM picks up last-token pooling from 1_Pooling/config.json.
+#
+# 0.14 of 121 GiB unified = ~17 GiB. Measured: 7.6 GiB weights, and 32k context
+# needs 4.5 GiB KV. At 0.10 the engine refuses to start (3.4 GiB KV available,
+# max usable len 24784), so 0.14 is the floor for full 32k plus headroom.
+# --safetensors-load-strategy prefetch: /models reaches this box through x-systemd.automount and
+# appears twice in /proc/mounts under one mount point, autofs before nfs4. vLLM's _get_fs_type keeps
+# the first longest-prefix match, reads the checkpoint filesystem as AUTOFS, and so skips the
+# auto-prefetch it would apply on a recognised NFS mount -- this unit logged exactly that:
+#   "Auto-prefetch is disabled because the filesystem (AUTOFS) is not a recognized network FS"
+# Forcing it back on is worth ~33% of cold-start: 40.5 s vs 60.9 s over 6 cold runs with the page
+# cache evicted (infra/bench-load-strategy.sh, load-strategy-bench.tsv, 2026-09-03). Affects restart
+# time only, never serving. NOT set on qwen3-reranker.service: on 46ef /models is local ext4, where
+# that measurement does not apply.
+#
+# Prefetch reads the whole checkpoint into page cache first, so it needs the checkpoint to fit in
+# 90% of MemAvailable (7.49 GiB here). The boot ordering above is what keeps that true -- this unit loads
+# only after the ones before it have finished claiming memory.
+ExecStartPre=/bin/bash -c 'test -s /models/qwen3-embedding-4b/config.json'
+
+ExecStart=/home/tmc/vllm_env/bin/vllm serve /models/qwen3-embedding-4b \
+  --served-model-name qwen3-embedding-4b \
+  --runner pooling \
+  --convert embed \
+  --max-model-len 32768 \
+  --gpu-memory-utilization 0.14 \
+  --safetensors-load-strategy prefetch \
+  --host 0.0.0.0 \
+  --port 8093
+
+# Health gate, inlined. systemd's "-" prefix makes a non-zero exit non-fatal, so a slow or wedged
+# engine delays this unit but never fails it; timeout(1) bounds the wait because TimeoutStartSec=0
+# gives systemd no deadline of its own. Deliberately uses no "$" so there is nothing for systemd's
+# variable expansion to mangle.
+#
+# This is what makes the After= ordering real: Type=simple would otherwise report "active" the
+# instant the process forks, minutes before the engine serves, and the units would all profile
+# memory at once. On 2026-09-03 that race cost four crash-loops across the two boxes.
+ExecStartPost=-/usr/bin/timeout 900 /bin/bash -c 'until curl -sf -m 3 http://127.0.0.1:8093/health >/dev/null 2>&1; do sleep 5; done'
+
+Restart=always
+RestartSec=10
+TimeoutStartSec=0
+KillMode=mixed
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

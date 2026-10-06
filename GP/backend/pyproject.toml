@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpf-preaudit"
+version = "0.1.0"
+description = "GP Fund AI pre-audit module — deterministic rules engine (Phase 1) for the Office of the Accountant General, Punjab"
+requires-python = ">=3.10"
+# The rules engine itself has NO runtime dependencies. These are for the web layer.
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "httpx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+include = ["gpf*"]

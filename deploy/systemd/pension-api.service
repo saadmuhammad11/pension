@@ -1,0 +1,27 @@
+[Unit]
+Description=AG Punjab Pension API (:8110)
+Documentation=file:/opt/pension/current/docs/DEPLOYMENT.md
+After=network-online.target vllm-qwen3-vl.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pension
+Group=pension
+WorkingDirectory=/opt/pension/current
+EnvironmentFile=/etc/pension/pension.env
+# LibreOffice (Word uploads -> PDF) needs a writable home; /opt is read-only under ProtectSystem.
+Environment=HOME=/var/lib/pension
+ExecStart=/opt/pension/venv/bin/python3 -m api.server 8110
+Restart=always
+RestartSec=5
+# An AI run in progress is lost on stop: check for active runs before any restart (DEPLOYMENT.md §10).
+TimeoutStopSec=60
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pension /var/log/pension
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

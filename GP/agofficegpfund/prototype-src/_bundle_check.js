@@ -1,0 +1,4895 @@
+/* ---- sap.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   SAP EXTRACTS
+   MVP: the section pulls the pay slip and the GPF Final Re-calculation Report
+   from SAP by personnel number and uploads them here. Later a connector fetches
+   them directly. Both routes produce the same SapExtract object, so nothing
+   downstream changes when the connector arrives.
+   ═══════════════════════════════════════════════════════════════════════ */
+const SAP_CONNECTOR = {
+  mode: 'manual-upload',            // 'manual-upload' now; 'sap-connector' in phase 2
+  status: 'Not configured',
+  note: 'Phase 2: automatic retrieval from SAP by personnel number, through the connector described in the build specification.'
+};
+
+function num(v){
+  if (v === null || v === undefined) return null;
+  const s = String(v).replace(/[, ]/g,'').replace(/\/-$/,'').replace(/-$/,'');
+  if (s === '' || isNaN(Number(s))) return null;
+  return Number(s);
+}
+function fmt(n){
+  if (n === null || n === undefined || isNaN(n)) return '';
+  return Number(n).toLocaleString('en-PK', {maximumFractionDigits:0});
+}
+
+/* Text extract format (mirrors an SAP list export saved as text):
+     SAP EXTRACT: PAY SLIP
+     Personnel No: 90000227
+     ...key: value lines...
+     SAP EXTRACT: GPF FINAL RE-CALCULATION REPORT
+     Personnel No: 90000227
+     Start Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance
+     01.07.2025|30.06.2026|...
+   Tabs or pipes are both accepted. JSON {payslip:{..}, recalc:{..}} is also accepted. */
+const PAYSLIP_KEYS = {
+  'personnel no':'persNo', 'pers no':'persNo', 'name':'name', 'designation':'designation', 'cnic':'cnic',
+  'month':'month', 'bps':'bps', 'ddo code':'ddoCode', 'gpf no':'gpfNo', 'old gpf no':'oldGpfNo',
+  'gpf balance':'gpfBalance', 'gpf subscription':'gpfSubscription',
+  'gpf loan instalment':'loanInstalment', 'gpf loan balance':'loanBalance',
+  'osd post':'osdPost', 'employment status':'status', 'bank':'bank', 'basic pay':'basicPay'
+};
+const RECALC_COLS = ['start','end','opening','subscription','adjustments','tempAdvance','recTempAdvance','permanentAdvance','interest','closing'];
+
+function parseSapText(text){
+  const out = { payslip:null, recalc:null, warnings:[] };
+  let section = null, cur = null;
+  text.split(/\r?\n/).forEach(raw=>{
+    const line = raw.trim();
+    if (!line) return;
+    const head = line.toUpperCase();
+    if (head.startsWith('SAP EXTRACT:')){
+      if (head.includes('PAY SLIP')){ section='payslip'; cur = out.payslip = {}; }
+      else if (head.includes('RE-CALCULATION') || head.includes('RECALCULATION')){ section='recalc'; cur = out.recalc = {rows:[]}; }
+      else { section=null; out.warnings.push('Unrecognised section: '+line); }
+      return;
+    }
+    if (!section) return;
+    const cells = line.split(/\t|\|/).map(c=>c.trim());
+    if (section==='recalc' && cells.length >= 10){
+      if (/start/i.test(cells[0])) return;                 // header row
+      const r = {};
+      RECALC_COLS.forEach((k,i)=>{ r[k] = i<2 ? cells[i] : num(cells[i]); });
+      cur.rows.push(r);
+      return;
+    }
+    const m = line.match(/^([^:]+):\s*(.*)$/);
+    if (!m) return;
+    const key = m[1].trim().toLowerCase(), val = m[2].trim();
+    if (section==='payslip'){
+      const k = PAYSLIP_KEYS[key];
+      if (!k){ out.warnings.push('Ignored pay slip line: '+line); return; }
+      cur[k] = ['gpfBalance','gpfSubscription','loanInstalment','loanBalance','basicPay'].includes(k) ? num(val) : val;
+    } else {
+      if (key==='personnel no') cur.persNo = val;
+      else if (key==='gpf reference no') cur.gpfRef = val;
+      else if (key==='report date') cur.reportDate = val;
+      else if (key==='name') cur.name = val;
+    }
+  });
+  return out;
+}
+
+function parseSapFile(name, text){
+  const t = text.trim();
+  if (t.startsWith('{')){
+    const j = JSON.parse(t);
+    return { payslip:j.payslip||null, recalc:j.recalc||null, warnings:[] };
+  }
+  return parseSapText(t);
+}
+
+/* Validate an extract against the case before it is accepted. */
+function checkSapAgainstCase(ex, F){
+  const issues = [];
+  const want = String(F.personnelNo||'').replace(/\D/g,'');
+  [['pay slip',ex.payslip],['re-calculation report',ex.recalc]].forEach(([lab,part])=>{
+    if (!part) return;
+    const got = String(part.persNo||'').replace(/\D/g,'');
+    if (!got) issues.push('The '+lab+' carries no personnel number.');
+    else if (want && got !== want) issues.push('The '+lab+' is for personnel no. '+part.persNo+', not '+F.personnelNo+'. It belongs to a different employee.');
+  });
+  return issues;
+}
+
+/* Last row of the re-calculation report and derived positions. */
+function recalcSummary(recalc){
+  if (!recalc || !recalc.rows || !recalc.rows.length) return null;
+  const rows = recalc.rows;
+  const last = rows[rows.length-1];
+  let tempDrawn=0, tempRec=0;
+  rows.forEach(r=>{ tempDrawn += (r.tempAdvance||0); tempRec += (r.recTempAdvance||0); });
+  return { last, tempDrawn, tempRec, tempOutstanding: tempDrawn - tempRec, rows };
+}
+
+/* A downloadable text template the section can fill from SAP screens. */
+function sapTemplate(F){
+  return 'SAP EXTRACT: PAY SLIP\nPersonnel No: '+(F.personnelNo||'')+
+    '\nName: \nDesignation: \nCNIC: \nMonth: \nBPS: \nDDO Code: \nGPF No: \nOld GPF No: \nGPF Balance: \nGPF Subscription: '+
+    '\nGPF Loan Instalment: \nGPF Loan Balance: \nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: '+(F.personnelNo||'')+
+    '\nGPF Reference No: \nReport Date: \n'+
+    'Start Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n';
+}
+
+/* ---- doa.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   DELEGATION OF AUTHORITY (DOA) REGISTER
+   Who may sign, for or on behalf of each department authority, and their
+   specimen signatures. The AG Office will supply the real register. Until
+   then the entries below are PROVISIONAL: built from the signatories that
+   appear in the eight case files, with no specimen on record. A provisional
+   entry never raises a hard stop on its own; it creates a verification task.
+   ═══════════════════════════════════════════════════════════════════════ */
+const DOA_ABBR = [
+  [/\bs\.?\s?p\b\.?/g,'superintendent of police'], [/\bd\.?i\.?g\b\.?/g,'deputy inspector general'],
+  [/\bc\.?e\.?o\b\.?/g,'chief executive officer'], [/\bd\.?e\.?a\b\.?/g,'district education authority'],
+  [/\bc\.?t\.?o\b\.?/g,'chief traffic officer'], [/\bs\.?t\.?o\b\.?/g,'senior traffic officer'],
+  [/\bd\.?d\.?o\b\.?/g,'drawing and disbursing officer'], [/\bd\.?a\.?o\b\.?/g,'district accounts officer'],
+  [/\badmn\b\.?/g,'admin'], [/\bhq\b|\bheadquarters?\b|\bheadquarter\b/g,'headquarters'],
+  [/\bf\s*\/\s*o\b|\bfor\b|\bon behalf of\b/g,' ']
+];
+function doaNorm(s){
+  let t = String(s||'').toLowerCase().replace(/[(),.:;]/g,' ');
+  DOA_ABBR.forEach(([re,rep])=>{ t = t.replace(re, rep); });
+  return t.replace(/\s+/g,' ').trim();
+}
+function doaScore(a, b){
+  const A = new Set(doaNorm(a).split(' ').filter(w=>w.length>2));
+  const B = new Set(doaNorm(b).split(' ').filter(w=>w.length>2));
+  if (!A.size || !B.size) return 0;
+  let hit = 0; A.forEach(w=>{ if (B.has(w)) hit++; });
+  return hit / Math.min(A.size, B.size);
+}
+
+/* Look up the authority a document is issued in the name of, then the person who
+   actually signed it. Returns what the register says, never a verdict on the ink. */
+function doaLookup(authorityText, signatoryText){
+  let best = null, bs = 0;
+  (DOA.authorities||[]).forEach(a=>{
+    const s = Math.max(doaScore(authorityText, a.authority), ...(a.aliases||[]).map(x=>doaScore(authorityText, x)));
+    if (s > bs){ bs = s; best = a; }
+  });
+  if (!best || bs < 0.6) return { status:'authority_not_listed', authority:null, signatory:null };
+  let sig = null, ss = 0;
+  best.signatories.forEach(g=>{
+    const s = doaScore(signatoryText, g.post + ' ' + (g.name||''));
+    if (s > ss){ ss = s; sig = g; }
+  });
+  if (!sig || ss < 0.6) return { status:'signatory_not_listed', authority:best, signatory:null };
+  return { status: sig.specimen ? 'listed_with_specimen' : 'listed_no_specimen', authority:best, signatory:sig };
+}
+
+function doaStatusText(m){
+  if (m.status==='authority_not_listed') return 'The authority is not yet on the DOA register.';
+  if (m.status==='signatory_not_listed') return 'The person who signed is not listed as an approved signatory for '+m.authority.authority+'.';
+  const who = m.signatory.mayFor ? m.signatory.post+' is on the register as authorised to sign for '+m.authority.authority+'.'
+                                 : m.signatory.post+' is on the register for '+m.authority.authority+', signing in own name.';
+  if (m.status==='listed_no_specimen') return who+' No specimen signature is on the register yet.';
+  return who+' Compare the signature with the specimen.';
+}
+
+/* ---- doa_seed.js ---- */
+/* PROVISIONAL register: built from the signatories seen in the eight case files.
+   Replace with the office's DOA list. No specimen is on record for anyone yet. */
+const DOA = {
+  status: 'provisional',
+  version: 'Provisional, built on 15-09-2026 from the signatories in the eight case files. The office will supply the approved list and specimens.',
+  authorities: [
+    { id:'police-dig-ops', dept:'Punjab Police', authority:'Deputy Inspector General of Police, Operations, Lahore', aliases:['DIG Operations Lahore'],
+      source:'Refundable advance: sanction and Form 05',
+      signatories:[ { id:'dig', post:'Deputy Inspector General of Police, Operations, Lahore', name:'', mayFor:false, powers:'Sanction of GP Fund advances', specimen:null },
+                    { id:'sphq', post:'SP Headquarters', name:'', mayFor:true, powers:'Signs advance sanctions and Form 05 for the DIG', specimen:null } ] },
+    { id:'sed-dea-lahore', dept:'School Education Department', authority:'Chief Executive Officer, District Education Authority Lahore', aliases:['CEO (DEA) Lahore'],
+      source:'Non-refundable advance: sanction',
+      signatories:[ { id:'ceo', post:'Chief Executive Officer (DEA) Lahore', name:'', mayFor:false, powers:'Sanction of GP Fund advances', specimen:null },
+                    { id:'adadmin', post:'Assistant Director (Admin)', name:'', mayFor:true, powers:'Signs advance sanctions for the CEO', specimen:null } ] },
+    { id:'gghs-ra-bazar', dept:'School Education Department', authority:'Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore',
+      source:'Non-refundable advance: Form 06 (DDO LV6280)',
+      signatories:[ { id:'shm', post:'Senior Headmistress', name:'', mayFor:false, powers:'DDO LV6280: change forms', specimen:null } ] },
+    { id:'hmd-lahore', dept:'Communication and Works', authority:'Executive Engineer, Highway Mechanical Division, Lahore',
+      source:'Final payment, non-gazetted: GPF-10 and Form 06 (DDO LO5361)',
+      signatories:[ { id:'xen', post:'Executive Engineer, Highway Mechanical Division', name:'', mayFor:false, powers:'DDO LO5361: GPF-10, change forms', specimen:null } ] },
+    { id:'cto-lahore', dept:'Punjab Police, City Traffic Police', authority:'Chief Traffic Officer, Lahore',
+      source:'Final payment, dismissal: Form 06 (DDO L04087)',
+      signatories:[ { id:'cto', post:'Chief Traffic Officer, Lahore', name:'', mayFor:false, powers:'DDO L04087: change forms, forwarding', specimen:null } ] },
+    { id:'pimh', dept:'Specialized Healthcare and Medical Education', authority:'Executive Director, Punjab Institute of Mental Health, Lahore',
+      source:'Residual payment: Form 06 (DDO L04578)',
+      signatories:[ { id:'ed', post:'Executive Director, Punjab Institute of Mental Health', name:'', mayFor:false, powers:'DDO L04578: change forms', specimen:null } ] },
+    { id:'gac-mustafabad', dept:'Higher Education Department', authority:'Principal, Govt. Associate College (W) Mustafabad, Lahore',
+      source:'Final payment, death case: GPF-10 and Form 06',
+      signatories:[ { id:'principal', post:'Principal, Govt. Associate College (W) Mustafabad', name:'', mayFor:false, powers:'DDO: GPF-10, change forms, attestation', specimen:null } ] },
+    { id:'treasury-lahore', dept:'Finance Department, Treasury', authority:'Treasury Office, Lahore',
+      source:'Missing credits: verification of challans',
+      signatories:[ { id:'dto', post:'Deputy Treasury Officer, Lahore', name:'', mayFor:false, powers:'Verification of challans', specimen:null } ] },
+    { id:'dpr-fsd', dept:'Directorate General Public Relations', authority:'Director Public Relations, Faisalabad',
+      source:'Balance transfer: proforma',
+      signatories:[ { id:'dpr', post:'Director Public Relations, Faisalabad (DDO)', name:'', mayFor:false, powers:'Balance transfer proforma', specimen:null } ] },
+    { id:'dao-fsd', dept:'Finance Department, District Accounts', authority:'District Accounts Office, Faisalabad', aliases:['District Accounts Officer Faisalabad'],
+      source:'Balance transfer: DAO confirmation',
+      signatories:[ { id:'dao', post:'District Accounts Officer, Faisalabad', name:'', mayFor:false, powers:'Confirms GP Fund account, forwards to AG', specimen:null } ] }
+  ]
+};
+
+/* ---- engine.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   RULES ENGINE
+   The reading stage produces FACTS. Plain rules turn facts into results.
+   Nothing in here reads an image or calls a model. An upload changes the
+   facts; the case is then re-evaluated from scratch and compared with the
+   previous run, so a cured observation is closed by the same rule that
+   raised it.
+
+   Result status vocabulary
+     ok    satisfied
+     sub   satisfied by an accepted substitute (e.g. challans for a certificate)
+     hard  not satisfied, the case cannot advance      (goes on the rejection form)
+     adv   observation, does not block                  (advisory memorandum)
+     conf  officer to verify (signature, specimen, thumb impression, QR online)
+     sap   awaiting SAP extract, action for this section, not a department defect
+     na    not applicable
+   ═══════════════════════════════════════════════════════════════════════ */
+const STLAB = {
+  ok:['ok','Satisfied'], sub:['sub','Satisfied by substitute'], hard:['hard','Not satisfied'],
+  adv:['adv','Observation'], conf:['conf','Officer to verify'], sap:['sap','Awaiting SAP extract'],
+  na:['pend','Not applicable']
+};
+const ISSUE = s => s==='hard' || s==='adv';
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+/* Evaluate every applicable check against the facts. */
+function evaluate(F){
+  const out = [];
+  const all = CHECKS.concat((F.custom||[]).map(c=>CUSTOM_CHECKS[c]).filter(Boolean));
+  all.forEach(ch=>{
+    let applies = false;
+    try { applies = ch.applies(F); } catch(e){ applies = false; }
+    if (!applies) return;
+    let r;
+    try { r = ch.run(F); } catch(e){ r = {status:'conf', finding:'The rule could not be evaluated on the facts available ('+e.message+'). Check by hand.'}; }
+    if (!r) return;
+    (Array.isArray(r) ? r : [r]).forEach(one=>{
+      if (!one) return;
+      out.push(Object.assign({
+        id: ch.id, group: ch.group, ref: ch.ref, code: ch.code || ch.ref, title: ch.title,
+        checklist: ch.checklist || null, doc: ch.title, evidence: [], cure: null
+      }, one, { id: one.sub ? ch.id + ':' + one.sub : ch.id }));
+    });
+  });
+  return out;
+}
+
+function lists(results){
+  return {
+    hard: results.filter(r=>r.status==='hard'),
+    adv:  results.filter(r=>r.status==='adv'),
+    obs:  results.filter(r=>ISSUE(r.status)).sort((x,y)=>(x.status==='hard'?0:1)-(y.status==='hard'?0:1)),
+    conf: results.filter(r=>r.status==='conf'),
+    sap:  results.filter(r=>r.status==='sap'),
+    ok:   results.filter(r=>r.status==='ok' || r.status==='sub')
+  };
+}
+
+/* Compare two runs of the same case. */
+function diffRuns(prev, next){
+  const pm = {}; prev.forEach(r=>pm[r.id]=r);
+  const nm = {}; next.forEach(r=>nm[r.id]=r);
+  const d = { resolved:[], raised:[], changed:[], stillOpen:[] };
+  next.forEach(r=>{
+    const p = pm[r.id];
+    const was = p ? p.status : null;
+    const openNow = ISSUE(r.status) || r.status==='conf' || r.status==='sap';
+    const openBefore = was && (ISSUE(was) || was==='conf' || was==='sap');
+    if (openBefore && !openNow) d.resolved.push({r, was});
+    else if (!openBefore && openNow) d.raised.push({r, was});
+    else if (openBefore && openNow && was !== r.status) d.changed.push({r, was});
+    else if (openNow) d.stillOpen.push({r, was});
+  });
+  prev.forEach(p=>{
+    if (!nm[p.id] && (ISSUE(p.status) || p.status==='conf' || p.status==='sap'))
+      d.resolved.push({r:Object.assign({}, p, {status:'na'}), was:p.status});
+  });
+  return d;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DELEGATION OF POWERS INSIDE THIS OFFICE (who may dispose of what)
+   ═══════════════════════════════════════════════════════════════════════ */
+const OFFICERS = [
+  { id:'da',  name:'Muhammad Adnan', desig:'Dealing Assistant, GP Fund-I', grade:'BS-16', level:1 },
+  { id:'ao',  name:'Sadia Rehman',   desig:'Accounts Officer, GP Fund-I',  grade:'BS-18', level:2 },
+  { id:'dag', name:'Fatima Hameed',  desig:'Deputy Accountant General (Funds)', grade:'BS-20', level:3 }
+];
+let OFFICER = OFFICERS[1];
+
+function may(action, sev){
+  const L = OFFICER.level;
+  if (action==='uphold') return true;
+  if (action==='refer')  return L <= 2;
+  if (action==='correct') return L >= 2;
+  if (action==='waive')  return sev==='hard' ? L >= 3 : L >= 2;
+  if (action==='verify') return L >= 2;
+  if (action==='upload') return true;
+  return false;
+}
+function whoCan(action, sev){
+  if (action==='correct') return 'the Accounts Officer or above';
+  if (action==='verify')  return 'the Accounts Officer or above';
+  if (action==='waive')   return sev==='hard' ? 'the Deputy Accountant General (Funds)' : 'the Accounts Officer or above';
+  return '';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CASE STATE
+   ═══════════════════════════════════════════════════════════════════════ */
+const STATE = {};
+function stamp(){
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return p(d.getDate())+'-'+p(d.getMonth()+1)+'-'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function newState(k, withoutSap){
+  const F = clone(CASES[k]);
+  if (withoutSap){ F.sap = null; F.persNos = (F.persNos||[]).filter(x=>!/SAP|Re-calculation/i.test(x.doc)); }
+  return { k, F, withoutSap: !!withoutSap, version:1, results:[], prev:null, lastDiff:null,
+           history:[], disp:{}, caseDisp:null, caseNote:'', audit:[], dak:{}, returns:0, issued:false, uploads:[] };
+}
+function st(k){ return STATE[k]; }
+function logAudit(k, what, detail){
+  STATE[k].audit.push({ at:stamp(), by:OFFICER.name, desig:OFFICER.desig, grade:OFFICER.grade, what, detail });
+}
+
+function runCase(k, reason){
+  const s = STATE[k];
+  const next = evaluate(s.F);
+  if (s.results.length){
+    s.prev = s.results;
+    s.lastDiff = diffRuns(s.results, next);
+    s.version += 1;
+  }
+  s.results = next;
+  const L = lists(next);
+  s.history.push({ v:s.version, at:stamp(), by:OFFICER.name, desig:OFFICER.desig, reason,
+                   hard:L.hard.length, adv:L.adv.length, conf:L.conf.length, sap:L.sap.length,
+                   resolved: s.lastDiff && s.version>1 ? s.lastDiff.resolved.length : 0,
+                   raised: s.lastDiff && s.version>1 ? s.lastDiff.raised.length : 0 });
+  /* dispositions on observations that no longer exist are kept, marked cured */
+  Object.keys(s.disp).forEach(id=>{
+    const r = next.find(x=>x.id===id);
+    if (!r || !ISSUE(r.status)) s.disp[id].cured = true; else delete s.disp[id].cured;
+  });
+  return s.lastDiff;
+}
+
+/* live position of the case after dispositions */
+function position(k){
+  const s = STATE[k], L = lists(s.results);
+  let hard=0, adv=0, waived=0, corrected=0, referred=0, open=0;
+  L.obs.forEach(o=>{
+    const d = s.disp[o.id];
+    if (d && d.action==='waive'){ waived++; return; }
+    if (d && d.action==='correct'){ corrected++; return; }
+    if (d && d.action==='refer') referred++;
+    if (o.status==='hard') hard++; else adv++;
+    if (!d) open++;
+  });
+  return { hard, adv, waived, corrected, referred, open, total:L.obs.length,
+           conf:L.conf.length, sap:L.sap.length, mayAdvance: hard===0 };
+}
+
+/* ---- rules_common.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   RULE CATALOGUE, PART 1: rules that apply across case families
+   ref names the circular item and/or the office clarification (R1 to R15,
+   AG Punjab, 15-09-2026). code is what prints on the rejection form.
+   A run() may return one result or an array; array items carry a 'sub'
+   key so each keeps a stable id across reprocessing.
+   ═══════════════════════════════════════════════════════════════════════ */
+const CHECKS = [];
+const CUSTOM_CHECKS = {};
+function check(def){ CHECKS.push(def); }
+function ev(page, label, crop, bbox){ return { page, label, crop:crop||null, bbox:bbox||null }; }
+const KIND = (F, ...k) => k.includes(F.kind);
+const FINALS = ['final','death','dismissal','residual'];
+const ADVANCES = ['refundable','nonrefundable'];
+const digits = v => String(v||'').replace(/\D/g,'');
+function nameKey(n){ return String(n||'').toLowerCase().replace(/\b(mr|mrs|ms|mst|miss|dr)\b\.?/g,'').replace(/[^a-z]/g,''); }
+function sameName(a,b){
+  const x = nameKey(a), y = nameKey(b);
+  if (!x || !y) return null;
+  return x === y || x.includes(y) || y.includes(x);
+}
+function verified(F, id){ return (F.verifications||{})[id] || null; }
+function verifiedResult(v, okText, badText){
+  return v.ok
+    ? { status:'ok', finding: okText + ' Verified by ' + v.by + ' (' + v.desig + ') on ' + v.at + (v.note ? ': ' + v.note : '.') }
+    : { status:'hard', finding: badText + ' Recorded by ' + v.by + ' (' + v.desig + ') on ' + v.at + (v.note ? ': ' + v.note : '.') };
+}
+
+/* ── R1, R8, R11: SAP extracts ─────────────────────────────────────────── */
+check({ id:'SAP-PAYSLIP', group:'sap', ref:'R1 · R8', checklist:'SAP', title:'SAP pay slip of the subscriber',
+  applies: F => true,
+  run: F => {
+    const p = F.sap && F.sap.payslip;
+    if (p){
+      const from = F.sap.source === 'case' ? 'found in the case at page ' + p.page : 'uploaded from SAP (' + F.sap.file + ')';
+      return { status:'ok', finding:'Pay slip for ' + (p.month || 'the month shown') + ', personnel no. ' + p.persNo + ', ' + from + '.',
+               evidence: p.page ? [ev(p.page, 'SAP pay slip')] : [] };
+    }
+    return { status:'sap', finding:'No SAP pay slip is in the case. Pull it from SAP against personnel no. ' + (F.personnelNo || '(not stated)') + ' and upload it on the SAP extracts step.',
+             remedy:'Action for this section. Not a defect of the department.', cure:{ kind:'sap' } };
+  }});
+
+check({ id:'SAP-RECALC', group:'sap', ref:'R1 · R11', checklist:'SAP', title:'GPF Final Re-calculation Report from SAP',
+  applies: F => true,
+  run: F => {
+    const r = F.sap && F.sap.recalc;
+    const need = KIND(F, ...FINALS) ? 'Required with the pay slip for a final payment (R11).' :
+                 KIND(F, ...ADVANCES) ? 'Needed to establish the balance for the 80% test and the advance position.' :
+                 'Shows whether the months in question are already credited.';
+    if (r && r.rows && r.rows.length){
+      const last = r.rows[r.rows.length-1];
+      const from = F.sap.source === 'case' ? 'found in the case at page ' + r.page : 'uploaded from SAP (' + F.sap.file + ')';
+      return { status:'ok', finding:'Report ' + (r.reportDate ? 'dated ' + r.reportDate + ', ' : '') + from + '. Last period ' + last.start + ' to ' + last.end +
+               ', closing balance Rs ' + fmt(last.closing) + '. ' + need, evidence: r.page ? [ev(r.page, 'GPF Final Re-calculation Report')] : [] };
+    }
+    return { status:'sap', finding:'No GPF Final Re-calculation Report is in the case. ' + need,
+             remedy:'Pull the report from SAP against personnel no. ' + (F.personnelNo || '(not stated)') + ' and upload it.', cure:{ kind:'sap' } };
+  }});
+
+check({ id:'SAP-IDENTITY', group:'identity', ref:'R1', title:'SAP extract belongs to this subscriber',
+  applies: F => !!(F.sap && (F.sap.payslip || F.sap.recalc)),
+  run: F => {
+    const want = digits(F.personnelNo), bad = [];
+    [['pay slip', F.sap.payslip], ['re-calculation report', F.sap.recalc]].forEach(([l, x])=>{
+      if (x && x.persNo && want && digits(x.persNo) !== want) bad.push('the ' + l + ' is for personnel no. ' + x.persNo);
+    });
+    if (bad.length) return { status:'hard', code:'R1', finding:'The case is for personnel no. ' + F.personnelNo + ' but ' + bad.join(' and ') + '.',
+                             remedy:'Pull the extract for the correct personnel number.', cure:{ kind:'sap' } };
+    return { status:'ok', finding:'Personnel no. ' + F.personnelNo + ' on every SAP extract.' };
+  }});
+
+/* ── R3: covering letter is never an observation ───────────────────────── */
+check({ id:'COVER', group:'checklist', ref:'A2-i · A3-ii · A4-i · R3', title:'Covering / forwarding letter',
+  checklist: F => KIND(F,'balance_transfer') ? 'A3-ii' : KIND(F,'missing_credits') ? 'A4-i' : 'A2-i',
+  applies: F => !KIND(F, ...ADVANCES),
+  run: F => {
+    const c = (F.docs && F.docs.covering) || {};
+    const what = c.present ? (c.nature || 'Forwarding instrument') + (c.author ? ' from ' + c.author : '') + (c.page ? ', page ' + c.page : '') + '.'
+                           : 'No separate letter on file.';
+    return { status:'ok', finding: what + ' Accepted under office practice: the covering letter is the authority’s notice to process the case and is not examined further (R3).',
+             evidence: c.page ? [ev(c.page, 'Covering letter', c.crop)] : [] };
+  }});
+
+/* ── R5: attestation of CNIC copies and pay slips is not required ─────── */
+check({ id:'CNIC-ATTEST', group:'identity', ref:'R5', title:'Attestation of CNIC copies',
+  applies: F => ((F.docs && F.docs.cnics) || []).length > 0,
+  run: F => F.docs.cnics.map((c, i)=>{
+    const who = c.whose || 'subscriber';
+    if (c.attested) return { sub:i, status:'ok', doc:'CNIC copy, ' + who,
+      finding:'Copy of ' + who + '’s CNIC (' + (c.type==='smart' ? 'smart card' : 'older card') + ', page ' + c.page + ') is attested' + (c.attestedBy ? ' by ' + c.attestedBy : '') + '.',
+      evidence:[ev(c.page, 'CNIC copy', c.crop)] };
+    return { sub:i, status:'adv', code:'R5', doc:'CNIC copy, ' + who,
+      finding:'The copy of ' + who + '’s CNIC at page ' + c.page + ' is not attested. Attestation is not required' + (c.type==='smart' ? ', and this is a smart card whose QR code is checked below' : '') + ', so this is noted only.',
+      remedy:'None required. Noted for the department’s record.', evidence:[ev(c.page, 'CNIC copy', c.crop)] };
+  })});
+
+check({ id:'PAYSLIP-ATTEST', group:'identity', ref:'R5', title:'Attestation of pay slip copy',
+  applies: F => !!(F.sap && F.sap.source === 'case' && F.sap.payslip && F.sap.payslip.attested === false),
+  run: F => ({ status:'adv', code:'R5', finding:'The pay slip copy at page ' + F.sap.payslip.page + ' is not attested. A pay slip does not need attestation, so this is noted only.',
+               remedy:'None required.', evidence:[ev(F.sap.payslip.page, 'Pay slip')] }) });
+
+/* ── R10: every QR code is scanned and its content checked ─────────────── */
+check({ id:'QR', group:'qr', ref:'R10 · B1-iii', title:'QR codes',
+  applies: F => (F.qr || []).length > 0,
+  run: F => F.qr.map(q=>{
+    const base = { sub:q.id, doc:'QR code, ' + q.doc + ' (page ' + q.page + ')', evidence:[ev(q.page, 'QR code', q.crop)] };
+    const v = verified(F, 'QR:' + q.id);
+    const sym = q.symbology || 'QR code';
+    if (q.notSupplied){
+      if (v) return Object.assign(base, verifiedResult(v, 'Missing side supplied and its code checked.', 'Code on the supplied side does not agree with the document.'));
+      return Object.assign(base, { status:'adv', code:'R10', finding: q.notSupplied + ' The ' + sym + ' on it cannot be scanned, so it is flagged as an observation.',
+        remedy: q.remedy || 'Upload the missing side; the code is then scanned and checked.', cure:{ kind:'qr', qid:q.id } });
+    }
+    if (!q.decoded && !/QR/i.test(sym))
+      return Object.assign(base, { status:'na', doc:sym + ', ' + q.doc + ' (page ' + q.page + ')',
+        finding:'A ' + sym + ' is printed on the ' + q.doc + ' but could not be read from this copy' + (q.why ? ' (' + q.why + ')' : '') + '. It is not a QR code, so it is recorded only and not raised (R10 covers QR codes).' + (q.readable ? ' The printed text beside it reads ' + q.readable + '.' : '') });
+    if (!q.decoded){
+      if (v) return Object.assign(base, verifiedResult(v, sym + ' checked on the original.', sym + ' on the original does not verify the document.'));
+      return Object.assign(base, { status:'adv', code:'R10', finding:'A ' + sym + ' is printed on the ' + q.doc + ' but could not be read from this copy' + (q.why ? ' (' + q.why + ')' : '') +
+        '. Its content cannot be checked against the document, so it is flagged as an observation.' + (q.readable ? ' The printed text beside it reads ' + q.readable + '.' : ''),
+        remedy: q.remedy || 'Upload a clearer copy, or scan the original with the office reader; the case is then re-checked.', cure:{ kind:'qr', qid:q.id } });
+    }
+    const bad = (q.compare || []).filter(c=>c.match === false);
+    const good = (q.compare || []).filter(c=>c.match === true);
+    if (bad.length) return Object.assign(base, { status:'hard', code: q.codeOnMismatch || 'R10',
+      finding:'QR code decoded. It disagrees with the document: ' + bad.map(c=>c.field + ' reads ' + c.qrVal + ' in the QR code but ' + c.docVal + ' on the ' + c.docLabel).join('; ') + '.',
+      remedy: q.remedyOnMismatch || 'Obtain a corrected document that agrees with the QR record.', payload:q.payload });
+    if (q.route === 'online'){
+      if (v) return Object.assign(base, verifiedResult(v, 'Decoded link opened on the verification terminal; the portal record matches the document.', 'Portal record does not match the document.'));
+      if (q.portal && q.portal.ok)
+        return Object.assign(base, { status:'ok', payload:q.payload, finding:'QR code decoded to ' + q.host + ' and verified on the issuing portal on ' + q.portal.checkedOn + ': ' + q.portal.result });
+      if (q.portal && q.portal.ok === false)
+        return Object.assign(base, { status:'adv', code:'R10', payload:q.payload,
+          finding:'QR code decoded to a verification link on ' + q.host + ', but the portal would not return the record (' + q.portal.result + '). The document is not verified, so it is flagged as an observation.',
+          remedy:'Verify on the office terminal with access to ' + q.host + ', or obtain the verified printout, and record the result.', cure:{ kind:'verify', vid:'QR:' + q.id } });
+      return Object.assign(base, { status:'conf', payload:q.payload,
+        finding:'QR code decoded to a verification link on ' + q.host + '. ' + (good.length ? 'Its reference agrees with the document. ' : '') +
+                'The portal page itself has to be opened to complete verification, which cannot be done from inside the air-gapped system.',
+        remedy:'Open the link on the office verification terminal and record whether the portal record matches.', cure:{ kind:'verify', vid:'QR:' + q.id } });
+    }
+    return Object.assign(base, { status:'ok', payload:q.payload,
+      finding:'QR code decoded and checked against the document: ' + (good.length ? good.map(c=>c.field + ' ' + c.qrVal).join(', ') + ' agree.' : 'content recorded.') });
+  })});
+
+check({ id:'QR-SANCTION', group:'qr', ref:'B1-iii · R10', code:'B1-iii', title:'QR-coded sanction (Health, Education, Police)',
+  applies: F => KIND(F, ...ADVANCES) && F.docs && F.docs.sanction && F.docs.sanction.present && /health|education|police/i.test(F.docs.sanction.dept || ''),
+  run: F => {
+    const s = F.docs.sanction;
+    const q = (F.qr || []).find(x=>x.id === s.qrId);
+    if (q && q.decoded && !(q.compare || []).some(c=>c.match === false))
+      return { status:'ok', finding:'The sanction carries a QR code. It was decoded and agrees with the order (see QR codes).', evidence:[ev(q.page, 'Sanction QR', q.crop)] };
+    if (q) return null;                        /* the QR rule above carries the finding */
+    return { status:'na', finding:'The ' + s.dept + ' sanction at page ' + s.page + ' carries no QR code. B1-iii applies only to a QR-coded sanction that the department has not verified, so nothing is raised.',
+             evidence:[ev(s.page, 'Sanction')] };
+  }});
+
+/* ── R4: signatories against the delegation of authority register ──────── */
+check({ id:'DOA', group:'signature', ref:'R4 · B1-ii · B1-vi · B2-iv', title:'Signatories and delegation of authority',
+  applies: F => (F.signatures || []).some(g=>['sanctioning','ddo','certifying'].includes(g.role)),
+  run: F => F.signatures.filter(g=>['sanctioning','ddo','certifying'].includes(g.role)).map(g=>{
+    const m = doaLookup(g.authority, g.signedBy);
+    const base = { sub:g.id, doc:g.roleLabel + ', ' + g.doc + ' (page ' + g.page + ')', evidence:[ev(g.page, 'Signature and stamp', g.crop)], doa:m, sig:g };
+    const code = g.role === 'sanctioning' ? (KIND(F,'refundable') ? 'B1-ii' : 'B2-iv') : 'R4';
+    const v = verified(F, 'DOA:' + g.id);
+    const who = g.signedBy + (g.forMarker ? ' for ' + g.authority : '');
+    if (v) return Object.assign(base, verifiedResult(v, who + ': authority and signature confirmed against the DOA register.', who + ': not an approved signatory, or the signature does not match the specimen.'), v.ok ? {} : { code });
+    if (m.status === 'signatory_not_listed' && DOA.status === 'final')
+      return Object.assign(base, { status:'hard', code, finding: doaStatusText(m) + ' Signed by ' + who + '.',
+        remedy:'Obtain the document under the signature of an approved signatory.' });
+    return Object.assign(base, { status:'conf', finding:'Signed by ' + who + '. ' + doaStatusText(m) + (DOA.status === 'final' ? '' : ' The register is provisional until the office supplies its DOA list.'),
+      remedy: m.status === 'listed_with_specimen' ? 'Compare the signature with the specimen and record the result.' : 'Confirm the signatory’s authority, and add the specimen to the register when received.',
+      cure:{ kind:'verify', vid:'DOA:' + g.id } });
+  })});
+
+/* ── R7: thumb impressions cannot be matched to a CNIC copy ────────────── */
+check({ id:'THUMB', group:'signature', ref:'R7', title:'Thumb impression in place of a signature',
+  applies: F => (F.thumbs || []).length > 0,
+  run: F => F.thumbs.map(t=>{
+    const base = { sub:t.id, doc:'Thumb impression, ' + t.doc + ' (page ' + t.page + ')', evidence:[ev(t.page, 'Thumb impression', t.crop)] };
+    const v = verified(F, 'THUMB:' + t.id);
+    if (v) return Object.assign(base, verifiedResult(v, 'Identity of the person who thumbed (' + t.whose + ') confirmed.', 'Identity of the person who thumbed could not be confirmed.'));
+    return Object.assign(base, { status:'conf',
+      finding:t.whose + ' has thumbed the ' + t.doc + ' instead of signing. The module does not match thumb impressions to CNIC copies: smart cards carry no fingerprint, and the scans are far below the resolution fingerprint comparison needs.',
+      remedy:'Confirm identity through NADRA biometric verification or the attesting officer’s certificate on the impression, and record which.', cure:{ kind:'verify', vid:'THUMB:' + t.id } });
+  })});
+
+/* ── R6: subscriber signature on the change form against the CNIC ──────── */
+check({ id:'SIG-CNIC', group:'signature', ref:'R6', title:'Subscriber signature on the change form matches the CNIC',
+  applies: F => KIND(F, ...ADVANCES) && F.docs && F.docs.changeForm && F.docs.changeForm.present,
+  run: F => {
+    const cf = F.docs.changeForm;
+    const card = (F.docs.cnics || []).find(c=>(c.whose || 'subscriber') === 'subscriber');
+    const pair = { left:{ label:'Specimen signature, ' + cf.label + ' p' + cf.page, crop:cf.sigCrop }, right:{ label:'Holder’s signature, CNIC p' + (card ? card.page : '?'), crop: card ? card.sigCrop : null } };
+    if (cf.sigKind === 'thumb') return { status:'na', finding:'Thumb impression used; see the thumb impression check (R7).' };
+    if (!cf.sigKind || cf.sigKind === 'none')
+      return { status:'hard', code: KIND(F,'refundable') ? 'B1-vii' : 'B2-v', finding:'The subscriber has not signed the ' + cf.label + '.',
+               remedy:'Obtain the subscriber’s signature on the form.', evidence:[ev(cf.page, cf.label)], cure:{ kind:'doc', docType:cf.label, fields:[{k:'signed', label:'Subscriber has signed', type:'yesno'}], apply:'form-signed' } };
+    if (!card) return { status:'hard', code:'A1-ii', finding:'No CNIC copy of the subscriber is on file to compare the signature against.', remedy:'Obtain a copy of the subscriber’s CNIC.',
+                        cure:{ kind:'doc', docType:'CNIC copy', fields:[{k:'number', label:'CNIC number on the copy', type:'text', expect:cf.cnic}], apply:'add-cnic' } };
+    const v = verified(F, 'SIG-CNIC');
+    if (v) return Object.assign(verifiedResult(v, 'Signature on the ' + cf.label + ' matches the holder’s signature on the CNIC.', 'Signature on the ' + cf.label + ' does not match the CNIC.'), { pair, code:'R6' });
+    return { status:'conf', pair, finding:'Compare the subscriber’s specimen signature on the ' + cf.label + ' with the holder’s signature on the CNIC. The module places them side by side; the officer decides.',
+             remedy:'Record whether the signatures match.', cure:{ kind:'verify', vid:'SIG-CNIC' }, evidence:[ev(cf.page, cf.label, cf.sigCrop), ev(card.page, 'CNIC', card.sigCrop)] };
+  }});
+
+/* ---- rules_family.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   RULE CATALOGUE, PART 2: rules by case family
+   ═══════════════════════════════════════════════════════════════════════ */
+const PARAMS = {
+  officeCapPct: 80,                  /* office statement of 15-09-2026, flagged against the Rules */
+  claimTolerance: 1
+};
+
+/* Advance limits as the Punjab GP Fund Rules 1978 (Compendium 2008) actually set them.
+   pct: share of the balance; months: months of pay; combine: which of the two governs. */
+const ADV_LIMITS = {
+  '1.14(1)(c)(i)':  { label:'Temporary advance, general purposes (illness, passage, ceremonies, Haj, other)', pct:50, months:3, combine:'min', src:'Rule 1.14(1)(c)(i)', relaxable:'only for special reasons recorded in writing, never for purpose (a)(vi)' },
+  '1.14(1)(d)(i)':  { label:'Temporary advance for a plot or house', pct:80, months:24, combine:'min', src:'Rule 1.14(1)(d)(i)' },
+  '1.14(1)(e)(i)-car':        { label:'Temporary advance for a car', pct:50, months:12, combine:'min', src:'Rule 1.14(1)(e)(i)' },
+  '1.14(1)(e)(i)-motorcycle': { label:'Temporary advance for a scooter or motorcycle', pct:50, months:6, combine:'min', src:'Rule 1.14(1)(e)(i)' },
+  '1.14(1)(e)(i)-bicycle':    { label:'Temporary advance for a bicycle', pct:50, months:4, combine:'min', src:'Rule 1.14(1)(e)(i)' },
+  '1.15(a)':        { label:'Non-refundable advance after 50, building or altering a house', pct:80, months:24, combine:'min', src:'Rule 1.15(a) with 1.14(1)(d)(i)', minAge:50 },
+  '1.15(b)':        { label:'Non-refundable advance after 50, buying a house', pct:80, src:'Rule 1.15(b)(1)', minAge:50 },
+  '1.15(c)':        { label:'Non-refundable advance after 50, agricultural land from Government', pct:80, src:'Rule 1.15(c)(1)', minAge:50 },
+  '1.15(d)':        { label:'Non-refundable advance after 50, illness, passage, education, ceremonies', pct:80, months:12, combine:'max', src:'Rule 1.15(d)(1)', minAge:50 },
+  '1.16':           { label:'Non-refundable advance at 50 or over, no reason needed', pct:100, src:'Rule 1.16 (substituted 12-12-2002)', minAge:50 },
+  '1.18':           { label:'Non-refundable advance at 45 or over, building a house', pct:80, months:24, combine:'min', src:'Rule 1.18 with 1.15(a)', minAge:45 }
+};
+
+const D = F => F.docs || {};
+const docCure = (docType, apply, fields) => ({ kind:'doc', docType, apply, fields: fields || [] });
+const yes = v => v === true || v === 'yes';
+
+/* ── Advances: refundable and non-refundable ───────────────────────────── */
+check({ id:'ADV-SANCTION', group:'checklist', checklist:'A1-i', ref:'A1-i · B1-ii', code:'B1-ii', title:'Original sanction of the competent authority',
+  applies: F => KIND(F, ...ADVANCES),
+  run: F => {
+    const s = D(F).sanction;
+    if (s && s.present) return { status:'ok', finding:'Sanction No. ' + (s.orderNo||'(not stated)') + ' dated ' + (s.date||'(not stated)') + ' of ' + (s.printedAuthority||s.dept) +
+      ', page ' + s.page + ', for Rs ' + fmt(s.amount) + '. The signatory is checked against the DOA register.', evidence:[ev(s.page, 'Sanction', s.crop)] };
+    return { status:'hard', finding:'No original sanction is on file.', remedy:'Produce the original sanction of the competent authority.',
+             cure: docCure('Original sanction', 'add-sanction', [{k:'orderNo',label:'Order no.',type:'text'},{k:'date',label:'Date',type:'text'},{k:'amount',label:'Amount sanctioned (Rs)',type:'number'},{k:'rule',label:'Rule quoted',type:'text'}]) };
+  }});
+
+check({ id:'ADV-RULE', group:'checklist', ref:'B1-iv · B2-ix', code:'B1-iv', title:'Rule and reason quoted on the sanction',
+  applies: F => KIND(F, ...ADVANCES) && D(F).sanction && D(F).sanction.present,
+  run: F => {
+    const s = D(F).sanction, code = KIND(F,'refundable') ? 'B1-iv' : 'B2-ix';
+    const needReason = KIND(F,'refundable');
+    if (s.rule && (!needReason || s.reason)) return { status:'ok', code, finding:'Rule quoted: ' + s.rule + (s.reason ? '. Reason: ' + s.reason + '.' : '.') + (s.limitClause === '1.16' ? ' Under Rule 1.16 no reason is needed.' : ''), evidence:[ev(s.page,'Sanction')] };
+    return { status:'hard', code, finding: !s.rule ? 'The sanction does not quote the rule under which the advance is granted.' : 'The sanction does not state the reason for the advance.',
+             remedy:'Obtain a sanction quoting the rule' + (needReason ? ' and the reason for the advance.' : '.'), evidence:[ev(s.page,'Sanction')],
+             cure: docCure('Revised sanction', 'set-sanction-rule', [{k:'rule',label:'Rule quoted',type:'text'},{k:'reason',label:'Reason stated',type:'text'}]) };
+  }});
+
+check({ id:'ADV-CNIC', group:'checklist', checklist:'A1-ii', ref:'A1-ii · R5', title:'Copy of CNIC of the subscriber',
+  applies: F => KIND(F, ...ADVANCES),
+  run: F => {
+    const c = (D(F).cnics || []).find(x=>(x.whose||'subscriber') === 'subscriber');
+    if (c) return { status:'ok', finding:'CNIC copy at page ' + c.page + ', no. ' + c.number + '. Attestation is not required (R5).', evidence:[ev(c.page,'CNIC', c.crop)] };
+    return { status:'hard', code:'A1-ii', finding:'No copy of the subscriber’s CNIC is on file.', remedy:'Obtain a copy of the subscriber’s CNIC. Attestation is not required.',
+             cure: docCure('CNIC copy', 'add-cnic', [{k:'number',label:'CNIC number',type:'text'},{k:'type',label:'Card type',type:'select',options:['smart','old']}]) };
+  }});
+
+check({ id:'ADV-FORM', group:'checklist', checklist:'A1-iii', ref:'A1-iii · R6', title:'Form 5 (refundable) or Form 6-B (non-refundable)',
+  applies: F => KIND(F, ...ADVANCES),
+  run: F => {
+    const cf = D(F).changeForm, want = KIND(F,'refundable') ? '05' : '06', name = KIND(F,'refundable') ? 'Form 5 (FORM PAY 05)' : 'Form 6-B (FORM PAY 06)';
+    const code = KIND(F,'refundable') ? 'B1-v' : 'B2-iii';
+    const cure = docCure(name, 'add-form', [{k:'personalNo',label:'Personal number on the form',type:'text',expect:F.personnelNo},{k:'signed',label:'Signed by the subscriber',type:'yesno'},{k:'ddoSigned',label:'Signed and stamped by the DDO',type:'yesno'}]);
+    if (!cf || !cf.present) return { status:'hard', code, finding: name + ' is not attached.', remedy:'Attach ' + name + ' with the subscriber’s personal number and signature.', cure };
+    if (String(cf.label).indexOf(want) < 0) return { status:'hard', code, finding:'The form attached is ' + cf.label + ', not ' + name + '.', remedy:'Attach ' + name + '.', evidence:[ev(cf.page, cf.label)], cure };
+    return { status:'ok', finding: name + ' at page ' + cf.page + '. Only the personal number and signatures are mandatory; the loan details box is not examined (R6).', evidence:[ev(cf.page, cf.label)] };
+  }});
+
+check({ id:'ADV-FORM-DDO', group:'checklist', ref:'B1-vii · B2-v', title:'Form signed by the DDO',
+  applies: F => KIND(F, ...ADVANCES) && D(F).changeForm && D(F).changeForm.present,
+  run: F => {
+    const cf = D(F).changeForm, code = KIND(F,'refundable') ? 'B1-vii' : 'B2-v';
+    if (cf.ddoSigned) return { status:'ok', code, finding:'Signed and stamped by ' + (cf.ddoStamp || 'the DDO') + '.', evidence:[ev(cf.page,'DDO signature', cf.ddoCrop)] };
+    return { status:'hard', code, finding:'The ' + cf.label + ' is not signed by the Drawing and Disbursing Officer.', remedy:'Obtain the DDO’s signature and stamp on the form.',
+             evidence:[ev(cf.page, cf.label)], cure: docCure(cf.label + ' signed by DDO', 'ddo-signed', [{k:'ddoSigned',label:'Signed and stamped by the DDO',type:'yesno'}]) };
+  }});
+
+check({ id:'ADV-PERSNO', group:'identity', ref:'R6', code:'R6', title:'Personal number on the form tallies with the pay slip',
+  applies: F => KIND(F, ...ADVANCES) && D(F).changeForm && D(F).changeForm.present,
+  run: F => {
+    const cf = D(F).changeForm, p = F.sap && F.sap.payslip;
+    const cure = exp => docCure(cf.label, 'set-form-persno', [{k:'personalNo',label:'Personal number on the corrected form',type:'text',expect:exp}]);
+    if (!cf.personalNo) return { status:'hard', finding:'The personal number is not filled in on the ' + cf.label + '. It is a mandatory field.', remedy:'Enter the personal number on the form.', evidence:[ev(cf.page, cf.label)], cure:cure(F.personnelNo) };
+    if (!p) return { status:'sap', finding:'Personal number ' + cf.personalNo + ' on the form. The SAP pay slip is needed to tally it.', cure:{ kind:'sap' } };
+    if (digits(cf.personalNo) === digits(p.persNo)) return { status:'ok', finding:'Personal number ' + cf.personalNo + ' on the ' + cf.label + ' tallies with the SAP pay slip.', evidence:[ev(cf.page, cf.label), ev(p.page, 'Pay slip')] };
+    return { status:'hard', finding:'The ' + cf.label + ' gives personal number ' + cf.personalNo + '; the SAP pay slip gives ' + p.persNo + '.', remedy:'Correct the personal number on the form.',
+             evidence:[ev(cf.page, cf.label), ev(p.page, 'Pay slip')], cure:cure(p.persNo) };
+  }});
+
+check({ id:'ADV-APPLICANT', group:'identity', ref:'R6', code:'R6', title:'Applicant on the form is the subscriber',
+  applies: F => KIND(F, ...ADVANCES) && D(F).changeForm && D(F).changeForm.present,
+  run: F => {
+    const cf = D(F).changeForm, p = F.sap && F.sap.payslip, card = (D(F).cnics||[]).find(c=>(c.whose||'subscriber')==='subscriber');
+    const refs = [];
+    if (p && p.name) refs.push(['SAP pay slip', p.name, sameName(cf.name, p.name)]);
+    if (card && card.name) refs.push(['CNIC', card.name, sameName(cf.name, card.name)]);
+    if (!refs.length) return { status:'sap', finding:'Name on the form: ' + (cf.name||'(not filled in)') + '. Nothing yet to compare it with.', cure:{ kind:'sap' } };
+    const bad = refs.filter(r=>r[2] === false && !(F.nameVariants||[]).includes(r[1]));
+    if (bad.length) return { status:'hard', finding:'Name on the ' + cf.label + ' is ' + cf.name + '; ' + bad.map(r=>r[0] + ' reads ' + r[1]).join('; ') + '.', remedy:'Confirm the applicant and correct the form.' };
+    return { status:'ok', finding:'Name ' + cf.name + ' agrees with ' + refs.map(r=>r[0] + ' (' + r[1] + ')').join(' and ') + '.' + (F.nameNote ? ' ' + F.nameNote : '') };
+  }});
+
+check({ id:'ADV-FORM-CNIC', group:'identity', ref:'R6', code:'R6', title:'CNIC number written on the form',
+  applies: F => KIND(F, ...ADVANCES) && D(F).changeForm && D(F).changeForm.cnic && (D(F).cnics||[]).some(c=>(c.whose||'subscriber')==='subscriber' && c.number),
+  run: F => {
+    const cf = D(F).changeForm, card = D(F).cnics.find(c=>(c.whose||'subscriber')==='subscriber' && c.number);
+    if (digits(cf.cnic) === digits(card.number)) return { status:'ok', finding:'CNIC ' + card.number + ' on the form agrees with the card.' };
+    return { status:'adv', finding:'The ' + cf.label + ' records CNIC ' + cf.cnic + '; the card, the SAP pay slip and the QR codes read ' + card.number + '. The applicant is otherwise confirmed by personal number and name, and the CNIC field is not mandatory on this form (R6), so this is noted only.',
+             remedy:'DDO to correct the CNIC on the form for the department’s record.', evidence:[ev(cf.page, cf.label, cf.cnicCrop), ev(card.page, 'CNIC', card.crop)],
+             cure: docCure('Corrected ' + cf.label, 'set-form-cnic', [{k:'cnic',label:'CNIC on the corrected form',type:'text',expect:card.number}]) };
+  }});
+
+/* Balance before the advance under examination. */
+function balanceBefore(F){
+  if (F.balanceBasis) return F.balanceBasis;
+  const s = D(F).sanction, amt = s && s.amount;
+  const rc = F.sap && F.sap.recalc, ps = F.sap && F.sap.payslip;
+  if (rc && rc.rows && rc.rows.length){
+    const col = KIND(F,'refundable') ? 'tempAdvance' : 'permanentAdvance';
+    const row = rc.rows.slice().reverse().find(r=>amt && r[col] && Math.abs(r[col] - amt) <= 1);
+    if (row) return { value: row.opening, posted:true,
+      explanation:'This advance (Rs ' + fmt(amt) + ') is already posted in the SAP re-calculation report for ' + row.start + ' to ' + row.end +
+                  ', so the pay slip balance is after it. The balance before it is the opening balance of that year, Rs ' + fmt(row.opening) + '.' };
+    const last = rc.rows[rc.rows.length-1];
+    return { value:last.closing, explanation:'Closing balance Rs ' + fmt(last.closing) + ' for ' + last.start + ' to ' + last.end + ' in the SAP re-calculation report. This advance is not yet posted.' };
+  }
+  if (ps && ps.gpfBalance !== null && ps.gpfBalance !== undefined)
+    return { value:ps.gpfBalance, provisional:true, explanation:'GPF balance Rs ' + fmt(ps.gpfBalance) + ' on the pay slip for ' + ps.month + '. Without the re-calculation report it cannot be confirmed whether this advance is already deducted.' };
+  return null;
+}
+
+check({ id:'ADV-LIMIT', group:'balance', ref:'GPF Rules 1.14 to 1.18 · R9 · B1-i', code:'B1-i', title:'Advance within the limit set by the GP Fund Rules',
+  applies: F => KIND(F, ...ADVANCES) && D(F).sanction && D(F).sanction.present,
+  run: F => {
+    const s = D(F).sanction, L = ADV_LIMITS[s.limitClause], b = balanceBefore(F);
+    if (!L) return { status:'conf', finding:'The clause under which Rs ' + fmt(s.amount) + ' was sanctioned (' + (s.rule||'not quoted') + ') could not be matched to a limit in the Rules.', remedy:'Identify the clause; the limit is then applied.', cure:{ kind:'verify', vid:'ADV-LIMIT' } };
+    if (!b) return { status:'sap', finding:'Sanctioned Rs ' + fmt(s.amount) + ' under ' + L.src + '. The SAP balance is needed to test the limit.', cure:{ kind:'sap' } };
+    const pay = (F.sap && F.sap.payslip && F.sap.payslip.basicPay) || s.basicPay || null;
+    const byPct = Math.floor(b.value * L.pct / 100);
+    let limit = byPct, byPay = null;
+    if (L.months && pay){ byPay = pay * L.months; limit = L.combine === 'max' ? Math.max(byPct, byPay) : Math.min(byPct, byPay); }
+    const office = Math.floor(b.value * PARAMS.officeCapPct / 100);
+    const calc = { amount:s.amount, balance:b.value, rule:L.src, label:L.label, pct:L.pct, months:L.months||null, combine:L.combine||null, pay, byPct, byPay, ruleLimit:limit, office, officePct:PARAMS.officeCapPct };
+    const ruleText = L.src + ' (' + L.label.toLowerCase() + ') allows ' + (L.months ? (pay ? L.combine === 'max' ? 'the greater of ' : 'the lesser of ' : '') : '') + L.pct + '% of the balance' +
+      (L.months ? (pay ? ' and ' + L.months + ' months’ pay (Rs ' + fmt(pay) + ' a month)' : ' (months of pay not known, so the percentage alone is applied)') : '') + ': Rs ' + fmt(limit) + '.';
+    const flag = limit !== office ? ' Flag: the office’s stated practice of ' + PARAMS.officeCapPct + '% gives Rs ' + fmt(office) + ' for this balance, which differs from the Rules; the Rules are applied and the difference is listed under Rules in force.' : '';
+    const stated = (s.balanceStated && Math.abs(s.balanceStated - b.value) > 1) ? ' The sanction itself states a balance of Rs ' + fmt(s.balanceStated) + ', which does not reconcile to SAP.' : '';
+    const age = (L.minAge && s.ageAtSanction) ? (s.ageAtSanction.y >= L.minAge ? ' Age ' + s.ageAtSanction.y + ' years ' + (s.ageAtSanction.m||0) + ' months at sanction; the rule needs ' + L.minAge + '.' : null) : '';
+    if (age === null) return { status:'hard', calc, finding:L.src + ' needs the subscriber to be ' + L.minAge + ' or over; the subscriber was ' + s.ageAtSanction.y + ' at sanction.', remedy:'Obtain a sanction under the rule that applies to the subscriber’s age.' };
+    const basis = ' Balance used: ' + b.explanation;
+    if (s.amount > limit) return { status:'hard', calc, finding:'Rs ' + fmt(s.amount) + ' exceeds the limit. ' + ruleText + ' Excess Rs ' + fmt(s.amount - limit) + '.' + basis + stated + (s.amount <= office ? ' The office’s 80% practice would have passed it; the Rules govern.' : ''),
+      remedy:'Reduce the sanction to Rs ' + fmt(limit) + ' or less' + (L.relaxable ? ', or record special reasons in writing (' + L.relaxable + ')' : '') + '.' };
+    if (b.provisional) return { status:'conf', calc, finding:'Rs ' + fmt(s.amount) + ' is within the limit on the pay slip balance. ' + ruleText + basis + flag, remedy:'Upload the re-calculation report to confirm the balance basis.', cure:{ kind:'sap' } };
+    if (s.amount > office) return { status:'adv', calc, finding:'Rs ' + fmt(s.amount) + ' is within the Rules. ' + ruleText + ' It is above the office’s stated ' + PARAMS.officeCapPct + '% practice (Rs ' + fmt(office) + '), so it is flagged for the office to confirm which applies.' + basis + stated + age,
+      remedy:'None under the Rules. The office to confirm whether its 80% practice overrides ' + L.src + '.' };
+    return { status:'ok', calc, finding:'Rs ' + fmt(s.amount) + ' is within the limit. ' + ruleText + basis + stated + age + flag };
+  }});
+
+check({ id:'ADV-ACTIVE', group:'balance', ref:'R12 · Rule 1.14(1)(c) proviso', code:'R12', title:'No other refundable advance outstanding',
+  applies: F => KIND(F,'refundable'),
+  run: F => {
+    const s = D(F).sanction || {}, rc = F.sap && F.sap.recalc, p = F.sap && F.sap.payslip;
+    if (!rc || !rc.rows || !rc.rows.length){
+      if (!p) return { status:'sap', finding:'The SAP pay slip and re-calculation report are needed to see any advance still outstanding.', cure:{ kind:'sap' } };
+      if (!p.loanBalance) return { status:'ok', finding:'The SAP pay slip shows no GPF advance outstanding.' };
+      return { status:'conf', finding:'The SAP pay slip shows a GPF advance balance of Rs ' + fmt(p.loanBalance) + '. Without the re-calculation report it cannot be told whether this is the advance under examination.', cure:{ kind:'sap' } };
+    }
+    const rows = rc.rows;
+    let idx = -1;
+    for (let i = rows.length-1; i >= 0; i--) if (s.amount && rows[i].tempAdvance && Math.abs(rows[i].tempAdvance - s.amount) <= 1){ idx = i; break; }
+    const before = rows.slice(0, idx >= 0 ? idx : rows.length);
+    let drawn = 0, rec = 0, lastRec = null;
+    before.forEach(r=>{ drawn += r.tempAdvance||0; rec += r.recTempAdvance||0; if (r.recTempAdvance) lastRec = r; });
+    const posted = idx >= 0 ? ' The advance under examination is already posted in ' + rows[idx].start + ' to ' + rows[idx].end +
+      (p && p.loanBalance ? '; the pay slip advance balance of Rs ' + fmt(p.loanBalance) + ' is this advance being recovered (Rs ' + fmt(s.amount) + ' less Rs ' + fmt(s.amount - p.loanBalance) + ').' : '.') : '';
+    if (drawn - rec > 1) return { status:'hard', finding:'Earlier refundable advances of Rs ' + fmt(drawn) + ' show recoveries of only Rs ' + fmt(rec) + ' in SAP: Rs ' + fmt(drawn - rec) + ' still outstanding when this advance was sanctioned.' + posted,
+      remedy:'The earlier advance must be fully recovered before a new one (Rule 1.14(1)(c) proviso). A new advance may be settled only after the month in which it reached zero.' };
+    if (!drawn) return { status:'ok', finding:'No earlier refundable advance in SAP since ' + rows[0].start + '.' + posted };
+    return { status:'ok', finding:'Earlier refundable advances of Rs ' + fmt(drawn) + ' were fully recovered, the last recovery in ' + lastRec.start + ' to ' + lastRec.end + '.' + posted };
+  }});
+
+/* ── Final payments ─────────────────────────────────────────────────────── */
+check({ id:'FP-GPF10', group:'checklist', checklist:'A2-ii', ref:'A2-ii · B2-i', code:'B2-i', title:'G.P.F. Form 10, properly filled and signed',
+  applies: F => KIND(F, ...FINALS),
+  run: F => {
+    const g = D(F).gpf10;
+    if (!g || !g.present) return { status:'hard', finding:'G.P.F. Form 10 is not on file' + (KIND(F,'residual') ? ', and nothing in the case substitutes for it.' : '.'), remedy:'Submit Form 10 signed by the DDO and the subscriber or claimant' + (KIND(F,'residual') ? ', or the officer confirms that the Form 10 filed with the original final payment covers the residual.' : '.'),
+      cure: docCure('G.P.F. Form 10', 'add-gpf10', [{k:'accountNo',label:'GP Fund account no.',type:'text',expect:F.personnelNo},{k:'signed',label:'Signed by subscriber or claimant',type:'yesno'},{k:'ddoSigned',label:'Signed by DDO',type:'yesno'}]) };
+    const miss = (g.missing || []).slice();
+    if (!miss.length) return { status:'ok', finding:'Form 10 at page ' + g.page + ', account no. ' + (g.accountNo||'') + ', signed.' + (g.note ? ' ' + g.note : ''), evidence:[ev(g.page,'Form 10', g.crop)] };
+    const p = F.sap && F.sap.payslip;
+    const sapCovers = p && miss.every(m=>/account|a\/c|personnel/i.test(m)) && (p.oldGpfNo || p.persNo);
+    return { status: sapCovers ? 'adv' : 'hard', finding:'Form 10 at page ' + g.page + ' does not state: ' + miss.join(', ') + '.' + (sapCovers ? ' ' + (g.corroboration || 'The missing identifiers are held in SAP') + ', so this is noted only.' : ''),
+             remedy:'Complete Form 10: ' + miss.join(', ') + '.', evidence:[ev(g.page,'Form 10', g.crop)],
+             cure: docCure('Completed G.P.F. Form 10', 'gpf10-complete', miss.map((m,i)=>({k:'m'+i,label:m+' now filled in',type:'yesno'}))) };
+  }});
+
+check({ id:'FP-NOTIF', group:'checklist', checklist:'A2-iii', ref:'A2-iii', title:'Retirement, dismissal or obituary notification',
+  applies: F => KIND(F, ...FINALS),
+  run: F => {
+    const n = D(F).notification;
+    if (n && n.present) return { status:'ok', finding:(n.label||'Notification') + ' No. ' + (n.no||'(not stated)') + ' dated ' + (n.date||'(not stated)') + ', page ' + n.page + '.' + (n.note ? ' ' + n.note : ''), evidence:[ev(n.page, n.label||'Notification', n.crop)] };
+    return { status:'hard', code:'A2-iii', finding:'The ' + (KIND(F,'death') ? 'obituary' : KIND(F,'dismissal') ? 'dismissal' : 'retirement') + ' notification is not on file.', remedy:'Attach a copy of the notification.',
+             cure: docCure('Notification', 'add-notification', [{k:'no',label:'Notification no.',type:'text'},{k:'date',label:'Date',type:'text'}]) };
+  }});
+
+check({ id:'FP-CNIC', group:'checklist', checklist:'A2-iv', ref:'A2-iv · R5', title:'Copy of CNIC of the subscriber',
+  applies: F => KIND(F, ...FINALS),
+  run: F => {
+    const c = (D(F).cnics || []).find(x=>/subscriber|deceased/.test(x.whose||'subscriber'));
+    if (c) return { status:'ok', finding:'CNIC copy of the ' + (c.whose||'subscriber') + ' at page ' + c.page + ', no. ' + c.number + '. Attestation is not required (R5).', evidence:[ev(c.page,'CNIC', c.crop)] };
+    return { status:'hard', code:'A2-iv', finding:'No copy of the subscriber’s CNIC is on file.', remedy:'Attach a copy of the subscriber’s CNIC.',
+             cure: docCure('CNIC copy', 'add-cnic', [{k:'number',label:'CNIC number',type:'text'},{k:'type',label:'Card type',type:'select',options:['smart','old']}]) };
+  }});
+
+check({ id:'FP-FORM06', group:'checklist', checklist:'A2-v', ref:'A2-v · B2-iii · B2-v', title:'Change Form-06 signed by DDO and subscriber',
+  applies: F => KIND(F, ...FINALS),
+  run: F => {
+    const cf = D(F).changeForm;
+    if (!cf || !cf.present) return { status:'hard', code:'B2-iii', finding:'Change Form-06 is not attached.', remedy:'Attach Change Form-06 signed by the DDO and the subscriber.',
+      cure: docCure('Change Form-06', 'add-form', [{k:'personalNo',label:'Personal number on the form',type:'text',expect:F.personnelNo},{k:'signed',label:'Signed or thumbed by subscriber/claimant',type:'yesno'},{k:'ddoSigned',label:'Signed and stamped by the DDO',type:'yesno'}]) };
+    const gaps = [];
+    if (!cf.ddoSigned) gaps.push('the DDO');
+    if (!cf.sigKind || cf.sigKind === 'none') gaps.push(KIND(F,'death') ? 'the claimant' : 'the subscriber');
+    if (gaps.length) return { status:'hard', code:'B2-v', finding:'Change Form-06 at page ' + cf.page + ' is not signed by ' + gaps.join(' or ') + '.', remedy:'Obtain the missing signature.', evidence:[ev(cf.page,'Form 06')],
+      cure: docCure('Signed Change Form-06', 'form-signatures', [{k:'ddoSigned',label:'Signed and stamped by the DDO',type:'yesno'},{k:'signed',label:'Signed or thumbed by subscriber/claimant',type:'yesno'}]) };
+    return { status:'ok', finding:'Change Form-06 at page ' + cf.page + ', signed by the DDO and ' + (cf.sigKind === 'thumb' ? 'thumbed' : 'signed') + ' by the ' + (KIND(F,'death') ? 'claimant' : 'subscriber') + '.' + (cf.note ? ' ' + cf.note : ''), evidence:[ev(cf.page,'Form 06', cf.crop)] };
+  }});
+
+check({ id:'FP-OLDAC', group:'identity', ref:'B2-vii', code:'B2-vii', title:'Old GP Fund account no. on the change form',
+  applies: F => KIND(F, ...FINALS) && D(F).changeForm && D(F).changeForm.present,
+  run: F => {
+    const cf = D(F).changeForm, p = F.sap && F.sap.payslip, rc = F.sap && F.sap.recalc;
+    const sapOld = p && p.oldGpfNo && digits(p.oldGpfNo).length > 3 ? p.oldGpfNo : null;
+    if (cf.oldGpfNo && digits(cf.oldGpfNo).length > 3){
+      if (sapOld && digits(sapOld) !== digits(cf.oldGpfNo)) return { status:'hard', finding:'Old A/c ' + cf.oldGpfNo + ' on the form; SAP pay slip Old # reads ' + sapOld + '.', remedy:'Reconcile the old account number.' };
+      return { status:'ok', finding:'Old GP Fund A/c ' + cf.oldGpfNo + ' on the form' + (sapOld ? ', agreeing with SAP Old # ' + sapOld + '.' : '.') };
+    }
+    if (sapOld) return { status:'adv', finding:'The old account number is not written on the form (' + (cf.oldGpfNoState || 'blank') + '), but SAP holds it as ' + sapOld + '. Noted; the office settles it from SAP.', remedy:'None needed to process.' };
+    if (!p) return { status:'sap', finding:'The old account number is not written on the form. The SAP pay slip may carry it.', cure:{ kind:'sap' } };
+    const first = rc && rc.rows && rc.rows[0];
+    if (first && !first.opening) return { status:'ok', finding:'Field 16 is ' + (cf.oldGpfNoState || 'blank') + ', but SAP holds no old number and the SAP ledger opens at nil in ' + first.start + ' to ' + first.end + ', so there is no manual-era account to quote.' };
+    return { status:'conf', finding:'Field 16 is ' + (cf.oldGpfNoState || 'blank') + ' and SAP holds no old number' + (first ? ', but the SAP ledger opens with Rs ' + fmt(first.opening) + ', so a manual-era account may exist.' : '.'),
+             remedy:'Confirm the manual-era account number from the AG ledger.', cure:{ kind:'verify', vid:'FP-OLDAC' } };
+  }});
+
+check({ id:'FP-SB', group:'checklist', checklist:'A2-vii', ref:'A2-vii · B2-viii', code:'B2-viii', title:'Original Service Book (non-gazetted)',
+  applies: F => KIND(F,'final','death','dismissal') && F.gazetted === 'non-gazetted',
+  run: F => {
+    const sb = D(F).serviceBook;
+    const cure = docCure('Service Book pages', 'add-servicebook', [{k:'dor',label:'Date of retirement or event entered',type:'yesno'},{k:'order',label:'Order entered',type:'yesno'},{k:'leave',label:'Leave account present',type:'yesno'}]);
+    if (!sb || !sb.present){
+      if (sb && sb.reportedAttached){
+        const v = verified(F, 'FP-SB');
+        if (v) return v.ok ? { status:'ok', finding:'Original Service Book received and entries checked by ' + v.by + (v.note ? ': ' + v.note : '.') } : { status:'hard', finding:'Original Service Book not received, or entries missing. ' + (v.note||''), remedy:'Produce the original Service Book.', cure };
+        return { status:'conf', finding:sb.reportedAttached + ' It is not in the scanned case, so the entries (date of the event, the order, leave account) cannot be checked from the file.', remedy:'Confirm the original Service Book is on hand and check the entries.', cure:{ kind:'verify', vid:'FP-SB' } };
+      }
+      return { status:'hard', finding:'No Service Book is on file for a non-gazetted subscriber.', remedy:'Produce the original Service Book.', cure };
+    }
+    const e = sb.entries || {}, miss = [];
+    if (!e.dor) miss.push('date of retirement'); if (!e.order) miss.push('order of retirement'); if (!e.leave) miss.push('leave account');
+    if (!miss.length) return { status:'ok', finding:'Service Book carries the requisite entries.' };
+    const v = verified(F, 'FP-SB');
+    if (v) return v.ok ? { status:'ok', finding:'Entries checked on the original Service Book by ' + v.by + (v.note ? ': ' + v.note : '.') }
+                       : { status:'hard', finding:'The original Service Book does not show: ' + miss.join(', ') + '. ' + (v.note||''), remedy:'Department to complete the Service Book entries.', cure };
+    /* a scan that holds only some pages is not evidence that entries are missing from the original */
+    return { status:'conf', finding:'Only ' + (sb.note || 'pages ' + (sb.pages||[]).join(', ')) + ' of the Service Book are in the scanned case, so the ' + miss.join(', ') + ' cannot be seen. That does not show they are missing from the original.',
+             remedy:'Check the entries on the original Service Book and record the result. If they are missing, the department completes them (B2-viii).',
+             evidence:(sb.pages||[]).map(p=>ev(p,'Service Book')), cure:{ kind:'verify', vid:'FP-SB' } };
+  }});
+
+/* ── Final payment already posted in the SAP report ──────────────────────
+   The reports in this corpus were pulled after the office processed the
+   cases, so SAP already shows the claim as a permanent advance. Treat a
+   posting equal to the claim as the claim itself, have the section confirm
+   the pay order, and raise what is left as a residual. */
+function postedClaim(F){
+  const rows = F.sap && F.sap.recalc && F.sap.recalc.rows, c = F.claim;
+  if (!rows || !rows.length || !c || !c.amount) return null;
+  const i = rows.findIndex(r=>r.permanentAdvance && Math.abs(r.permanentAdvance - c.amount) <= PARAMS.claimTolerance);
+  return i < 0 ? null : { row:rows[i], last:rows[rows.length-1] };
+}
+
+check({ id:'FP-POSTED', group:'balance', ref:'R11', code:'R11', title:'Claim already posted in SAP',
+  applies: F => KIND(F,'final','death','dismissal') && !!(F.sap && F.sap.recalc && F.claim),
+  run: F => {
+    const p = postedClaim(F), rc = F.sap.recalc;
+    if (!p) return { status:'ok', finding:'SAP posts no permanent advance equal to the claim, so nothing has been paid against it yet.' };
+    const v = verified(F, 'FP-POSTED');
+    if (v) return verifiedResult(v, 'The SAP posting is this claim; pay order recorded.', 'The SAP posting is a separate earlier payment, so paying the claim would pay it twice.');
+    return { status:'conf', finding:'SAP already posts a permanent advance of Rs ' + fmt(p.row.permanentAdvance) + ' in ' + p.row.start + ' to ' + p.row.end + ', equal to the claim (' + (F.claim.basis || 'Rs ' + fmt(F.claim.amount)) + '). The report was pulled after the office processed the case, so this is most likely the claim itself. If it were a separate earlier payment, paying the claim would pay it twice.',
+             remedy:'Before payment, confirm from the SAP ledger or the GP Fund Payment Register that the posting is this claim, and record the pay order.',
+             evidence: rc.page ? [ev(rc.page, 'Re-calculation report')] : [], cure:{ kind:'verify', vid:'FP-POSTED' } };
+  }});
+
+check({ id:'FP-RESIDUAL', group:'balance', ref:'B2-vi', code:'B2-vi', title:'Balance left in SAP after the claim',
+  applies: F => KIND(F,'final','death','dismissal') && !!postedClaim(F),
+  run: F => {
+    const p = postedClaim(F), left = p.last.closing, rc = F.sap.recalc;
+    if (!(left > 0)) return { status:'ok', finding:'Nothing is left in SAP after the posting.' };
+    if (F.claim.residualNote) return { status:'na', finding:'Rs ' + fmt(left) + ' is left in SAP after the posting. ' + F.claim.residualNote };
+    return { status:'adv', finding:'After the Rs ' + fmt(F.claim.amount) + ' posting, SAP still holds Rs ' + fmt(left) + (F.claim.residualMadeOf ? ': ' + F.claim.residualMadeOf : '') + '. A residual payment appears due to the ' + (KIND(F,'death') ? 'entitled family' : 'subscriber') + '.',
+             remedy:'Section to process the residual on a residual claim.', evidence: rc.page ? [ev(rc.page, 'Re-calculation report')] : [] };
+  }});
+
+/* ── Death cases (heirs, affidavit, succession, OSD) ─────────────────── */
+check({ id:'DEATH-HEIRS', group:'checklist', checklist:'A2-iv', ref:'A2-iv', code:'A2-iv', title:'CNIC copies of all legal heirs',
+  applies: F => KIND(F,'death') && D(F).death,
+  run: F => {
+    const heirs = D(F).death.heirs || [];
+    const miss = heirs.filter(h=>!h.cnicCopy && !h.minor);
+    if (!heirs.length) return { status:'conf', finding:'The legal heirs could not be established from the case.', cure:{ kind:'verify', vid:'DEATH-HEIRS' } };
+    if (!miss.length) return { status:'ok', finding:'Copies on file for every adult legal heir: ' + heirs.filter(h=>!h.minor).map(h=>h.name).join(', ') + '.' + (heirs.some(h=>h.minor) ? ' Minor heirs: ' + heirs.filter(h=>h.minor).map(h=>h.name).join(', ') + ', covered by the NADRA family registration certificate.' : '') };
+    return { status:'hard', finding:'No CNIC copy for ' + miss.map(h=>h.name + ' (' + h.relation + ')').join(', ') + '.', remedy:'Attach CNIC copies for every adult legal heir.',
+             cure: docCure('CNIC copy of legal heir', 'add-heir-cnic', [{k:'name',label:'Heir',type:'select',options:miss.map(h=>h.name)},{k:'number',label:'CNIC number',type:'text'}]) };
+  }});
+
+check({ id:'DEATH-AFFIDAVIT', group:'checklist', checklist:'A2-vi', ref:'A2-vi', code:'A2-vi', title:'Original affidavit for lawful widow',
+  applies: F => KIND(F,'death') && D(F).death && D(F).death.widowClaim,
+  run: F => {
+    const a = D(F).death.affidavit || {};
+    if (a.present && a.original) return { status:'ok', finding:(a.label||'Affidavit') + ' at page ' + a.page + '.', evidence:[ev(a.page,'Affidavit')] };
+    return { status:'hard', finding: a.present ? (a.label||'The document') + ' at page ' + a.page + ' is not an affidavit for lawful widow. ' + (a.note||'') : 'No affidavit for lawful widow is on file.',
+             remedy:'Produce the original affidavit for lawful widow.', evidence: a.page ? [ev(a.page, a.label||'Document')] : [], cure: docCure('Original affidavit for lawful widow', 'add-affidavit', [{k:'original',label:'Original, on stamp paper, attested',type:'yesno'}]) };
+  }});
+
+check({ id:'DEATH-SUCCESSION', group:'checklist', checklist:'A2-vi', ref:'A2-vi · R13', code:'A2-vi', title:'Succession certificate, or OSD post created',
+  applies: F => KIND(F,'death') && D(F).death,
+  run: F => {
+    const d = D(F).death, p = F.sap && F.sap.payslip;
+    const osdSap = p && p.osdPost && /yes|created|osd/i.test(String(p.osdPost));
+    if (osdSap) return { status:'ok', finding:'The SAP pay slip shows an OSD post created (' + p.osdPost + '). A succession certificate is not required (R13).' };
+    if (d.successionCert === 'granted') return { status:'ok', finding:'Succession certificate granted, page ' + d.successionPage + '.' };
+    if (d.successionRequired === false) return { status:'ok', finding:'Not required: ' + (d.successionNote || 'one widow and heirs within the family.') };
+    if (!p) return { status:'sap', finding:'Succession certificate: ' + (d.successionNote||'not on file') + '. If SAP shows an OSD post created, it is not required (R13). Pull the pay slip first.', cure:{ kind:'sap' } };
+    if (d.osdAnnotation){
+      const v = verified(F, 'DEATH-OSD');
+      if (v) return v.ok ? { status:'ok', finding:'OSD post creation confirmed in SAP by ' + v.by + (v.note ? ': ' + v.note : '') + '. Succession certificate not required (R13).' }
+                         : { status:'hard', finding:'SAP does not show an OSD post, and no succession certificate is on file. ' + (d.successionNote||''), remedy:'Produce the succession certificate granted by the court.',
+                             cure: docCure('Succession certificate', 'add-succession', [{k:'granted',label:'Certificate granted by the court',type:'yesno'}]) };
+      return { status:'conf', finding:d.osdAnnotation.where + ' is annotated "' + d.osdAnnotation.text + '", but the SAP pay slip in the case carries no OSD post indicator. ' + (d.successionNote||''),
+               remedy:'Confirm in SAP whether an OSD post was created. If so no succession certificate is needed (R13).', cure:{ kind:'verify', vid:'DEATH-OSD' }, evidence:[ev(d.osdAnnotation.page,'OSD annotation', d.osdAnnotation.crop)] };
+    }
+    return { status:'hard', finding:'No succession certificate. ' + (d.successionNote||''), remedy:'Produce the succession certificate, or evidence from SAP that an OSD post was created.',
+             cure: docCure('Succession certificate', 'add-succession', [{k:'granted',label:'Certificate granted by the court',type:'yesno'}]) };
+  }});
+
+/* ── Missing credits ────────────────────────────────────────────────────── */
+check({ id:'MC-PERIOD', group:'checklist', checklist:'A4-ii', ref:'A4-ii', title:'Period of missing months',
+  applies: F => KIND(F,'missing_credits'),
+  run: F => { const ch = D(F).challans || {}; return ch.period ? { status:'ok', finding:'Period stated: ' + ch.period + '.' }
+    : { status:'hard', code:'A4-ii', finding:'The period of the missing months is not stated.', remedy:'State the period.', cure: docCure('Letter stating the period', 'set-period', [{k:'period',label:'Period',type:'text'}]) }; } });
+
+function challanSubstitute(F){
+  const ch = D(F).challans || {}, copies = ch.copies || [];
+  const noStamp = copies.filter(c=>!c.bankStamp);
+  const missing = ((ch.schedule||{}).items || []).filter(it=>!copies.some(c=>String(c.sr) === String(it.sr)));
+  return { ok: copies.length > 0 && !noStamp.length && ch.toVerified, noStamp, missing, copies, ch };
+}
+[['MC-DDO-CERT','A4-iii','R14','Manual deduction certificate by DDO, with bills and acquaintance roll (non-gazetted period)','non-gazetted'],
+ ['MC-AG-CERT','A4-iv','R15','Manual deduction certificate by AG Office (gazetted period)','gazetted']].forEach(([id, item, r, title, period])=>{
+  check({ id, group:'checklist', checklist:item, ref:item + ' · ' + r, code:item, title,
+    applies: F => KIND(F,'missing_credits') && (F.gazetted === period || F.gazetted === 'mixed' || F.gazetted === 'unknown'),
+    run: F => {
+      const x = challanSubstitute(F);
+      if (x.ch.certificate && x.ch.certificate[period]) return { status:'ok', finding:'Certificate on file.' };
+      if (x.ok) return { status:'sub', finding:'No certificate, but every one of the ' + x.copies.length + ' challans attached carries the bank’s stamp and the covering letter carries the Treasury Office verification (page ' + x.ch.toPage + '). Accepted in place of the certificate (' + r + ')' +
+                           (F.gazetted === 'unknown' ? ', whichever period type applies.' : '.') + (x.missing.length ? ' Schedule ' + x.missing.map(m=>'Sr. ' + m.sr).join(', ') + ' is not covered; see A4-v.' : ''),
+                         evidence:[ev(x.ch.toPage,'Treasury verification', x.ch.toCrop)] };
+      const why = [];
+      if (x.noStamp.length) why.push('challan' + (x.noStamp.length>1?'s':'') + ' at page ' + x.noStamp.map(c=>c.page).join(', ') + ' carr' + (x.noStamp.length>1?'y':'ies') + ' no bank stamp');
+      if (!x.ch.toVerified) why.push('the covering letter carries no Treasury Office verification');
+      if (!x.copies.length) why.push('no challans are attached');
+      return { status:'hard', finding:'No certificate, and the challans cannot yet stand in for it: ' + why.join('; ') + '.',
+               remedy:'Produce challan copies carrying the bank’s stamp' + (!x.ch.toVerified ? ' and obtain Treasury Office verification on the covering letter' : '') + ', or the certificate itself.',
+               cure: x.noStamp.length ? docCure('Challan copy with bank stamp', 'challan-stamp', [{k:'page',label:'Replaces challan at page',type:'select',options:x.noStamp.map(c=>String(c.page))},{k:'bankStamp',label:'Bank stamp present on the new copy',type:'yesno'}])
+                                      : docCure('Treasury-verified covering letter', 'to-verified', [{k:'toVerified',label:'Treasury Office verification stamp present',type:'yesno'}]) };
+    }});
+});
+
+check({ id:'MC-STAMP', group:'checklist', ref:'R14 · R15', code:'R14', title:'Bank stamps legible on each challan',
+  applies: F => KIND(F,'missing_credits') && ((D(F).challans||{}).copies||[]).some(c=>c.stampFaint),
+  run: F => D(F).challans.copies.filter(c=>c.stampFaint).map(c=>({ sub:'p'+c.page, status:'adv', doc:'Challan Sr. ' + c.sr + ' (page ' + c.page + ')',
+    finding:'The bank stamp is present but too faint to read the bank, branch or date. ' + (c.stampNote||''), remedy:'Confirm against the original, or upload a clearer copy.', evidence:[ev(c.page,'Bank stamp', c.crop)],
+    cure: docCure('Clearer copy of challan Sr. ' + c.sr, 'challan-stamp-clear', [{k:'page',label:'Challan page',type:'select',options:[String(c.page)]},{k:'legible',label:'Bank stamp and date now legible',type:'yesno'}]) })) });
+
+check({ id:'MC-CHALLANS', group:'checklist', checklist:'A4-v', ref:'A4-v', code:'A4-v', title:'Challans verified by Treasury, as scheduled',
+  applies: F => KIND(F,'missing_credits'),
+  run: F => {
+    const ch = D(F).challans || {}, copies = ch.copies || [], sch = ch.schedule || {};
+    const attached = copies.reduce((a,c)=>a + (c.amount||0), 0);
+    const missing = (sch.items || []).filter(it=>!copies.some(c=>String(c.sr) === String(it.sr)));
+    if (!missing.length && (!sch.total || Math.abs(attached - sch.total) <= 1)) return { status:'ok', finding:copies.length + ' challans attached, total Rs ' + fmt(attached) + ', agreeing with the Treasury-verified schedule of Rs ' + fmt(sch.total) + '.' };
+    return { status:'hard', calc:{ attached, scheduled:sch.total, variance:(sch.total||0) - attached },
+      finding:'The schedule lists ' + (sch.items||[]).length + ' challans for Rs ' + fmt(sch.total) + ', verified by the Treasury; ' + copies.length + ' are attached for Rs ' + fmt(attached) + '. ' +
+              (missing.length ? 'Missing: ' + missing.map(m=>'Sr. ' + m.sr + ' (' + m.period + ', Rs ' + fmt(m.amount) + (m.cheque ? ', cheque ' + m.cheque : '') + ')').join('; ') + '. ' : '') +
+              'Variance Rs ' + fmt((sch.total||0) - attached) + ', exactly the missing challan' + (missing.length > 1 ? 's' : '') + '.',
+      remedy:'Attach the paid copy of the missing challan with the bank’s stamp and the Treasury verification mark, or amend the schedule and the Treasury verification.',
+      evidence: ch.schedulePage ? [ev(ch.schedulePage, 'Schedule of challans', ch.scheduleCrop)] : [],
+      cure: missing.length ? docCure('Challan Form 32-A, Sr. ' + missing[0].sr, 'add-challan', [{k:'sr',label:'Schedule Sr.',type:'text',expect:String(missing[0].sr)},{k:'amount',label:'Amount (Rs)',type:'number',expect:String(missing[0].amount)},{k:'bankStamp',label:'Bank stamp present',type:'yesno'}]) : null };
+  }});
+
+check({ id:'MC-GAZ', group:'sap', ref:'A4-iii · A4-iv · R1', title:'BPS and gazetted status of the subscriber',
+  applies: F => KIND(F,'missing_credits') && F.gazetted === 'unknown' && !(F.sap && F.sap.payslip && F.sap.payslip.bps),
+  run: F => ({ status:'sap', finding:'Neither BPS nor gazetted status is stated in the case (' + (F.gazettedEvidence||'') + '). It does not block: the challans satisfy both R14 and R15. Record it from the SAP pay slip.', cure:{ kind:'sap' } }) });
+
+/* ── Balance transfer ───────────────────────────────────────────────────── */
+check({ id:'BT-PROFORMA', group:'checklist', checklist:'A3-i', ref:'A3-i · R1', code:'A3-i', title:'Proforma particulars',
+  applies: F => KIND(F,'balance_transfer'),
+  run: F => {
+    const pf = D(F).proforma || {}, p = F.sap && F.sap.payslip, rc = F.sap && F.sap.recalc, out = [];
+    const E = [ev(pf.page,'Proforma', pf.crop)];
+    const persOnly = v => /personal|pers|p\s*#/i.test(v||'') || digits(v) === digits(F.personnelNo);
+    out.push((pf.name && pf.father && pf.designation)
+      ? { sub:'particulars', status:'ok', doc:'Name, father name, designation, personnel no.', finding:pf.name + ' s/o ' + pf.father + ', ' + pf.designation + ', personnel no. ' + F.personnelNo + '.', evidence:E }
+      : { sub:'particulars', status:'hard', doc:'Name, father name, designation', finding:'Particulars missing from the proforma.', remedy:'Complete the proforma.', evidence:E });
+    out.push(pf.periods ? { sub:'periods', status:'ok', doc:'Period of posting', finding:'Stated in column 7: ' + pf.periods + '.', evidence:[ev(pf.page,'Periods', pf.periodsCrop)] }
+                        : { sub:'periods', status:'hard', doc:'Period of posting', finding:'The periods of posting are not stated.', remedy:'State the periods of posting.' });
+    if (pf.newAc && persOnly(pf.newAc) && pf.daoConfirmed)
+      out.push({ sub:'dao-ac', status:'ok', doc:'GP Fund A/c No. in the DAO (column 5)', finding:'Column 5 gives the personnel number, which keys the GP Fund account in SAP, and the respective DAO has confirmed it: "' + pf.daoConfirmed + '".', evidence:[ev(pf.page,'DAO confirmation', pf.daoCrop)] });
+    else if (pf.newAc) out.push({ sub:'dao-ac', status:'ok', doc:'GP Fund A/c No. in the DAO (column 5)', finding:'Stated: ' + pf.newAc + '.' });
+    else out.push({ sub:'dao-ac', status:'hard', doc:'GP Fund A/c No. in the DAO (column 5)', finding:'Not stated, and not confirmed by the DAO.', remedy:'State the account number and obtain DAO confirmation.',
+                    cure: docCure('Completed proforma', 'proforma', [{k:'newAc',label:'New A/c no. (column 5)',type:'text'}]) });
+    if (pf.oldAc && !persOnly(pf.oldAc) && digits(pf.oldAc).length > 3) out.push({ sub:'old-ac', status:'ok', doc:'Old GP Fund A/c No. (column 4)', finding:'Stated: ' + pf.oldAc + '.' });
+    else if (!p) out.push({ sub:'old-ac', status:'sap', doc:'Old GP Fund A/c No. (column 4)', finding:'Column 4 repeats the personnel number. SAP carries any old manual account number (pay slip Old #, re-calculation report), so the section reads it from the extract before treating it as a department defect.', cure:{ kind:'sap' } });
+    else if (p.oldGpfNo) out.push({ sub:'old-ac', status:'ok', doc:'Old GP Fund A/c No. (column 4)', finding:'Column 4 repeats the personnel number; SAP holds the old number as ' + p.oldGpfNo + '. Settled from SAP.' });
+    else if (rc && rc.rows && rc.rows.length && !rc.rows[0].opening) out.push({ sub:'old-ac', status:'ok', doc:'Old GP Fund A/c No. (column 4)', finding:'SAP holds no old number and the ledger opens at nil in ' + rc.rows[0].start + ', so no manual-era account exists.' });
+    else out.push({ sub:'old-ac', status:'hard', doc:'Old GP Fund A/c No. (column 4)', finding:'Column 4 repeats the personnel number and SAP does not supply an old account number.', remedy:'Department to state the old GP Fund account number allotted by AG Punjab, or "none allotted".',
+                    cure: docCure('Department statement of old A/c no.', 'proforma', [{k:'oldAc',label:'Old A/c no.',type:'text'}]) });
+    if (pf.lastDeduction) out.push({ sub:'last-ded', status:'ok', doc:'Treasury voucher and date of last deduction (column 6)', finding:'Stated: ' + pf.lastDeduction + '.' });
+    else if (rc && rc.rows && rc.rows.length){ const last = rc.rows.slice().reverse().find(r=>r.subscription); out.push({ sub:'last-ded', status:'ok', doc:'Last fund deduction (column 6)', finding:'Column 6 is blank; SAP shows the last subscriptions posted in ' + (last ? last.start + ' to ' + last.end : 'the report') + '. Read from SAP.' }); }
+    else out.push({ sub:'last-ded', status:'sap', doc:'Last fund deduction (column 6)', finding:'Column 6 is blank. The last GP Fund deduction is read from the SAP re-calculation report, which the section pulls itself.', cure:{ kind:'sap' } });
+    if (rc && rc.rows && rc.rows.length){
+      const recent = rc.rows.slice(-2).filter(r=>r.tempAdvance || r.permanentAdvance);
+      out.push(recent.length ? { sub:'adv12', status:'conf', doc:'Advances in the last twelve months (column 7)', finding:'SAP shows advances in ' + recent.map(r=>r.start + ' to ' + r.end + ' (Rs ' + fmt((r.tempAdvance||0)+(r.permanentAdvance||0)) + ')').join('; ') + '. Carry any outstanding recovery with the transfer.', cure:{ kind:'verify', vid:'BT-ADV' } }
+                             : { sub:'adv12', status:'ok', doc:'Advances in the last twelve months (column 7)', finding:'Nil per SAP.' });
+    } else out.push({ sub:'adv12', status:'sap', doc:'Advances in the last twelve months (column 7)', finding:'No figure or nil entered; column 7 was used for the posting periods. Any advance or outstanding recovery is read from SAP before the balance is transferred.', cure:{ kind:'sap' } });
+    return out;
+  }});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CURES: how a confirmed upload changes the facts. The rules then decide.
+   ═══════════════════════════════════════════════════════════════════════ */
+const up = (file) => 'upload: ' + file;
+const CURES = {
+  'add-sanction': (F,v,f)=>{ F.docs.sanction = Object.assign(F.docs.sanction||{}, {present:true, page:up(f), orderNo:v.orderNo, date:v.date, amount:num(v.amount), rule:v.rule}); },
+  'set-sanction-rule': (F,v)=>{ Object.assign(F.docs.sanction, {rule:v.rule || F.docs.sanction.rule, reason:v.reason || F.docs.sanction.reason}); },
+  'sanction-qr': (F,v,f)=>{ F.qr = (F.qr||[]).filter(q=>q.id!=='sanction-upload');
+    F.qr.push({id:'sanction-upload', page:up(f), doc:'uploaded QR-coded sanction', symbology:'QR code', decoded:true, payload:v.payload,
+               compare:[{field:'Content', qrVal:v.payload||'(not entered)', docVal:'the printed sanction', docLabel:'sanction', match:yes(v.agrees)}]});
+    F.docs.sanction.qrId = 'sanction-upload'; },
+  'add-cnic': (F,v,f)=>{ F.docs.cnics = F.docs.cnics||[]; F.docs.cnics.push({page:up(f), whose:'subscriber', type:v.type||'smart', number:v.number, attested:false}); },
+  'add-form': (F,v,f)=>{ const lab = KIND(F,'refundable') ? 'FORM PAY 05' : 'FORM PAY 06';
+    F.docs.changeForm = Object.assign(F.docs.changeForm||{}, {present:true, label:lab, page:up(f), personalNo:v.personalNo, sigKind: yes(v.signed)?'signature':'none', ddoSigned: yes(v.ddoSigned)}); },
+  'ddo-signed': (F,v)=>{ F.docs.changeForm.ddoSigned = yes(v.ddoSigned); },
+  'form-signed': (F,v)=>{ F.docs.changeForm.sigKind = yes(v.signed) ? 'signature' : 'none'; },
+  'form-signatures': (F,v)=>{ if (yes(v.ddoSigned)) F.docs.changeForm.ddoSigned = true; if (yes(v.signed) && (!F.docs.changeForm.sigKind || F.docs.changeForm.sigKind==='none')) F.docs.changeForm.sigKind = 'signature'; },
+  'set-form-persno': (F,v)=>{ F.docs.changeForm.personalNo = v.personalNo; },
+  'set-form-cnic': (F,v)=>{ F.docs.changeForm.cnic = v.cnic; },
+  'add-gpf10': (F,v,f)=>{ F.docs.gpf10 = {present:true, page:up(f), accountNo:v.accountNo, missing:[].concat(yes(v.signed)?[]:['signature of subscriber or claimant'], yes(v.ddoSigned)?[]:['signature of DDO'], v.accountNo?[]:['GP Fund account no.'])}; },
+  'gpf10-complete': (F,v)=>{ const g = F.docs.gpf10; g.missing = (g.missing||[]).filter((m,i)=>!yes(v['m'+i])); },
+  'add-notification': (F,v,f)=>{ F.docs.notification = {present:true, page:up(f), no:v.no, date:v.date, label:'Notification'}; },
+  'set-oldac': (F,v)=>{ F.docs.changeForm.oldGpfNo = v.oldGpfNo; },
+  'add-servicebook': (F,v,f)=>{ F.docs.serviceBook = {present:true, pages:[up(f)], entries:{dor:yes(v.dor), order:yes(v.order), leave:yes(v.leave)}, note:'uploaded pages'}; },
+  'add-heir-cnic': (F,v)=>{ const h = F.docs.death.heirs.find(x=>x.name===v.name); if (h) h.cnicCopy = true; },
+  'add-affidavit': (F,v,f)=>{ F.docs.death.affidavit = {present:true, original:yes(v.original), page:up(f), label:'Affidavit for lawful widow'}; },
+  'add-succession': (F,v,f)=>{ if (yes(v.granted)){ F.docs.death.successionCert = 'granted'; F.docs.death.successionPage = up(f); } },
+  'set-period': (F,v)=>{ F.docs.challans.period = v.period; },
+  'challan-stamp': (F,v)=>{ const c = F.docs.challans.copies.find(x=>String(x.page)===String(v.page)); if (c && yes(v.bankStamp)) c.bankStamp = true; },
+  'challan-stamp-clear': (F,v)=>{ const c = F.docs.challans.copies.find(x=>String(x.page)===String(v.page)); if (c && yes(v.legible)) c.stampFaint = false; },
+  'to-verified': (F,v)=>{ F.docs.challans.toVerified = yes(v.toVerified); },
+  'add-challan': (F,v,f)=>{ F.docs.challans.copies.push({page:up(f), sr:v.sr, amount:num(v.amount), bankStamp:yes(v.bankStamp)}); },
+  'proforma': (F,v)=>{ Object.assign(F.docs.proforma, {oldAc:v.oldAc || F.docs.proforma.oldAc, newAc:v.newAc || F.docs.proforma.newAc, lastDeduction:v.lastDeduction || F.docs.proforma.lastDeduction}); }
+};
+
+/* ---- facts_gen.js ---- */
+/* Generated from the reading stage output. Do not edit by hand. */
+const GEN = {
+ "balance-transfer": {
+  "slug": "balance-transfer",
+  "pageDims": {
+   "1": [
+    2994,
+    2116
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "balance_transfer_proforma",
+    "title": "The proforma regarding transfer of GP Fund balances, in landscape."
+   }
+  ],
+  "evidence": [
+   "balance-transfer_p001_ag_receipt_diary_stamp.png",
+   "balance-transfer_p001_col4_col5_personal_no.png",
+   "balance-transfer_p001_col5_header_faisalbad.png",
+   "balance-transfer_p001_col6_voucher_blank.png",
+   "balance-transfer_p001_col7_period_of_posting.png",
+   "balance-transfer_p001_dao_endorsement_stamp_signature.png",
+   "balance-transfer_p001_dao_green_initials.png",
+   "balance-transfer_p001_dao_receipt_stamp_diary14580.png",
+   "balance-transfer_p001_ddo_signature_no_stamp.png",
+   "balance-transfer_p001_hod_forwarding_note.png",
+   "balance-transfer_p001_margin_marks.png",
+   "balance-transfer_p001_particulars_name_father_designation.png",
+   "balance-transfer_p001_title_office.png"
+  ]
+ },
+ "fp-death": {
+  "slug": "fp-death",
+  "pageDims": {
+   "1": [
+    2273,
+    3216
+   ],
+   "2": [
+    2455,
+    3474
+   ],
+   "3": [
+    2455,
+    3474
+   ],
+   "4": [
+    2480,
+    3509
+   ],
+   "5": [
+    2455,
+    3474
+   ],
+   "6": [
+    2471,
+    3497
+   ],
+   "7": [
+    2240,
+    3170
+   ],
+   "8": [
+    2447,
+    3462
+   ],
+   "9": [
+    2447,
+    3462
+   ],
+   "10": [
+    2339,
+    3310
+   ],
+   "11": [
+    2447,
+    3462
+   ],
+   "12": [
+    2174,
+    3076
+   ],
+   "13": [
+    3368,
+    2380
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "GPF-10 (Revised) application for final payment",
+    "title": "Revised G.P.F-10, Memo No."
+   },
+   {
+    "p": 2,
+    "type": "Obituary notification",
+    "title": "Govt."
+   },
+   {
+    "p": 3,
+    "type": "NADRA Punjab Decline Certificate",
+    "title": "NADRA Decline Certificate under the Punjab Letters of Administration and Succession Certificates Act 2021."
+   },
+   {
+    "p": 4,
+    "type": "NADRA Family Registration Certificate",
+    "title": "NADRA FRC for applicant Zubaida Bibi, citizen no."
+   },
+   {
+    "p": 5,
+    "type": "CNIC copy (subscriber, old-style card)",
+    "title": "Front and back of the old-style (non-smart) CNIC of Yousaf Masih, 00001-0000107-1, year of birth 1976."
+   },
+   {
+    "p": 6,
+    "type": "CNIC copy (widow, smart CNIC)",
+    "title": "Smart NIC of Zubaida Bibi, husband Yousaf Masih, F, identity no."
+   },
+   {
+    "p": 7,
+    "type": "Court application for succession certificate (page 1)",
+    "title": "In the Court of Senior Civil Judge Lahore."
+   },
+   {
+    "p": 8,
+    "type": "Court application for succession certificate (page 2)",
+    "title": "Prayer that petitioner No."
+   },
+   {
+    "p": 9,
+    "type": "Undertaking on stamp paper",
+    "title": "Rs 100 stamp paper with a Notary Public stamp ('MUHAMMAD ..."
+   },
+   {
+    "p": 10,
+    "type": "Death Registration Certificate (NADRA CRMS / Union Council)",
+    "title": "Government of the Punjab Death Registration Certificate, Tracking Id 91100043919744 (last digits partly under a stamp)..."
+   },
+   {
+    "p": 11,
+    "type": "SAP pay slip (November 2023)",
+    "title": "SAP pay slip for November 2023, S# 22, P Sec 018."
+   },
+   {
+    "p": 12,
+    "type": "FORM PAY 06 (Permanent Loans/Advances Form, Form 6-B)",
+    "title": "FORM PAY 06, office of Govt Associate College Mustafabad Lahore, for the month of 7/25."
+   },
+   {
+    "p": 13,
+    "type": "SAP GPF Final Re-calculation Report",
+    "title": "SAP GPF Final Re-calculation Report, System PRP, User UMAIR RAZA, run 10.09.2026 at 14:54:03, employee number 90000417..."
+   }
+  ],
+  "evidence": [
+   "fp-death_p001_ag_receipt_stamp.png",
+   "fp-death_p001_ddo_signature_stamp.png",
+   "fp-death_p001_gpf_account_no.png",
+   "fp-death_p001_thumb_gpf10.png",
+   "fp-death_p002_aag_noted_annotation.png",
+   "fp-death_p002_principal_signature.png",
+   "fp-death_p003_legal_heirs_decline_reason.png",
+   "fp-death_p003_osd_post_property_line.png",
+   "fp-death_p003_qr_decline_cert.png",
+   "fp-death_p003_registrar_signature_attestation.png",
+   "fp-death_p004_frc_family_members.png",
+   "fp-death_p004_qr_frc.png",
+   "fp-death_p004_registrar_signature_attestation.png",
+   "fp-death_p005_cnic_subscriber_back.png",
+   "fp-death_p005_cnic_subscriber_front.png",
+   "fp-death_p006_cnic_widow_back_qr_number.png",
+   "fp-death_p006_cnic_widow_front.png",
+   "fp-death_p006_cnic_widow_holder_signature_box.png",
+   "fp-death_p006_qr_smart_cnic_widow.png",
+   "fp-death_p007_court_presentation_stamp.png",
+   "fp-death_p008_thumb_petitioner.png",
+   "fp-death_p009_notary_stamp.png",
+   "fp-death_p009_undertaking_unsigned_claimant_block.png",
+   "fp-death_p010_death_cert_header.png",
+   "fp-death_p010_qr_death_registration.png",
+   "fp-death_p010_uc_secretary_signature.png",
+   "fp-death_p011_gpf_balance_loan_lines.png",
+   "fp-death_p011_payslip_header.png",
+   "fp-death_p011_payslip_status_no_osd.png",
+   "fp-death_p011_principal_attestation.png",
+   "fp-death_p012_ag_acceptance_annotation.png",
+   "fp-death_p012_ddo_signature_stamp.png",
+   "fp-death_p012_dod_dor_old_acct_notes.png",
+   "fp-death_p012_employee_specimen_thumbs.png",
+   "fp-death_p012_loan_details_amount.png",
+   "fp-death_p012_osd_post_annotation.png",
+   "fp-death_p012_payee_widow_note.png",
+   "fp-death_p012_personal_number_boxes.png",
+   "fp-death_p013_recalc_header.png",
+   "fp-death_p013_recalc_last_rows.png"
+  ],
+  "sap": {
+   "payslip": {
+    "page": 11,
+    "month": "November 2023",
+    "persNo": "90000417",
+    "name": "YOUSAF MASIH",
+    "designation": "SWEEPER",
+    "cnic": "0000100001071",
+    "bps": "02",
+    "ddoCode": "L04734 Principal, Govt. Associate College (W) Mustafabad",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 50791,
+    "gpfSubscription": 1060,
+    "loanInstalment": 3000,
+    "loanBalance": 72000,
+    "basicPay": 20190,
+    "osdPost": "",
+    "attested": true
+   },
+   "recalc": {
+    "page": 13,
+    "persNo": "90000417",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 0,
+      "subscription": 650,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 23,
+      "closing": 673
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 673,
+      "subscription": 1560,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 216,
+      "closing": 2449
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 2449,
+      "subscription": 2462,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 513,
+      "closing": 5424
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 5424,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 816,
+      "closing": 8784
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 8784,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1372,
+      "closing": 12700
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 12700,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1654,
+      "closing": 16898
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 16898,
+      "subscription": 2544,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2029,
+      "closing": 21471
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 21471,
+      "subscription": 3730,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2642,
+      "closing": 27843
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 27843,
+      "subscription": 4737,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3554,
+      "closing": 36134
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 36134,
+      "subscription": 8210,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5803,
+      "closing": 50147
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 50147,
+      "subscription": 8520,
+      "adjustments": 0,
+      "tempAdvance": 36000,
+      "recTempAdvance": 9000,
+      "permanentAdvance": 0,
+      "interest": 3781,
+      "closing": 35448
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 35448,
+      "subscription": 8520,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 12000,
+      "permanentAdvance": 0,
+      "interest": 3678,
+      "closing": 59646
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 59646,
+      "subscription": 8520,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 12000,
+      "permanentAdvance": 0,
+      "interest": 8774,
+      "closing": 88940
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 88940,
+      "subscription": 11670,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 3000,
+      "permanentAdvance": 0,
+      "interest": 13881,
+      "closing": 117491
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 117491,
+      "subscription": 9540,
+      "adjustments": 0,
+      "tempAdvance": 78000,
+      "recTempAdvance": 18000,
+      "permanentAdvance": 0,
+      "interest": 10492,
+      "closing": 77523
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 77523,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 9659,
+      "closing": 87182
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 87182,
+      "subscription": 6360,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 92482,
+      "interest": 8071,
+      "closing": 9131
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 9131,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 0,
+      "closing": 9131
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000417\nName: YOUSAF MASIH\nDesignation: SWEEPER\nCNIC: 0000100001071\nMonth: November 2023\nBPS: 02\nDDO Code: L04734 Principal, Govt. Associate College (W) Mustafabad\nGPF No: \nOld GPF No: \nGPF Balance: 50791\nGPF Subscription: 1060\nGPF Loan Instalment: 3000\nGPF Loan Balance: 72000\nBasic Pay: 20190\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000417\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2009|30.06.2010|0|650|0|0|0|0|23|673\n01.07.2010|30.06.2011|673|1560|0|0|0|0|216|2449\n01.07.2011|30.06.2012|2449|2462|0|0|0|0|513|5424\n01.07.2012|30.06.2013|5424|2544|0|0|0|0|816|8784\n01.07.2013|30.06.2014|8784|2544|0|0|0|0|1372|12700\n01.07.2014|30.06.2015|12700|2544|0|0|0|0|1654|16898\n01.07.2015|30.06.2016|16898|2544|0|0|0|0|2029|21471\n01.07.2016|30.06.2017|21471|3730|0|0|0|0|2642|27843\n01.07.2017|30.06.2018|27843|4737|0|0|0|0|3554|36134\n01.07.2018|30.06.2019|36134|8210|0|0|0|0|5803|50147\n01.07.2019|30.06.2020|50147|8520|0|36000|9000|0|3781|35448\n01.07.2020|30.06.2021|35448|8520|0|0|12000|0|3678|59646\n01.07.2021|30.06.2022|59646|8520|0|0|12000|0|8774|88940\n01.07.2022|30.06.2023|88940|11670|0|0|3000|0|13881|117491\n01.07.2023|30.06.2024|117491|9540|0|78000|18000|0|10492|77523\n01.07.2024|30.06.2025|77523|0|0|0|0|0|9659|87182\n01.07.2025|30.06.2026|87182|6360|0|0|0|92482|8071|9131\n01.07.2026|30.06.2027|9131|0|0|0|0|0|0|9131\n"
+ },
+ "fp-dismissal": {
+  "slug": "fp-dismissal",
+  "pageDims": {
+   "1": [
+    2380,
+    3368
+   ],
+   "2": [
+    2455,
+    3474
+   ],
+   "3": [
+    2471,
+    3497
+   ],
+   "4": [
+    2414,
+    3415
+   ],
+   "5": [
+    2994,
+    2116
+   ],
+   "6": [
+    2314,
+    3275
+   ],
+   "7": [
+    3252,
+    2298
+   ],
+   "8": [
+    3485,
+    2463
+   ],
+   "9": [
+    3392,
+    2397
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "change_form_pay06_with_office_computation",
+    "title": "FORM PAY 06 'PERMANENT LO[ANS/ADVANC]ES FORM (NEW & AMENDMEN[T])' (pink sticky note covers part of the title;"
+   },
+   {
+    "p": 2,
+    "type": "gpf10_application_with_forwarding",
+    "title": "'APPLICATION FOR THE FINAL PAYMENT OF GP[F]' (revised form, FD letter No."
+   },
+   {
+    "p": 3,
+    "type": "urdu_application",
+    "title": "Handwritten Urdu application to 'Janab-e-Aali' citing order 1823-33 PA-STO/S dated 30-12-23 and asking for release of ..."
+   },
+   {
+    "p": 4,
+    "type": "punishment_order_p1",
+    "title": "PUNISHMENT ORDER (left edge cropped), QR code at top."
+   },
+   {
+    "p": 5,
+    "type": "punishment_order_p2",
+    "title": "Continuation (landscape page)."
+   },
+   {
+    "p": 6,
+    "type": "estamp_affidavit_with_cnic",
+    "title": "E-STAMP paper;"
+   },
+   {
+    "p": 7,
+    "type": "sap_payslip",
+    "title": "SAP pay slip in payroll-register format, 01.12.2023-31.12.2023: 90000834 FAIZAN SIDDIQUI, Prev Pers No blank, Desig TRAFF..."
+   },
+   {
+    "p": 8,
+    "type": "sap_payslip_duplicate",
+    "title": "The same December 2023 pay slip scanned again at an angle;"
+   },
+   {
+    "p": 9,
+    "type": "sap_gpf_final_recalculation_report",
+    "title": "GPF Final Re-calculation Report, System PRP, User UMAIR RAZA, dated 10/09/2026 14:58:25."
+   }
+  ],
+  "evidence": [
+   "fp-dismissal_p001_ddo_signature_cto_stamp.png",
+   "fp-dismissal_p001_month_field_and_ag_token.png",
+   "fp-dismissal_p001_office_computation_sheet.png",
+   "fp-dismissal_p001_office_working_gross_overwritten.png",
+   "fp-dismissal_p001_personal_no_cnic_fields.png",
+   "fp-dismissal_p001_subscriber_signature_1.png",
+   "fp-dismissal_p001_subscriber_signature_2.png",
+   "fp-dismissal_p001_subscriber_signature_3.png",
+   "fp-dismissal_p001_thumb_impression_1.png",
+   "fp-dismissal_p001_thumb_impression_2.png",
+   "fp-dismissal_p001_thumb_impression_3.png",
+   "fp-dismissal_p002_ag_receipt_token_stamp.png",
+   "fp-dismissal_p002_cto_forwarding_signature.png",
+   "fp-dismissal_p002_subscriber_signature_gpf10.png",
+   "fp-dismissal_p002_urdu_note_service_roll_attached.png",
+   "fp-dismissal_p003_cto_diary_stamp.png",
+   "fp-dismissal_p004_attestation_accountant_ctp.png",
+   "fp-dismissal_p004_order_no_date_header.png",
+   "fp-dismissal_p004_qr_punishment_order.png",
+   "fp-dismissal_p005_attestation_accountant_ctp.png",
+   "fp-dismissal_p005_punishing_authority_signature.png",
+   "fp-dismissal_p006_affidavit_subscriber_signature.png",
+   "fp-dismissal_p006_affidavit_thumb_impression.png",
+   "fp-dismissal_p006_cnic_front_copy.png",
+   "fp-dismissal_p006_cnic_holder_signature_area.png",
+   "fp-dismissal_p006_estamp_qr.png",
+   "fp-dismissal_p006_notary_stamp_attested.png",
+   "fp-dismissal_p006_stamp_vendor_signature.png",
+   "fp-dismissal_p007_payslip_gpf_balance_loan_lines.png",
+   "fp-dismissal_p007_payslip_identity_gpf_deductions.png",
+   "fp-dismissal_p008_payslip_gpf_balance_loan_lines.png",
+   "fp-dismissal_p009_recalc_header.png",
+   "fp-dismissal_p009_recalc_last_rows.png"
+  ],
+  "sap": {
+   "payslip": {
+    "page": 7,
+    "month": "December 2023",
+    "persNo": "90000834",
+    "name": "FAIZAN SIDDIQUI",
+    "designation": "TRAFFIC WARDEN",
+    "cnic": "",
+    "bps": "14",
+    "ddoCode": "L04087 Chief Traffic Officer Lahore",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 445013,
+    "gpfSubscription": 3900,
+    "loanInstalment": 13000,
+    "loanBalance": 221000,
+    "basicPay": 52110,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 9,
+    "persNo": "90000834",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2008",
+      "end": "30.06.2009",
+      "opening": 0,
+      "subscription": 5100,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 223,
+      "closing": 5323
+     },
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 5323,
+      "subscription": 10200,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1519,
+      "closing": 17042
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 17042,
+      "subscription": 10200,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3205,
+      "closing": 30447
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 30447,
+      "subscription": 15942,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5321,
+      "closing": 51710
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 51710,
+      "subscription": 16464,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 7275,
+      "closing": 75449
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 75449,
+      "subscription": 6860,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 10633,
+      "closing": 92942
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 92942,
+      "subscription": 16464,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 11969,
+      "closing": 121375
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 121375,
+      "subscription": 16464,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 14463,
+      "closing": 152302
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 152302,
+      "subscription": 24249,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 18610,
+      "closing": 195161
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 195161,
+      "subscription": 31014,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 24777,
+      "closing": 250952
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 250952,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 38455,
+      "closing": 320847
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 320847,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 40545,
+      "closing": 392832
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 392832,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 32379,
+      "closing": 456651
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 456651,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 58736,
+      "closing": 546827
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 546827,
+      "subscription": 42960,
+      "adjustments": 0,
+      "tempAdvance": 390000,
+      "recTempAdvance": 91000,
+      "permanentAdvance": 0,
+      "interest": 52826,
+      "closing": 343613
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 343613,
+      "subscription": 23400,
+      "adjustments": 6052,
+      "tempAdvance": 0,
+      "recTempAdvance": 78000,
+      "permanentAdvance": 451065,
+      "interest": 17968,
+      "closing": 17968
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 17968,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2239,
+      "closing": 17968
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000834\nName: FAIZAN SIDDIQUI\nDesignation: TRAFFIC WARDEN\nCNIC: \nMonth: December 2023\nBPS: 14\nDDO Code: L04087 Chief Traffic Officer Lahore\nGPF No: \nOld GPF No: \nGPF Balance: 445013\nGPF Subscription: 3900\nGPF Loan Instalment: 13000\nGPF Loan Balance: 221000\nBasic Pay: 52110\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000834\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2008|30.06.2009|0|5100|0|0|0|0|223|5323\n01.07.2009|30.06.2010|5323|10200|0|0|0|0|1519|17042\n01.07.2010|30.06.2011|17042|10200|0|0|0|0|3205|30447\n01.07.2011|30.06.2012|30447|15942|0|0|0|0|5321|51710\n01.07.2012|30.06.2013|51710|16464|0|0|0|0|7275|75449\n01.07.2013|30.06.2014|75449|6860|0|0|0|0|10633|92942\n01.07.2014|30.06.2015|92942|16464|0|0|0|0|11969|121375\n01.07.2015|30.06.2016|121375|16464|0|0|0|0|14463|152302\n01.07.2016|30.06.2017|152302|24249|0|0|0|0|18610|195161\n01.07.2017|30.06.2018|195161|31014|0|0|0|0|24777|250952\n01.07.2018|30.06.2019|250952|31440|0|0|0|0|38455|320847\n01.07.2019|30.06.2020|320847|31440|0|0|0|0|40545|392832\n01.07.2020|30.06.2021|392832|31440|0|0|0|0|32379|456651\n01.07.2021|30.06.2022|456651|31440|0|0|0|0|58736|546827\n01.07.2022|30.06.2023|546827|42960|0|390000|91000|0|52826|343613\n01.07.2023|30.06.2024|343613|23400|6052|0|78000|451065|17968|17968\n01.07.2024|30.06.2025|17968|0|0|0|0|0|2239|17968\n"
+ },
+ "fp-non-gazetted": {
+  "slug": "fp-non-gazetted",
+  "pageDims": {
+   "1": [
+    2298,
+    3252
+   ],
+   "2": [
+    2339,
+    3310
+   ],
+   "3": [
+    2422,
+    3427
+   ],
+   "4": [
+    2314,
+    3275
+   ],
+   "5": [
+    2422,
+    3427
+   ],
+   "6": [
+    2397,
+    3392
+   ],
+   "7": [
+    2414,
+    3415
+   ],
+   "8": [
+    3287,
+    2323
+   ],
+   "9": [
+    3322,
+    2347
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "GPF-10 (Revised G PF-10) application for final payment",
+    "title": "Addressed to Accountant General Punjab Lahore;"
+   },
+   {
+    "p": 2,
+    "type": "Retirement office order (attested copy)",
+    "title": "Office of the Superintending Engineer, Highway Mechanical Circle, 02-Lake Road, Lahore."
+   },
+   {
+    "p": 3,
+    "type": "CNIC copy - front (old-format Urdu computerised NIC)",
+    "title": "Page rotated 90 degrees."
+   },
+   {
+    "p": 4,
+    "type": "CNIC copy - back (old-format)",
+    "title": "Page rotated 90 degrees."
+   },
+   {
+    "p": 5,
+    "type": "FORM PAY 06 - Permanent Loans/Advances Form (New & Amendment), used as Change Form-06",
+    "title": "Office of the: stamp Executive Engineer Highway Mechanical Division Lahore;"
+   },
+   {
+    "p": 6,
+    "type": "Service Book cover",
+    "title": "SERVICE BOOK;"
+   },
+   {
+    "p": 7,
+    "type": "Service Book particulars page with finger impressions",
+    "title": "Name فضل دین;"
+   },
+   {
+    "p": 8,
+    "type": "SAP pay slip June 2026 (sheets S#1 and S#2 of the same slip)",
+    "title": "Pers # 90000374, FAZAL DIN, DRIVER, CNIC 0000100001029, P Sec:002, Month: June 2026, LO5361 -XEN Highways Mechanical Di..."
+   },
+   {
+    "p": 9,
+    "type": "SAP GPF Final Re-calculation Report",
+    "title": "System PRP, User UMAIR RAZA, Date 10/09/2026, Time 14:52:35, Page 1;"
+   }
+  ],
+  "evidence": [
+   "fp-non-gazetted_p001_ag_diary_receipt_stamp.png",
+   "fp-non-gazetted_p001_gpf10_ddo_ee_signature_stamp.png",
+   "fp-non-gazetted_p001_gpf10_name_dor_account.png",
+   "fp-non-gazetted_p001_gpf10_subscriber_signature.png",
+   "fp-non-gazetted_p002_office_order_402_body.png",
+   "fp-non-gazetted_p002_se_signature_ee_attestation.png",
+   "fp-non-gazetted_p002_se_signature_office_order.png",
+   "fp-non-gazetted_p003_cnic_front_attested_rotated.png",
+   "fp-non-gazetted_p003_cnic_front_name_father_dob_rotated.png",
+   "fp-non-gazetted_p004_cnic_back_2d_barcode.png",
+   "fp-non-gazetted_p004_cnic_back_issue_date_expiry.png",
+   "fp-non-gazetted_p004_cnic_back_printed_thumbprint.png",
+   "fp-non-gazetted_p004_cnic_back_rotated.png",
+   "fp-non-gazetted_p005_form06_ddo_code.png",
+   "fp-non-gazetted_p005_form06_employee_specimen_signatures.png",
+   "fp-non-gazetted_p005_form06_month_field.png",
+   "fp-non-gazetted_p005_form06_percentage_100.png",
+   "fp-non-gazetted_p005_form06_personal_no_name_cnic.png",
+   "fp-non-gazetted_p005_form06_prepared_checked_ee_stamp.png",
+   "fp-non-gazetted_p005_form06_scale_old_gpf_account.png",
+   "fp-non-gazetted_p006_service_book_cover_numbers.png",
+   "fp-non-gazetted_p007_attesting_ee_gujranwala.png",
+   "fp-non-gazetted_p007_sdo_sheikhupura_signature.png",
+   "fp-non-gazetted_p007_service_book_finger_impressions.png",
+   "fp-non-gazetted_p007_service_book_govt_servant_signature.png",
+   "fp-non-gazetted_p007_service_book_thumb_impression.png",
+   "fp-non-gazetted_p008_payslip1_dob_service_bank.png",
+   "fp-non-gazetted_p008_payslip1_gpf_balance_subscription.png",
+   "fp-non-gazetted_p008_payslip1_header.png",
+   "fp-non-gazetted_p008_payslip2_gpf_balance.png",
+   "fp-non-gazetted_p009_recalc_last_rows_2023_2027.png",
+   "fp-non-gazetted_p009_recalc_report_header.png",
+   "fp-non-gazetted_p009_recalc_temp_advance_rows_2003_2012.png"
+  ],
+  "sap": {
+   "payslip": {
+    "page": 8,
+    "month": "June 2026",
+    "persNo": "90000374",
+    "name": "FAZAL DIN",
+    "designation": "DRIVER",
+    "cnic": "0000100001029",
+    "bps": "06",
+    "ddoCode": "LO5361 XEN Highways Mechanical Division",
+    "gpfNo": "UPDATED",
+    "oldGpfNo": "01700171471",
+    "gpfBalance": 74178,
+    "gpfSubscription": 1420,
+    "loanInstalment": null,
+    "loanBalance": null,
+    "basicPay": 40960,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 9,
+    "persNo": "90000374",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.1988",
+      "end": "30.06.1989",
+      "opening": 0,
+      "subscription": 75,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2,
+      "closing": 77
+     },
+     {
+      "start": "01.07.1989",
+      "end": "30.06.1990",
+      "opening": 77,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 50,
+      "closing": 427
+     },
+     {
+      "start": "01.07.1990",
+      "end": "30.06.1991",
+      "opening": 427,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 122,
+      "closing": 849
+     },
+     {
+      "start": "01.07.1991",
+      "end": "30.06.1992",
+      "opening": 849,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 209,
+      "closing": 1358
+     },
+     {
+      "start": "01.07.1992",
+      "end": "30.06.1993",
+      "opening": 1358,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 315,
+      "closing": 1973
+     },
+     {
+      "start": "01.07.1993",
+      "end": "30.06.1994",
+      "opening": 1973,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 431,
+      "closing": 2704
+     },
+     {
+      "start": "01.07.1994",
+      "end": "30.06.1995",
+      "opening": 2704,
+      "subscription": 300,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 575,
+      "closing": 3579
+     },
+     {
+      "start": "01.07.1995",
+      "end": "30.06.1996",
+      "opening": 3579,
+      "subscription": 575,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 781,
+      "closing": 4935
+     },
+     {
+      "start": "01.07.1996",
+      "end": "30.06.1997",
+      "opening": 4935,
+      "subscription": 600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1146,
+      "closing": 6681
+     },
+     {
+      "start": "01.07.1997",
+      "end": "30.06.1998",
+      "opening": 6681,
+      "subscription": 600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1595,
+      "closing": 8876
+     },
+     {
+      "start": "01.07.1998",
+      "end": "30.06.1999",
+      "opening": 8876,
+      "subscription": 550,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2074,
+      "closing": 11500
+     },
+     {
+      "start": "01.07.1999",
+      "end": "30.06.2000",
+      "opening": 11500,
+      "subscription": 720,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2465,
+      "closing": 14685
+     },
+     {
+      "start": "01.07.2000",
+      "end": "30.06.2001",
+      "opening": 14685,
+      "subscription": 1080,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2291,
+      "closing": 18056
+     },
+     {
+      "start": "01.07.2001",
+      "end": "30.06.2002",
+      "opening": 18056,
+      "subscription": 1560,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2817,
+      "closing": 22433
+     },
+     {
+      "start": "01.07.2002",
+      "end": "30.06.2003",
+      "opening": 22433,
+      "subscription": 2040,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3413,
+      "closing": 27886
+     },
+     {
+      "start": "01.07.2003",
+      "end": "30.06.2004",
+      "opening": 27886,
+      "subscription": 2040,
+      "adjustments": 0,
+      "tempAdvance": 10000,
+      "recTempAdvance": 500,
+      "permanentAdvance": 0,
+      "interest": 3694,
+      "closing": 24120
+     },
+     {
+      "start": "01.07.2004",
+      "end": "30.06.2005",
+      "opening": 24120,
+      "subscription": 2040,
+      "adjustments": 670,
+      "tempAdvance": 0,
+      "recTempAdvance": 6000,
+      "permanentAdvance": 0,
+      "interest": 3497,
+      "closing": 36327
+     },
+     {
+      "start": "01.07.2005",
+      "end": "30.06.2006",
+      "opening": 36327,
+      "subscription": 2140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 3000,
+      "permanentAdvance": 0,
+      "interest": 4182,
+      "closing": 45649
+     },
+     {
+      "start": "01.07.2006",
+      "end": "30.06.2007",
+      "opening": 45649,
+      "subscription": 2280,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5157,
+      "closing": 53086
+     },
+     {
+      "start": "01.07.2007",
+      "end": "30.06.2008",
+      "opening": 53086,
+      "subscription": 2480,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 6802,
+      "closing": 62368
+     },
+     {
+      "start": "01.07.2008",
+      "end": "30.06.2009",
+      "opening": 62368,
+      "subscription": 3320,
+      "adjustments": 0,
+      "tempAdvance": 39600,
+      "recTempAdvance": 1100,
+      "permanentAdvance": 0,
+      "interest": 9134,
+      "closing": 36322
+     },
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 36322,
+      "subscription": 3480,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 13200,
+      "permanentAdvance": 0,
+      "interest": 6350,
+      "closing": 59352
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 59352,
+      "subscription": 3480,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 13200,
+      "permanentAdvance": 0,
+      "interest": 9711,
+      "closing": 85743
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 85743,
+      "subscription": 5405,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 12100,
+      "permanentAdvance": 0,
+      "interest": 13104,
+      "closing": 116352
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 116352,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 70000,
+      "interest": 8025,
+      "closing": 59957
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 59957,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8502,
+      "closing": 74039
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 74039,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 50000,
+      "interest": 6607,
+      "closing": 36226
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 36226,
+      "subscription": 5580,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 4357,
+      "closing": 46163
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 46163,
+      "subscription": 8237,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 35000,
+      "interest": 4044,
+      "closing": 23444
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 23444,
+      "subscription": 10535,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3403,
+      "closing": 37382
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 37382,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 6194,
+      "closing": 54256
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 54256,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 45000,
+      "interest": 4505,
+      "closing": 24441
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 24441,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2388,
+      "closing": 37509
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 37509,
+      "subscription": 10680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5368,
+      "closing": 53557
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 53557,
+      "subscription": 14640,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8673,
+      "closing": 76870
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 76870,
+      "subscription": 15960,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 68000,
+      "interest": 11155,
+      "closing": 35985
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 35985,
+      "subscription": 16950,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5623,
+      "closing": 58558
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 58558,
+      "subscription": 17040,
+      "adjustments": -1420,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8154,
+      "closing": 82332
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 82332,
+      "subscription": 0,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 74178,
+      "interest": 0,
+      "closing": 8154
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000374\nName: FAZAL DIN\nDesignation: DRIVER\nCNIC: 0000100001029\nMonth: June 2026\nBPS: 06\nDDO Code: LO5361 XEN Highways Mechanical Division\nGPF No: UPDATED\nOld GPF No: 01700171471\nGPF Balance: 74178\nGPF Subscription: 1420\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 40960\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000374\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.1988|30.06.1989|0|75|0|0|0|0|2|77\n01.07.1989|30.06.1990|77|300|0|0|0|0|50|427\n01.07.1990|30.06.1991|427|300|0|0|0|0|122|849\n01.07.1991|30.06.1992|849|300|0|0|0|0|209|1358\n01.07.1992|30.06.1993|1358|300|0|0|0|0|315|1973\n01.07.1993|30.06.1994|1973|300|0|0|0|0|431|2704\n01.07.1994|30.06.1995|2704|300|0|0|0|0|575|3579\n01.07.1995|30.06.1996|3579|575|0|0|0|0|781|4935\n01.07.1996|30.06.1997|4935|600|0|0|0|0|1146|6681\n01.07.1997|30.06.1998|6681|600|0|0|0|0|1595|8876\n01.07.1998|30.06.1999|8876|550|0|0|0|0|2074|11500\n01.07.1999|30.06.2000|11500|720|0|0|0|0|2465|14685\n01.07.2000|30.06.2001|14685|1080|0|0|0|0|2291|18056\n01.07.2001|30.06.2002|18056|1560|0|0|0|0|2817|22433\n01.07.2002|30.06.2003|22433|2040|0|0|0|0|3413|27886\n01.07.2003|30.06.2004|27886|2040|0|10000|500|0|3694|24120\n01.07.2004|30.06.2005|24120|2040|670|0|6000|0|3497|36327\n01.07.2005|30.06.2006|36327|2140|0|0|3000|0|4182|45649\n01.07.2006|30.06.2007|45649|2280|0|0|0|0|5157|53086\n01.07.2007|30.06.2008|53086|2480|0|0|0|0|6802|62368\n01.07.2008|30.06.2009|62368|3320|0|39600|1100|0|9134|36322\n01.07.2009|30.06.2010|36322|3480|0|0|13200|0|6350|59352\n01.07.2010|30.06.2011|59352|3480|0|0|13200|0|9711|85743\n01.07.2011|30.06.2012|85743|5405|0|0|12100|0|13104|116352\n01.07.2012|30.06.2013|116352|5580|0|0|0|70000|8025|59957\n01.07.2013|30.06.2014|59957|5580|0|0|0|0|8502|74039\n01.07.2014|30.06.2015|74039|5580|0|0|0|50000|6607|36226\n01.07.2015|30.06.2016|36226|5580|0|0|0|0|4357|46163\n01.07.2016|30.06.2017|46163|8237|0|0|0|35000|4044|23444\n01.07.2017|30.06.2018|23444|10535|0|0|0|0|3403|37382\n01.07.2018|30.06.2019|37382|10680|0|0|0|0|6194|54256\n01.07.2019|30.06.2020|54256|10680|0|0|0|45000|4505|24441\n01.07.2020|30.06.2021|24441|10680|0|0|0|0|2388|37509\n01.07.2021|30.06.2022|37509|10680|0|0|0|0|5368|53557\n01.07.2022|30.06.2023|53557|14640|0|0|0|0|8673|76870\n01.07.2023|30.06.2024|76870|15960|0|0|0|68000|11155|35985\n01.07.2024|30.06.2025|35985|16950|0|0|0|0|5623|58558\n01.07.2025|30.06.2026|58558|17040|-1420|0|0|0|8154|82332\n01.07.2026|30.06.2027|82332|0|0|0|0|74178|0|8154\n"
+ },
+ "missing-credits": {
+  "slug": "missing-credits",
+  "pageDims": {
+   "1": [
+    2414,
+    3415
+   ],
+   "2": [
+    2438,
+    3450
+   ],
+   "3": [
+    2422,
+    3427
+   ],
+   "4": [
+    2463,
+    3485
+   ],
+   "5": [
+    2463,
+    3485
+   ],
+   "6": [
+    2372,
+    3357
+   ],
+   "7": [
+    2438,
+    3450
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "covering_letter_with_treasury_verification",
+    "title": "Letter from Administrative Officer, Government Engineering Academy Punjab, Lahore (letterhead 'Punjab E[ngineering] Ac..."
+   },
+   {
+    "p": 2,
+    "type": "challan_form_32A",
+    "title": "Challan Form No."
+   },
+   {
+    "p": 3,
+    "type": "challan_form_32A",
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 4,
+    "type": "challan_form_32A",
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 5,
+    "type": "challan_form_32A",
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 6,
+    "type": "challan_form_32A",
+    "title": "Challan Form 32-A, schedule Sr."
+   },
+   {
+    "p": 7,
+    "type": "challan_form_32A",
+    "title": "Challan Form 32-A, schedule Sr."
+   }
+  ],
+  "evidence": [
+   "missing-credits_p001_covering_letter_signatory_admin_officer.png",
+   "missing-credits_p001_handwritten_no_fd2_13-8-26.png",
+   "missing-credits_p001_receipt_stamps_24jul_10aug.png",
+   "missing-credits_p001_schedule_7_challans.png",
+   "missing-credits_p001_treasury_verification_endorsement.png",
+   "missing-credits_p002_bank_stamp.png",
+   "missing-credits_p002_ddo_signature.png",
+   "missing-credits_p002_treasury_challan_verified_mark.png",
+   "missing-credits_p003_bank_stamp.png",
+   "missing-credits_p003_ddo_signature.png",
+   "missing-credits_p003_treasury_challan_verified_mark.png",
+   "missing-credits_p004_bank_stamp.png",
+   "missing-credits_p004_ddo_signature.png",
+   "missing-credits_p004_treasury_challan_verified_mark.png",
+   "missing-credits_p005_bank_stamp.png",
+   "missing-credits_p005_ddo_signature.png",
+   "missing-credits_p005_treasury_challan_verified_mark.png",
+   "missing-credits_p006_bank_stamp.png",
+   "missing-credits_p006_bank_stamp_clearing.png",
+   "missing-credits_p006_ddo_signature.png",
+   "missing-credits_p006_treasury_challan_verified_mark.png",
+   "missing-credits_p007_bank_stamp.png",
+   "missing-credits_p007_ddo_signature.png",
+   "missing-credits_p007_treasury_challan_verified_mark.png"
+  ]
+ },
+ "non-refundable": {
+  "slug": "non-refundable",
+  "pageDims": {
+   "1": [
+    2463,
+    3485
+   ],
+   "2": [
+    2422,
+    3427
+   ],
+   "3": [
+    2422,
+    3427
+   ],
+   "4": [
+    2389,
+    3380
+   ],
+   "5": [
+    2372,
+    3357
+   ],
+   "6": [
+    2463,
+    3485
+   ],
+   "7": [
+    3193,
+    2257
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "sanction_order_qr",
+    "title": "Government of the Punjab, School Education Department, ORDER No."
+   },
+   {
+    "p": 2,
+    "type": "cnic_copy_front",
+    "title": "Photocopy of a smart CNIC front (chip visible), rotated 90 degrees."
+   },
+   {
+    "p": 3,
+    "type": "cnic_copy_back",
+    "title": "Photocopy of the smart CNIC back, rotated 90 degrees."
+   },
+   {
+    "p": 4,
+    "type": "form_pay_06",
+    "title": "FORM PAY 06, PERMANENT LOANS/ADVANCES FORM (NEW & AMENDMENT)."
+   },
+   {
+    "p": 5,
+    "type": "sap_pay_slip",
+    "title": "SAP pay slip, Lahore, P Sec 035, Month August 2026, LV6280 -GOVT."
+   },
+   {
+    "p": 6,
+    "type": "sap_pay_slip_continuation",
+    "title": "Second sheet of the same August 2026 SAP pay slip ('Sheet no."
+   },
+   {
+    "p": 7,
+    "type": "sap_gpf_final_recalculation_report",
+    "title": "SAP GPF Final Re-calculation Report, Page 1, Date 10/09/2026, Time 14:49:25, for 90000216 RUBINA TARIQ ('No :' blank)."
+   }
+  ],
+  "evidence": [
+   "non-refundable_p001_diary_stamp.png",
+   "non-refundable_p001_endorsement_signatures.png",
+   "non-refundable_p001_sanction_qr.png",
+   "non-refundable_p001_sanction_rule_amount_balance.png",
+   "non-refundable_p001_sanction_signatory_stamp.png",
+   "non-refundable_p002_cnic_front_attestation.png",
+   "non-refundable_p002_cnic_holder_signature.png",
+   "non-refundable_p002_cnic_number_issue.png",
+   "non-refundable_p003_cnic_back_number.png",
+   "non-refundable_p003_cnic_back_qr.png",
+   "non-refundable_p004_ag_office_signatures.png",
+   "non-refundable_p004_ddo_signature_stamp.png",
+   "non-refundable_p004_employee_specimen_signatures.png",
+   "non-refundable_p004_loan_box.png",
+   "non-refundable_p004_office_annotations_12274.png",
+   "non-refundable_p004_old_gpf_no_field.png",
+   "non-refundable_p004_personal_no_and_cnic.png",
+   "non-refundable_p005_payslip_gpf_balance_deductions.png",
+   "non-refundable_p005_payslip_header.png",
+   "non-refundable_p006_payslip_gpf_balance.png",
+   "non-refundable_p006_payslip_header.png",
+   "non-refundable_p007_recalc_header.png",
+   "non-refundable_p007_recalc_last_rows.png"
+  ],
+  "sap": {
+   "payslip": {
+    "page": 5,
+    "month": "August 2026",
+    "persNo": "90000216",
+    "name": "RUBINA TARIQ",
+    "designation": "PRIMARY SCHOOL TEACHER",
+    "cnic": "0000100001044",
+    "bps": "14",
+    "ddoCode": "LV6280 Govt. Girls High School R.A. Bazar Lahore",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 260522,
+    "gpfSubscription": 3900,
+    "loanInstalment": null,
+    "loanBalance": null,
+    "basicPay": 50050,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 7,
+    "persNo": "90000216",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 0,
+      "subscription": 1460,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 43,
+      "closing": 1503
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 1503,
+      "subscription": 6680,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 675,
+      "closing": 8858
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 8858,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1527,
+      "closing": 17525
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 17525,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2888,
+      "closing": 27553
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 27553,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3692,
+      "closing": 38385
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 38385,
+      "subscription": 7140,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 4690,
+      "closing": 50215
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 50215,
+      "subscription": 10519,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 6282,
+      "closing": 67016
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 67016,
+      "subscription": 22371,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 8989,
+      "closing": 98376
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 98376,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 16561,
+      "closing": 146377
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 146377,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 19609,
+      "closing": 197426
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 197426,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 16942,
+      "closing": 245808
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 245808,
+      "subscription": 31440,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 32592,
+      "closing": 309840
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 309840,
+      "subscription": 42960,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 47163,
+      "closing": 399963
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 399963,
+      "subscription": 46800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 59416,
+      "closing": 506179
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 506179,
+      "subscription": 46800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 66229,
+      "closing": 619208
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 619208,
+      "subscription": 46800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 77669,
+      "closing": 743677
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 743677,
+      "subscription": 7800,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 490955,
+      "interest": 0,
+      "closing": 260522
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000216\nName: RUBINA TARIQ\nDesignation: PRIMARY SCHOOL TEACHER\nCNIC: 0000100001044\nMonth: August 2026\nBPS: 14\nDDO Code: LV6280 Govt. Girls High School R.A. Bazar Lahore\nGPF No: \nOld GPF No: \nGPF Balance: 260522\nGPF Subscription: 3900\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 50050\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000216\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2010|30.06.2011|0|1460|0|0|0|0|43|1503\n01.07.2011|30.06.2012|1503|6680|0|0|0|0|675|8858\n01.07.2012|30.06.2013|8858|7140|0|0|0|0|1527|17525\n01.07.2013|30.06.2014|17525|7140|0|0|0|0|2888|27553\n01.07.2014|30.06.2015|27553|7140|0|0|0|0|3692|38385\n01.07.2015|30.06.2016|38385|7140|0|0|0|0|4690|50215\n01.07.2016|30.06.2017|50215|10519|0|0|0|0|6282|67016\n01.07.2017|30.06.2018|67016|22371|0|0|0|0|8989|98376\n01.07.2018|30.06.2019|98376|31440|0|0|0|0|16561|146377\n01.07.2019|30.06.2020|146377|31440|0|0|0|0|19609|197426\n01.07.2020|30.06.2021|197426|31440|0|0|0|0|16942|245808\n01.07.2021|30.06.2022|245808|31440|0|0|0|0|32592|309840\n01.07.2022|30.06.2023|309840|42960|0|0|0|0|47163|399963\n01.07.2023|30.06.2024|399963|46800|0|0|0|0|59416|506179\n01.07.2024|30.06.2025|506179|46800|0|0|0|0|66229|619208\n01.07.2025|30.06.2026|619208|46800|0|0|0|0|77669|743677\n01.07.2026|30.06.2027|743677|7800|0|0|0|490955|0|260522\n"
+ },
+ "refundable": {
+  "slug": "refundable",
+  "pageDims": {
+   "1": [
+    2447,
+    3462
+   ],
+   "2": [
+    2389,
+    3380
+   ],
+   "3": [
+    3275,
+    2314
+   ],
+   "4": [
+    2405,
+    3404
+   ],
+   "5": [
+    3357,
+    2372
+   ],
+   "6": [
+    3368,
+    2380
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "sanction_order",
+    "title": "Original sanction ORDER, Office of the Deputy Inspector General of Police, Operations, Lahore."
+   },
+   {
+    "p": 2,
+    "type": "cnic_copy_front",
+    "title": "Photocopy of the smart National Identity Card front, rotated 90 degrees: chip, Name Barkit Ali (Urdu برکت علی), Fath..."
+   },
+   {
+    "p": 3,
+    "type": "cnic_copy_back",
+    "title": "Photocopy of the smart NIC back: CNIC 00001-0000101-3 printed above the QR code;"
+   },
+   {
+    "p": 4,
+    "type": "change_form_05",
+    "title": "FORM PAY05 Temporary Loans/Advances Form (New & Amendment)."
+   },
+   {
+    "p": 5,
+    "type": "sap_payslip",
+    "title": "SAP pay slip for August 2026, two copies side by side."
+   },
+   {
+    "p": 6,
+    "type": "sap_gpf_recalculation_report",
+    "title": "SAP GPF Final Re-calculation Report."
+   }
+  ],
+  "evidence": [
+   "refundable_p001_ag_token_diary_noting.png",
+   "refundable_p001_sanction_no_date.png",
+   "refundable_p001_sanction_order_text.png",
+   "refundable_p001_sanction_signatory_for_dig.png",
+   "refundable_p002_cnic_front_details.png",
+   "refundable_p002_cnic_holder_signature.png",
+   "refundable_p003_cnic_back_qr.png",
+   "refundable_p003_stray_fragment_other_employee_report.png",
+   "refundable_p004_form05_accounts_officer_endorsement.png",
+   "refundable_p004_form05_ddo_personal_no_name.png",
+   "refundable_p004_form05_ddo_signatory_stamp.png",
+   "refundable_p004_form05_employee_specimen_signatures.png",
+   "refundable_p004_form05_header.png",
+   "refundable_p004_form05_loan_details.png",
+   "refundable_p005_payslip_left_gpf_balance_loan_lines.png",
+   "refundable_p005_payslip_left_header_ddo.png",
+   "refundable_p005_payslip_right_gpf_balance.png",
+   "refundable_p005_payslip_right_header_identity.png",
+   "refundable_p005_payslip_totals_footer.png",
+   "refundable_p006_recalc_header.png",
+   "refundable_p006_recalc_last_row.png",
+   "refundable_p006_recalc_table.png"
+  ],
+  "sap": {
+   "payslip": {
+    "page": 5,
+    "month": "August 2026",
+    "persNo": "90000227",
+    "name": "BARKAT ALI",
+    "designation": "CONSTABLE",
+    "cnic": "0000100001013",
+    "bps": "07",
+    "ddoCode": "LO0056 DIG Special Protection Unit",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 19194,
+    "gpfSubscription": 1500,
+    "loanInstalment": 2000,
+    "loanBalance": 56000,
+    "basicPay": 22890,
+    "osdPost": "",
+    "attested": false
+   },
+   "recalc": {
+    "page": 6,
+    "persNo": "90000227",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 0,
+      "subscription": 9000,
+      "adjustments": 919,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 384,
+      "closing": 10303
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 10303,
+      "subscription": 18000,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 2801,
+      "closing": 31104
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 31104,
+      "subscription": 18000,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5090,
+      "closing": 54194
+     },
+     {
+      "start": "01.07.2025",
+      "end": "30.06.2026",
+      "opening": 54194,
+      "subscription": 18000,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 7705,
+      "closing": 79899
+     },
+     {
+      "start": "01.07.2026",
+      "end": "30.06.2027",
+      "opening": 79899,
+      "subscription": 3000,
+      "adjustments": 0,
+      "tempAdvance": 58000,
+      "recTempAdvance": 2000,
+      "permanentAdvance": 0,
+      "interest": 0,
+      "closing": 26899
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000227\nName: BARKAT ALI\nDesignation: CONSTABLE\nCNIC: 0000100001013\nMonth: August 2026\nBPS: 07\nDDO Code: LO0056 DIG Special Protection Unit\nGPF No: \nOld GPF No: \nGPF Balance: 19194\nGPF Subscription: 1500\nGPF Loan Instalment: 2000\nGPF Loan Balance: 56000\nBasic Pay: 22890\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000227\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2022|30.06.2023|0|9000|919|0|0|0|384|10303\n01.07.2023|30.06.2024|10303|18000|0|0|0|0|2801|31104\n01.07.2024|30.06.2025|31104|18000|0|0|0|0|5090|54194\n01.07.2025|30.06.2026|54194|18000|0|0|0|0|7705|79899\n01.07.2026|30.06.2027|79899|3000|0|58000|2000|0|0|26899\n"
+ },
+ "residual": {
+  "slug": "residual",
+  "pageDims": {
+   "1": [
+    2471,
+    3497
+   ],
+   "2": [
+    2447,
+    3462
+   ],
+   "3": [
+    2438,
+    3450
+   ],
+   "4": [
+    3345,
+    2364
+   ],
+   "5": [
+    3252,
+    2298
+   ],
+   "6": [
+    3263,
+    2306
+   ]
+  },
+  "pageIndex": [
+   {
+    "p": 1,
+    "type": "change_form_pay06",
+    "title": "FORM PAY 06 'PERMANENT LOANS / ADVANCES FORM (..."
+   },
+   {
+    "p": 2,
+    "type": "covering_application",
+    "title": "Subscriber's application to the Accountant General Punjab, subject 'RESIDUAL PAYMENT OF G.P.FUND'."
+   },
+   {
+    "p": 3,
+    "type": "retirement_notification",
+    "title": "Government of the Punjab, Specialized Healthcare and Medical Education Department, Notification No."
+   },
+   {
+    "p": 4,
+    "type": "cnic_copy",
+    "title": "Smart CNIC (chip), front side only: Name Shabnam;"
+   },
+   {
+    "p": 5,
+    "type": "sap_payslip",
+    "title": "SAP 'Accounts Office Lahore PAYROLL REGISTER', page 211, date 01.11.2024, for the month of October 2024 (01.10.2024-31..."
+   },
+   {
+    "p": 6,
+    "type": "sap_recalc_report",
+    "title": "SAP 'GPF Final Re-calculation Report', Page 1, Date 10/09/2026, Time 15:00:22;"
+   }
+  ],
+  "evidence": [
+   "residual_p001_ag_audit_entered_signatures.png",
+   "residual_p001_ddo_signature_stamp.png",
+   "residual_p001_employee_specimen_signatures.png",
+   "residual_p001_form_title_pink_note.png",
+   "residual_p001_handwritten_residual_amount.png",
+   "residual_p001_personal_number.png",
+   "residual_p002_diary_tokens.png",
+   "residual_p002_subscriber_signature.png",
+   "residual_p003_barcode.png",
+   "residual_p003_notification_text.png",
+   "residual_p003_os_attestation.png",
+   "residual_p003_section_officer_signature.png",
+   "residual_p004_cnic_attestation.png",
+   "residual_p004_cnic_front_only.png",
+   "residual_p004_cnic_holder_signature.png",
+   "residual_p005_gpf_subscription_balance.png",
+   "residual_p005_loan_fund_lines.png",
+   "residual_p005_os_attestation.png",
+   "residual_p005_payslip_header.png",
+   "residual_p006_recalc_header.png",
+   "residual_p006_recalc_last_rows.png"
+  ],
+  "sap": {
+   "payslip": {
+    "page": 5,
+    "month": "October 2024",
+    "persNo": "90000687",
+    "name": "SHABNAM",
+    "designation": "HEAD NURSE",
+    "cnic": "",
+    "bps": "17",
+    "ddoCode": "L04578 Punjab Institute of Mental Health",
+    "gpfNo": "",
+    "oldGpfNo": "",
+    "gpfBalance": 340330,
+    "gpfSubscription": 6350,
+    "loanInstalment": null,
+    "loanBalance": null,
+    "basicPay": 110050,
+    "osdPost": "",
+    "attested": true
+   },
+   "recalc": {
+    "page": 6,
+    "persNo": "90000687",
+    "reportDate": "10.09.2026",
+    "rows": [
+     {
+      "start": "01.07.2007",
+      "end": "30.06.2008",
+      "opening": 0,
+      "subscription": 2280,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 48,
+      "closing": 2328
+     },
+     {
+      "start": "01.07.2008",
+      "end": "30.06.2009",
+      "opening": 2328,
+      "subscription": 12020,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 1290,
+      "closing": 15638
+     },
+     {
+      "start": "01.07.2009",
+      "end": "30.06.2010",
+      "opening": 15638,
+      "subscription": 12600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 3145,
+      "closing": 31383
+     },
+     {
+      "start": "01.07.2010",
+      "end": "30.06.2011",
+      "opening": 31383,
+      "subscription": 12600,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 5426,
+      "closing": 49409
+     },
+     {
+      "start": "01.07.2011",
+      "end": "30.06.2012",
+      "opening": 49409,
+      "subscription": 20410,
+      "adjustments": 0,
+      "tempAdvance": 45000,
+      "recTempAdvance": 7500,
+      "permanentAdvance": 0,
+      "interest": 5927,
+      "closing": 38246
+     },
+     {
+      "start": "01.07.2012",
+      "end": "30.06.2013",
+      "opening": 38246,
+      "subscription": 21120,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 18000,
+      "permanentAdvance": 0,
+      "interest": 7132,
+      "closing": 84498
+     },
+     {
+      "start": "01.07.2013",
+      "end": "30.06.2014",
+      "opening": 84498,
+      "subscription": 21120,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 19500,
+      "permanentAdvance": 80000,
+      "interest": 10837,
+      "closing": 55955
+     },
+     {
+      "start": "01.07.2014",
+      "end": "30.06.2015",
+      "opening": 55955,
+      "subscription": 21120,
+      "adjustments": 0,
+      "tempAdvance": 50000,
+      "recTempAdvance": 6000,
+      "permanentAdvance": 0,
+      "interest": 6078,
+      "closing": 39153
+     },
+     {
+      "start": "01.07.2015",
+      "end": "30.06.2016",
+      "opening": 39153,
+      "subscription": 25920,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 24000,
+      "permanentAdvance": 0,
+      "interest": 7303,
+      "closing": 96376
+     },
+     {
+      "start": "01.07.2016",
+      "end": "30.06.2017",
+      "opening": 96376,
+      "subscription": 39566,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 20000,
+      "permanentAdvance": 0,
+      "interest": 14588,
+      "closing": 170530
+     },
+     {
+      "start": "01.07.2017",
+      "end": "30.06.2018",
+      "opening": 170530,
+      "subscription": 50549,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 23118,
+      "closing": 244197
+     },
+     {
+      "start": "01.07.2018",
+      "end": "30.06.2019",
+      "opening": 244197,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 200000,
+      "interest": 19892,
+      "closing": 115329
+     },
+     {
+      "start": "01.07.2019",
+      "end": "30.06.2020",
+      "opening": 115329,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 100000,
+      "interest": 13170,
+      "closing": 79739
+     },
+     {
+      "start": "01.07.2020",
+      "end": "30.06.2021",
+      "opening": 79739,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 77000,
+      "interest": 5451,
+      "closing": 59430
+     },
+     {
+      "start": "01.07.2021",
+      "end": "30.06.2022",
+      "opening": 59430,
+      "subscription": 51240,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 0,
+      "permanentAdvance": 0,
+      "interest": 10811,
+      "closing": 121481
+     },
+     {
+      "start": "01.07.2022",
+      "end": "30.06.2023",
+      "opening": 121481,
+      "subscription": 69960,
+      "adjustments": 0,
+      "tempAdvance": 100000,
+      "recTempAdvance": 27780,
+      "permanentAdvance": 0,
+      "interest": 17393,
+      "closing": 136614
+     },
+     {
+      "start": "01.07.2023",
+      "end": "30.06.2024",
+      "opening": 136614,
+      "subscription": 76200,
+      "adjustments": 0,
+      "tempAdvance": 0,
+      "recTempAdvance": 66672,
+      "permanentAdvance": 0,
+      "interest": 29896,
+      "closing": 309382
+     },
+     {
+      "start": "01.07.2024",
+      "end": "30.06.2025",
+      "opening": 309382,
+      "subscription": 25400,
+      "adjustments": 31408,
+      "tempAdvance": 0,
+      "recTempAdvance": 5548,
+      "permanentAdvance": 712068,
+      "interest": 20807,
+      "closing": -340330
+     }
+    ]
+   },
+   "source": "case"
+  },
+  "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000687\nName: SHABNAM\nDesignation: HEAD NURSE\nCNIC: \nMonth: October 2024\nBPS: 17\nDDO Code: L04578 Punjab Institute of Mental Health\nGPF No: \nOld GPF No: \nGPF Balance: 340330\nGPF Subscription: 6350\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 110050\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000687\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2007|30.06.2008|0|2280|0|0|0|0|48|2328\n01.07.2008|30.06.2009|2328|12020|0|0|0|0|1290|15638\n01.07.2009|30.06.2010|15638|12600|0|0|0|0|3145|31383\n01.07.2010|30.06.2011|31383|12600|0|0|0|0|5426|49409\n01.07.2011|30.06.2012|49409|20410|0|45000|7500|0|5927|38246\n01.07.2012|30.06.2013|38246|21120|0|0|18000|0|7132|84498\n01.07.2013|30.06.2014|84498|21120|0|0|19500|80000|10837|55955\n01.07.2014|30.06.2015|55955|21120|0|50000|6000|0|6078|39153\n01.07.2015|30.06.2016|39153|25920|0|0|24000|0|7303|96376\n01.07.2016|30.06.2017|96376|39566|0|0|20000|0|14588|170530\n01.07.2017|30.06.2018|170530|50549|0|0|0|0|23118|244197\n01.07.2018|30.06.2019|244197|51240|0|0|0|200000|19892|115329\n01.07.2019|30.06.2020|115329|51240|0|0|0|100000|13170|79739\n01.07.2020|30.06.2021|79739|51240|0|0|0|77000|5451|59430\n01.07.2021|30.06.2022|59430|51240|0|0|0|0|10811|121481\n01.07.2022|30.06.2023|121481|69960|0|100000|27780|0|17393|136614\n01.07.2023|30.06.2024|136614|76200|0|0|66672|0|29896|309382\n01.07.2024|30.06.2025|309382|25400|31408|0|5548|712068|20807|-340330\n"
+ }
+};
+
+/* ---- facts.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   CASE FACTS
+   What the reading stage lifted from each of the eight cases (corpus of
+   15-09-2026). The prototype ships these as fixtures; in production they are
+   produced by stages 1 to 5 with a confidence and page region per field.
+   Page index, page sizes and SAP figures come from GEN (generated).
+   ═══════════════════════════════════════════════════════════════════════ */
+const CASES = {};
+function defCase(slug, f){
+  const g = GEN[slug] || {};
+  CASES[slug] = Object.assign({
+    slug, key: slug,
+    pageDims: g.pageDims || {},
+    pageIndex: (g.pageIndex || []).map(x=>({ p:x.p, title:x.title })),
+    sap: g.sap ? clone(g.sap) : null,
+    sapSample: g.sapSample || null,
+    verifications: {}, custom: [], qr: [], signatures: [], thumbs: [], docs: {}
+  }, f);
+}
+
+/* ---- facts_case_balance-transfer.js ---- */
+/* Balance Transfer: Rafaqat Ahmad, Director Public Relations Faisalabad */
+defCase('balance-transfer', {
+  label:'Balance Transfer', kind:'balance_transfer', family:'BALANCE_TRANSFER',
+  sub:'Transfer of GP Fund balances, Lahore postings to DAO Faisalabad',
+  subject:'Rafaqat Ahmad, Director', dept:'Office of the Director Public Relations, Faisalabad',
+  personnelNo:'90000847', pages:1, diary:'14580 / 243780 / 988477, 03-08-2026', gazetted:'unknown',
+  note:'Rafaqat Ahmad, Director PR Faisalabad. One-page proforma. The DAO has confirmed P# 90000847 as the GP Fund account; old account and last deduction to come from SAP.',
+  persNos:[{doc:'Proforma column 4',page:1,value:'90000847'},{doc:'Proforma column 5',page:1,value:'90000847'},{doc:'DAO Faisalabad endorsement',page:1,value:'90000847'}],
+  record:[
+    ['Subscriber','Rafaqat Ahmad s/o Mian Nawab, Director','Proforma columns 1 to 3',0.97,1],
+    ['Office','Office of the Director Public Relations, Faisalabad','Proforma header',0.97,1],
+    ['Old A/c no. (column 4)','"Personal No:- 90000847", the personnel number','Proforma',0.99,1],
+    ['New A/c no. in DAO (column 5)','"Personal No:- 90000847", confirmed by DAO Faisalabad','Proforma · DAO endorsement',0.98,1],
+    ['Last deduction (column 6)','Blank','Proforma',0.99,1],
+    ['Column 7','Used for the posting periods; no advance figure or nil','Proforma',0.95,1],
+    ['Posting periods','Lahore 24-04-1999 to 03-2009; 03-2011 to 03-2013; 10-2018 to 08-2019; 03-2021 to 03-2025','Proforma column 7',0.93,1],
+    ['DAO endorsement','No. DAO/FSD/HM/212 dated 13-05-2026, forwarded to AG Punjab, "GP Fund A/C No: P# 90000847 Is Hereby Confirmed"','Proforma',0.92,1],
+    ['DDO signature','Present; no office stamp, name or date','Proforma',0.95,1]
+  ],
+  docs:{
+    covering:{ present:true, page:1, author:'the Director Public Relations Faisalabad and the DAO Faisalabad', nature:'Handwritten forwarding on the proforma and DAO endorsement', crop:'balance-transfer_p001_hod_forwarding_note.png' },
+    proforma:{ page:1, name:'Rafaqat Ahmad', father:'Mian Nawab', designation:'Director', oldAc:'Personal No:- 90000847', newAc:'Personal No:- 90000847',
+      daoConfirmed:'The GP Fund A/C No: P# 90000847 Is Hereby Confirmed', lastDeduction:'',
+      periods:'Lahore 24-04-1999 to March 2009, March 2011 to March 2013, October 2018 to August 2019, March 2021 to March 2025',
+      crop:'balance-transfer_p001_particulars_name_father_designation.png', periodsCrop:'balance-transfer_p001_col7_period_of_posting.png', daoCrop:'balance-transfer_p001_dao_endorsement_stamp_signature.png' }
+  },
+  signatures:[
+    { id:'ddo', page:1, doc:'proforma', role:'ddo', roleLabel:'DDO signature', authority:'Director Public Relations, Faisalabad',
+      signedBy:'unidentified signatory (no stamp, name or date)', forMarker:false, crop:'balance-transfer_p001_ddo_signature_no_stamp.png', bbox:[2036,1347,2635,1602] },
+    { id:'dao', page:1, doc:'DAO endorsement', role:'certifying', roleLabel:'DAO confirmation', authority:'District Accounts Office, Faisalabad',
+      signedBy:'District Accounts Officer, Faisalabad', forMarker:false, crop:'balance-transfer_p001_dao_endorsement_stamp_signature.png', bbox:[1527,1168,2215,1677] }
+  ]
+});
+
+/* ---- facts_case_fp-death.js ---- */
+/* Final Payment, Death Case: Yousaf Masih, Sweeper (BS-02), Govt. Associate College (W) Mustafabad */
+defCase('fp-death', {
+  label:'Final Payment, Death Case', kind:'death', family:'FINAL_PAYMENT',
+  sub:'Final payment on death in service, claim by the widow',
+  subject:'Yousaf Masih (deceased), Sweeper (BS-02)', dept:'Govt. Associate College (W) Mustafabad, Lahore (Education)',
+  personnelNo:'90000417', pages:13, diary:'20064, 24-02-2026', gazetted:'non-gazetted',
+  note:'Yousaf Masih, Sweeper, died 03-04-2024. The Rs 92,482 claim reconciles to SAP. The widow thumbs; no affidavit for lawful widow, no Service Book, CNIC copies missing for two heirs, and Form 06 carries a personnel number one digit off.',
+  persNos:[{doc:'GPF-10 (account no.)',page:1,value:'90000417'},{doc:'FORM PAY 06',page:12,value:'30890417'},{doc:'SAP pay slip, November 2023',page:11,value:'90000417'},{doc:'GPF Final Re-calculation Report',page:13,value:'90000417'}],
+  record:[
+    ['Deceased subscriber','Yousaf Masih s/o Bota Masih, Sweeper (BS-02)','GPF-10 · obituary · NADRA · SAP',0.98,1],
+    ['Personnel no. / GP Fund A/c','90000417; Form 06 reads 30890417','GPF-10 · SAP · report · Form 06',0.93,12],
+    ['CNIC','00001-0000107-1 (old card, attested; the faded copy reads ...071-1, NADRA documents and SAP give ...676-1)','CNIC · NADRA certificates · pay slip',0.95,5],
+    ['Death','03-04-2024 in service; first entry into service 02-11-2008','Obituary No. 1612/GACWM · NADRA death certificate',0.98,2],
+    ['Claimant','Mst Zubaida Bibi, widow, 00001-0000103-8 (smart card)','CNIC · FRC · Form 06',0.96,6],
+    ['Legal heirs (NADRA FRC)','Widow; son Javed Masih (born 17-08-2004); daughter Hina Yousaf (born 28-09-2007, 18 since 28-09-2025)','FRC · decline certificate · court application',0.95,4],
+    ['Claimed','Rs 92,482 on Form 06','Form 06',0.97,12],
+    ['SAP basis of the claim','Closing 30-06-2025 Rs 87,182 plus five months at Rs 1,060','Re-calculation report',0.97,13],
+    ['SAP posting','Permanent advance Rs 92,482 in 2025-26, leaving Rs 9,131','Re-calculation report',0.97,13],
+    ['Advances','Rs 36,000 (2019-20) fully recovered; Rs 78,000 (2023-24) with Rs 60,000 unrecovered, already netted','Report · pay slip',0.95,13],
+    ['OSD post','Form 06 annotated "(Death case) OSD post created"; NADRA decline lists "Creation The OSD Post"; pay slip on file predates the death','Form 06 · decline certificate',0.90,12],
+    ['Succession','NADRA decline (a minor heir) and a court application; no grant','Pages 3, 7, 8',0.95,3]
+  ],
+  docs:{
+    covering:{ present:true, page:1, author:'the Principal, Govt. Associate College (W) Mustafabad', nature:'Revised GPF-10 issued under Memo No. 667/GACWM dated 24-07-2025 with the printed forwarding line' },
+    gpf10:{ present:true, page:1, accountNo:'90000417', crop:'fp-death_p001_item3_family_list_blank.png',
+      missing:['item 3(ii), the family members entitled under Rule 1.34, the rule and their applications'] },
+    notification:{ present:true, page:2, label:'Obituary notification', no:'1612/GACWM', date:'06-04-2024', note:'Death on 03-04-2024; the NADRA death registration certificate agrees.' },
+    cnics:[
+      { page:5, whose:'deceased subscriber', type:'old', number:'00001-0000107-1', name:'Yousaf Masih', attested:true, attestedBy:'Principal, GAC (W) Mustafabad', crop:'fp-death_p005_cnic_subscriber_front.png' },
+      { page:6, whose:'widow', type:'smart', number:'00001-0000103-8', name:'Zubaida Bibi', attested:true, attestedBy:'Principal, GAC (W) Mustafabad', crop:'fp-death_p006_cnic_widow_front.png', sigCrop:'fp-death_p006_cnic_widow_holder_signature_box.png' } ],
+    changeForm:{ present:true, label:'FORM PAY 06', page:12, personalNo:'30890417', name:'Yousaf Masih', sigKind:'thumb', ddoSigned:true,
+      ddoStamp:'Principal, Govt. Associate College (W) Mustafabad', ddoCrop:'fp-death_p012_ddo_signature_stamp.png', crop:'fp-death_p012_loan_details_amount.png',
+      oldGpfNo:'', oldGpfNoState:'written as what seems to read "-nil-"', note:'Payee noted as the widow, Mst Zubaida Bibi; amount Rs 92,482; annotated "(Death case) OSD post created".' },
+    serviceBook:{ present:false },
+    death:{
+      widowClaim:true,
+      heirs:[ { name:'Zubaida Bibi', relation:'widow', cnicCopy:true },
+              { name:'Javed Masih', relation:'son, born 17-08-2004', cnicCopy:false },
+              { name:'Hina Yousaf', relation:'daughter, born 28-09-2007, 18 since 28-09-2025', cnicCopy:false } ],
+      affidavit:{ present:true, original:false, page:9, label:'The undertaking on Rs 100 stamp paper',
+        note:'It covers liability for Government dues, is worded for family pension, is undated, and the claimant has not signed it. The NADRA FRC and the court application support her status but are not the affidavit.' },
+      successionRequired:false,
+      successionNote:'one widow, and the heirs (widow, son, daughter) are all family, so circular A.2(vi) does not require a certificate. The case holds a NADRA decline, given because an heir was a minor, and a court application with no grant.',
+      osdAnnotation:{ page:12, where:'Form 06 page 12', text:'(Death case) OSD post created', crop:'fp-death_p012_osd_post_annotation.png' }
+    }
+  },
+  claim:{ amount:92482, expected:92482, page:12, basis:'SAP closing balance at 30-06-2025 of Rs 87,182 plus five months at Rs 1,060',
+    residualMadeOf:'the 2025-26 interest (Rs 8,071) and one further month’s subscription (Rs 1,060), neither in the claim' },
+  qr:[
+    { id:'decline-qr', page:3, doc:'NADRA succession decline certificate', symbology:'QR code', decoded:true, route:'online', host:'id.nadra.gov.pk', crop:'fp-death_p003_qr_decline_cert.png',
+      payload:'https://id.nadra.gov.pk/e-succession_certificate?300101007531',
+      compare:[ {field:'document number', qrVal:'300101007531', docVal:'300101007531', docLabel:'certificate and its Code 39 barcode', match:true} ],
+      portal:{ ok:false, checkedOn:'15-09-2026', result:'NADRA refused the request from outside its network, HTTP 403' } },
+    { id:'frc-qr', page:4, doc:'NADRA family registration certificate', symbology:'QR code', decoded:true, route:'online', host:'id.nadra.gov.pk', crop:'fp-death_p004_qr_frc.png',
+      payload:'https://id.nadra.gov.pk/e-frc/verifyFrcApplication?505295769494',
+      compare:[ {field:'Code 39 document no.', qrVal:'EA80580288', docVal:'EA80580288', docLabel:'certificate', match:true} ],
+      portal:{ ok:false, checkedOn:'15-09-2026', result:'NADRA refused the request from outside its network, HTTP 403' } },
+    { id:'widow-cnic-qr', page:6, doc:'widow’s smart CNIC back', symbology:'QR code', decoded:true, payload:'50459132685600001000010381', crop:'fp-death_p006_qr_smart_cnic_widow.png',
+      compare:[ {field:'CNIC number', qrVal:'00001-0000103-8', docVal:'00001-0000103-8', docLabel:'card', match:true} ] },
+    { id:'death-cert-qr', page:10, doc:'NADRA death registration certificate', symbology:'QR code', decoded:true, route:'online', host:'crms.nadra.gov.pk', crop:'fp-death_p010_qr_death_registration.png',
+      payload:'https://crms.nadra.gov.pk/verify?TrackingID=OxyaJaOyf6Rl2ZxYviapTA==', compare:[],
+      portal:{ ok:false, checkedOn:'15-09-2026', result:'the CRMS server refused the connection' } },
+    { id:'old-cnic-barcode', page:5, doc:'deceased’s old CNIC back', symbology:'PDF417 barcode', decoded:false, why:'faded photocopy' }
+  ],
+  signatures:[
+    { id:'gpf10-ddo', page:1, doc:'GPF-10', role:'ddo', roleLabel:'DDO signature', authority:'Principal, Govt. Associate College (W) Mustafabad, Lahore',
+      signedBy:'Principal, Govt. Associate College (W) Mustafabad', forMarker:false, crop:'fp-death_p001_ddo_signature_stamp.png' }
+  ],
+  thumbs:[
+    { id:'gpf10', page:1, doc:'GPF-10', whose:'The claimant (not named at the mark; presumably the widow)', crop:'fp-death_p001_thumb_gpf10.png' },
+    { id:'form06', page:12, doc:'FORM PAY 06, three impressions in the specimen signature block', whose:'The claimant (not named; the form names the widow as payee)', crop:'fp-death_p012_employee_specimen_thumbs.png' }
+  ],
+  custom:['DEATH-PERSNO','DEATH-CLAIM','DEATH-POSTDEATH','DEATH-PERIOD']
+});
+
+CUSTOM_CHECKS['DEATH-PERSNO'] = { id:'DEATH-PERSNO', group:'identity', ref:'R6 · identity', code:'R6', title:'Personnel number on Form 06',
+  applies: F => true,
+  run: F => {
+    const v = verified(F, 'DEATH-PERSNO');
+    if (v) return verifiedResult(v, 'Personnel number on the original Form 06 confirmed as 90000417.', 'Form 06 carries the wrong personnel number (30890417); a corrected Form 06 is needed before posting.');
+    return { status:'conf', finding:'Form 06 reads 30890417: the third box holds a closed double-loop 8, unlike the 9 beside it. SAP, the GPF-10 and the re-calculation report all give 90000417, and the name, grade and DDO code match, so the form concerns the right person but carries a number one digit off. Posting against 30890417 would reach the wrong account.',
+      remedy:'Check the original. If it reads 30890417, the department sends a corrected Form 06 (upload it here).', evidence:[ev(12,'Personnel number boxes','fp-death_p012_personal_number_boxes.png')], cure:{ kind:'verify', vid:'DEATH-PERSNO' } };
+  }};
+
+CUSTOM_CHECKS['DEATH-CLAIM'] = { id:'DEATH-CLAIM', group:'balance', ref:'R11', code:'R11', title:'Claim against the SAP re-calculation report',
+  applies: F => true,
+  run: F => {
+    const rows = F.sap && F.sap.recalc && F.sap.recalc.rows, p = F.sap && F.sap.payslip;
+    if (!rows || !rows.length) return { status:'sap', finding:'The claim of Rs 92,482 cannot be tested without the GPF Final Re-calculation Report.', remedy:'Pull the report for personnel no. 90000417.', cure:{ kind:'sap' } };
+    const base = rows.find(r=>/30\.06\.2025/.test(r.end));
+    const sub = (p && p.gpfSubscription) || 1060;
+    if (!base) return { status:'conf', finding:'The report has no row closing on 30-06-2025 to test the claim against.', cure:{ kind:'verify', vid:'DEATH-CLAIM' } };
+    const expected = base.closing + 5 * sub;
+    if (expected === F.claim.amount) return { status:'ok', finding:'Rs ' + fmt(F.claim.amount) + ' claimed = SAP closing balance at 30-06-2025 of Rs ' + fmt(base.closing) + ' + five months at Rs ' + fmt(sub) + '. The unrecovered Rs 60,000 of the 2023-24 advance is already netted in the SAP balance.', evidence:[ev(13,'Re-calculation report','fp-death_p013_recalc_table.png')] };
+    return { status:'hard', code:'B2-vi', finding:'Rs ' + fmt(F.claim.amount) + ' claimed, but the SAP closing balance at 30-06-2025 plus five months gives Rs ' + fmt(expected) + '.', remedy:'Department to correct the claim to the SAP figure.', evidence:[ev(13,'Re-calculation report')] };
+  }};
+
+CUSTOM_CHECKS['DEATH-POSTDEATH'] = { id:'DEATH-POSTDEATH', group:'balance', ref:'B2-vi · R14', code:'B2-vi', title:'Subscriptions after the death',
+  applies: F => !!(F.sap && F.sap.recalc),
+  run: F => {
+    const v = verified(F, 'DEATH-POSTDEATH');
+    if (v) return verifiedResult(v, 'Post-death subscriptions and interest checked against the SAP pay history.', 'Post-death credits are not reconciled; to be corrected before payment.');
+    return { status:'conf', finding:'SAP credits no subscription in 2024-25 and six months (Rs 6,360) in 2025-26, after the death on 03-04-2024, and the forms note "1060/- 03/26". This fits pay drawn against the OSD post. The Rules say nothing on subscriptions after death, and interest may be capped under Rule 1.13(4) once the balance became payable.',
+      remedy:'Check the SAP pay history for the OSD post and confirm which post-death credits and interest are admissible (open item GPF-O17).', evidence:[ev(13,'Re-calculation report','fp-death_p013_recalc_last_rows.png')], cure:{ kind:'verify', vid:'DEATH-POSTDEATH' } };
+  }};
+
+CUSTOM_CHECKS['DEATH-PERIOD'] = { id:'DEATH-PERIOD', group:'checklist', ref:'B2-ii', code:'B2-ii', title:'Subscription period against service',
+  applies: F => !!(F.sap && F.sap.recalc),
+  run: F => {
+    const v = verified(F, 'DEATH-PERIOD');
+    if (v) return verifiedResult(v, 'Subscription period reconciled with service.', 'Subscription period does not reconcile with service.');
+    return { status:'conf', finding:'Service began on 02-11-2008, but SAP subscriptions start in 2009-10 with only Rs 650. That may be the first-year exemption, low early rates or missing credits. The Service Book is not on file to check.',
+      remedy:'Compare with the Service Book once it is produced.', cure:{ kind:'verify', vid:'DEATH-PERIOD' } };
+  }};
+
+/* ---- facts_case_fp-dismissal.js ---- */
+/* Final Payment, Dismissal from Service: Faizan Siddiqui, Traffic Warden No. 2709/TW */
+defCase('fp-dismissal', {
+  label:'Final Payment, Dismissal from Service', kind:'dismissal', family:'FINAL_PAYMENT',
+  sub:'Final payment after dismissal from service',
+  subject:'Faizan Siddiqui, Traffic Warden (BS-14)', dept:'City Traffic Police, Chief Traffic Officer, Lahore',
+  personnelNo:'90000834', pages:9, diary:'983415 / 208238, 21-05-2026', gazetted:'non-gazetted',
+  note:'Faizan Siddiqui, dismissed 30-12-2023. Every circular document except the Service Book is in the scan. E-stamp verified on the Punjab portal; the punishment order QR cannot be read.',
+  persNos:[{doc:'FORM PAY 06',page:1,value:'90000834'},{doc:'Application (GPF-10)',page:2,value:'90000834'},{doc:'SAP pay slip, December 2023',page:7,value:'90000834'},{doc:'GPF Final Re-calculation Report',page:9,value:'90000834'}],
+  record:[
+    ['Subscriber','Faizan Siddiqui s/o Zulqarnain Butt, Traffic Warden No. 2709/TW','Form 06 · application · CNIC · e-stamp',0.97,1],
+    ['Personnel no.','90000834','Form 06 · application · SAP',0.99,1],
+    ['CNIC','00001-0000105-9 (smart card, front only)','Form 06 · Urdu application · CNIC copy',0.97,6],
+    ['Dismissal','30-12-2023, Order 1823-33/PA-STO/S of the Senior Traffic Officer, Saddar Division','Punishment order · application',0.93,4],
+    ['Forwarding','CTO Lahore No. 7082/CTO/Acctt dated 04-05-2026','Application',0.96,2],
+    ['E-stamp affidavit','PB-LHR-50661BB59AF39C23, dated 22-04-2026; verified on the Punjab e-Stamp portal','E-stamp · portal',0.99,6],
+    ['SAP pay slip, December 2023','GPF balance Rs 445,013; earlier advance Rs 390,000, repaid Rs 169,000, balance Rs 221,000','SAP pay slip',0.97,7],
+    ['SAP posting','Permanent advance Rs 451,065 in 2023-24 (the final payment)','SAP re-calculation report',0.96,9],
+    ['Section working on Form 06','451,065 less Zakat 11,276, plus 16,900 interest: net Rs 456,689','Form 06 (office hand)',0.88,1],
+    ['Thumb impressions','Beside the subscriber’s signatures on Form 06 and the affidavit; they accompany signatures, so R7 does not arise','Form 06 · affidavit',0.95,1]
+  ],
+  docs:{
+    covering:{ present:true, page:2, author:'the Chief Traffic Officer, Lahore', nature:'Forwarding No. 7082/CTO/Acctt dated 04-05-2026 on the application' },
+    gpf10:{ present:true, page:2, accountNo:'90000834 (personnel no.)', missing:[], note:'Item 2(i) reads "Rs nil" while the December 2023 SAP pay slip shows a subscription of Rs 3,900; not a B2-i ground.' },
+    notification:{ present:true, page:4, label:'Punishment order, dismissal from service', no:'1823-33/PA-STO/S', date:'30-12-2023',
+      note:'Signed by Ikram Ullah Malik, Senior Traffic Officer, Saddar Division, Lahore; attested by the Accountant, City Traffic Police.' },
+    cnics:[ { page:6, whose:'subscriber', type:'smart', number:'00001-0000105-9', name:'Faizan Siddiqui', expiry:'07-08-2033', attested:false,
+      crop:'fp-dismissal_p006_cnic_front_copy.png', sigCrop:'fp-dismissal_p006_cnic_holder_signature_area.png' } ],
+    changeForm:{ present:true, label:'FORM PAY 06', page:1, personalNo:'90000834', name:'Faizan Siddiqui', cnic:'00001-0000105-9', sigKind:'signature', ddoSigned:true,
+      ddoStamp:'Chief Traffic Officer, Lahore', ddoCrop:'fp-dismissal_p001_ddo_signature_cto_stamp.png', oldGpfNo:'', oldGpfNoState:'carrying only the AG token T.NO 983415',
+      note:'The handwriting across the form (both computations, "31-12-2023") is the AG office’s own working, not a department entry.' },
+    serviceBook:{ present:false, reportedAttached:'The CTO’s forwarding note says the original service roll is attached.' }
+  },
+  qr:[
+    { id:'estamp', page:6, doc:'e-stamp affidavit', symbology:'QR code', decoded:true, route:'online', host:'es.punjab-zameen.gov.pk', crop:'fp-dismissal_p006_estamp_qr.png',
+      payload:'Url: https://es.punjab-zameen.gov.pk/eStampCitizenPortal/GeneratePDF/Stamp_Receipt?id=PB-LHR-50661BB59AF39C23',
+      compare:[ {field:'stamp id', qrVal:'PB-LHR-50661BB59AF39C23', docVal:'PB-LHR-50661BB59AF39C23', docLabel:'portal record', match:true} ],
+      portal:{ ok:true, checkedOn:'15-09-2026', result:'e-stamp PB-LHR-50661BB59AF39C23 found and valid, Rs 100, "certificate or other document", issued 22-04-2026 and usable to 29-04-2026, applicant Faizan Siddiqui, CNIC 00001-0000105-9, father Zulqarnain Butt. The affidavit is dated 22-04-2026, within validity, and name, CNIC and father name agree with the case.' } },
+    { id:'order-qr', page:4, doc:'punishment order', symbology:'QR code', decoded:false, why:'modules degraded by photocopying', crop:'fp-dismissal_p004_qr_punishment_order.png',
+      remedy:'Scan the QR code on the original order, or obtain the department’s verification, and upload it.' },
+    { id:'cnic-back', page:6, doc:'smart CNIC', symbology:'QR code', notSupplied:'Only the front of the smart CNIC is copied, on the e-stamp affidavit; the back, which carries the QR code, is not in the case.', remedy:'Upload a copy of the back of the CNIC.' }
+  ],
+  signatures:[
+    { id:'form06-ddo', page:1, doc:'FORM PAY 06', role:'ddo', roleLabel:'DDO signature', authority:'Chief Traffic Officer, Lahore',
+      signedBy:'Chief Traffic Officer, Lahore', forMarker:false, crop:'fp-dismissal_p001_ddo_signature_cto_stamp.png' }
+  ],
+  claim:{ amount:451065, basis:'the balance on Form 06 before the section’s zakat and interest working', residualNote:'It is the 2023-24 interest, which the interest check covers.' },
+  custom:['DIS-APPEAL','DIS-CREDITS','DIS-INTEREST']
+});
+
+CUSTOM_CHECKS['DIS-APPEAL'] = { id:'DIS-APPEAL', group:'checklist', ref:'Rule 1.13(6) Explanation 1', code:'OFF_LIST', title:'No appeal pending against the dismissal',
+  applies: F => true,
+  run: F => {
+    const v = verified(F, 'DIS-APPEAL');
+    if (v) return verifiedResult(v, 'No appeal or review pending against the dismissal.', 'An appeal or review is pending; the balance is held until final orders.');
+    return { status:'conf', finding:'Under Rule 1.13(6) Explanation 1, a dismissed subscriber who has appealed is not paid until final orders. The affidavit of 22-04-2026 says he does not wish to rejoin and has deposited his other dues, but does not say expressly that no appeal is pending.',
+      remedy:'Decide whether the affidavit is enough, or obtain a department certificate that no appeal or review is pending.', cure:{ kind:'verify', vid:'DIS-APPEAL' } };
+  }};
+
+CUSTOM_CHECKS['DIS-CREDITS'] = { id:'DIS-CREDITS', group:'balance', ref:'B2-vi · B2-ii', code:'B2-vi', title:'Possible missing credits in 2013-14',
+  applies: F => !!(F.sap && F.sap.recalc),
+  run: F => {
+    const v = verified(F, 'DIS-CREDITS');
+    if (v) return verifiedResult(v, 'The 2013-14 shortfall is explained (leave without pay, suspension or absence).', 'Missing credits confirmed; to be processed first.');
+    return { status:'conf', finding:'The 2013-14 subscription is Rs 6,860, about five months at Rs 1,372, against Rs 16,464 (twelve months) in the years either side: about seven months (Rs 9,604) not credited, unless he was on leave without pay or suspended. 2016-17 does not split into whole months, and 2023-24 carries an unexplained adjustment of Rs 6,052.',
+      remedy:'Check the Service Book for leave without pay or suspension in 2013-14. If deductions were made but not credited, treat as a missing-credit claim (R14).', evidence:[ev(9,'Re-calculation report')], cure:{ kind:'verify', vid:'DIS-CREDITS' } };
+  }};
+
+CUSTOM_CHECKS['DIS-INTEREST'] = { id:'DIS-INTEREST', group:'balance', ref:'R11 · Rule 1.13(4)', code:'R11', title:'Interest in the section’s working against SAP',
+  applies: F => !!(F.sap && F.sap.recalc),
+  run: F => {
+    const v = verified(F, 'DIS-INTEREST');
+    if (v) return verifiedResult(v, 'Interest reconciled and one clean computation recorded.', 'Interest not reconciled.');
+    return { status:'conf', finding:'The section’s working on Form 06 adds interest of Rs 16,900; SAP credits Rs 17,968 for 2023-24, a difference of Rs 1,068. The 2024-25 row shows interest of Rs 2,239 not carried to the closing balance. Under Rule 1.13(4) interest stops six months after the balance became payable when the claim is late. This is the section’s own working, not a department defect.',
+      remedy:'Reconcile interest, explain the Rs 6,052 adjustment and record one clean, initialled computation.', evidence:[ev(1,'Section working','fp-dismissal_p001_office_computation_sheet.png')], cure:{ kind:'verify', vid:'DIS-INTEREST' } };
+  }};
+
+/* ---- facts_case_fp-non-gazetted.js ---- */
+/* Final Payment, Non-Gazetted: Fazal Din, Driver, Highway Mechanical Division Lahore */
+defCase('fp-non-gazetted', {
+  label:'Final Payment, Non-Gazetted', kind:'final', family:'FINAL_PAYMENT',
+  sub:'Final payment on superannuation, non-gazetted',
+  subject:'Fazal Din, Driver (BS-05/06)', dept:'Highway Mechanical Division, Lahore (C&W)',
+  personnelNo:'90000374', pages:9, diary:'214465 / 989082, 11-08-2026', gazetted:'non-gazetted',
+  note:'Fazal Din, Driver, retired 09-06-2026. SAP pay slip and report in the case. Service Book pages lack the retirement entries; SAP shows an unexplained posting of Rs 74,178.',
+  persNos:[{doc:'GPF-10 (account no.)',page:1,value:'90000374'},{doc:'FORM PAY 06',page:5,value:'90000374'},{doc:'SAP pay slip, June 2026',page:8,value:'90000374'},{doc:'GPF Final Re-calculation Report',page:9,value:'90000374'}],
+  record:[
+    ['Subscriber','Fazal Din s/o Qutab-ud-Din, Driver','GPF-10 · office order · CNIC · SAP',0.98,1],
+    ['Personnel no. / GP Fund A/c','90000374','GPF-10 · Form 06 · Service Book · SAP',0.99,1],
+    ['Old GP Fund A/c','017-00-171471 (SAP Old # 01700171471); not on the GPF-10','Form 06 · Service Book · pay slip',0.97,5],
+    ['CNIC','00001-0000102-9 (old-style card, attested)','CNIC · Form 06 · pay slip',0.97,3],
+    ['Retirement','09-06-2026 (A.N.), Office Order 402/E/HMC of 03-06-2026','Office order',0.99,2],
+    ['Scale','BS-05 on the office order; 06 on Form 06 and the SAP pay slip','Office order · Form 06 · pay slip',0.93,2],
+    ['DDO code','LO5361 (previous version misread it as 405361)','Form 06 · pay slip',0.95,5],
+    ['SAP balance, June 2026 pay slip','Rs 74,178 (principal, before 2025-26 interest)','SAP pay slip',0.98,8],
+    ['SAP closing 30-06-2026','Rs 82,332','SAP re-calculation report',0.98,9],
+    ['SAP posting 2026-27','Permanent advance Rs 74,178, leaving Rs 8,154','SAP re-calculation report',0.96,9],
+    ['Service Book','Cover and particulars page only','Pages 6 and 7',0.95,6]
+  ],
+  docs:{
+    covering:{ present:true, page:1, author:'the Executive Engineer, Highway Mechanical Division, Lahore', nature:'Pre-printed forwarding endorsement at the foot of the GPF-10' },
+    gpf10:{ present:true, page:1, accountNo:'90000374', missing:['old GP Fund A/c number'], crop:'fp-non-gazetted_p001_gpf10_name_dor_account.png',
+      corroboration:'The old number 017-00-171471 is on Form 06, the Service Book cover and the SAP pay slip (Old # 01700171471)' },
+    notification:{ present:true, page:2, label:'Retirement office order', no:'402/E/HMC', date:'03-06-2026', crop:'fp-non-gazetted_p002_office_order_402_body.png',
+      note:'Driver (BS-05), retired w.e.f. 09-06-2026 (A.N.) on superannuation; attested by the Executive Engineer HMD Lahore.' },
+    cnics:[ { page:3, whose:'subscriber', type:'old', number:'00001-0000102-9', name:'Fazal Din', expiry:'lifetime', attested:true, attestedBy:'Executive Engineer, HMD Lahore' } ],
+    changeForm:{ present:true, label:'FORM PAY 06', page:5, personalNo:'90000374', name:'Fazal Din', cnic:'00001-0000102-9', sigKind:'signature', ddoSigned:true,
+      ddoStamp:'Executive Engineer, Highway Mechanical Division, Lahore', oldGpfNo:'017-00-171471',
+      note:'100% of balance ticked. "For the month of 08/2026" is the processing month of the entry, not a deduction month.' },
+    serviceBook:{ present:true, pages:[6,7], entries:{ dor:false, order:false, leave:false }, note:'cover No. 3194307 and the particulars page only' }
+  },
+  qr:[ { id:'cnic-barcode', page:4, doc:'old-style CNIC back', symbology:'PDF417 barcode', decoded:false, why:'halftone photocopy',
+         remedy:'Verify CNIC 00001-0000102-9 through NADRA Verisys, or upload a clear scan of the back of the card.' } ],
+  signatures:[
+    { id:'gpf10-ddo', page:1, doc:'GPF-10 forwarding', role:'ddo', roleLabel:'DDO signature', authority:'Executive Engineer, Highway Mechanical Division, Lahore',
+      signedBy:'Executive Engineer, Highway Mechanical Division', forMarker:false, crop:'fp-non-gazetted_p001_gpf10_ddo_ee_signature_stamp.png', bbox:[1300,2270,2150,2740] }
+  ],
+  claim:{ amount:74178, basis:'100% of the balance on Form 06, Rs 74,178 on the June 2026 SAP pay slip', residualMadeOf:'the 2025-26 interest (Rs 8,154), credited after the June pay slip was drawn' },
+  custom:['NG-ADJUST','NG-PERIOD','NG-SCALE']
+});
+
+CUSTOM_CHECKS['NG-ADJUST'] = { id:'NG-ADJUST', group:'balance', ref:'B2-vi', code:'B2-vi', title:'Adjustments and possible missing credits in the re-calculation report',
+  applies: F => !!(F.sap && F.sap.recalc),
+  run: F => {
+    const v = verified(F, 'NG-ADJUST');
+    if (v) return verifiedResult(v, 'Adjustments explained; no missing credits.', 'Missing credits confirmed; to be processed with missing-credit documents first.');
+    return { status:'conf', finding:'(a) Adjustment of Rs 670 in 2004-05. (b) Adjustment of Rs 1,420 less in 2025-26, one month’s subscription. (c) Temporary advances of Rs 49,600 against recoveries of Rs 49,100: Rs 500 not credited back. (d) 1998-99 subscription Rs 550 against Rs 600 in the years either side. Every row is arithmetically consistent.',
+      remedy:'Confirm whether these are genuine adjustments or missing credits. If missing credits, they are processed first with a DDO certificate or bank-stamped, Treasury-verified challans (R14).', cure:{ kind:'verify', vid:'NG-ADJUST' } };
+  }};
+
+CUSTOM_CHECKS['NG-PERIOD'] = { id:'NG-PERIOD', group:'checklist', ref:'B2-ii', code:'B2-ii', title:'Subscription period against service',
+  applies: F => !!(F.sap && F.sap.recalc),
+  run: F => {
+    const v = verified(F, 'NG-PERIOD');
+    if (v) return verifiedResult(v, 'Subscription period reconciled with the date of appointment.', 'Subscription period does not reconcile with service.');
+    return { status:'conf', finding:'SAP credits subscriptions from 1988-89 (Rs 75, about three months) to June 2026. The pay slip prints 38 years 10 months of service, which points to appointment around August 1987. The Service Book pages supplied do not show the date of first appointment.',
+      remedy:'Reconcile the start of subscription with the date of appointment in the Service Book.', cure:{ kind:'verify', vid:'NG-PERIOD' } };
+  }};
+
+CUSTOM_CHECKS['NG-SCALE'] = { id:'NG-SCALE', group:'identity', ref:'Outside the list', code:'OFF_LIST', title:'Scale on the retirement order',
+  applies: F => true,
+  run: F => ({ status:'ok', finding:'Noted only: the retirement order describes the subscriber as Driver (BS-05); Form 06 and the SAP pay slip give 06. It does not affect a GP Fund final payment, which is computed from SAP balances, and it is not on the circular’s list, so it is not raised.',
+    evidence:[ev(2,'Office order'), ev(8,'SAP pay slip')] }) };
+
+/* ---- facts_case_missing-credits.js ---- */
+/* Missing Credits: Dr Nauman Mushtaq, AP-II, on deputation at Government Engineering Academy Punjab */
+defCase('missing-credits', {
+  label:'Missing Credits, Challans', kind:'missing_credits', family:'MISSING_CREDITS',
+  sub:'Missing credits for a deputation period, paid by challan',
+  subject:'Dr Nauman Mushtaq, AP-II (on deputation)', dept:'Government Engineering Academy Punjab, Niaz Beg, Lahore',
+  personnelNo:'90000043', pages:7, diary:'Fd-2/K-851, 13-08-2026', gazetted:'unknown', gazettedEvidence:'designation "AP-II" and "Officers on Deputation" only',
+  note:'Dr Nauman Mushtaq, deputation 07-2025 to 04-2026. Seven challans scheduled and Treasury-verified for Rs 79,600; six attached. No SAP extracts in the case.',
+  persNos:[{doc:'Covering letter schedule',page:1,value:'90000043'},{doc:'Challans Sr. 1 to 7 (six attached)',page:2,value:'90000043'}],
+  record:[
+    ['Subscriber','Dr Nauman Mushtaq, AP-II (schedule spells "Numan Mushtaq, AP")','Schedule · challans',0.95,1],
+    ['Personnel no.','90000043','Schedule · all six challans',0.98,2],
+    ['Deputation period','01-07-2025 to 30-04-2026, 10 months at Rs 7,960','Covering letter',0.97,1],
+    ['Covering letter','Administrative Officer GEA to Treasury Officer Lahore, 21-07-2026, "Verification of challans"','Covering letter',0.97,1],
+    ['Treasury verification','"Verified Rs 79600/-, under head G06103", Deputy Treasury Officer Lahore','Covering letter endorsement',0.95,1],
+    ['Challans scheduled','7, total Rs 79,600','Schedule',0.99,1],
+    ['Challans attached','6 (Sr. 1, 2, 3, 5, 6, 7), total Rs 71,640','Pages 2 to 7',0.99,2],
+    ['Missing challan','Sr. 4: November 2025, Rs 7,960, cheque 8073770058 of 17-12-2025, credited 02-01-2026','Schedule',0.96,1],
+    ['Bank stamps','Present on all six; Sr. 1 too faint to read','Pages 2 to 7',0.90,2],
+    ['BPS and gazetted status','Not stated anywhere in the case','',0.99,null]
+  ],
+  docs:{
+    covering:{ present:true, page:1, author:'the Administrative Officer, Government Engineering Academy Punjab', nature:'Request to the Treasury Officer to verify the challans', crop:'missing-credits_p001_covering_letter_signatory_admin_officer.png' },
+    challans:{
+      period:'deputation period 01-07-2025 to 30-04-2026 (10 months at Rs 7,960)',
+      toVerified:true, toPage:1, toCrop:'missing-credits_p001_treasury_verification_endorsement.png',
+      schedulePage:1, scheduleCrop:'missing-credits_p001_schedule_7_challans.png',
+      schedule:{ count:7, total:79600, items:[
+        {sr:1, period:'July 2025', amount:7960, cheque:'8073758389'}, {sr:2, period:'August 2025', amount:7960, cheque:'8073758395'},
+        {sr:3, period:'September to October 2025', amount:15920, cheque:'8073770051'}, {sr:4, period:'November 2025', amount:7960, cheque:'8073770058'},
+        {sr:5, period:'December 2025 to January 2026', amount:15920, cheque:'8073770064'}, {sr:6, period:'February to March 2026', amount:15920, cheque:'8073770076'},
+        {sr:7, period:'April 2026', amount:7960, cheque:'8073770086'} ] },
+      copies:[
+        {page:2, sr:1, amount:7960, bankStamp:true, stampFaint:true, crop:'missing-credits_p002_bank_stamp.png',
+         stampNote:'Only "...BANK OF PAKISTAN" and "...BANKING" can be made out. The Treasury "Challan verified Rs 7960/-" mark dated 22-08-2025 agrees with the schedule.'},
+        {page:3, sr:2, amount:7960, bankStamp:true, stampText:'NBP Islamic Banking Johar Town, 09 OCT 2025', crop:'missing-credits_p003_bank_stamp.png'},
+        {page:4, sr:3, amount:15920, bankStamp:true, stampText:'NBP Islamic Banking Johar Town, 25 NOV 2025', crop:'missing-credits_p004_bank_stamp.png'},
+        {page:5, sr:5, amount:15920, bankStamp:true, stampText:'NBP Aitemaad Johar Town, clearing, 16 FEB 2026', crop:'missing-credits_p005_bank_stamp.png'},
+        {page:6, sr:6, amount:15920, bankStamp:true, stampText:'NBP Aitemaad Johar Town, clearing, 29 APR 2026', crop:'missing-credits_p006_bank_stamp_clearing.png'},
+        {page:7, sr:7, amount:7960, bankStamp:true, stampText:'NBP Aitemaad Johar Town, 15 JUL 2026', crop:'missing-credits_p007_bank_stamp.png'} ]
+    }
+  },
+  signatures:[
+    { id:'treasury', page:1, doc:'Treasury verification on the covering letter', role:'certifying', roleLabel:'Treasury verification', authority:'Treasury Office, Lahore',
+      signedBy:'Deputy Treasury Officer, Lahore', forMarker:false, crop:'missing-credits_p001_treasury_verification_endorsement.png', bbox:[420,2280,1480,2920] }
+  ],
+  custom:['MC-NAME']
+});
+
+CUSTOM_CHECKS['MC-NAME'] = { id:'MC-NAME', group:'identity', ref:'R1', title:'Name spelling against SAP',
+  applies: F => true,
+  run: F => {
+    const p = F.sap && F.sap.payslip;
+    if (!p || !p.name) return { status:'sap', finding:'The schedule spells the name "Dr. Numan Mushtaq, AP"; all six challans spell it "Dr. Nauman Mushtaq, AP-II". The personnel number is the same throughout. Match against the SAP master name.', cure:{ kind:'sap' } };
+    const ok = /n(a|ou)?u?man\s*mushtaq/i.test(p.name);
+    return ok ? { status:'ok', finding:'SAP names personnel no. ' + p.persNo + ' as ' + p.name + '. Both spellings refer to this subscriber.' }
+              : { status:'hard', finding:'SAP names personnel no. ' + p.persNo + ' as ' + p.name + ', not Nauman Mushtaq.', remedy:'Department to confirm the identity of the subscriber.' };
+  }};
+
+/* ---- facts_case_non-refundable.js ---- */
+/* Non-Refundable Advance: Mrs Rubina Tariq, PST, School Education Department */
+defCase('non-refundable', {
+  label:'Non-Refundable Advance', kind:'nonrefundable', family:'ADVANCE',
+  sub:'Non-refundable advance at age 50 or over, Rule 1.16',
+  subject:'Rubina Tariq, PST (BS-14)', dept:'School Education Department, GGHS R.A. Bazar, Lahore Cantt',
+  personnelNo:'90000216', pages:7, diary:'987752 / 212877, 23-07-2026', gazetted:'non-gazetted',
+  note:'Mrs Rubina Tariq, PST. Rs 490,955 under Rule 1.16. QR-coded sanction and smart CNIC both scan and agree. CNIC digits transposed on Form 6-B.',
+  persNos:[{doc:'Sanction order',page:1,value:'90000216'},{doc:'FORM PAY 06',page:4,value:'90000216'},{doc:'SAP pay slip, August 2026',page:5,value:'90000216'},{doc:'GPF Final Re-calculation Report',page:7,value:'90000216'}],
+  record:[
+    ['Subscriber','Mrs Rubina Tariq w/o Tariq Ur Rehman, Primary School Teacher','Sanction · CNIC · SAP pay slip',0.97,1],
+    ['Personnel no.','90000216','Sanction · Form 06 · pay slip · report',0.99,4],
+    ['CNIC','00001-0000104-4 (smart card); Form 06 writes 00010-0000104-4','Card · QR codes · pay slip · Form 06',0.97,2],
+    ['Date of birth, age at sanction','05-11-1974; 51 years 8 months on 14-07-2026','Sanction · CNIC · pay slip',0.98,1],
+    ['Sanction','No. 113909/LHR/2026 dated 14-07-2026, Rs 490,955','Sanction order',0.98,1],
+    ['Rule quoted','1.16, with FD notification FD-SR-1-2-1/2000 of 12-12-2002','Sanction order',0.96,1],
+    ['Balance stated on sanction','Rs 613,694 (Rs 490,955 is exactly 80% of it)','Sanction order',0.95,1],
+    ['GPF balance on pay slip','Rs 260,522, after this advance was posted','SAP pay slip, August 2026',0.98,5],
+    ['Balance before the advance','Rs 743,677 at 30-06-2026','SAP re-calculation report',0.98,7],
+    ['Office annotation on Form 06','490,955 less 12,274 (2.5%), net Rs 478,681','Form 06 foot',0.90,4]
+  ],
+  docs:{
+    sanction:{ present:true, page:1, dept:'School Education Department', printedAuthority:'Chief Executive Officer (DEA) Lahore',
+      orderNo:'113909/LHR/2026', date:'14-07-2026', rule:'Rule 1.16 of the Punjab GP Fund Rules 1978, with FD notification FD-SR-1-2-1/2000 of 12-12-2002', reason:'Age over 45 (born 05-11-1974)',
+      amount:490955, balanceStated:613694, limitClause:'1.16', ageAtSanction:{y:51, m:8}, qrId:'sanction', crop:'non-refundable_p001_sanction_signatory_stamp.png' },
+    changeForm:{ present:true, label:'FORM PAY 06', page:4, personalNo:'90000216', name:'Mrs. Rubina Tariq', cnic:'00010-0000104-4', cnicCrop:'non-refundable_p004_personal_no_and_cnic.png',
+      sigKind:'signature', sigCrop:'non-refundable_p004_employee_specimen_signatures.png',
+      ddoSigned:true, ddoStamp:'Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore', ddoCrop:'non-refundable_p004_ddo_signature_stamp.png' },
+    cnics:[ { page:2, whose:'subscriber', type:'smart', number:'00001-0000104-4', name:'Rubina Tariq', expiry:'08-08-2032', attested:true, attestedBy:'Senior Headmistress, GGHS R.A. Bazar',
+      sigCrop:'non-refundable_p002_cnic_holder_signature.png', crop:'non-refundable_p002_cnic_number_issue.png' } ]
+  },
+  qr:[
+    { id:'sanction', page:1, doc:'sanction order', symbology:'QR code', decoded:true, crop:'non-refundable_p001_sanction_qr.png',
+      payload:'Rubina Tariq CNIC# 0000100001044 posted as a PST (BS-14), posted at GGHS  R.A. BAZAR, Tehsil CANTT, District LAHORE',
+      compare:[ {field:'name', qrVal:'Rubina Tariq', docVal:'Mrs. Rubina Tariq', docLabel:'sanction', match:true},
+                {field:'CNIC', qrVal:'0000100001044', docVal:'0000100001044', docLabel:'sanction', match:true},
+                {field:'post', qrVal:'PST (BS-14)', docVal:'PST (BS-14)', docLabel:'sanction', match:true},
+                {field:'school', qrVal:'GGHS R.A. Bazar, Lahore', docVal:'GGHS R.A. Bazar', docLabel:'sanction', match:true} ] },
+    { id:'cnic-back', page:3, doc:'smart CNIC back', symbology:'QR code', decoded:true, payload:'50529399118600001000010441', crop:'non-refundable_p003_cnic_back_qr.png',
+      compare:[ {field:'CNIC number', qrVal:'00001-0000104-4', docVal:'00001-0000104-4', docLabel:'card', match:true},
+                {field:'card number', qrVal:'505293991186', docVal:'505293991186', docLabel:'number printed under the code', match:true} ] }
+  ],
+  signatures:[
+    { id:'sanction', page:1, doc:'sanction order', role:'sanctioning', roleLabel:'Sanctioning signature', authority:'Chief Executive Officer, District Education Authority Lahore',
+      signedBy:'Assistant Director (Admin)', forMarker:true, crop:'non-refundable_p001_sanction_signatory_stamp.png', bbox:[1660,1950,2330,2650] },
+    { id:'form06-ddo', page:4, doc:'FORM PAY 06', role:'ddo', roleLabel:'DDO signature', authority:'Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore',
+      signedBy:'Senior Headmistress', forMarker:false, crop:'non-refundable_p004_ddo_signature_stamp.png' }
+  ],
+  custom:['NR-OFFICE-ANNOT']
+});
+
+CUSTOM_CHECKS['NR-OFFICE-ANNOT'] = { id:'NR-OFFICE-ANNOT', group:'balance', ref:'Section working', code:'OFF_LIST', title:'Office annotation of Rs 12,274 on Form 06',
+  applies: F => true,
+  run: F => {
+    const v = verified(F, 'NR-OFFICE-ANNOT');
+    if (v) return verifiedResult(v, 'Basis of the Rs 12,274 deduction confirmed in the section’s records.', 'Basis of the Rs 12,274 deduction not confirmed.');
+    return { status:'conf', finding:'The accounts office wrote "490955/- 12274/-" and "Rs=478681/-" on Form 06. Rs 12,274 is 2.5% of Rs 490,955 and the "Other" box reads 2½, so this looks like the office’s own 2.5% deduction (probably Zakat). The SAP report posts the full Rs 490,955 with no adjustment. Not a department defect.',
+      remedy:'Section to confirm the basis of the deduction.', evidence:[ev(4,'Office annotation','non-refundable_p004_office_annotations_12274.png')], cure:{ kind:'verify', vid:'NR-OFFICE-ANNOT' } };
+  }};
+
+/* ---- facts_case_refundable.js ---- */
+/* Refundable Advance: Constable Barkat Ali, Punjab Police */
+defCase('refundable', {
+  label:'Refundable Advance', kind:'refundable', family:'ADVANCE',
+  sub:'Refundable advance for house repair, Rule 1.14(1)(a)(iv)',
+  subject:'Barkat Ali, Constable (BS-07)', dept:'Punjab Police, Office of the DIG Operations, Lahore',
+  personnelNo:'90000227', pages:6, diary:'214253 / 988890, 10-08-2026', gazetted:'non-gazetted',
+  note:'Constable Barkat Ali. Rs 58,000 for house repair, signed for the DIG Operations by SP Headquarters. Pay slip and re-calculation report already in the case.',
+  nameNote:'The English spelling on the card is "Barkit"; the Urdu name is the same.',
+  nameVariants:['Barkit Ali'],
+  persNos:[{doc:'Sanction order',page:1,value:'90000227'},{doc:'FORM PAY 05',page:4,value:'90000227'},{doc:'SAP pay slip, August 2026',page:5,value:'90000227'},{doc:'GPF Final Re-calculation Report',page:6,value:'90000227'}],
+  record:[
+    ['Subscriber','Barkat Ali s/o Liaqat Ali, Constable No. 7156','Sanction · CNIC · SAP pay slip',0.97,1],
+    ['Personnel no.','90000227','Sanction · Form 05 · pay slip · report',0.99,4],
+    ['CNIC','00001-0000101-3 (smart card, valid to 05-11-2030)','CNIC front and back · QR · pay slip',0.98,2],
+    ['Sanction','No. 1463/GPF-Ops dated 07-08-2026, Rs 58,000','Sanction order',0.98,1],
+    ['Rule quoted','1.14(1)(a)(iv)(d)(i): house repair, limit 24 months’ pay or 80% of balance','Sanction order',0.95,1],
+    ['Recovery','29 instalments of Rs 2,000','Sanction · Form 05',0.96,1],
+    ['Basic pay','Rs 19,040 on the sanction; Rs 22,890 on the August 2026 SAP pay slip','Sanction · pay slip',0.92,5],
+    ['GPF balance on pay slip','Rs 19,194, after this advance was posted','SAP pay slip, August 2026',0.97,5],
+    ['Balance before the advance','Rs 79,899 at 01-07-2026','SAP re-calculation report',0.98,6],
+    ['Advance posted in SAP','Rs 58,000 in 2026-27, Rs 2,000 recovered, balance Rs 56,000','Report · pay slip',0.97,6],
+    ['Payroll unit in SAP','LO0056 DIG Special Protection Unit (sanction and Form 05: DIG Operations, DDO LO5313)','Pay slip · Form 05',0.90,5]
+  ],
+  docs:{
+    sanction:{ present:true, page:1, dept:'Punjab Police', printedAuthority:'Deputy Inspector General of Police, Operations, Lahore',
+      orderNo:'1463/GPF-Ops', date:'07-08-2026', rule:'Rule 1.14(1)(a)(iv)(d)(i) of the Punjab GP Fund Rules 1978', reason:'Repair of house',
+      amount:58000, balanceStated:null, basicPay:19040, limitClause:'1.14(1)(d)(i)', qrId:null, crop:'refundable_p001_sanction_order_text.png' },
+    changeForm:{ present:true, label:'FORM PAY 05', page:4, personalNo:'90000227', name:'Barkat Ali', cnic:'',
+      sigKind:'signature', sigCrop:'refundable_p004_form05_employee_specimen_signatures.png',
+      ddoSigned:true, ddoStamp:'SP Headquarters for DIG Operations, Lahore', ddoCrop:'refundable_p004_form05_ddo_signatory_stamp.png' },
+    cnics:[ { page:2, whose:'subscriber', type:'smart', number:'00001-0000101-3', name:'Barkit Ali', expiry:'05-11-2030', attested:false,
+      sigCrop:'refundable_p002_cnic_holder_signature.png', crop:'refundable_p002_cnic_front_details.png' } ]
+  },
+  qr:[ { id:'cnic-back', page:3, doc:'smart CNIC back', symbology:'QR code', decoded:true, payload:'10826129086900001000010131', crop:'refundable_p003_cnic_back_qr.png',
+    compare:[ {field:'CNIC number', qrVal:'00001-0000101-3', docVal:'00001-0000101-3', docLabel:'card', match:true},
+              {field:'card number', qrVal:'108261290869', docVal:'108261290869', docLabel:'number printed under the code', match:true} ] } ],
+  signatures:[
+    { id:'sanction', page:1, doc:'sanction order', role:'sanctioning', roleLabel:'Sanctioning signature', authority:'Deputy Inspector General of Police, Operations, Lahore',
+      signedBy:'SP Headquarters', forMarker:true, crop:'refundable_p001_sanction_signatory_for_dig.png', bbox:[1395,2165,2225,2480] },
+    { id:'form05-ddo', page:4, doc:'FORM PAY 05', role:'ddo', roleLabel:'DDO signature', authority:'Deputy Inspector General of Police, Operations, Lahore',
+      signedBy:'SP Headquarters', forMarker:true, crop:'refundable_p004_form05_ddo_signatory_stamp.png' }
+  ],
+  custom:['REF-PAYROLL-UNIT']
+});
+
+CUSTOM_CHECKS['REF-PAYROLL-UNIT'] = { id:'REF-PAYROLL-UNIT', group:'identity', ref:'R4 · B1-ii (outside the list, justified)', code:'OFF_LIST',
+  title:'Sanctioning office and SAP payroll unit',
+  applies: F => !!(F.sap && F.sap.payslip),
+  run: F => {
+    const v = verified(F, 'REF-PAYROLL-UNIT');
+    if (v) return verifiedResult(v, 'Subscriber’s unit at the sanction date confirmed, and DIG Operations Lahore was competent.', 'The sanctioning office was not the competent authority for the unit on whose payroll the subscriber is borne.');
+    return { status:'conf', finding:'The sanction and Form 05 place the subscriber under the DIG Operations Lahore (DDO LO5313, Constable No. 7156). The SAP pay slip for August 2026 places him under LO0056 DIG Special Protection Unit (Buckle 6033/SC). Identity is not in doubt; the competence of the sanctioning authority depends on which establishment he is borne on.',
+      remedy:'Confirm the subscriber’s unit and DDO at the sanction date. Justification for raising: B1-ii requires sanction by the authority competent under delegation.',
+      evidence:[ev(5,'SAP pay slip header','refundable_p005_payslip_left_header_ddo.png'), ev(4,'Form 05 DDO code','refundable_p004_form05_ddo_personal_no_name.png')],
+      cure:{ kind:'verify', vid:'REF-PAYROLL-UNIT' } };
+  }};
+
+/* ---- facts_case_residual.js ---- */
+/* Residual Payment: Mst Shabnam, Head Nurse (BS-17), Punjab Institute of Mental Health */
+defCase('residual', {
+  label:'Residual Payment', kind:'residual', family:'FINAL_PAYMENT',
+  sub:'Residual GP Fund payment after final payment drawn',
+  subject:'Shabnam, Head Nurse (BS-17)', dept:'Punjab Institute of Mental Health, Lahore',
+  personnelNo:'90000687', pages:6, diary:'206984 / 982288', gazetted:'gazetted',
+  note:'Mst Shabnam, retired 07-11-2024. Rs 31,408 residual. The SAP report now in the case shows a debit balance and a possible double posting. No Form 10.',
+  persNos:[{doc:'FORM PAY 06',page:1,value:'90000687'},{doc:'Application',page:2,value:'90000687'},{doc:'SAP payroll register, October 2024',page:5,value:'90000687'},{doc:'GPF Final Re-calculation Report',page:6,value:'90000687'}],
+  record:[
+    ['Subscriber','Mst Shabnam w/o Abid Javed, Head Nurse (BS-17), gazetted','Form 06 · CNIC · SAP register',0.97,1],
+    ['Personnel no.','90000687','Form 06 · application · SAP',0.99,1],
+    ['CNIC','00001-0000106-4 (smart card, lifetime); front only','Form 06 · CNIC · notification',0.97,4],
+    ['Retirement','07-11-2024 on superannuation, Notification SO(NC)10-1/15 of 03-09-2024','Notification',0.97,3],
+    ['Claimed','Rs 31,408 residual, handwritten on Form 06','Form 06',0.95,1],
+    ['GPF balance, October 2024 register','Rs 340,330, before the final payment','SAP payroll register',0.97,5],
+    ['Report, 2024-25 row','Adjustment 31,408; permanent advance 712,068; interest 20,807; closing 340,330 debit','SAP re-calculation report',0.93,6],
+    ['Form 10','Not in the case','',0.99,null],
+    ['Zakat','"No Zakat deducted (Christian)" written on Form 06','Form 06',0.90,1]
+  ],
+  docs:{
+    covering:{ present:true, page:2, author:'the subscriber', nature:'Subscriber’s application to the AG for residual payment' },
+    gpf10:{ present:false },
+    notification:{ present:true, page:3, label:'Retirement notification', no:'SO(NC)10-1/15', date:'03-09-2024', note:'Retirement w.e.f. 07-11-2024 on superannuation. Attested by the Office Superintendent, PIMH.' },
+    cnics:[ { page:4, whose:'subscriber', type:'smart', number:'00001-0000106-4', name:'Shabnam', expiry:'lifetime', attested:true, attestedBy:'Office Superintendent, PIMH',
+      sigCrop:'residual_p004_cnic_holder_signature.png', crop:'residual_p004_cnic_front_only.png' } ],
+    changeForm:{ present:true, label:'FORM PAY 06', page:1, personalNo:'90000687', name:'Shabnam', cnic:'00001-0000106-4',
+      sigKind:'signature', sigCrop:'residual_p001_employee_specimen_signatures.png', ddoSigned:true, ddoStamp:'Executive Director, Punjab Institute of Mental Health', ddoCrop:'residual_p001_ddo_signature_stamp.png',
+      oldGpfNo:'', oldGpfNoState:'blank', note:'The printed form number is under a blank pink note; the heading "Permanent Loan Details" identifies Form 06.' }
+  },
+  qr:[
+    { id:'notif-barcode', page:3, doc:'retirement notification', symbology:'1-D barcode', decoded:false, why:'bars merged in the photocopy', crop:'residual_p003_barcode.png',
+      readable:'"*0000100001064R 2884*", whose CNIC part agrees with the notification', remedy:'Upload a clean copy of the notification, or confirm it with the SHC&ME Department.' },
+    { id:'cnic-back', page:4, doc:'smart CNIC', symbology:'QR code', notSupplied:'Only the front of the smart CNIC is copied; the back, which carries the QR code, is not in the case.', remedy:'Upload a copy of the back of the CNIC.' }
+  ],
+  signatures:[
+    { id:'form06-ddo', page:1, doc:'FORM PAY 06', role:'ddo', roleLabel:'DDO signature', authority:'Executive Director, Punjab Institute of Mental Health, Lahore',
+      signedBy:'Executive Director, Punjab Institute of Mental Health', forMarker:false, crop:'residual_p001_ddo_signature_stamp.png', bbox:[250,2600,850,3150] }
+  ],
+  custom:['RES-RECON']
+});
+
+CUSTOM_CHECKS['RES-RECON'] = { id:'RES-RECON', group:'balance', ref:'B2-vi · R11', code:'B2-vi', title:'Residual reconciles with the SAP re-calculation report',
+  applies: F => true,
+  run: F => {
+    const rc = F.sap && F.sap.recalc;
+    if (!rc || !rc.rows || !rc.rows.length) return { status:'sap', finding:'Rs 31,408 residual claimed. The SAP re-calculation report is needed to reconcile it.', cure:{ kind:'sap' } };
+    const last = rc.rows[rc.rows.length-1];
+    const v = verified(F, 'RES-RECON');
+    if (v) return verifiedResult(v, 'Residual reconciled in SAP.', 'Residual could not be reconciled in SAP.');
+    if (F.sap.source === 'upload' && last.closing > 0)
+      return Math.abs(last.closing - 31408) <= 1 ? { status:'ok', finding:'The uploaded report closes at Rs ' + fmt(last.closing) + ' in credit, equal to the residual claimed.' }
+                                                 : { status:'hard', finding:'The uploaded report closes at Rs ' + fmt(last.closing) + '; Rs 31,408 is claimed.', remedy:'Reconcile the claim with SAP.' };
+    return { status:'conf', calc:{ claim:31408, expected:last.closing, basis:'closing balance for ' + last.start + ' to ' + last.end },
+      finding:'The report does not show the residual at credit. Rs 31,408 appears as the 2024-25 adjustment, but the 2024-25 closing is printed Rs 340,330 debit. Every earlier row follows opening + subscription + adjustment - advances + recoveries + interest; this row only does if the interest of Rs 20,807 is left out. The permanent advance of Rs 712,068 equals exactly 2 x 340,330 + 31,408, which fits a double posting of the final payment. Paying on this report risks paying against a debit, or paying twice.',
+      remedy:'Before payment, the section pulls the SAP ledger postings for 2024-25, corrects any double posting, and uploads the corrected report on the SAP extracts step.',
+      evidence:[ev(6,'Report, last rows','residual_p006_recalc_last_rows.png')], cure:{ kind:'verify', vid:'RES-RECON' } };
+  }};
+
+/* ---- facts_order.js ---- */
+const ORDER = ['fp-non-gazetted','fp-death','fp-dismissal','missing-credits','residual','refundable','non-refundable','balance-transfer'].filter(k=>CASES[k]);
+
+/* ---- app_core.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   UI: navigation, shared helpers, page viewer, intake, initial processing
+   ═══════════════════════════════════════════════════════════════════════ */
+let sel = null;
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function vd(status, label){ const v = STLAB[status] || STLAB.na; return '<span class="vd '+v[0]+'">'+esc(label||v[1])+'</span>'; }
+function plural(n, one, many){ return n + ' ' + (n===1 ? one : (many || one+'s')); }
+
+function go(n){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  $('s'+n).classList.add('on');
+  $('stepwrap').style.display = (n==='doa' || n==='rules') ? 'none' : '';
+  document.querySelectorAll('.step').forEach(s=>{
+    const i = +s.dataset.s;
+    s.classList.toggle('active', i===n);
+    s.classList.toggle('done', typeof n==='number' && i<n);
+  });
+  $('casetag').innerHTML = sel && STATE[sel] ? '<b>'+esc(CASES[sel].label)+'</b> · '+esc(CASES[sel].subject)+' · version '+STATE[sel].version : '';
+  window.scrollTo({top:0});
+}
+
+/* officer switcher */
+OFFICERS.forEach(o=>{ const opt=document.createElement('option'); opt.value=o.id; opt.textContent=o.desig+'  ·  '+o.grade; $('who').appendChild(opt); });
+$('who').value='ao';
+$('who').onchange=()=>{ OFFICER = OFFICERS.find(o=>o.id===$('who').value); repaint(); };
+function repaint(){
+  const on = document.querySelector('.screen.on'); if (!on) return;
+  const id = on.id;
+  if (id==='s4' && sel) renderExam(sel);
+  if (id==='s5' && sel) renderDisposal(sel);
+  if (id==='sdoa') renderDoa();
+}
+
+/* ── page viewer ───────────────────────────────────────────────────────── */
+function pageSrc(F, p){ return 'pages/' + F.slug + '/p' + String(p).padStart(3,'0') + '.jpg'; }
+function openModal(title, html){ $('mtitle').textContent = title; $('mbody').innerHTML = html; $('modal').classList.add('on'); }
+$('mclose').onclick = ()=> $('modal').classList.remove('on');
+$('modal').onclick = e=>{ if (e.target.id==='modal') $('modal').classList.remove('on'); };
+document.addEventListener('keydown', e=>{ if (e.key==='Escape') $('modal').classList.remove('on'); });
+
+window.viewPage = function(k, p, bbox, label){
+  const s = STATE[k] || { F:CASES[k] }, F = s.F;
+  if (typeof p === 'string' && p.indexOf('upload:') === 0){
+    const name = p.slice(7).trim(), u = (s.uploads||[]).find(x=>x.name===name);
+    if (u && u.url && /^image\//.test(u.type)) openModal('Uploaded: '+name, '<img src="'+u.url+'" style="max-width:100%">');
+    else openModal('Uploaded: '+name, '<p class="src">'+(u ? esc(u.type||'file')+', '+fmtSize(u.size)+', SHA-256 '+esc(u.hash) : 'Uploaded document')+'</p><p>The file is held with the case. PDF uploads open in the document store in production.</p>');
+    return;
+  }
+  const meta = (F.pageIndex||[]).find(x=>x.p===p) || {};
+  let h = '<div class="src" style="margin-bottom:8px">'+esc(meta.title||'')+(label ? ' · highlighted: '+esc(label) : '')+'</div>'+
+          '<div class="pgwrap"><img id="pgimg" src="'+pageSrc(F,p)+'" alt="page '+p+'">';
+  if (bbox){ h += '<div class="pgbox" id="pgbox" style="display:none"></div>'; }
+  h += '</div>';
+  openModal(F.label+', page '+p, h);
+  if (bbox){
+    const img = $('pgimg');
+    const place = ()=>{
+      const dims = (F.pageDims||{})[p]; if (!dims) return;
+      const sx = img.clientWidth / dims[0], sy = img.clientHeight / dims[1];
+      const b = $('pgbox'); b.style.display='block';
+      b.style.left = (bbox[0]*sx)+'px'; b.style.top=(bbox[1]*sy)+'px';
+      b.style.width = ((bbox[2]-bbox[0])*sx)+'px'; b.style.height=((bbox[3]-bbox[1])*sy)+'px';
+    };
+    if (img.complete) place(); else img.onload = place;
+  }
+};
+function pglink(k, p, label, bbox){
+  if (p===undefined || p===null || p==='') return '';
+  const lab = (typeof p === 'string' && p.indexOf('upload:')===0) ? 'uploaded document' : 'p'+p;
+  return '<span class="pglink" onclick=\'viewPage('+JSON.stringify(k)+','+JSON.stringify(p)+','+JSON.stringify(bbox||null)+','+JSON.stringify(label||'')+')\'>'+esc(lab)+'</span>';
+}
+function evBox(k, e){
+  const img = e.crop ? '<img src="evidence/'+esc(CASES[k].slug)+'/'+esc(e.crop)+'" alt="" onclick=\'viewPage('+JSON.stringify(k)+','+JSON.stringify(e.page)+','+JSON.stringify(e.bbox||null)+','+JSON.stringify(e.label||'')+')\'>'
+                     : '<div class="noimg">no crop</div>';
+  return '<div class="evbox">'+img+'<div class="evcap"><b>'+esc(e.label||'')+'</b> '+pglink(k, e.page, e.label, e.bbox)+'</div></div>';
+}
+function fmtSize(b){ return b > 1048576 ? (b/1048576).toFixed(1)+' MB' : Math.max(1, Math.round(b/1024))+' KB'; }
+
+/* ── uploads: every file is hashed and kept with the case ──────────────── */
+async function hashFile(file){
+  try{
+    const buf = await file.arrayBuffer();
+    const h = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  } catch(e){ return 'unavailable in this browser context'; }
+}
+function pickFile(accept){
+  return new Promise(res=>{
+    const inp = $('filepick'); inp.value=''; inp.accept = accept || '';
+    inp.onchange = ()=> res(inp.files && inp.files[0] ? inp.files[0] : null);
+    inp.click();
+  });
+}
+async function registerUpload(k, file, against){
+  const s = STATE[k];
+  const u = { name:file.name, size:file.size, type:file.type || 'application/octet-stream', hash: await hashFile(file),
+              url: /^image\//.test(file.type) ? URL.createObjectURL(file) : null, against, at:stamp(), by:OFFICER.name };
+  s.uploads.push(u);
+  logAudit(k, 'Document uploaded', file.name+' ('+fmtSize(file.size)+', SHA-256 '+u.hash.slice(0,16)+'...) against: '+against);
+  return u;
+}
+
+/* ── screen 1: intake ──────────────────────────────────────────────────── */
+function corpusHeadline(){
+  let hard=0, adv=0, sapIn=0, qrRead=0, qrAll=0, conf=0;
+  ORDER.forEach(k=>{
+    const r = evaluate(CASES[k]), L = lists(r);
+    hard += L.hard.length; adv += L.adv.length; conf += L.conf.length;
+    if (CASES[k].sap && CASES[k].sap.payslip && CASES[k].sap.recalc) sapIn++;
+    (CASES[k].qr||[]).forEach(q=>{ qrAll++; if (q.decoded) qrRead++; });
+  });
+  return { hard, adv, sapIn, qrRead, qrAll, conf };
+}
+function renderIntake(){
+  const H = corpusHeadline();
+  let h = '<h1 class="pagetitle">GP Fund case intake</h1>'+
+    '<p class="pagesub">Pre-audit against Office Circular No. G.P. Fund-I (Coord)/TR/127 dated 21.12.2023, the Punjab GP Fund Rules 1978, and the office’s clarifications of 15-09-2026.</p>'+
+    '<div class="kpis">'+
+      '<div class="kpi"><div class="kv">'+ORDER.length+'</div><div class="kl">cases supplied, all eight case types</div></div>'+
+      '<div class="kpi"><div class="kv">'+H.sapIn+' / '+ORDER.length+'</div><div class="kl">cases that arrived with the SAP pay slip and re-calculation report</div></div>'+
+      '<div class="kpi"><div class="kv">'+H.hard+'</div><div class="kl">hard stops across the eight cases, as submitted</div></div>'+
+      '<div class="kpi"><div class="kv">'+H.qrRead+' / '+H.qrAll+'</div><div class="kl">QR codes read from the scans and checked</div></div>'+
+    '</div>'+
+    '<div class="notice gold"><b>What changed after the office’s review.</b> Covering letters are accepted as they come. Unattested CNIC copies and pay slips are noted, not objected to. '+
+    'SAP extracts are marked on the checklist when present and can be uploaded straight after initial processing when not. Every open item can be cured by uploading a document against it, and the case is re-checked.</div>'+
+    '<div class="card"><h3>Select a case</h3><p class="hint">The pages are read on this machine and nothing leaves it.</p><div class="caselist" id="caselist"></div></div>'+
+    '<div class="card" id="casemeta" style="display:none"></div>'+
+    '<div class="actionbar"><button class="btn" id="run" disabled>Run initial processing</button><span class="src" id="runhint">Select a case to begin.</span></div>';
+  $('s1body').innerHTML = h;
+  ORDER.forEach(k=>{
+    const F = CASES[k], d = document.createElement('div');
+    d.className = 'caseopt' + (sel===k ? ' sel' : ''); d.dataset.k = k;
+    d.innerHTML = '<div style="flex:1"><div class="cn">'+esc(F.label)+'</div><div class="cm">'+esc(F.note)+'</div></div><div class="pgcount">'+F.pages+' pp</div>';
+    d.onclick = ()=> selectCase(k);
+    $('caselist').appendChild(d);
+  });
+  if (sel) selectCase(sel);
+  $('run').onclick = startRun;
+}
+function selectCase(k){
+  sel = k;
+  document.querySelectorAll('.caseopt').forEach(x=>x.classList.toggle('sel', x.dataset.k===k));
+  const F = CASES[k], hasSap = !!(F.sap && (F.sap.payslip || F.sap.recalc));
+  const m = $('casemeta'); m.style.display='block';
+  m.innerHTML = '<h3>Case detected &amp; dak particulars</h3><p class="hint">Case type is bound from the documents present, before any checking begins.</p>'+
+    '<table><tr><th>Case</th><th>Pages</th><th>Case type</th><th>Subscriber</th><th>Personnel no.</th><th>SAP pages in the case</th></tr>'+
+    '<tr><td class="fv">'+esc(F.label)+'</td><td>'+F.pages+'</td><td>'+esc(F.sub)+'</td><td>'+esc(F.subject)+'</td><td class="mono">'+esc(F.personnelNo||'not stated')+'</td>'+
+    '<td>'+(hasSap ? [F.sap.payslip?'pay slip p'+F.sap.payslip.page:'', F.sap.recalc?'re-calculation report p'+F.sap.recalc.page:''].filter(Boolean).join(', ') : '<span class="blank">none</span>')+'</td></tr></table>'+
+    '<div class="dispform" style="margin-top:14px"><div class="row2">'+
+      '<div><label for="dkno">Diary / token no.</label><input id="dkno" type="text" value="'+esc(F.diary||'')+'"></div>'+
+      '<div><label for="dkdate">Date of receipt in this office</label><input id="dkdate" type="text" placeholder="dd-mm-yyyy"></div></div>'+
+      '<div class="row2"><div><label for="dkmark">Marked to</label><input id="dkmark" type="text" value="GP Fund-I, Dealing Assistant"></div>'+
+      '<div><label for="dkret">Return count on this case so far</label><select id="dkret"><option value="0">0, first submission</option><option value="1">1, already returned once</option></select></div></div>'+
+      (hasSap ? '<label class="chk"><input type="checkbox" id="nosap"> <span>Treat this case as received <b>without</b> its SAP pages, to see the SAP extract upload in use</span></label>' : '')+
+    '</div>';
+  $('run').disabled = false;
+  $('runhint').textContent = 'In production, about four minutes on one DGX Spark for a case this size.';
+}
+
+/* ── screen 2: initial processing ─────────────────────────────────────── */
+const STAGES = [
+  ['Ingest and sort the pages','Split, straighten and clean each page. A page that cannot be made legible is flagged, not guessed at.','Image handling. No AI.'],
+  ['Read each page','Text, layout and reading order, in Urdu and English alike.','AI reads'],
+  ['Identify each document','Every page given its type from its layout and content, never from the file name.','AI reads'],
+  ['Lift the fields','Each document type has its own field list. Every value carries a confidence and the page it came from.','AI reads'],
+  ['Scan QR codes and barcodes','Every code on every page decoded and its content compared with the printed document.','Decoder. No AI.'],
+  ['Settle the case type','Case type fixed from the documents present, and the governing checklist attached.','Rules decide'],
+  ['Mark the checklist','Each required document marked present, absent or defective. SAP extracts found in the case are marked off.','Rules decide'],
+  ['Compare the documents','Personal numbers, names, CNICs, dates and amounts checked against each other and against SAP.','Rules decide'],
+  ['Check the signatories','Every signature for or on behalf of an authority looked up in the delegation of authority register.','Rules decide, officer confirms'],
+  ['Test the balance and advances','80% limit, advances outstanding, and the claim against the re-calculation report.','Rules decide'],
+  ['Match to the circular and office rules','Every failure matched to its standardised rejection reason or office clarification.','Rules decide'],
+  ['Draft the observations','One sheet: document, defect, clause, remedy and severity.','Drafted by AI, checked against the rules']
+];
+function startRun(){
+  const k = sel, withoutSap = $('nosap') ? $('nosap').checked : false;
+  STATE[k] = newState(k, withoutSap);
+  const s = STATE[k];
+  s.dak = { no:$('dkno').value || '(not entered)', date:$('dkdate').value || '(not entered)', marked:$('dkmark').value || '(not entered)' };
+  s.returns = parseInt($('dkret').value,10) || 0;
+  logAudit(k, 'Case taken up for pre-audit', 'Diary '+s.dak.no+', received '+s.dak.date+', marked to '+s.dak.marked+'. Prior returns: '+s.returns+'.'+(withoutSap ? ' Received without SAP extracts.' : ''));
+  go(2);
+  const F = s.F;
+  $('s2body').innerHTML = '<h1 class="pagetitle">Initial processing</h1><p class="pagesub">Reading '+F.pages+' pages. '+esc(F.label)+' for '+esc(F.subject)+'.</p>'+
+    '<div class="pbar"><div class="pipe" id="pipe"></div></div><div class="card"><div id="stagelist"></div></div>'+
+    '<div class="notice grey">Every stage runs inside this office, on its own servers. The AI reads the papers. The rules decide the outcome. Nothing is sent outside.</div>';
+  STAGES.forEach((sg,i)=>{
+    const d = document.createElement('div'); d.className='stage pend'; d.id='st'+i;
+    d.innerHTML = '<div class="sic">'+(i+1)+'</div><div><div class="sn">'+sg[0]+'</div><div class="sd">'+sg[1]+'</div><div class="smodel">'+sg[2]+'</div></div>';
+    $('stagelist').appendChild(d);
+  });
+  let i = 0;
+  const tick = ()=>{
+    if (i>0){ const p=$('st'+(i-1)); p.className='stage ok'; p.querySelector('.sic').textContent='✓'; }
+    if (i>=STAGES.length){
+      $('pipe').style.width='100%';
+      runCase(k, 'Initial processing');
+      const L = lists(s.results);
+      logAudit(k, 'Initial processing completed by the module', plural(L.hard.length,'hard stop')+', '+plural(L.adv.length,'observation')+', '+plural(L.conf.length,'verification task')+', '+plural(L.sap.length,'SAP item')+'.');
+      setTimeout(()=>{ renderSap(k); go(3); }, 420); return;
+    }
+    $('st'+i).className='stage run'; $('pipe').style.width=((i/STAGES.length)*100)+'%';
+    i++; setTimeout(tick, 260+i*24);
+  };
+  tick();
+}
+
+$('lnkCases').onclick = ()=>{ renderIntake(); go(1); };
+
+/* ---- app_sap.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   SCREEN 3: SAP extracts, straight after initial processing
+   ═══════════════════════════════════════════════════════════════════════ */
+function sapPartCard(k, title, part, kind){
+  const s = STATE[k], F = s.F;
+  let body;
+  if (part && F.sap.source === 'case')
+    body = vd('ok','Found in the case')+' <span class="src">page</span> '+pglink(k, part.page, title)+'<div class="src" style="margin-top:4px">Marked on the checklist. No upload needed.</div>';
+  else if (part)
+    body = vd('ok','Uploaded from SAP')+'<div class="src" style="margin-top:4px">'+esc(F.sap.file)+'</div>';
+  else
+    body = vd('sap','Awaiting SAP extract')+'<div class="src" style="margin-top:4px">Pull from SAP against personnel no. <b class="mono">'+esc(F.personnelNo||'')+'</b>.</div>';
+  return '<div class="card" style="margin-bottom:0"><h3>'+title+'</h3>'+body+'</div>';
+}
+
+function sapFiguresTable(k){
+  const F = STATE[k].F, p = F.sap && F.sap.payslip, rc = F.sap && F.sap.recalc;
+  let h = '';
+  if (p){
+    const rows = [['Personnel no.',p.persNo],['Name',p.name],['Designation',p.designation],['CNIC',p.cnic],['Month',p.month],['BPS',p.bps],
+      ['GPF no.',p.gpfNo],['Old GPF no.',p.oldGpfNo],['GPF balance',p.gpfBalance!=null?'Rs '+fmt(p.gpfBalance):''],['GPF subscription',p.gpfSubscription!=null?'Rs '+fmt(p.gpfSubscription):''],
+      ['GPF advance instalment',p.loanInstalment!=null?'Rs '+fmt(p.loanInstalment):''],['GPF advance balance',p.loanBalance!=null?'Rs '+fmt(p.loanBalance):''],['OSD post',p.osdPost]]
+      .filter(r=>r[1]!==undefined && r[1]!==null && r[1]!=='');
+    h += '<h4>Pay slip</h4><table class="compact">'+rows.map(r=>'<tr><td style="width:190px">'+r[0]+'</td><td class="fv mono">'+esc(r[1])+'</td></tr>').join('')+'</table>';
+  }
+  if (rc && rc.rows && rc.rows.length){
+    const rows = rc.rows.slice(-5);
+    h += '<h4>GPF Final Re-calculation Report'+(rc.rows.length>5?', last five periods of '+rc.rows.length:'')+'</h4><div class="tscroll"><table class="num compact"><tr>'+
+      ['Period','Opening','Subscription','Adjust.','Temp adv.','Rec. temp','Perm. adv.','Interest','Closing'].map((c,i)=>'<th'+(i?' class="n"':'')+'>'+c+'</th>').join('')+'</tr>'+
+      rows.map(r=>'<tr><td class="nowrap">'+esc(r.start)+' to '+esc(r.end)+'</td>'+['opening','subscription','adjustments','tempAdvance','recTempAdvance','permanentAdvance','interest','closing']
+        .map(c=>'<td class="n mono">'+(r[c]?fmt(r[c]):'0')+'</td>').join('')+'</tr>').join('')+'</table></div>';
+  }
+  return h;
+}
+
+function renderSap(k){
+  const s = STATE[k], F = s.F, have = F.sap || {};
+  let h = '<h1 class="pagetitle">SAP extracts</h1>'+
+    '<p class="pagesub">Straight after initial processing. The pay slip and the GPF Final Re-calculation Report come from SAP. Where the department has already sent them they are marked off; where not, the section pulls them by personnel number and uploads them here.</p>';
+  if (s.lastDiff && s.lastReason && /SAP/.test(s.lastReason)) h += diffBanner(k);
+
+  /* personnel numbers found in the case */
+  const pn = F.persNos || [];
+  h += '<div class="card"><h3>Personnel number</h3><p class="hint">Read from the case documents. This is the key for the SAP lookup.</p>'+
+       '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div class="kv mono" style="font-size:24px">'+esc(F.personnelNo||'not found')+'</div>'+
+       (F.personnelNo ? '<button class="abtn" onclick="navigator.clipboard && navigator.clipboard.writeText(\''+esc(F.personnelNo)+'\')">Copy</button>' : '')+'</div>'+
+       (pn.length ? '<table class="compact" style="margin-top:10px"><tr><th>Document</th><th>Reads</th><th>Page</th></tr>'+pn.map(x=>'<tr><td>'+esc(x.doc)+'</td><td class="mono">'+esc(x.value)+'</td><td>'+pglink(k,x.page)+'</td></tr>').join('')+'</table>' : '')+
+       '</div>';
+
+  h += '<div class="cols" style="margin-bottom:15px">'+sapPartCard(k,'SAP pay slip',have.payslip,'payslip')+sapPartCard(k,'GPF Final Re-calculation Report',have.recalc,'recalc')+'</div>';
+
+  const missing = !(have.payslip && have.recalc);
+  if (true){
+    h += '<div class="card"><h3>'+(missing ? 'Pull from SAP and upload' : 'Upload a fresh SAP extract')+'</h3>'+
+      '<p class="hint">In SAP, open the pay slip and the GPF Final Re-calculation Report for personnel no. <b class="mono">'+esc(F.personnelNo||'')+'</b> and save them. '+
+      'A text or spreadsheet export is read directly. A PDF or scan is accepted too; the officer then keys the figures, which in production the reading stage lifts.</p>'+
+      '<div class="drop" id="sapdrop"><b>Choose the SAP extract file</b><br>.txt, .csv or .json exports are read directly. PDF and images are accepted.</div>'+
+      '<div class="actionbar" style="margin-top:12px">'+
+        (F.sapSample ? '<button class="btn ghost small" id="sapsample">Use the extract saved for this prototype</button>' : '')+
+        '<button class="btn ghost small" id="saptemplate">Show the extract layout</button>'+
+        '<button class="btn ghost small" disabled title="'+esc(SAP_CONNECTOR.note)+'">Fetch from SAP automatically</button>'+
+        '<span class="src">SAP connector: '+esc(SAP_CONNECTOR.status)+'. '+esc(SAP_CONNECTOR.note)+'</span>'+
+      '</div><div id="sapmsg"></div></div>';
+  }
+  const figs = sapFiguresTable(k);
+  if (figs) h += '<div class="card"><h3>Figures in use</h3><p class="hint">What the rules will use from SAP'+(F.sap && F.sap.source==='case' ? ', as read from the pages in the case.' : '.')+'</p>'+figs+'</div>';
+
+  const L = lists(s.results);
+  h += '<div class="notice slate">'+(L.sap.length ? '<b>'+plural(L.sap.length,'check')+' still wait'+(L.sap.length===1?'s':'')+' for SAP data:</b> '+L.sap.map(r=>esc(r.title)).join('; ')+'. You can continue and upload later.'
+                                          : '<b>Nothing is waiting for SAP data.</b>')+'</div>';
+  h += '<div class="actionbar"><button class="btn" id="toexam">Continue to examination</button></div>';
+  $('s3body').innerHTML = h;
+
+  $('toexam').onclick = ()=>{ renderExam(k); go(4); };
+  if ($('sapdrop')){
+    $('sapdrop').onclick = async ()=>{ const f = await pickFile('.txt,.csv,.json,.pdf,.png,.jpg,.jpeg'); if (f) handleSapFile(k, f); };
+    const dz = $('sapdrop');
+    dz.ondragover = e=>{ e.preventDefault(); dz.classList.add('over'); };
+    dz.ondragleave = ()=> dz.classList.remove('over');
+    dz.ondrop = e=>{ e.preventDefault(); dz.classList.remove('over'); if (e.dataTransfer.files[0]) handleSapFile(k, e.dataTransfer.files[0]); };
+    if ($('sapsample')) $('sapsample').onclick = ()=> applySapText(k, F.sapSample, 'SAP_EXTRACT_'+F.personnelNo+'.txt (saved sample)');
+    $('saptemplate').onclick = ()=> openModal('SAP extract layout', '<p class="src">A text export in this layout is read directly. Tabs or pipes separate the report columns.</p><code class="esp">'+esc(sapTemplate(F))+'</code>');
+  }
+}
+
+async function handleSapFile(k, file){
+  await registerUpload(k, file, 'SAP extracts');
+  if (/\.(txt|csv|json)$/i.test(file.name) || /^text\//.test(file.type)){
+    const text = await file.text();
+    applySapText(k, text, file.name);
+  } else {
+    sapManualForm(k, file.name);
+  }
+}
+
+function applySapText(k, text, fileName){
+  const s = STATE[k], F = s.F;
+  let ex;
+  try { ex = parseSapFile(fileName, text); } catch(e){ $('sapmsg').innerHTML = '<div class="notice red" style="margin-top:12px">The file could not be read: '+esc(e.message)+'</div>'; return; }
+  if (!ex.payslip && !ex.recalc){ $('sapmsg').innerHTML = '<div class="notice red" style="margin-top:12px">No pay slip or re-calculation report section was found in '+esc(fileName)+'. Use the extract layout.</div>'; return; }
+  const issues = checkSapAgainstCase(ex, F);
+  if (issues.length){ $('sapmsg').innerHTML = '<div class="notice red" style="margin-top:12px"><b>Not accepted.</b> '+issues.map(esc).join(' ')+'</div>'; logAudit(k,'SAP extract rejected', fileName+': '+issues.join(' ')); return; }
+  F.sap = { payslip: ex.payslip || (F.sap && F.sap.payslip) || null, recalc: ex.recalc || (F.sap && F.sap.recalc) || null, source:'upload', file:fileName };
+  logAudit(k, 'SAP extract accepted', fileName+(ex.payslip?', pay slip':'')+(ex.recalc?', re-calculation report ('+ex.recalc.rows.length+' periods)':''));
+  reprocess(k, 'SAP extract uploaded: '+fileName);
+  renderSap(k);
+}
+
+function sapManualForm(k, fileName){
+  const F = STATE[k].F;
+  const fld = (id, lab, v) => '<div><label for="'+id+'">'+lab+'</label><input type="text" id="'+id+'" value="'+esc(v||'')+'"></div>';
+  $('sapmsg').innerHTML = '<div class="dispform" style="margin-top:12px"><div class="notice blue" style="margin-bottom:12px">'+esc(fileName)+' is a PDF or image. In production the reading stage lifts these figures; in this prototype, key them from the extract.</div>'+
+    '<div class="row3">'+fld('m_pers','Personnel no.',F.personnelNo)+fld('m_month','Pay slip month','')+fld('m_bal','GPF balance (Rs)','')+'</div>'+
+    '<div class="row3">'+fld('m_old','Old GPF no.','')+fld('m_loan','GPF advance balance (Rs)','')+fld('m_osd','OSD post (yes / no)','')+'</div>'+
+    '<div class="row3">'+fld('m_start','Last report period from','')+fld('m_end','to','')+fld('m_close','Closing balance (Rs)','')+'</div>'+
+    '<button class="abtn on" id="m_go">Accept figures and re-check the case</button></div>';
+  $('m_go').onclick = ()=>{
+    const g = id => $(id).value.trim();
+    const ex = { payslip:{ persNo:g('m_pers'), month:g('m_month'), gpfBalance:num(g('m_bal')), oldGpfNo:g('m_old'), loanBalance:num(g('m_loan')), osdPost:g('m_osd') },
+                 recalc: g('m_close') ? { persNo:g('m_pers'), rows:[{start:g('m_start'), end:g('m_end'), closing:num(g('m_close'))}] } : null };
+    const issues = checkSapAgainstCase(ex, F);
+    if (issues.length){ alert(issues.join(' ')); return; }
+    F.sap = { payslip:ex.payslip, recalc:ex.recalc || (F.sap && F.sap.recalc) || null, source:'upload', file:fileName+' (figures keyed by '+OFFICER.name+')' };
+    logAudit(k, 'SAP figures keyed from uploaded extract', fileName);
+    reprocess(k, 'SAP extract uploaded: '+fileName);
+    renderSap(k);
+  };
+}
+
+/* shared: re-run the rules and remember why */
+function reprocess(k, reason){
+  const s = STATE[k];
+  s.lastReason = reason;
+  const d = runCase(k, reason);
+  const L = lists(s.results);
+  logAudit(k, 'Case reprocessed, version '+s.version, reason+'. Now '+plural(L.hard.length,'hard stop')+', '+plural(L.adv.length,'observation')+', '+plural(L.conf.length,'verification task')+', '+plural(L.sap.length,'SAP item')+
+    (d ? '. Resolved '+d.resolved.length+', newly raised '+d.raised.length+'.' : '.'));
+  $('casetag').innerHTML = '<b>'+esc(CASES[k].label)+'</b> · '+esc(CASES[k].subject)+' · version '+s.version;
+  return d;
+}
+
+function diffBanner(k){
+  const s = STATE[k], d = s.lastDiff;
+  if (!d) return '';
+  const li = x => '<li>'+esc(x.r.doc || x.r.title)+': '+vd(x.was||'na', (STLAB[x.was]||STLAB.na)[1])+' now '+vd(x.r.status)+'</li>';
+  const mixed = d.raised.length > 0;
+  return '<div class="diff'+(mixed?' mixed':'')+'"><h4>Reprocessed, version '+s.version+': '+esc(s.lastReason||'')+'</h4>'+
+    (d.resolved.length ? '<div><b>'+plural(d.resolved.length,'item')+' now satisfied</b><ul>'+d.resolved.map(li).join('')+'</ul></div>' : '<div>No open item was cleared by this change.</div>')+
+    (d.raised.length ? '<div style="margin-top:6px"><b>'+plural(d.raised.length,'item')+' newly raised</b><ul>'+d.raised.map(li).join('')+'</ul></div>' : '')+
+    (d.changed.length ? '<div style="margin-top:6px"><b>'+plural(d.changed.length,'item')+' changed</b><ul>'+d.changed.map(li).join('')+'</ul></div>' : '')+
+    '</div>';
+}
+
+/* ---- app_exam.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   SCREEN 4: examination, verification tasks, uploads and reprocessing
+   ═══════════════════════════════════════════════════════════════════════ */
+const CLAUSE = {
+  'B1-i':'Insufficient balance in the GP Fund Account',
+  'B1-ii':'Original sanction not attached and/or not signed by competent authority as per delegation of power',
+  'B1-iii':'QR-coded sanction not verified by department (Health, Education & Police)',
+  'B1-iv':'Respective rule and relevant reason for advance not mentioned on sanction',
+  'B1-v':'Change Form-05 not found attached with the GP Fund case',
+  'B1-vi':'Signature of sanctioning authority does not match the specimen signature provided',
+  'B1-vii':'Change Form not signed by respective DDO and subscriber',
+  'B2-i':'Incomplete GP Fund Form-10: signature, old and new GP Fund A/c No., Personnel Number, Date of Retirement',
+  'B2-ii':'Mismatch in the subscription period with the service as mentioned on Service Book and Service Statement',
+  'B2-iii':'Change Form-06 for final payment and non-refundable advance not attached',
+  'B2-iv':'Signature of sanctioning authority does not match the specimen provided',
+  'B2-v':'Change Form not signed by respective DDO and subscriber',
+  'B2-vi':'Missing credits and adjustments found in Re-Calculation Sheet of applicant',
+  'B2-vii':'Old GP Fund A/c No. / manual not mentioned in change form',
+  'B2-viii':'Requisite entries not found in Service Book (date of retirement, order of retirement, leave account)',
+  'B2-ix':'Respective rule not quoted on sanction (non-refundable advance)',
+  'A1-ii':'Checklist A.1(ii): copy of CNIC of the subscriber',
+  'A2-iii':'Checklist A.2(iii): retirement / dismissal / obituary notification',
+  'A2-iv':'Checklist A.2(iv): CNIC of subscriber; in a death case, of all legal heirs',
+  'A2-vi':'Checklist A.2(vi): affidavit for lawful widow and succession certificate where applicable',
+  'A3-i':'Checklist A.3(i): completely filled proforma for transfer of GP Fund balances',
+  'A4-ii':'Checklist A.4(ii): period of missing months',
+  'A4-iii':'Checklist A.4(iii): manual deduction certificate by DDO, non-gazetted period',
+  'A4-iv':'Checklist A.4(iv): manual deduction certificate by AG Office, gazetted period',
+  'A4-v':'Checklist A.4(v): challan forms verified by Treasury Office',
+  'R1':'Office clarification 15-09-2026, R1: SAP extracts', 'R4':'Office clarification 15-09-2026, R4: delegation of authority',
+  'R5':'Office clarification 15-09-2026, R5: attestation not required; noted only',
+  'R6':'Office clarification 15-09-2026, R6: Form 5 / Form 6-B personal number and signature',
+  'R10':'Office clarification 15-09-2026, R10: QR codes scanned and validated',
+  'R12':'Office clarification 15-09-2026, R12: no two active advances'
+};
+function clauseText(code){ return CLAUSE[code] || (String(code).indexOf('OFF')===0 ? 'Outside the standardised list, raised with justification' : 'Checklist item '+code); }
+
+function renderExam(k){
+  const s = STATE[k], F = s.F, L = lists(s.results), p = position(k);
+  let h = '<h1 class="pagetitle">'+esc(F.label)+', examination</h1>'+
+    '<p class="pagesub">'+esc(F.subject)+' · '+esc(F.dept)+' · version '+s.version+' · '+plural(p.total,'observation')+', '+p.open+' still to be disposed of · '+plural(L.conf.length,'verification task')+' · '+plural(L.sap.length,'SAP item')+'</p>';
+  if (s.lastDiff && s.version > 1) h += diffBanner(k);
+  h += '<div class="notice '+(p.hard ? 'red' : 'ok')+'" id="posband"><b>'+(p.hard ? 'As things stand the case cannot advance: '+plural(p.hard,'hard stop')+' outstanding.' : 'No hard stop outstanding.')+'</b> '+
+       (p.waived||p.corrected||p.referred ? p.waived+' waived, '+p.corrected+' settled in office, '+p.referred+' referred upward. ' : '')+
+       (L.conf.length ? plural(L.conf.length,'verification task')+' for an officer. ' : '')+(L.sap.length ? plural(L.sap.length,'check')+' waiting for SAP data. ' : '')+
+       'Observations issue together, in one instance, as para 2 of the circular requires.</div>';
+  if (s.returns >= 1) h += '<div class="notice gold"><b>This case has already been returned once.</b> A second return needs the review and signature of the DAG (Funds) / DAO I under para 3. The gate applies at disposal.</div>';
+  h += '<div class="secnav"><a href="#x-obs">Observations</a><a href="#x-conf">Verification tasks</a><a href="#x-all">All checks</a><a href="#x-rec">Case record</a><a href="#x-hist">Case history</a></div>';
+
+  /* observations */
+  h += '<div class="card" id="x-obs"><h3>Observations, and what the officer decides to do with each</h3>'+
+       '<p class="hint"><b>Uphold</b> keeps it on the form. <b>Waive</b> accepts the deficiency on recorded grounds. <b>Settle in office</b> is for a datum the file or SAP already evidences. '+
+       '<b>Refer upward</b> sends it to a higher officer. <b>Upload document</b> takes the curing paper against the observation and re-checks the case.</p>';
+  if (!L.obs.length) h += '<div class="src">No observation is raised on this case.</div>';
+  L.obs.forEach(o=>{ h += obsBlock(k, o); });
+  const openAdv = L.adv.filter(o=>!s.disp[o.id]);
+  if (openAdv.length > 1) h += '<div class="act"><button class="abtn" onclick=\'upholdAllAdv('+JSON.stringify(k)+')\'>Uphold all '+openAdv.length+' open advisory observations</button></div>';
+  h += '</div>';
+
+  /* verification tasks */
+  h += '<div class="card" id="x-conf"><h3>Verification tasks</h3><p class="hint">Things the module sets up but an officer must decide: signatures against the DOA register and the CNIC, thumb impressions, QR links that need the portal, and facts to confirm. '+
+       (may('verify') ? '' : '<b>Recording a verification requires '+whoCan('verify')+'.</b>')+'</p>';
+  if (!L.conf.length) h += '<div class="src">None open.</div>';
+  L.conf.forEach(r=>{ h += confBlock(k, r); });
+  h += '</div>';
+
+  if (L.sap.length){
+    h += '<div class="card"><h3>Waiting for SAP data</h3><p class="hint">Actions for this section, not defects of the department.</p><ul style="margin:0;padding-left:18px;font-size:13px">'+
+         L.sap.map(r=>'<li>'+esc(r.title)+': <span class="src">'+esc(r.finding)+'</span></li>').join('')+'</ul>'+
+         '<div class="act"><button class="abtn up" onclick=\'renderSap('+JSON.stringify(k)+');go(3)\'>Go to SAP extracts</button></div></div>';
+  }
+
+  /* all checks */
+  const GROUPS = [['checklist','Checklist'],['sap','SAP extracts'],['identity','Identity and personal number'],['signature','Signatures and delegation of authority'],['qr','QR codes'],['balance','Balance and advances']];
+  h += '<div class="card" id="x-all"><h3>All checks</h3><p class="hint">Every rule applied to this case, with the result and where it was found. Satisfied items are recorded here so the file shows what was checked, not only what failed.</p>';
+  GROUPS.forEach(([g,lab])=>{
+    const rows = s.results.filter(r=>r.group===g);
+    if (!rows.length) return;
+    h += '<h4>'+lab+'</h4><table><tr><th style="width:120px">Reference</th><th>Check and finding</th><th style="width:150px">Result</th></tr>';
+    rows.forEach(r=>{
+      h += '<tr><td class="mono" style="font-size:11.5px">'+esc(typeof r.checklist==='function' ? r.checklist(F) : (r.checklist||r.ref))+'</td><td><div class="fv">'+esc(r.doc||r.title)+'</div>'+
+           '<div class="src" style="margin-top:3px">'+esc(r.finding)+'</div>'+(r.payload ? '<div class="qrpay" style="margin-top:5px">'+esc(r.payload)+'</div>' : '')+calcBlock(r)+
+           (r.evidence && r.evidence.length ? '<div class="src" style="margin-top:3px">'+r.evidence.map(e=>pglink(k,e.page,e.label,e.bbox)).join(' ')+'</div>' : '')+'</td><td>'+vd(r.status)+'</td></tr>';
+    });
+    h += '</table>';
+  });
+  h += '</div>';
+
+  /* case record */
+  h += '<div class="card" id="x-rec"><h3>Extracted case record</h3><p class="hint">Read by the vision stage. Each value carries its source page and a confidence; below threshold goes to an officer.</p><table>'+
+       '<tr><th>Field</th><th>Value</th><th>Source</th><th>Confidence</th></tr>'+
+       (F.record||[]).map(r=>'<tr><td>'+esc(r[0])+'</td><td class="fv">'+esc(r[1])+'</td><td class="src">'+esc(r[2])+(r[4] ? ' '+pglink(k,r[4]) : '')+'</td><td>'+confBar(r[3])+'</td></tr>').join('')+'</table></div>';
+
+  /* history */
+  h += '<div class="card" id="x-hist"><h3>Case history</h3><p class="hint">Each upload or verification re-checks the whole case and adds a version. Earlier versions stay on record.</p>'+
+       '<table class="compact"><tr><th>Version</th><th>When</th><th>By</th><th>Why</th><th class="n">Hard</th><th class="n">Obs.</th><th class="n">Verify</th><th class="n">SAP</th></tr>'+
+       s.history.map(v=>'<tr><td>'+v.v+'</td><td class="mono">'+esc(v.at)+'</td><td>'+esc(v.by)+'</td><td>'+esc(v.reason)+(v.v>1 ? '<div class="src">'+v.resolved+' resolved, '+v.raised+' raised</div>' : '')+'</td>'+
+         '<td class="n">'+v.hard+'</td><td class="n">'+v.adv+'</td><td class="n">'+v.conf+'</td><td class="n">'+v.sap+'</td></tr>').join('')+'</table>'+
+       (s.uploads.length ? '<h4>Documents uploaded</h4><table class="compact"><tr><th>File</th><th>Against</th><th>By</th><th>SHA-256</th></tr>'+
+         s.uploads.map(u=>'<tr><td>'+esc(u.name)+'<div class="src">'+fmtSize(u.size)+'</div></td><td>'+esc(u.against)+'</td><td>'+esc(u.by)+'<div class="src">'+esc(u.at)+'</div></td><td class="mono" style="font-size:11px;word-break:break-all">'+esc(u.hash)+'</td></tr>').join('')+'</table>' : '')+
+       '</div>';
+  h += '<div class="actionbar"><button class="btn" id="todisposal">Proceed to disposal</button><button class="btn ghost" onclick=\'renderSap('+JSON.stringify(k)+');go(3)\'>SAP extracts</button><button class="btn ghost" onclick="renderIntake();go(1)">Take another case</button></div>';
+  $('s4body').innerHTML = h;
+  $('todisposal').onclick = ()=>{ renderDisposal(k); go(5); };
+}
+
+function confBar(v){
+  if (v===undefined || v===null) return '';
+  const pct = Math.round(v*100);
+  return '<span class="src nowrap" style="color:'+(v<0.9?'var(--amber)':'var(--muted)')+'">'+pct+'%</span>';
+}
+function calcBlock(r){
+  const c = r.calc; if (!c) return '';
+  if (c.ruleLimit !== undefined) return '<table class="num compact" style="margin-top:6px;max-width:520px"><tr><td>Sanctioned</td><td class="n mono">Rs '+fmt(c.amount)+'</td></tr>'+
+    '<tr><td>GPF balance before this advance</td><td class="n mono">Rs '+fmt(c.balance)+'</td></tr>'+
+    '<tr><td>'+c.pct+'% of the balance</td><td class="n mono">Rs '+fmt(c.byPct)+'</td></tr>'+
+    (c.byPay!==null ? '<tr><td>'+c.months+' months’ pay at Rs '+fmt(c.pay)+'</td><td class="n mono">Rs '+fmt(c.byPay)+'</td></tr>' : '')+
+    '<tr><td class="fv">Limit under '+esc(c.rule)+(c.byPay!==null ? ' ('+(c.combine==='max'?'greater':'lesser')+' of the two)' : '')+'</td><td class="n mono fv">Rs '+fmt(c.ruleLimit)+'</td></tr>'+
+    '<tr><td class="fv">'+(c.amount<=c.ruleLimit?'Headroom':'Excess')+'</td><td class="n mono fv">Rs '+fmt(Math.abs(c.ruleLimit-c.amount))+'</td></tr>'+
+    '<tr><td class="muted">Office practice, '+c.officePct+'% of balance'+(c.office!==c.ruleLimit?' (flagged: differs from the Rules)':'')+'</td><td class="n mono muted">Rs '+fmt(c.office)+'</td></tr></table>';
+  if (c.claim !== undefined) return '<table class="num compact" style="margin-top:6px;max-width:460px"><tr><td>Amount claimed</td><td class="n mono">Rs '+fmt(c.claim)+'</td></tr><tr><td>Per SAP re-calculation report</td><td class="n mono">Rs '+fmt(c.expected)+'</td></tr><tr><td class="fv">Difference</td><td class="n mono fv">Rs '+fmt(Math.abs(c.claim-c.expected))+'</td></tr></table>';
+  if (c.attached !== undefined) return '<table class="num compact" style="margin-top:6px;max-width:460px"><tr><td>Scheduled and Treasury-verified</td><td class="n mono">Rs '+fmt(c.scheduled)+'</td></tr><tr><td>Challans attached</td><td class="n mono">Rs '+fmt(c.attached)+'</td></tr><tr><td class="fv">Variance</td><td class="n mono fv">Rs '+fmt(c.variance)+'</td></tr></table>';
+  return '';
+}
+
+function obsBlock(k, o){
+  const s = STATE[k], d = s.disp[o.id];
+  const cls = d ? ({waive:'waived', correct:'corrected', refer:'referred', uphold:o.status})[d.action] : o.status;
+  const lab = d ? ({waive:['waived','Waived on grounds'], correct:['ok','Settled in office'], refer:['ref','Referred upward'], uphold:[o.status, o.status==='hard'?'Upheld, hard stop':'Upheld, observation']})[d.action]
+                : [o.status, o.status==='hard' ? 'Hard stop' : 'Observation'];
+  const K = JSON.stringify(k), I = JSON.stringify(o.id);
+  let h = '<div class="obs '+cls+'" id="ob-'+esc(o.id)+'"><div class="obshead"><span class="obscode">'+esc(o.code)+'</span><span class="obsdoc">'+esc(o.doc||o.title)+'</span>'+
+          '<span class="vd '+(STLAB[lab[0]]?STLAB[lab[0]][0]:lab[0])+'">'+lab[1]+'</span></div>'+
+          '<div class="obsrow"><span class="obsk">Defect</span><span>'+esc(o.finding)+'</span></div>'+calcBlock(o)+
+          '<div class="obsrow"><span class="obsk">Clause</span><span>'+esc(clauseText(o.code))+'</span></div>'+
+          (o.remedy ? '<div class="obsrow"><span class="obsk">Remedy</span><span>'+esc(o.remedy)+'</span></div>' : '')+
+          (o.evidence && o.evidence.some(e=>e.crop) ? '<div class="evid">'+o.evidence.filter(e=>e.crop).map(e=>evBox(k,e)).join('')+'</div>'
+            : (o.evidence && o.evidence.length ? '<div class="obsrow"><span class="obsk">Seen at</span><span>'+o.evidence.map(e=>pglink(k,e.page,e.label,e.bbox)).join(' ')+'</span></div>' : ''));
+  if (d){
+    h += '<div class="recorded"><b>'+lab[1]+'</b> by '+esc(d.by)+', '+esc(d.desig)+' ('+esc(d.grade)+') on '+esc(d.at)+'.'+(d.reason?'<br><b>Ground:</b> '+esc(d.reason):'')+(d.authority?'<br><b>Authority relied upon:</b> '+esc(d.authority):'')+
+         '<br><button class="abtn" style="margin-top:7px" onclick=\'undoDisp('+K+','+I+')\'>Undo</button>'+(o.cure ? ' <button class="abtn up" style="margin-top:7px" onclick=\'openCure('+K+','+I+')\'>Upload document against this</button>' : '')+'</div>';
+  } else {
+    h += '<div class="act"><button class="abtn" onclick=\'doDisp('+K+','+I+',"uphold")\'>Uphold</button>'+dbtn(k,o,'waive','Waive on grounds')+dbtn(k,o,'correct','Settle in office')+dbtn(k,o,'refer','Refer upward')+
+         (o.cure ? '<button class="abtn up" onclick=\'openCure('+K+','+I+')\'>'+(o.cure.kind==='sap' ? 'Upload SAP extract' : 'Upload document against this')+'</button>' : '')+
+         '</div><div id="df-'+esc(o.id)+'"></div>';
+  }
+  return h + '</div>';
+}
+function dbtn(k, o, action, label){
+  const ok = may(action, o.status);
+  return '<button class="abtn" '+(ok?'':'disabled ')+'onclick=\'doDisp('+JSON.stringify(k)+','+JSON.stringify(o.id)+','+JSON.stringify(action)+')\'>'+label+'</button>'+
+         (ok ? '' : '<span class="lockmsg">'+label+' requires '+whoCan(action, o.status)+'</span>');
+}
+
+function confBlock(k, r){
+  const K = JSON.stringify(k), I = JSON.stringify(r.id), vid = r.cure && r.cure.vid;
+  let h = '<div class="obs conf" id="ob-'+esc(r.id)+'"><div class="obshead"><span class="obscode">'+esc(r.ref)+'</span><span class="obsdoc">'+esc(r.doc||r.title)+'</span>'+vd('conf')+'</div>'+
+          '<div class="obsrow"><span class="obsk">Finding</span><span>'+esc(r.finding)+'</span></div>'+
+          (r.payload ? '<div class="obsrow"><span class="obsk">QR reads</span><span class="qrpay">'+esc(r.payload)+'</span></div>' : '')+calcBlock(r)+
+          (r.remedy ? '<div class="obsrow"><span class="obsk">To do</span><span>'+esc(r.remedy)+'</span></div>' : '');
+  if (r.pair){
+    h += '<div class="cmp">'+evBox(k, {crop:r.pair.left.crop, label:r.pair.left.label, page:(STATE[k].F.docs.changeForm||{}).page})+
+         evBox(k, {crop:r.pair.right.crop, label:r.pair.right.label, page:((STATE[k].F.docs.cnics||[])[0]||{}).page})+'</div>';
+  } else if (r.doa && r.sig){
+    const spec = r.doa.signatory && r.doa.signatory.specimen;
+    h += '<div class="cmp">'+evBox(k, {crop:r.sig.crop, label:'Signature on the '+r.sig.doc, page:r.sig.page})+
+         '<div class="evbox">'+(spec ? '<img src="'+spec.url+'" alt="">' : '<div class="noimg">Specimen not yet on the register</div>')+
+         '<div class="evcap"><b>DOA register</b> '+esc(r.doa.authority ? r.doa.authority.authority : 'authority not listed')+(r.doa.signatory ? ', '+esc(r.doa.signatory.post) : '')+
+         ' <span class="pglink" onclick="renderDoa();go(\'doa\')">open register</span></div></div></div>';
+  } else if (r.evidence && r.evidence.some(e=>e.crop)){
+    h += '<div class="evid">'+r.evidence.filter(e=>e.crop).map(e=>evBox(k,e)).join('')+'</div>';
+  }
+  if (vid){
+    const ok = may('verify');
+    h += '<div class="dispform"><label for="vn-'+esc(r.id)+'">What was checked, and where</label><textarea id="vn-'+esc(r.id)+'" placeholder="e.g. compared with specimen on register entry; NADRA biometric verification ref. no."></textarea>'+
+         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="abtn on" '+(ok?'':'disabled ')+'onclick=\'doVerify('+K+','+I+','+JSON.stringify(vid)+',true)\'>Verified</button>'+
+         '<button class="abtn" '+(ok?'':'disabled ')+'onclick=\'doVerify('+K+','+I+','+JSON.stringify(vid)+',false)\'>Does not verify</button>'+
+         (r.cure.kind==='qr' || r.cure.kind==='doc' ? '<button class="abtn up" onclick=\'openCure('+K+','+I+')\'>Upload document</button>' : '')+
+         (ok ? '<span class="src">Recorded against '+esc(OFFICER.desig)+' ('+esc(OFFICER.grade)+').</span>' : '<span class="lockmsg">Requires '+whoCan('verify')+'</span>')+'</div></div>';
+  } else if (r.cure){
+    h += '<div class="act"><button class="abtn up" onclick=\'openCure('+K+','+I+')\'>'+(r.cure.kind==='sap'?'Upload SAP extract':'Upload document against this')+'</button></div>';
+  }
+  return h + '</div>';
+}
+
+/* ── dispositions ─────────────────────────────────────────────────────── */
+function findResult(k, id){ return STATE[k].results.find(r=>r.id===id); }
+window.doDisp = function(k, id, action){
+  const o = findResult(k, id); if (!o || !may(action, o.status)) return;
+  if (action==='uphold'){ record(k, id, 'uphold', '', ''); return; }
+  const prompt = action==='waive' ? 'On what ground is the deficiency waived? State the facts relied upon.'
+               : action==='correct' ? 'Where in the file or in SAP is this already evidenced? Record what you verified.' : 'Why is this being referred, and to whom?';
+  const host = document.getElementById('df-'+id);
+  host.innerHTML = '<div class="dispform"><label>'+prompt+'</label><textarea id="rz-'+esc(id)+'" placeholder="Recorded on the file and printed on the office copy."></textarea>'+
+    (action==='waive' ? '<label>Rule, notification or authority relied upon</label><input type="text" id="au-'+esc(id)+'" placeholder="e.g. Rule 1.14, GP Fund Rules 1978, or the order relied upon">' : '')+
+    '<div style="display:flex;gap:8px;align-items:center"><button class="abtn on" id="rec-'+esc(id)+'">Record</button><button class="abtn" id="can-'+esc(id)+'">Cancel</button>'+
+    '<span class="src">Recorded against '+esc(OFFICER.desig)+' ('+esc(OFFICER.grade)+').</span></div></div>';
+  document.getElementById('rec-'+id).onclick = ()=> record(k, id, action, document.getElementById('rz-'+id).value, action==='waive' ? document.getElementById('au-'+id).value : '');
+  document.getElementById('can-'+id).onclick = ()=>{ host.innerHTML=''; };
+};
+window.record = function(k, id, action, reason, authority){
+  const o = findResult(k, id);
+  if (action!=='uphold' && !String(reason||'').trim()){ alert('A ground must be recorded first.'); return; }
+  if (action==='waive' && !String(authority||'').trim()){ alert('The rule, notification or authority relied upon must be recorded before a waiver.'); return; }
+  STATE[k].disp[id] = { action, reason:reason||'', authority:authority||'', by:OFFICER.name, desig:OFFICER.desig, grade:OFFICER.grade, at:stamp() };
+  logAudit(k, {uphold:'Observation upheld', waive:'Observation waived on grounds', correct:'Observation settled in office', refer:'Observation referred upward'}[action],
+    '['+o.code+'] '+(o.doc||o.title)+(reason?', ground: '+reason:'')+(authority?', authority: '+authority:''));
+  keepScroll(()=>renderExam(k));
+};
+window.undoDisp = function(k, id){
+  const o = findResult(k, id); delete STATE[k].disp[id];
+  logAudit(k, 'Disposition withdrawn', '['+(o?o.code:id)+'] returned to open.');
+  keepScroll(()=>renderExam(k));
+};
+window.upholdAllAdv = function(k){
+  lists(STATE[k].results).adv.filter(o=>!STATE[k].disp[o.id]).forEach(o=>{
+    STATE[k].disp[o.id] = { action:'uphold', reason:'', authority:'', by:OFFICER.name, desig:OFFICER.desig, grade:OFFICER.grade, at:stamp() };
+  });
+  logAudit(k, 'Advisory observations upheld together', 'Carried to the advisory memorandum.');
+  keepScroll(()=>renderExam(k));
+};
+function keepScroll(fn){ const y = window.scrollY; fn(); window.scrollTo(0, y); }
+
+/* ── verification ─────────────────────────────────────────────────────── */
+window.doVerify = function(k, id, vid, ok){
+  if (!may('verify')) return;
+  const note = (document.getElementById('vn-'+id)||{}).value || '';
+  if (!ok && !note.trim()){ alert('Record what did not verify before closing the task.'); return; }
+  const r = findResult(k, id), F = STATE[k].F;
+  F.verifications = F.verifications || {};
+  F.verifications[vid] = { ok, note, by:OFFICER.name, desig:OFFICER.desig, grade:OFFICER.grade, at:stamp() };
+  logAudit(k, ok ? 'Verification recorded' : 'Verification failed', (r ? r.doc||r.title : vid)+(note?': '+note:''));
+  reprocess(k, (ok ? 'Verified: ' : 'Did not verify: ')+(r ? r.doc||r.title : vid));
+  renderExam(k); window.scrollTo(0,0);
+};
+
+/* ── upload against an item, read, confirm, re-check ──────────────────── */
+window.openCure = async function(k, id){
+  const r = findResult(k, id); if (!r || !r.cure) return;
+  if (r.cure.kind==='sap'){ renderSap(k); go(3); return; }
+  const cure = r.cure;
+  openModal('Upload against: '+(r.doc||r.title),
+    '<p class="src" style="margin-top:0">'+esc(r.finding)+'</p>'+
+    '<div class="drop" id="cdrop"><b>Choose the '+esc(cure.docType || 'document')+'</b><br>PDF or image. The file is hashed and kept with the case.</div><div id="cfile"></div><div id="cstep"></div>');
+  const take = async file=>{
+    const u = await registerUpload(k, file, (r.doc||r.title));
+    $('cfile').innerHTML = '<div class="filerow">'+(u.url ? '<img class="thumbimg" src="'+u.url+'">' : '')+'<div><div class="fn">'+esc(u.name)+'</div><div class="src">'+fmtSize(u.size)+' · SHA-256 '+esc(u.hash.slice(0,32))+'...</div></div></div>';
+    $('cdrop').style.display='none';
+    readingStep(k, r, u, file);
+  };
+  $('cdrop').onclick = async ()=>{ const f = await pickFile('.pdf,.png,.jpg,.jpeg,.tif,.tiff'); if (f) take(f); };
+};
+
+function readingStep(k, r, u, file){
+  const steps = ['Straighten and clean the page','Identify the document','Lift the fields'];
+  let i = 0;
+  $('cstep').innerHTML = '<div class="card" style="margin-top:12px"><div id="cread"></div></div>';
+  const tick = ()=>{
+    $('cread').innerHTML = steps.map((t,j)=>'<div class="stage '+(j<i?'ok':j===i?'run':'pend')+'"><div class="sic">'+(j<i?'✓':j+1)+'</div><div><div class="sn">'+t+'</div></div></div>').join('');
+    if (i++ < steps.length) return setTimeout(tick, 380);
+    confirmStep(k, r, u, file);
+  };
+  tick();
+}
+
+async function confirmStep(k, r, u, file){
+  const cure = r.cure;
+  let fields = (cure.fields || []).slice();
+  let decoded = null;
+  if (cure.kind==='qr'){
+    if ('BarcodeDetector' in window && /^image\//.test(u.type)){
+      try { const bmp = await createImageBitmap(file); const codes = await new BarcodeDetector({formats:['qr_code']}).detect(bmp); if (codes[0]) decoded = codes[0].rawValue; } catch(e){}
+    }
+    fields = [{k:'payload', label:'QR code reads', type:'text', expect: decoded || ''}, {k:'agrees', label:'Content agrees with the printed document', type:'yesno'}];
+  }
+  const inp = f => {
+    if (f.type==='yesno') return '<select class="finput" id="cf-'+f.k+'"><option value="">choose</option><option value="yes">Yes</option><option value="no">No</option></select>';
+    if (f.type==='select') return '<select class="finput" id="cf-'+f.k+'">'+f.options.map(o=>'<option>'+esc(o)+'</option>').join('')+'</select>';
+    return '<input class="finput" type="text" id="cf-'+f.k+'" value="'+esc(f.expect||'')+'">';
+  };
+  $('cstep').innerHTML = '<div class="card" style="margin-top:12px"><h3>Confirm what the document shows</h3>'+
+    '<p class="hint">'+(decoded ? 'The QR code was decoded by the browser. ' : '')+'In production the reading stage fills these from the page with a confidence and the page region. In this prototype the officer confirms them from the uploaded document.'+
+    (fields.some(f=>f.expect) ? ' Pre-filled values are what the case expects; change them if the document shows otherwise.' : '')+'</p>'+
+    fields.map(f=>'<label class="flabel" for="cf-'+f.k+'">'+esc(f.label)+'</label>'+inp(f)).join('')+
+    '<div class="actionbar"><button class="btn" id="capply">Apply and re-check the case</button><span class="src">The rules decide whether the item is now satisfied.</span></div></div>';
+  $('capply').onclick = ()=>{
+    const vals = {}; fields.forEach(f=>{ vals[f.k] = $('cf-'+f.k).value.trim(); });
+    if (fields.some(f=>f.type==='yesno' && !vals[f.k])){ alert('Answer every yes / no question.'); return; }
+    const F = STATE[k].F;
+    if (cure.kind==='qr'){
+      F.verifications = F.verifications || {};
+      F.verifications['QR:'+cure.qid] = { ok: vals.agrees==='yes', note:'Uploaded '+u.name+'. QR reads: '+(vals.payload||'(not entered)'), by:OFFICER.name, desig:OFFICER.desig, grade:OFFICER.grade, at:stamp() };
+    } else if (CURES[cure.apply]) {
+      CURES[cure.apply](F, vals, u.name);
+    }
+    logAudit(k, 'Uploaded document read and confirmed', u.name+' against '+(r.doc||r.title)+': '+Object.keys(vals).map(x=>x+'='+vals[x]).join(', '));
+    reprocess(k, 'Document uploaded against '+(r.doc||r.title));
+    $('modal').classList.remove('on');
+    renderExam(k); window.scrollTo(0,0);
+  };
+}
+
+/* ---- app_dispose.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   SCREEN 5: disposal of the case   ·   SCREEN 6: issue and record
+   ═══════════════════════════════════════════════════════════════════════ */
+const DISPOSALS = [
+  { id:'return', n:'Return to the department for compliance', d:'Issue the claim rejection form with every upheld observation, in one instance, as para 2 of the circular requires.' },
+  { id:'pass', n:'Pass for payment', d:'No hard stop, verification task or SAP item outstanding. The case goes to the GP Fund Payment Register and to payment.' },
+  { id:'part', n:'Pass for part payment, balance withheld', d:'Release the undisputed portion now and hold the rest (Rule 1.35, Explanation). Used where the objection touches only part of the amount.' },
+  { id:'refer', n:'Refer to the Deputy Accountant General (Funds)', d:'For a second return, for waiver of a hard stop, or where the case turns on a question above this desk.' },
+  { id:'hold', n:'Hold pending verification', d:'Awaiting SAP, NADRA, the Treasury, a portal check or the department. It ages on the pendency report instead of sitting unnoticed.' }
+];
+
+function upheldObs(k){ const s = STATE[k]; return lists(s.results).obs.filter(o=>{ const d = s.disp[o.id]; return !d || d.action==='uphold' || d.action==='refer'; }); }
+function settledObs(k){ const s = STATE[k]; return lists(s.results).obs.filter(o=>{ const d = s.disp[o.id]; return d && (d.action==='waive' || d.action==='correct'); }); }
+
+function renderDisposal(k){
+  const s = STATE[k], F = s.F, p = position(k), L = lists(s.results);
+  let h = '<h1 class="pagetitle">Disposal of the case</h1><p class="pagesub">' + esc(F.subject) + ' · ' + plural(p.hard,'hard stop') + ' outstanding, ' + p.waived + ' waived, ' + p.corrected + ' settled in office, ' +
+          plural(L.conf.length,'verification task') + ', ' + plural(L.sap.length,'SAP item') + '.</p>';
+  if (p.open > 0) h += '<div class="notice gold"><b>' + plural(p.open,'observation') + ' still open.</b> Every observation must be disposed of before the case leaves this desk. Go back and uphold, waive, settle, refer or cure each one.</div>';
+  const second = s.returns >= 1;
+  if (second) h += '<div class="notice red"><b>Second return.</b> Under para 3 of the circular it may not be returned again until the DAG (Funds) / DAO I has reviewed and signed it. ' +
+                   (OFFICER.level >= 3 ? 'You hold that office.' : 'Refer it to the DAG, or switch to the DAG to countersign.') + '</div>';
+  h += '<div class="card"><h3>How is the case to be disposed of?</h3><p class="hint">The module never disposes of a case. It presents the position; an authorised officer decides.</p>';
+  DISPOSALS.forEach(dz=>{
+    let why = '';
+    if (dz.id==='return' && p.hard === 0 && !upheldObs(k).length) why = 'Nothing to return the case for.';
+    if (dz.id==='return' && second && OFFICER.level < 3) why = 'A second return requires the signature of the DAG (Funds) / DAO I.';
+    if (dz.id==='pass'){
+      const blocks = [];
+      if (p.hard) blocks.push(plural(p.hard,'hard stop'));
+      if (L.conf.length) blocks.push(plural(L.conf.length,'verification task'));
+      if (L.sap.length) blocks.push(plural(L.sap.length,'SAP item'));
+      if (blocks.length) why = 'Cannot pass for payment while ' + blocks.join(', ') + ' remain' + (blocks.length===1 && /^1 /.test(blocks[0]) ? 's' : '') + ' open.';
+      else if (OFFICER.level < 2) why = 'Passing for payment is reserved to the Accounts Officer or above.';
+    }
+    if (dz.id==='part' && OFFICER.level < 2) why = 'Part payment is reserved to the Accounts Officer or above.';
+    const on = s.caseDisp === dz.id;
+    h += '<div class="dchoice' + (on?' sel':'') + (why?' disabled':'') + '" ' + (why ? '' : 'onclick=\'pickDisposal(' + JSON.stringify(k) + ',' + JSON.stringify(dz.id) + ')\'') + '>' +
+         '<div class="dn">' + dz.n + '</div><div class="dd">' + dz.d + '</div>' + (why ? '<div class="dd" style="color:var(--amber);margin-top:5px">' + why + '</div>' : '') + '</div>';
+  });
+  h += '<div id="dispnote"></div></div>';
+  const up = upheldObs(k), st2 = settledObs(k);
+  h += '<div class="cols"><div class="card"><h3>' + (p.hard ? 'Will appear on the rejection form' : 'Will appear on the advisory memorandum') + '</h3><p class="hint">' + plural(up.length,'observation') + ', issued in one instance.</p>' +
+       (up.length ? '<ul style="margin:0;padding-left:18px;font-size:13px">' + up.map(o=>'<li style="margin-bottom:5px"><span class="mono">' + esc(o.code) + '</span>, ' + esc(o.doc||o.title) + '</li>').join('') + '</ul>' : '<div class="src">Nothing to issue to the department.</div>') +
+       '</div><div class="card"><h3>Retained on the office copy only</h3><p class="hint">Disposed of in office, recorded on the half the circular requires this office to keep.</p>' +
+       (st2.length ? '<ul style="margin:0;padding-left:18px;font-size:13px">' + st2.map(o=>'<li style="margin-bottom:5px"><span class="mono">' + esc(o.code) + '</span>, ' + esc(o.doc||o.title) + '<br><span class="src">' + (s.disp[o.id].action==='waive'?'Waived':'Settled') + ' by ' + esc(s.disp[o.id].desig) + '</span></li>').join('') + '</ul>' : '<div class="src">Nothing waived or settled.</div>') +
+       '</div></div>';
+  if (L.conf.length || L.sap.length) h += '<div class="notice slate"><b>Still open for this office:</b> ' + L.conf.concat(L.sap).map(r=>esc(r.doc||r.title)).join('; ') + '.</div>';
+  h += '<div class="actionbar"><button class="btn" id="toissue" ' + ((s.caseDisp && p.open===0 && s.dispConfirmed) ? '' : 'disabled') + '>Record disposal &amp; issue</button><button class="btn ghost" id="back4">Back to examination</button></div>';
+  $('s5body').innerHTML = h;
+  $('back4').onclick = ()=>{ renderExam(k); go(4); };
+  $('toissue').onclick = ()=>{ s.issued = true; logAudit(k,'Pack issued','Disposal: ' + (DISPOSALS.find(d=>d.id===s.caseDisp)||{}).n + '.'); renderIssue(k); go(6); };
+  if (s.caseDisp) showDispNote(k);
+}
+window.pickDisposal = function(k, id){ const s = STATE[k]; s.caseDisp = id; s.dispConfirmed = false; renderDisposal(k); };
+function showDispNote(k){
+  const s = STATE[k], dz = DISPOSALS.find(d=>d.id===s.caseDisp);
+  $('dispnote').innerHTML = '<div class="dispform" style="margin-top:12px"><label for="cdnote">Officer’s note on the disposal, printed on the office copy</label>' +
+    '<textarea id="cdnote" placeholder="Optional, but recorded where entered.">' + esc(s.caseNote||'') + '</textarea>' +
+    (s.dispConfirmed ? '<div class="recorded"><b>Recorded:</b> ' + esc(dz.n) + '</div>' : '<button class="abtn on" id="cdgo">Confirm: ' + esc(dz.n) + '</button>') + '</div>';
+  if ($('cdgo')) $('cdgo').onclick = ()=>{
+    s.caseNote = $('cdnote').value; s.dispConfirmed = true;
+    logAudit(k, 'Case disposal recorded', dz.n + (s.caseNote ? ', note: ' + s.caseNote : ''));
+    if (s.caseDisp === 'return') s.returns = (s.returns||0) + 1;
+    renderDisposal(k);
+  };
+}
+
+function formMeta(k, fifth){
+  const s = STATE[k], F = s.F;
+  return '<div class="rfmeta"><div><div class="l">Subscriber</div>' + esc(F.subject) + '</div><div><div class="l">Personnel / GP Fund A/c</div><span class="mono">' + esc(F.personnelNo) + '</span></div>' +
+         '<div><div class="l">Case type</div>' + esc(F.label) + '</div><div><div class="l">Diary no.</div><span class="mono">' + esc(s.dak.no) + '</span><br><span class="src">' + esc(s.dak.date) + '</span></div>' +
+         '<div><div class="l">' + fifth[0] + '</div>' + fifth[1] + '</div></div>';
+}
+function obsTable(list, withSev){
+  return '<div class="tscroll"><table><tr><th style="width:34px">#</th><th style="width:88px">Clause</th><th>Document, defect and remedy</th>' + (withSev ? '<th style="width:96px">Severity</th>' : '') + '</tr>' +
+    list.map((o,n)=>'<tr><td class="mono">' + (n+1) + '</td><td class="mono">' + esc(o.code) + '</td><td><div class="fv">' + esc(o.doc||o.title) + '</div><div style="margin-top:3px">' + esc(o.finding) + '</div>' +
+      (o.remedy ? '<div style="margin-top:4px;color:var(--green2)"><b>Remedy:</b> ' + esc(o.remedy) + '</div>' : '') + '<div class="src" style="margin-top:3px">' + esc(clauseText(o.code)) + '</div></td>' +
+      (withSev ? '<td>' + vd(o.status, o.status==='hard' ? 'Hard stop' : 'Observation') + '</td>' : '') + '</tr>').join('') + '</table></div>';
+}
+
+function renderIssue(k){
+  const s = STATE[k], F = s.F, L = lists(s.results), dz = DISPOSALS.find(d=>d.id===s.caseDisp) || { n:'(not recorded)' };
+  const up = upheldObs(k), st2 = settledObs(k), returning = s.caseDisp === 'return';
+  let h = '<h1 class="pagetitle">' + (returning ? 'Claim rejection form, office record and register' : 'Office record and register') + '</h1>' +
+          '<p class="pagesub">The single-instance output required by para 2 of the circular, the office record of every decision, and the GP Fund Payment Register entry directed at C(i).</p>';
+  if (returning){
+    h += '<div class="rform"><div class="rfhead"><div class="o1">Office of the Accountant General Punjab</div><div class="o2">Claim Rejection Form. GP Fund</div>' +
+         '<div class="o3">Issued under Office Circular No. G.P. Fund-I (Coord)/TR/127 dated 21.12.2023, para 2</div></div>' + formMeta(k, ['Return', s.returns + (s.returns===1?'st':s.returns===2?'nd':'th') + ' return']) +
+         '<div class="rfbody"><div class="notice ' + (s.returns>1?'red':'gold') + '" style="margin-bottom:15px"><b>Returned for compliance: ' + plural(up.length,'observation') + ' to be removed.</b> ' +
+         (s.returns>1 ? 'This return carries the signature of the DAG (Funds) / DAO I, as para 3 requires.' : 'A second return will require the review and signature of the DAG (Funds) / DAO I under para 3.') + '</div>' +
+         obsTable(up, true) + '<div style="margin-top:14px;font-size:12.5px;color:var(--muted)">All observations are raised in this single instance. Each can be cured by sending the document named in the remedy; the case is then re-checked against the same rules.</div></div>' +
+         '<div class="tearline">Retain the portion below in office</div><div class="rfsig"><div class="sigbox"><div class="sigline"></div>' + (s.returns>1 ? 'Deputy Accountant General (Funds) / DAO I' : 'Accounts Officer, GP Fund Section') +
+         '<br><span class="src">' + esc(OFFICER.name) + ', ' + esc(OFFICER.desig) + ' (' + esc(OFFICER.grade) + ')</span></div><div class="sigbox"><div class="sigline"></div>Received on behalf of the department<br><span class="src">Name, designation and date</span></div></div></div>';
+  } else {
+    h += '<div class="notice ok"><b>' + esc(dz.n) + '.</b> No rejection form issues on this case. The office record and register entry below carry the decision and the grounds.</div>';
+    if (up.length) h += '<div class="rform" style="margin-top:16px"><div class="rfhead"><div class="o1">Office of the Accountant General Punjab</div><div class="o2">Advisory Memorandum. GP Fund</div>' +
+      '<div class="o3">Issued with the case. The case is not returned; these matters are to be put right on the department’s record.</div></div>' + formMeta(k, ['Disposal', esc(dz.n)]) +
+      '<div class="rfbody">' + obsTable(up, false) + '</div><div class="tearline">Retain the portion below in office</div><div class="rfsig"><div class="sigbox"><div class="sigline"></div>Accounts Officer, GP Fund Section<br><span class="src">' +
+      esc(OFFICER.name) + ', ' + esc(OFFICER.desig) + '</span></div><div class="sigbox"><div class="sigline"></div>Received on behalf of the department<br><span class="src">Name, designation and date</span></div></div></div>';
+  }
+  if (st2.length) h += '<div class="card" style="margin-top:16px"><h3>Office copy: observations disposed of without returning the case</h3><div class="tscroll"><table><tr><th style="width:88px">Clause</th><th>Document and ground</th><th style="width:170px">Officer</th></tr>' +
+    st2.map(o=>{ const d = s.disp[o.id]; return '<tr><td class="mono">' + esc(o.code) + '</td><td><div class="fv">' + esc(o.doc||o.title) + '</div><div class="src">' + (d.action==='waive'?'Waived':'Settled in office') + ': ' + esc(d.reason) + '</div>' +
+      (d.authority ? '<div class="src"><b>Authority:</b> ' + esc(d.authority) + '</div>' : '') + '</td><td><div class="fv" style="font-size:12.5px">' + esc(d.by) + '</div><div class="src">' + esc(d.desig) + '<br>' + esc(d.grade) + ' · ' + esc(d.at) + '</div></td></tr>'; }).join('') + '</table></div></div>';
+  const ver = Object.entries(F.verifications||{});
+  h += '<div class="card"><h3>Verifications recorded</h3>' + (ver.length ? '<div class="tscroll"><table><tr><th>Item</th><th>Result</th><th>Officer</th></tr>' +
+    ver.map(([id,v])=>'<tr><td class="mono" style="font-size:11.5px">' + esc(id) + '</td><td>' + vd(v.ok?'ok':'hard', v.ok?'Verified':'Did not verify') + '<div class="src">' + esc(v.note||'') + '</div></td><td>' + esc(v.by) + '<div class="src">' + esc(v.desig) + ' · ' + esc(v.at) + '</div></td></tr>').join('') + '</table></div>'
+    : '<div class="src">None recorded.</div>') + (L.conf.length ? '<div class="notice slate" style="margin-top:10px">Still open: ' + L.conf.map(r=>esc(r.doc||r.title)).join('; ') + '.</div>' : '') + '</div>';
+  h += '<div class="card"><h3>SAP extracts and documents relied on</h3><p class="hint">' + (F.sap ? 'SAP extracts: ' + (F.sap.source==='case' ? 'found in the case' : 'uploaded, ' + esc(F.sap.file)) : 'No SAP extract on the case.') + '</p>' +
+    (s.uploads.length ? '<div class="tscroll"><table class="compact"><tr><th>File</th><th>Against</th><th>SHA-256</th></tr>' + s.uploads.map(u=>'<tr><td>' + esc(u.name) + '</td><td>' + esc(u.against) + '</td><td class="mono" style="font-size:11px;word-break:break-all">' + esc(u.hash) + '</td></tr>').join('') + '</table></div>' : '<div class="src">No documents uploaded on this case.</div>') + '</div>';
+  h += '<div class="card"><h3>Audit trail</h3><p class="hint">Every action on this case, with officer, designation, grade and time. Entries cannot be altered or removed.</p>' +
+    s.audit.map(a=>'<div class="aud"><div class="audt">' + esc(a.at) + '</div><div class="audw">' + esc(a.by) + '<span>' + esc(a.desig) + ' · ' + esc(a.grade) + '</span></div><div><div class="fv" style="font-size:13px">' + esc(a.what) + '</div>' +
+      (a.detail ? '<div class="src" style="margin-top:2px">' + esc(a.detail) + '</div>' : '') + '</div></div>').join('') + '</div>';
+  h += '<div class="card"><h3>GP Fund Payment Register</h3><p class="hint">Direction C(i) of the circular.</p><div class="tscroll"><table><tr><th>Diary</th><th>Subscriber</th><th>Personnel no.</th><th>Case type</th><th>Version</th><th>Disposal</th><th>Officer</th></tr>' +
+    '<tr><td class="mono">' + esc(s.dak.no) + '</td><td class="fv">' + esc(F.subject) + '</td><td class="mono">' + esc(F.personnelNo) + '</td><td>' + esc(F.label) + '</td><td>' + s.version + '</td><td>' + esc(dz.n) + '</td><td>' + esc(OFFICER.desig) + '<br><span class="src">' + stamp() + '</span></td></tr></table></div></div>';
+  h += '<div class="card"><h3>Employee Service Portal, comment entry</h3><p class="hint">Para 2 requires observations to be recorded in the comment section of the tracking system.</p><code class="esp">' + esc(espText(k, up)) + '</code></div>';
+  h += '<div class="actionbar noprint"><button class="btn ghost" id="back5">Back to disposal</button><button class="btn ghost" onclick="window.print()">Print the pack</button><button class="btn ghost" onclick="renderIntake();go(1)">Take another case</button></div>' +
+       '<div class="footnote">Prototype for discussion. Prepared by TMC for the Office of the Accountant General, Punjab. Checklist items and rejection codes from Office Circular No. G.P. Fund-I (Coord)/TR/127 of 21.12.2023; limits from the Punjab GP Fund Rules 1978 (Compendium 2008); office clarifications of 15-09-2026.</div>';
+  $('s6body').innerHTML = h;
+  $('back5').onclick = ()=>{ renderDisposal(k); go(5); };
+}
+function espText(k, up){
+  const s = STATE[k], F = s.F, dz = DISPOSALS.find(d=>d.id===s.caseDisp) || { n:'(not recorded)' };
+  let t = 'GP FUND PRE-AUDIT, OBSERVATIONS (single instance)\nCase: ' + F.subject + ' | Personnel no. ' + F.personnelNo + ' | ' + F.label + '\nDiary: ' + s.dak.no + ' | Version ' + s.version + ' | Returns: ' + s.returns + ' | Disposal: ' + dz.n + '\n\n';
+  if (!up.length) t += 'No observation issued to the department.\n';
+  up.forEach((o,n)=>{ t += (n+1) + '. [' + o.code + '] ' + (o.doc||o.title) + '\n   ' + o.finding + '\n' + (o.remedy ? '   REMEDY: ' + o.remedy + '\n' : ''); });
+  return t + '\nIssued by ' + OFFICER.name + ', ' + OFFICER.desig + ', under Circular G.P. Fund-I (Coord)/TR/127.';
+}
+
+/* ---- app_admin.js ---- */
+/* ═══════════════════════════════════════════════════════════════════════
+   DOA REGISTER and RULES IN FORCE, plus start-up
+   ═══════════════════════════════════════════════════════════════════════ */
+function doaCases(a){
+  const out = [];
+  ORDER.forEach(k=>(CASES[k].signatures||[]).forEach(g=>{ if (doaScore(g.authority, a.authority) >= 0.6) out.push(CASES[k].label); }));
+  return Array.from(new Set(out));
+}
+function renderDoa(){
+  const edit = OFFICER.level >= 2, dag = OFFICER.level >= 3;
+  let h = '<h1 class="pagetitle">Delegation of authority register</h1><p class="pagesub">Who may sign, for or on behalf of each department authority, with specimen signatures. Every signature for an authority in a case is looked up here.</p>' +
+    '<div class="notice ' + (DOA.status==='final' ? 'ok' : 'gold') + '"><b>' + (DOA.status==='final' ? 'Register marked final.' : 'Provisional register.') + '</b> ' + esc(DOA.version) +
+    (DOA.status==='final' ? ' A signatory not on the register now raises a hard stop.' : ' While provisional, a signatory not on the register creates a verification task, never a hard stop.') + '</div>';
+  if (dag) h += '<div class="actionbar" style="margin:-4px 0 14px"><button class="btn ghost small" id="doafinal">' + (DOA.status==='final' ? 'Mark register provisional again' : 'Mark register final (office list received)') + '</button></div>';
+  DOA.authorities.forEach(a=>{
+    const cs = doaCases(a);
+    h += '<div class="card"><h3>' + esc(a.authority) + '</h3><p class="hint">' + esc(a.dept) + ' · seen in: ' + esc(a.source) + (cs.length ? ' · cases: ' + esc(cs.join(', ')) : '') + '</p>' +
+      '<div class="tscroll"><table><tr><th>Signatory</th><th>Powers</th><th style="width:110px">Signs for</th><th style="width:230px">Specimen</th></tr>' +
+      a.signatories.map(g=>'<tr><td class="fv">' + esc(g.post) + (g.name ? '<div class="src">' + esc(g.name) + '</div>' : '') + '</td><td class="src">' + esc(g.powers||'') + '</td><td>' + (g.mayFor ? 'Yes, for the authority' : 'In own name') + '</td><td>' +
+        (g.specimen ? '<img src="' + g.specimen.url + '" style="max-height:60px;max-width:200px;border:1px solid var(--line)"><div class="src">' + esc(g.specimen.by) + ', ' + esc(g.specimen.at) + '</div>' : '<span class="blank">awaited from the office</span>') +
+        (edit ? '<div><button class="abtn up" style="margin-top:5px" onclick=\'uploadSpecimen(' + JSON.stringify(a.id) + ',' + JSON.stringify(g.id) + ')\'>' + (g.specimen ? 'Replace' : 'Upload') + ' specimen</button></div>' : '') + '</td></tr>').join('') +
+      '</table></div>' + (dag ? '<div class="act"><button class="abtn" onclick=\'addSignatory(' + JSON.stringify(a.id) + ')\'>Add signatory</button></div><div id="adds-' + esc(a.id) + '"></div>' : '') + '</div>';
+  });
+  if (!edit) h += '<div class="src">Uploading specimens requires the Accounts Officer or above; adding signatories requires the DAG (Funds).</div>';
+  $('sdoabody').innerHTML = h;
+  if ($('doafinal')) $('doafinal').onclick = ()=>{ DOA.status = DOA.status==='final' ? 'provisional' : 'final'; afterDoaChange('DOA register marked ' + DOA.status); };
+}
+function afterDoaChange(why){
+  if (sel && STATE[sel]){ logAudit(sel, 'DOA register changed', why); reprocess(sel, why); }
+  renderDoa();
+}
+window.uploadSpecimen = async function(aid, gid){
+  const f = await pickFile('.png,.jpg,.jpeg'); if (!f) return;
+  const url = await new Promise(r=>{ const fr = new FileReader(); fr.onload = ()=>r(fr.result); fr.readAsDataURL(f); });
+  const g = DOA.authorities.find(a=>a.id===aid).signatories.find(x=>x.id===gid);
+  g.specimen = { url, name:f.name, by:OFFICER.name, at:stamp() };
+  afterDoaChange('Specimen uploaded for ' + g.post);
+};
+window.addSignatory = function(aid){
+  const host = document.getElementById('adds-' + aid);
+  host.innerHTML = '<div class="dispform"><div class="row3"><div><label>Post</label><input type="text" id="ns-post"></div><div><label>Name</label><input type="text" id="ns-name"></div><div><label>Powers</label><input type="text" id="ns-pow"></div></div>' +
+    '<label class="chk"><input type="checkbox" id="ns-for"> <span>May sign for the authority</span></label><button class="abtn on" id="ns-go">Add to register</button></div>';
+  document.getElementById('ns-go').onclick = ()=>{
+    const post = document.getElementById('ns-post').value.trim(); if (!post){ alert('Enter the post.'); return; }
+    DOA.authorities.find(a=>a.id===aid).signatories.push({ id:'s' + Date.now(), post, name:document.getElementById('ns-name').value.trim(), powers:document.getElementById('ns-pow').value.trim(), mayFor:document.getElementById('ns-for').checked, specimen:null });
+    afterDoaChange('Signatory added: ' + post);
+  };
+};
+
+const OFFICE_RULES = [
+  ['R1','SAP extracts','Pay slip and GPF Final Re-calculation Report marked off when in the case; otherwise a SAP item for the section, uploaded straight after initial processing.','Consistent with Rule 1.40 and the 1985 office order: the balance is the office’s own record.'],
+  ['R2','Cure by upload','Every observation and verification task takes a document; the whole case is re-checked and a new version recorded.','Supports Rule 1.35 Explanation: pay the undisputed portion promptly.'],
+  ['R3','Covering letter','Accepted in every case, never an observation.','Rules require the claimant’s application (Rule 1.35(4)); that is still checked (Form 10).'],
+  ['R4','Delegation of authority','Signatures for an authority looked up in the DOA register; specimen compared by the officer.','Appendix-IV (1983, item 3 substituted 2000) names authorities; the office register refines it.'],
+  ['R5','Attestation','Unattested CNIC copies and pay slips noted only.','The Rules do not require attestation.'],
+  ['R6','Form 5 and Form 6-B','Personal number tallies with the pay slip; signatures compared with the CNIC; other fields not examined.','Forms PAY 05 and 06 are not in the 1978 Rules; they rest on the circular.'],
+  ['R7','Thumb impressions','Detected and routed to NADRA biometric verification or attesting officer; not matched by the module.','Tested on the corpus: not feasible from the papers.'],
+  ['R8','SAP pay slip','Manual upload now; connector later, same data contract.',''],
+  ['R9','80% of SAP balance','FLAG. The module applies the limits the Rules set for the clause quoted and shows the office’s 80% beside them.','Rules: 1.14(1)(c)(i) 50% or 3 months’ pay; 1.14(1)(d)(i) 80% or 24 months’ pay; 1.14(1)(e) 50%; 1.15(b),(c) 80%; 1.15(d) 80% or 12 months’ pay, whichever is more; 1.16 100%.'],
+  ['R10','QR codes','Every code scanned; content compared with the document; portal links verified where reachable. Unreadable or unverifiable codes are observations.',''],
+  ['R11','Final payment extracts','Pay slip and re-calculation report required; the claim is reconciled to the report.','Consistent with the 1985 office order.'],
+  ['R12','One advance at a time','Earlier refundable advances must be fully recovered in SAP before a new one.','1989 proviso to Rule 1.14(1)(c) agrees. Rule 1.14(1)(c)(ii) adds a twelve-month gap in some cases: open item.'],
+  ['R13','OSD post','OSD post on the SAP pay slip removes the succession certificate requirement.','Not in the Rules; Provident Funds Act s.4 still needs a certificate for non-family payees over Rs 5,000.'],
+  ['R14','Non-gazetted missing credits','Bank-stamped challans with Treasury verification stand in for the DDO certificate.','Rule 1.40(3)(ii) splits at BS 1-15, not by gazetted status.'],
+  ['R15','Gazetted missing credits','Bank-stamped challans verified by the Treasury stand in for the AG certificate.','Rule 1.40(3)(i) already names the Treasury Officer as a certifier.']
+];
+const OPEN_ITEMS = [
+  ['GPF-O14','DOA register and specimen signatures for every department that signs GP Fund documents (R4).'],
+  ['GPF-O15','Advance limits (FLAG): the Finance Department notification, if any, that set 80% for temporary advances; whether 80% overrides Rule 1.16’s 100% at age 50; the amendment mark on Rule 1.15(d).'],
+  ['GPF-O16','Second advance timing: "after the month the earlier advance reached zero" (R12) against the twelve-month gap in Rule 1.14(1)(c)(ii); whether SAP still charges interest on advances (Rule 1.19(4)).'],
+  ['GPF-O17','OSD post (R13): the instruction behind it and the SAP field that shows it.'],
+  ['GPF-O18','Confirm that "Form 6-B" is FORM PAY 06 as it appears in the cases.'],
+  ['GPF-O19','SAP access for the connector: RFC/BAPI, OData or a BDC recording; the transaction or report names for the pay slip and the GPF Final Re-calculation Report; a read-only service account.'],
+  ['GPF-O20','QR verification portals: NADRA e-FRC returned access denied; the Punjab e-Stamp portal verified. Whether the air-gapped system may reach portals through a gateway.'],
+  ['GPF-O21','Missing credits split: gazetted status (circular) against BS-16 (Rule 1.40(3)).'],
+  ['GPF-O22','Thumb impressions: route to NADRA biometric verification (bank BVS or e-Sahulat slip) as the curing document.'],
+  ['GPF-O23','Death cases: whether the QR-linked NADRA family registration certificate substitutes for heirs’ CNIC copies, and whether an adult son who takes no share under Rule 1.34 must still supply one; subscriptions and interest after death against an OSD post.'],
+  ['GPF-O24','Service Book: how the section records that the original was physically received, so entries are checked on the original rather than the scan.'],
+  ['GPF-O25','Missing credits: whether a Treasury-verified schedule row stands in for a missing challan copy, and whether proven months may be credited while one is held.'],
+  ['GPF-O26','Whether R4 reaches the signatory of a forwarding endorsement that forms part of a substantive form (GPF-10 DDO block, DAO confirmation), given R3.'],
+  ['GPF-O1','Blank claim rejection form attached to the circular.'],
+  ['GPF-O3','Employee Service Portal integration contract.'],
+  ['GPF-O4','Checklist governing residual payment.'],
+  ['GPF-O6','Rejection reasons for balance transfer and missing credits.'],
+  ['GPF-O13','Delegation bands inside this office.']
+];
+function renderRules(){
+  let h = '<h1 class="pagetitle">Rules in force</h1><p class="pagesub">Rule set of 15-09-2026. Circular No. G.P. Fund-I (Coord)/TR/127 of 21.12.2023, the Punjab GP Fund Rules 1978 (Compendium 2008), and the office’s clarifications of 15-09-2026. A case is always re-checked against the rule set in force when it was examined.</p>';
+  h += '<div class="card"><h3>Office clarifications of 15-09-2026</h3><div class="tscroll"><table><tr><th style="width:44px">Ref</th><th style="width:170px">Clarification</th><th>How the module applies it</th><th>Position in the Rules</th></tr>' +
+       OFFICE_RULES.map(r=>'<tr' + (r[0]==='R9' ? ' class="hl"' : '') + '><td class="mono">' + r[0] + '</td><td class="fv">' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td class="src">' + esc(r[3]) + '</td></tr>').join('') + '</table></div></div>';
+  h += '<div class="card"><h3>Advance limits in the GP Fund Rules</h3><p class="hint">Applied by clause. The office’s stated 80% is shown beside every result and flagged where it differs.</p><div class="tscroll"><table><tr><th>Clause</th><th>Advance</th><th class="n">Share of balance</th><th class="n">Months of pay</th><th>Governs</th></tr>' +
+       Object.values(ADV_LIMITS).map(L=>'<tr' + (L.pct !== PARAMS.officeCapPct ? ' class="hl"' : '') + '><td class="mono">' + esc(L.src) + '</td><td>' + esc(L.label) + (L.minAge ? '<div class="src">Age ' + L.minAge + ' or over</div>' : '') + '</td><td class="n mono">' + L.pct + '%</td><td class="n mono">' + (L.months||'') + '</td><td>' + (L.combine ? (L.combine==='max' ? 'greater of the two' : 'lesser of the two') : 'share of balance') + '</td></tr>').join('') +
+       '</table></div><div class="notice gold" style="margin-top:12px"><b>Flag.</b> The office stated that a sanctioned advance must be at most 80% of the SAP balance. The Rules set 80% only for house and land advances and some non-refundable advances; a general temporary advance is capped at half the balance or three months’ pay, and Rule 1.16 allows 100% at age 50. Open item GPF-O15.</div></div>';
+  h += '<div class="card"><h3>Thumb impressions</h3><p>Tested on every thumb impression and CNIC copy in the eight cases. Smart CNICs carry no fingerprint, the two people who thumbed forms both hold smart cards, and even the clearest ink impressions did not separate same-person from different-person pairs. Matching from the case papers is not possible. The module records each impression and asks for NADRA biometric verification or the attesting officer’s certificate.</p></div>';
+  h += '<div class="card"><h3>Open items for the AG Office</h3><table>' + OPEN_ITEMS.map(o=>'<tr><td class="mono" style="width:80px">' + o[0] + '</td><td>' + esc(o[1]) + '</td></tr>').join('') + '</table></div>';
+  $('srulesbody').innerHTML = h;
+}
+
+$('lnkDoa').onclick = ()=>{ renderDoa(); go('doa'); };
+$('lnkRules').onclick = ()=>{ renderRules(); go('rules'); };
+document.querySelectorAll('.step').forEach(el=>{
+  el.onclick = ()=>{
+    const n = +el.dataset.s;
+    if (n===1){ renderIntake(); go(1); return; }
+    if (!sel || !STATE[sel] || !STATE[sel].results.length) return;
+    if (n===3){ renderSap(sel); go(3); }
+    if (n===4){ renderExam(sel); go(4); }
+    if (n===5){ renderDisposal(sel); go(5); }
+    if (n===6 && STATE[sel].issued){ renderIssue(sel); go(6); }
+  };
+});
+renderIntake();
+go(1);

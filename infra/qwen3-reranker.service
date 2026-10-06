@@ -1,0 +1,111 @@
+# /etc/systemd/system/qwen3-reranker.service   -- DEPLOYS TO spark-46ef (10.170.0.240)
+#
+# Qwen3-Reranker-4B — cross-encoder rescoring of embedding-retrieved candidates.
+# Endpoints: POST /v1/rerank, /v2/rerank, /rerank, /v1/score, /score
+#
+# Lives on 46ef, not 3369: it is the smallest of the three (14.5 GiB) and the lowest-QPS
+# (it only scores top-K after retrieval), so it is the cheapest of the trio to put on the
+# box that already carries the NFS export, Qwen3.8-27B at 0.65, Qdrant and Postgres.
+# Its peers qwen3-embedding.service (:8093) and qwen3guard.service (:8095) run on 3369.
+#
+# The published checkpoint is a *generative* model that answers the relevance question with
+# the single token "yes" or "no". Serving it as a scorer therefore needs --hf-overrides,
+# which swaps in Qwen3ForSequenceClassification and builds a 2-way-softmax head from the
+# "no"/"yes" logits (vllm/model_executor/models/config.py, Qwen3ForSequenceClassificationConfig).
+# Order matters: ["no","yes"] puts the relevant class at index 1, so the score is P(yes).
+# Dropping is_original_qwen3_reranker leaves the head uninitialised and every score is noise.
+[Unit]
+Description=Qwen3-Reranker-4B (vLLM, OpenAI API) on :8094
+After=network-online.target
+Wants=network-online.target
+# Ordering only, no Requires=: the reranker must still start if the 27B is stopped or absent.
+# After= alone is not enough to prevent the cold-start race, though -- vllm-qwen38.service is
+# Type=simple with no health gate, so it reports "active" the moment it forks, minutes before it
+# has taken its 0.65 (~79 GiB). The real wait is the ExecStartPre below.
+After=vllm-qwen38.service
+# No RequiresMountsFor=/models here, unlike the 3369 units: on 46ef /models is a directory on
+# the root ext4 filesystem (it is the NFS *export* source, not a mount), so there is no
+# automount race to guard against.
+
+[Service]
+Type=simple
+User=tmc
+Group=tmc
+WorkingDirectory=/home/tmc
+
+Environment=HOME=/home/tmc
+Environment=CUDA_HOME=/usr/local/cuda
+Environment=HF_HOME=/home/tmc/.cache/huggingface
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_DATASETS_OFFLINE=1
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+Environment=VLLM_NO_USAGE_STATS=1
+Environment=DO_NOT_TRACK=1
+# 46ef has no /home/tmc/vllm_env; its vLLM is the shared /models/sglang-env
+# (0.23.1rc1.dev1067), which is what vllm-qwen38.service already runs from.
+Environment=PATH=/usr/local/cuda/bin:/models/sglang-env/bin:/usr/local/bin:/usr/bin:/bin
+
+# 8192 is the context the model card specifies for the reranker; scoring pairs are short, so
+# KV is ~1.2 GiB and 0.12 of 121 GiB (~14.5 GiB) covers 7.6 GiB of weights with room to spare.
+# Headroom check: vllm-qwen38.service holds 0.65 (~79 GiB) and the box sits at ~88 GiB used,
+# so this lands at ~102 GiB of 121 GiB. If the 27B's utilisation is ever raised, re-check here
+# first — this unit is the one with the least slack behind it.
+#
+# --chat-template is NOT optional. Without it vLLM's scorer does
+#     full_prompt = prompt_1 + prompt_2
+# (io_processor.py, get_score_prompt -> default_tokenizer_encode) -- a bare concatenation of
+# query and document, with none of the "Judge whether the Document meets the requirements"
+# framing or the yes/no assistant suffix the model was trained on. It still returns 200 and
+# plausible-looking floats, which is what makes it dangerous. Measured 2026-09-03 on the query
+# "What is pension commutation?":
+#            without template     with template
+#   relevant       0.6763            0.9996
+#   relevant       0.2550            0.9875
+#   irrelevant     0.4168            0.0000     <- outranked a relevant doc without the template
+#
+# This points at the template that ships inside the checkpoint, so there is no extra file to keep
+# in sync or lose. KNOWN LIMITATION of that stock template: the `instruction` field of /v1/rerank
+# is accepted, returns 200, and is SILENTLY IGNORED. Its first line resolves the instruction only
+# from a `system` message and then `| default(...)`, but vLLM's scorer renders with just
+# [{"role":"query"},{"role":"document"}] and never sends one -- and `{% set %}` then clobbers any
+# value passed through chat_template_kwargs. Verified 2026-09-03: an instruction reading "judge
+# whether the document is a weather forecast" left every score bit-identical.
+# Ranking quality itself is unaffected; only per-request instructions are.
+# To re-enable them, copy the template out, change its first line to fall back to the kwarg
+# instead of the hardcoded default, and point --chat-template at the copy.
+#
+# Prefix caching pays off because the system prefix and instruction are identical across
+# every candidate in a batch.
+# Health gate, inlined. systemd's "-" prefix makes a non-zero exit non-fatal, so a slow or wedged
+# engine delays this unit but never fails it; timeout(1) bounds the wait because TimeoutStartSec=0
+# gives systemd no deadline of its own. Deliberately uses no "$" so there is nothing for systemd's
+# variable expansion to mangle.
+#
+# Waits for the 27B on :8001 before loading. vllm-qwen38.service is Type=simple with no gate of
+# its own, so After= alone would not wait, and both would size their KV cache against memory the
+# other is about to take. This unit's first start died exactly that way (CUDA out of memory).
+ExecStartPre=-/usr/bin/timeout 900 /bin/bash -c 'until curl -sf -m 3 http://127.0.0.1:8001/health >/dev/null 2>&1; do sleep 5; done'
+
+ExecStart=/models/sglang-env/bin/vllm serve /models/qwen3-reranker-4b \
+  --served-model-name qwen3-reranker-4b \
+  --runner pooling \
+  --hf-overrides '{"architectures":["Qwen3ForSequenceClassification"],"classifier_from_token":["no","yes"],"is_original_qwen3_reranker":true}' \
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.12 \
+  --enable-prefix-caching \
+  --chat-template /models/qwen3-reranker-4b/chat_template.jinja \
+  --host 0.0.0.0 \
+  --port 8094
+
+ExecStartPost=-/usr/bin/timeout 900 /bin/bash -c 'until curl -sf -m 3 http://127.0.0.1:8094/health >/dev/null 2>&1; do sleep 5; done'
+
+Restart=always
+RestartSec=10
+TimeoutStartSec=0
+KillMode=mixed
+LimitNOFILE=1048576
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target
