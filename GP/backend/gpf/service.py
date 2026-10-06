@@ -14,6 +14,8 @@ matter are enforced in one place:
 from __future__ import annotations
 
 import datetime
+import functools
+import threading
 import uuid
 from typing import Optional
 
@@ -44,11 +46,34 @@ def _officer(officer_id: str) -> dict:
     return o
 
 
+def _per_case(method):
+    """Serialise the mutating service methods per case (audit 6 Oct 2026, G7).
+
+    The API serves requests on a thread pool and every mutation here is read-modify-write on one
+    CaseState: two officers acting on one case at once interleaved -- a disposition recorded
+    on top of a re-run that had not finished, a history row for a version that was never
+    saved. One re-entrant lock per case id, taken for the whole method."""
+    @functools.wraps(method)
+    def wrapped(self, case_id, *args, **kwargs):
+        with self._lock_for(case_id):
+            return method(self, case_id, *args, **kwargs)
+    return wrapped
+
+
 class CaseService:
     def __init__(self, repo: CaseRepository, docstore: DocumentStore, connector):
         self.repo = repo
         self.docs = docstore
         self.connector = connector
+        self._locks: dict[str, threading.RLock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _lock_for(self, case_id: str) -> threading.RLock:
+        with self._locks_guard:
+            lock = self._locks.get(case_id)
+            if lock is None:
+                lock = self._locks[case_id] = threading.RLock()
+            return lock
 
     # ── intake ────────────────────────────────────────────────────────────────
     def list_templates(self) -> list[dict]:
@@ -178,6 +203,7 @@ class CaseService:
         return v
 
     # ── SAP extracts (R1, R8) ───────────────────────────────────────────────────
+    @_per_case
     def upload_sap(self, case_id: str, filename: str, text: str, *, officer_id: str = "ao") -> dict:
         s = self._require(case_id)
         officer = _officer(officer_id)
@@ -196,6 +222,7 @@ class CaseService:
         self.repo.save(case_id, s)
         return self._diff_view(diff)
 
+    @_per_case
     def refresh_payslip_balances(self, case_id: str, gpf_balance, loan_balance, *, basis: str,
                                  officer_id: str = "ao") -> dict:
         """Fill the pay slip's fund and advance balances where the first reading left them empty.
@@ -227,6 +254,7 @@ class CaseService:
             raise ServiceError(f"No open item '{result_id}' on this case.", 404)
         return r
 
+    @_per_case
     def cure(self, case_id: str, result_id: str, values: dict, *,
              filename: Optional[str] = None, content: Optional[bytes] = None,
              officer_id: str = "ao") -> dict:
@@ -267,6 +295,7 @@ class CaseService:
         self.repo.save(case_id, s)
         return self._diff_view(diff)
 
+    @_per_case
     def verify(self, case_id: str, vid: str, ok: bool, note: str = "", *, officer_id: str = "ao") -> dict:
         s = self._require(case_id)
         officer = _officer(officer_id)
@@ -297,6 +326,7 @@ class CaseService:
                          "docVal": "the document", "docLabel": "document", "match": bool(agrees)}]
 
     # ── dispositions (§13.2) ────────────────────────────────────────────────────
+    @_per_case
     def set_disposition(self, case_id: str, result_id: str, action: str, *,
                         ground: str = "", authority: str = "", officer_id: str = "ao") -> dict:
         s = self._require(case_id)
@@ -356,6 +386,7 @@ class CaseService:
         opt("hold", True)
         return opts
 
+    @_per_case
     def dispose(self, case_id: str, disposal: str, *, note: str = "", officer_id: str = "ao") -> dict:
         s = self._require(case_id)
         officer = _officer(officer_id)
