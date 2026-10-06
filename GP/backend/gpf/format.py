@@ -16,19 +16,27 @@ ADVANCES = ("refundable", "nonrefundable")
 def num(v: Any):
     """Parse a loose numeric string (commas, spaces, trailing '/-') to a number.
 
-    Returns None when empty or not a number. Mirrors sap.js `num`.
+    Returns None when empty or not a number. Mirrors sap.js `num`. SAP prints a debit with a
+    trailing minus ("1,234.00-"): that is a negative figure, not 1,234 (audit 6 Oct 2026, G3);
+    "1,234/-" is the rupee sign-off and positive.
     """
-    if v is None:
+    if v is None or isinstance(v, bool):
         return None
+    if isinstance(v, (int, float)):
+        return int(v) if float(v).is_integer() else v
     s = str(v).replace(",", "").replace(" ", "")
     s = re.sub(r"/-$", "", s)
-    s = re.sub(r"-$", "", s)
+    negative = s.endswith("-")
+    if negative:
+        s = s[:-1]
     if s == "":
         return None
     try:
         f = float(s)
     except ValueError:
         return None
+    if negative:
+        f = -f
     return int(f) if f.is_integer() else f
 
 
