@@ -23,7 +23,7 @@ from pathlib import Path
 
 from api import db, gpf_bridge, rounds, workflow
 from api.artefacts import report_dict
-from api.runs import RUNS, adopt_from_disk, start_run
+from api.runs import RUNS, adopt_from_disk, past_deadline, prune_registry, start_run
 
 #: A GP Fund examination is a reading job of the GP Fund module, not a pipeline run; its id on
 #: case_runs carries this prefix so the reconciler knows whom to ask.
@@ -364,6 +364,10 @@ def _run_state(run_id: str) -> tuple[str, str | None]:
         return state, error
     live = RUNS.get(run_id)
     if live is not None:
+        if past_deadline(live):
+            # The run's own thread stops at its next stage boundary (api.runs.Run.emit); the case
+            # is not left in "AI verification in progress" until then (audit 6 Oct 2026, R7).
+            return "failed", f"the run exceeded its deadline (started {live.started_at}); verify the case again"
         return live.state, live.error
     adopted = adopt_from_disk(run_id)
     if adopted is not None:
@@ -660,6 +664,7 @@ def start_reconciler(interval_s: float = 3.0) -> None:
         while True:
             time.sleep(interval_s)
             try:
+                prune_registry()
                 conn = db.connect()
                 try:
                     sync_run_states(conn)

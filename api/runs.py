@@ -15,7 +15,7 @@ import sys
 import threading
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +71,12 @@ class Run:
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def emit(self, stage: str, message: str, **extra: Any) -> None:
+        # Every stage reports here, so this is where a run past its deadline is stopped: the
+        # next stage boundary raises, execute() records the failure and the slot is freed. The
+        # closing events of a run are never refused (audit 6 Oct 2026, R7).
+        if stage not in ("end", "error") and past_deadline(self):
+            raise RunDeadlineExceeded(f"the run exceeded its {_run_deadline_min()}-minute deadline "
+                                      f"(started {self.started_at}); verify the case again")
         now = datetime.now()
         ev = {
             "seq": len(self.events),
@@ -92,6 +98,66 @@ RUNS: dict[str, Run] = {}
 #: Where a run's intake choices are kept, beside its artefacts.
 INTAKE = "intake.json"
 _REGISTRY_LOCK = threading.Lock()
+
+
+class RunDeadlineExceeded(RuntimeError):
+    """Raised inside a run's own thread once it has been running longer than the deadline."""
+
+
+def _run_deadline_min() -> int:
+    """How long one verification may run. Every model call already has a timeout, but a run is
+    many calls, each retried, so a run could stay "running" for hours and hold its slot
+    (audit 6 Oct 2026, R7). 90 minutes is three times the longest case seen in the trial."""
+    try:
+        return max(1, int(os.environ.get("PENSION_RUN_DEADLINE_MIN", "90")))
+    except ValueError:
+        return 90
+
+
+def past_deadline(run: "Run", now: datetime | None = None) -> bool:
+    if run.state != "running" or not run.started_at:
+        return False
+    try:
+        started = datetime.fromisoformat(run.started_at)
+    except ValueError:
+        return False
+    return (now or datetime.now()) - started > timedelta(minutes=_run_deadline_min())
+
+
+def _registry_keep_min() -> int:
+    """How long a finished run stays in the in-memory registry after it ends."""
+    try:
+        return max(1, int(os.environ.get("PENSION_RUN_REGISTRY_KEEP_MIN", "60")))
+    except ValueError:
+        return 60
+
+
+def prune_registry(now: datetime | None = None) -> list[str]:
+    """Drop finished runs from the registry once they are old enough to be served from disk.
+
+    The registry only ever grew: every run the process had seen stayed in memory, events and
+    all, until a restart (audit 6 Oct 2026, R7). A finished run's account is on disk and
+    ``adopt_from_disk`` rebuilds the entry on demand, so a done run is dropped after
+    PENSION_RUN_REGISTRY_KEEP_MIN (60) minutes. A failed run leaves no report to adopt, so it
+    is kept 24 times longer for its error to stay readable. Queued and running runs are never
+    touched. Returns the run ids dropped.
+    """
+    now = now or datetime.now()
+    keep_done = timedelta(minutes=_registry_keep_min())
+    keep_failed = keep_done * 24
+    dropped: list[str] = []
+    with _REGISTRY_LOCK:
+        for run_id, run in list(RUNS.items()):
+            if run.state not in ("done", "failed") or not run.finished_at:
+                continue
+            try:
+                finished = datetime.fromisoformat(run.finished_at)
+            except ValueError:
+                continue
+            if now - finished > (keep_done if run.state == "done" else keep_failed):
+                del RUNS[run_id]
+                dropped.append(run_id)
+    return dropped
 
 
 def completed_run_ids() -> list[str]:
@@ -650,6 +716,7 @@ def start_run(body: bytes, filename: str, variant: str | None = None,
 
     run_dir = ARTIFACTS / f"run-{run_id}"
     resumed = run_dir.exists()
+    prune_registry()
     with _REGISTRY_LOCK:
         existing = RUNS.get(run_id)
         if existing and existing.state in ("queued", "running"):
