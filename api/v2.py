@@ -606,7 +606,8 @@ def _document_problem(name: str, body: bytes) -> str | None:
     The file's first bytes decide, never its name alone. The two short signatures that other
     formats share are pinned down: RIFF is also WAV and AVI, so only RIFF....WEBP passes; "BM"
     is two letters many files can start with, so it passes only on a .bmp. A text file must be
-    text. A PDF is refused past the page limit (api.settings.max_case_pages)."""
+    text. A PDF is refused past the page limit (api.settings.max_case_pages); an image past the
+    pixel limits of pipeline.bundle, read from its headers."""
     kind = next((k for magic, k in _MAGIC.items() if body.startswith(magic)), None)
     lower = name.lower()
     if kind == "image" and body.startswith(b"RIFF") and body[8:12] != b"WEBP":
@@ -621,6 +622,11 @@ def _document_problem(name: str, body: bytes) -> str | None:
         pages = pdf_page_count(body)
         if pages is not None and pages > settings.max_case_pages():
             return f"has {pages} pages; the most one file may have is {settings.max_case_pages()}"
+    if kind == "image":
+        # Measured from its headers, before anything is decoded (audit 6 Oct 2026, item 5).
+        import io
+        from pipeline.bundle import image_problem
+        return image_problem(io.BytesIO(body))
     return None                                   # a PDF with no readable pages is the verification's finding
 
 

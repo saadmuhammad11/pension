@@ -49,6 +49,13 @@ MAX_DEPTH = 2
 #: Frames taken from one multi-page TIFF or animated GIF. A scanner's multi-page TIFF of a
 #: service book is tens of pages; an animated GIF of thousands is not a document.
 MAX_FRAMES = 200
+#: Pixels in one frame, read from the file's header before anything is decoded. A 600 dpi A4
+#: scan is 35 Mpx; a frame past this is not a page from a counter scanner. Without it a 1 MB
+#: group-4 TIFF of 200 frames at 9000x9000 asked for ~25 GB (audit 6 Oct 2026, item 5).
+MAX_FRAME_PIXELS = 50_000_000
+#: Pixels across all the frames taken from one image file: 200 frames of 2 Mpx, or eleven
+#: 600 dpi A4 pages.
+MAX_IMAGE_PIXELS = 400_000_000
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 OFFICE_EXT = {".doc", ".docx", ".odt", ".rtf", ".txt", ".csv", ".xls", ".xlsx", ".ods",
@@ -318,6 +325,46 @@ def _upright(frame):
     return frame.convert("RGB")
 
 
+def image_problem(src) -> str | None:
+    """Why this image file must not be decoded, judged from its headers alone; None if it may.
+
+    ``src`` is a path or a binary file object. ``Image.open`` reads headers and decodes
+    nothing, and moving to a TIFF frame reads that frame's directory, not its pixels; so a
+    file is measured frame by frame (up to ``MAX_FRAMES``) before a byte of image data is
+    unpacked. A GIF's logical screen bounds every frame and is read before any frame is
+    counted. Anything Pillow cannot open is not this function's to judge (None): the
+    conversion reports it.
+    """
+    from PIL import Image
+    try:
+        with Image.open(src) as im:
+            w, h = im.size
+            if w * h > MAX_FRAME_PIXELS:
+                return (f"is {w} x {h} pixels; a page may have at most "
+                        f"{MAX_FRAME_PIXELS // 1_000_000} million")
+            total = 0
+            n = 0
+            while n < MAX_FRAMES:
+                w, h = im.size
+                if w * h > MAX_FRAME_PIXELS:
+                    return (f"page {n + 1} is {w} x {h} pixels; a page may have at most "
+                            f"{MAX_FRAME_PIXELS // 1_000_000} million")
+                total += w * h
+                if total > MAX_IMAGE_PIXELS:
+                    return (f"holds more than {MAX_IMAGE_PIXELS // 1_000_000} million pixels by page "
+                            f"{n + 1}; split it into smaller files")
+                n += 1
+                try:
+                    im.seek(n)
+                except EOFError:
+                    break
+    except Image.DecompressionBombError as exc:
+        return f"is too large to open safely ({exc})"
+    except Exception:                                            # noqa: BLE001
+        return None
+    return None
+
+
 def _image_to_pdf(src: Path, dst: Path) -> str:
     """One image, one A4 page, the image fitted inside it at full resolution.
 
@@ -331,14 +378,21 @@ def _image_to_pdf(src: Path, dst: Path) -> str:
     copy, so iterating what it returned read the first page of a multi-page TIFF and nothing
     else.
     """
+    import tempfile
+
     from PIL import Image, ImageSequence
 
-    with Image.open(src) as opened:
+    problem = image_problem(src)
+    if problem:
+        raise BundleError(f"{src.name} {problem}")
+    with Image.open(src) as opened, tempfile.TemporaryDirectory(dir=dst.parent) as tmp:
         try:
             total = int(getattr(opened, "n_frames", 1) or 1)
         except Exception:                                        # noqa: BLE001
             total = 1
-        pages = []
+        # Each page is written as soon as it is made and merged at the end, so one page is in
+        # memory at a time rather than every page of the file (audit 6 Oct 2026, item 5).
+        written: list[Path] = []
         canvas = (0, 0)
         dpi = 72.0
         for n, raw in enumerate(ImageSequence.Iterator(opened)):
@@ -361,12 +415,16 @@ def _image_to_pdf(src: Path, dst: Path) -> str:
                                       max(1, round(frame.height * ratio))), Image.LANCZOS)
             page = Image.new("RGB", canvas, "white")
             page.paste(frame, ((canvas[0] - frame.width) // 2, (canvas[1] - frame.height) // 2))
-            pages.append(page)
-        if not pages:
+            frame.close()
+            one = Path(tmp) / f"{n:04d}.pdf"
+            page.save(one, "PDF", resolution=dpi)
+            page.close()
+            written.append(one)
+        if not written:
             raise BundleError(f"{src.name} holds no image")
-        pages[0].save(dst, "PDF", resolution=dpi, save_all=True, append_images=pages[1:])
-    if total > len(pages):
-        return f"only the first {len(pages)} of {total} frames were taken (limit {MAX_FRAMES})"
+        _merge(written, dst)
+    if total > len(written):
+        return f"only the first {len(written)} of {total} frames were taken (limit {MAX_FRAMES})"
     return ""
 
 
