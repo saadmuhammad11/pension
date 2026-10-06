@@ -64,6 +64,10 @@ API = os.environ.get("PENSION_API_URL") or "http://127.0.0.1:8110"
 
 #: The GP Fund frame's sign-in cookie (api.v2.GPF_COOKIE).
 GPF_COOKIE = "pension_gpf"
+#: How long a frame cookie's "yes" from the API is remembered. Long enough that a page's dozens of
+#: asset requests cost one check; short enough that a sign-out or a disabled account is felt
+#: within seconds, and sign-out itself forgets the entry at once (audit 6 Oct 2026, L11).
+GPF_CHECK_TTL_S = 10
 
 #: Never served from dist, whatever lands there.
 _FORBIDDEN = ("credentials", ".csv", ".env", ".sqlite")
@@ -282,8 +286,14 @@ class PortalApp:
             return None
         if len(self._gpf_ok) > 1000:
             self._gpf_ok.clear()
-        self._gpf_ok[token] = (now + 30, officer)
+        self._gpf_ok[token] = (now + GPF_CHECK_TTL_S, officer)
         return officer
+
+    def forget_frame_sign_in(self, token: str | None) -> None:
+        """Drop a frame cookie from the remembered checks: sign-out must take effect at once, not
+        when the cache entry happens to lapse (audit 6 Oct 2026, L11)."""
+        if token:
+            self._gpf_ok.pop(token, None)
 
     async def gpf_act_refused(self, request: Request, sub: str) -> Response | None:
         """A change sent from the frame is passed on only if the API agrees this officer may act on
@@ -370,6 +380,8 @@ class PortalApp:
                                 status_code=502)
         out_headers = {k: v for k, v in upstream.headers.items()
                        if k.lower() not in _HOP_BY_HOP and k.lower() != "content-encoding"}
+        if request.url.path == "/api/v2/auth/logout" and request.method == "POST":
+            self.forget_frame_sign_in(request.cookies.get(GPF_COOKIE))
 
         async def body_iter():
             try:
