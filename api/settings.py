@@ -48,6 +48,16 @@ def min_password_length() -> int:
     return 10 if production() else 8
 
 
+def max_bundle_pages() -> int:
+    """Pages the merged case file may have, whatever it was uploaded as. The per-file limit above
+    is checked at upload, where a zip's contents are not opened; a zip of PDFs reached the
+    pipeline with any number of pages (audit 6 Oct 2026)."""
+    try:
+        return max(1, int(os.environ.get("PENSION_MAX_BUNDLE_PAGES", "1000")))
+    except ValueError:
+        return 1000
+
+
 def max_case_pages() -> int:
     """Pages one uploaded PDF may have. A real pension file is 40-120 pages; a 5,000-page upload
     would hold the vision model for days."""

@@ -106,8 +106,16 @@ def sha256_of(path: Path) -> str:
     return h.hexdigest()
 
 
+#: Seconds any one poppler call may take. A crafted PDF can keep pdftoppm busy indefinitely, and
+#: with no limit the run sat "running" for ever (audit 6 Oct 2026). A real page takes a second or two.
+TOOL_TIMEOUT = int(os.environ.get("PENSION_PDF_TOOL_TIMEOUT", "300") or 300)
+
+
 def _run(cmd: list[str]) -> str:
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=TOOL_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise IngestError(f"{cmd[0]} did not finish within {TOOL_TIMEOUT} s") from None
     if proc.returncode != 0:
         raise IngestError(f"{cmd[0]} failed: {proc.stderr.strip()[:300]}")
     return proc.stdout
@@ -152,6 +160,28 @@ def _page_size_pts(pdf: Path) -> tuple[float, float]:
     return (float(m.group(1)), float(m.group(2))) if m else (595.0, 842.0)
 
 
+def _page_sizes_pts(pdf: Path, total: int) -> dict[int, tuple[float, float]]:
+    """Every page's size in points, from one pdfinfo call."""
+    out = _run(["pdfinfo", "-f", "1", "-l", str(total), str(pdf)])
+    return {int(m.group(1)): (float(m.group(2)), float(m.group(3)))
+            for m in re.finditer(r"Page\s+(\d+)\s+size:\s*([\d.]+)\s*x\s*([\d.]+)", out)}
+
+
+def _oversized_pages(pdf: Path, total: int, dpi: int) -> list[tuple[int, int]]:
+    """(page, megapixels) of every page that would render past the image limit at ``dpi``.
+
+    The resolution is chosen from page 1, so a 428-byte PDF with an A4 first page and a
+    9500 x 9500 pt second page rendered page 2 at 24,800 px square: 2.4 GB in pdftoppm, and the
+    run failed only afterwards (audit 6 Oct 2026). Measured first now, from the PDF's own sizes."""
+    from pipeline.bundle import MAX_FRAME_PIXELS
+    out = []
+    for n, (w, h) in _page_sizes_pts(pdf, total).items():
+        pixels = (w * dpi / 72) * (h * dpi / 72)
+        if pixels > MAX_FRAME_PIXELS:
+            out.append((n, round(pixels / 1e6)))
+    return out
+
+
 def _render_dpi(pdf: Path) -> int:
     """Resolution that puts the long edge near ``_TARGET_LONG_PX``.
 
@@ -194,6 +224,11 @@ def _ingest_raw_scan(pdf: Path, out: Path, pages_dir: Path,
 
     dpi = _render_dpi(pdf)
     total = int(_run(["pdfinfo", str(pdf)]).split("Pages:")[1].split()[0])
+    too_big = _oversized_pages(pdf, total, dpi)
+    if too_big:
+        listed = ", ".join(f"p.{n} ({mp} Mpx)" for n, mp in too_big[:5])
+        raise IngestError(f"{len(too_big)} page(s) of {pdf.name} are far larger than a document page and would "
+                          f"not render safely at {dpi} dpi: {listed}. Scan them again at a normal size.")
     # Asked only about a page whose text runs up the side, twice, at about two seconds a
     # call. Built once; if the vision service is not up, those pages are left exactly as they
     # were scanned and the manifest says so.

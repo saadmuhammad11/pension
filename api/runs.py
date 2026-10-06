@@ -343,6 +343,11 @@ def unpack(run: Run) -> dict:
     run.emit("bundle", f"unpacking {run.bundle_path.name}")
     bundle = normalise(run.bundle_path.read_bytes(), run.bundle_path.name,
                        run.run_dir / "bundle")
+    from api import settings
+    from pipeline.bundle import BundleError
+    if bundle.pages > settings.max_bundle_pages():
+        raise BundleError(f"the case file comes to {bundle.pages} pages; the most a case may have is "
+                          f"{settings.max_bundle_pages()}. Split it, or attach only the pension papers.")
     run.pdf_path.write_bytes(bundle.pdf)
     manifest = bundle.manifest()
     manifest["source"] = run.source or {"kind": "upload", "file": run.bundle_path.name}
