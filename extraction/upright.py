@@ -293,8 +293,8 @@ def vision_judge(
                     "rotated 180 degrees."},
             ]}],
         }
-        request = urllib.request.Request(
-            url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        from extraction.model_auth import model_headers
+        request = urllib.request.Request(url, data=json.dumps(body).encode(), headers=model_headers())
         with urllib.request.urlopen(request, timeout=120) as response:
             answer = json.load(response)["choices"][0]["message"]["content"].strip().upper()
         if "UPSIDE" in answer:

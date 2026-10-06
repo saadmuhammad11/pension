@@ -53,6 +53,12 @@ LOCAL="${GPF_LOCAL_HOST:-127.0.0.1}"
 SPARK1="${GPF_SPARK1_HOST:-192.168.101.10}"
 export GPF_VLLM_URLS="${GPF_VLLM_URLS:-http://$LOCAL:8011,http://$LOCAL:8012,http://$LOCAL:8093,http://$SPARK1:8001}"
 export GPF_VLLM_TIMEOUT="${GPF_VLLM_TIMEOUT:-180}"
+# The model servers' key (audit 6 Oct 2026, item 7): once the keyed units are installed every /v1
+# request needs it. Read from the same file the units load (root:tmc 640) unless already set.
+if [[ -z "${PENSION_MODEL_API_KEY:-}" && -r /etc/pension/models.env ]]; then
+  PENSION_MODEL_API_KEY="$(sed -n 's/^VLLM_API_KEY=//p' /etc/pension/models.env | tail -1)"
+fi
+export PENSION_MODEL_API_KEY="${PENSION_MODEL_API_KEY:-}"
 export GPF_DATA_DIR="${GPF_DATA_DIR:-$ROOT/data}"
 
 C_OK=$'\e[32m'; C_BAD=$'\e[31m'; C_WARN=$'\e[33m'; C_OFF=$'\e[0m'

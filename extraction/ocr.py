@@ -34,6 +34,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from extraction.model_auth import model_headers
+
 #: PENSION_OCR_URL points a deployment at its own GPU box (docs/DEPLOYMENT.md F4).
 OCR_ENDPOINT = os.environ.get("PENSION_OCR_URL") or "http://192.168.1.1:8012/v1/chat/completions"
 OCR_MODEL = "paddleocr-vl-1.6"
@@ -107,9 +109,7 @@ def ocr_page(
             ],
         }],
     }
-    req = urllib.request.Request(
-        endpoint, json.dumps(payload).encode(), {"Content-Type": "application/json"}
-    )
+    req = urllib.request.Request(endpoint, json.dumps(payload).encode(), model_headers())
     try:
         raw = urllib.request.urlopen(req, timeout=timeout_s).read()
     except urllib.error.HTTPError as exc:

@@ -112,9 +112,8 @@ class Chunk:
 
 
 def _post(endpoint: str, payload: dict, timeout_s: int = 120) -> dict:
-    req = urllib.request.Request(
-        endpoint, json.dumps(payload).encode(), {"Content-Type": "application/json"}
-    )
+    from extraction.model_auth import model_headers
+    req = urllib.request.Request(endpoint, json.dumps(payload).encode(), model_headers())
     try:
         return json.loads(urllib.request.urlopen(req, timeout=timeout_s).read())
     except urllib.error.HTTPError as exc:

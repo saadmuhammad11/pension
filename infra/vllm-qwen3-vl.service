@@ -1,13 +1,20 @@
 [Unit]
 Description=Qwen3-VL-30B-A3B-FP8 document vision (vLLM, OpenAI API) on :8011
-Documentation=file:/home/tmc/Desktop/Pension-AG/infra/serve-qwen3-vl.sh
+Documentation=file:/opt/pension/current/infra/serve-qwen3-vl.sh
 After=network-online.target
 Wants=network-online.target
 
 # Weights live on /models, an x-systemd.automount NFS export from spark-46ef
 # (192.168.100.10). Without this the boot-time start races the automount and the
 # script's own preflight dies with "model path not found".
-RequiresMountsFor=/models
+# 2026-09-30: was RequiresMountsFor=/models. That is a HARD dependency: on the 27 Sep
+# reboot models.mount failed for ~11 s ("Network is unreachable" -- 46ef not exporting yet),
+# this unit got 'Dependency failed' and was never started or retried. Restart= does not
+# cover dependency failures, and a drop-in cannot clear RequiresMountsFor on systemd 255.
+# Soft Wants= + the ExecStartPre wait below turn a slow mount into an ordinary, retried start.
+Wants=models.mount
+After=models.mount models.automount
+StartLimitIntervalSec=0
 
 # AGPB-BUILD footprint: vision 0.35 + reasoning 0.40 + voice ~0.55 exceeds the 121GB
 # unified memory. Running both vLLM services on this box is the 2026-07-15 OOM-freeze
@@ -18,12 +25,17 @@ Conflicts=vllm-qwen36.service
 Type=simple
 User=tmc
 Group=tmc
-WorkingDirectory=/home/tmc/Desktop/Pension-AG/infra
+WorkingDirectory=/home/tmc
 
 Environment=HOME=/home/tmc
 Environment=CUDA_HOME=/usr/local/cuda
 Environment=HF_HOME=/home/tmc/.cache/huggingface
 Environment=PATH=/usr/local/cuda/bin:/home/tmc/vllm_env/bin:/usr/local/bin:/usr/bin:/bin
+
+# The model key (audit 6 Oct 2026, item 7): VLLM_API_KEY=<48+ random chars>, root:tmc 640. vLLM
+# reads it from the environment and refuses /v1 requests without it; the launcher refuses to
+# start without it. The pipeline and GP Fund send the same value as PENSION_MODEL_API_KEY.
+EnvironmentFile=/etc/pension/models.env
 
 # Measured 2026-09-03, 6 cold runs with the page cache evicted before each (see
 # bench-load-strategy.sh, results in load-strategy-bench.tsv):
@@ -46,14 +58,19 @@ Environment=LOAD_STRATEGY=prefetch
 # Run the script, not an inlined vllm command: it carries the preflight that must not be
 # bypassed (architecture check, upstream shard-byte match, weights fingerprint, offline
 # enforcement). It ends in `exec vllm serve`, so the main PID is the engine itself.
-ExecStart=/home/tmc/Desktop/Pension-AG/infra/serve-qwen3-vl.sh
+# Wait up to 300 s for the weights to be readable (ls triggers the automount), then start.
+# If they never appear the start fails and Restart= retries it -- no more silent 'dead'.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do ls /models/ >/dev/null 2>&1; [ -r /models/qwen3-vl-30b-a3b-fp8/config.json ] && exit 0; sleep 2; done; echo "/models not readable after 300s - is spark-46ef up and exporting?" >&2; exit 1'
+# The launcher and warmup from this deployment's release (root-owned), not a developer's
+# working tree: until 6 Oct 2026 both ran from another developer's checkout.
+ExecStart=/opt/pension/current/infra/serve-qwen3-vl.sh
 
 # The first request per schema after a restart returns all amounts null (reproduced across
 # two restarts on 2026-09-02). With Restart=always an unwarmed automatic restart would
 # re-arm that defect unattended, so warmup is part of starting, not a separate step.
 # The script polls /health on its own and always exits 0, so it cannot fail the unit;
 # the unit therefore reports active only once the service is warm.
-ExecStartPost=/home/tmc/Desktop/Pension-AG/infra/warmup-vision.sh
+ExecStartPost=/opt/pension/current/infra/warmup-vision.sh
 
 Restart=always
 RestartSec=10

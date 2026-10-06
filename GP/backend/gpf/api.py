@@ -55,15 +55,30 @@ service = CaseService(repo, docstore, connector)
 _VLLM_URLS = os.environ.get("GPF_VLLM_URLS")
 _VLLM_URL = os.environ.get("GPF_VLLM_URL")
 _VLLM_TIMEOUT = float(os.environ.get("GPF_VLLM_TIMEOUT", "180"))
+
+
+def _model_api_key() -> str:
+    """The key the model servers ask for (vLLM VLLM_API_KEY; audit 6 Oct 2026, item 7).
+
+    The pipeline's own value, PENSION_MODEL_API_KEY, unless GPF_VLLM_API_KEY overrides it;
+    "EMPTY" when neither is set, which a vLLM started without a key accepts.
+    """
+    key = os.environ.get("GPF_VLLM_API_KEY") or os.environ.get("PENSION_MODEL_API_KEY") or ""
+    return key.strip() or "EMPTY"
+
+
+_VLLM_API_KEY = _model_api_key()
 if _VLLM_URLS:
     urls = [u.strip() for u in _VLLM_URLS.split(",") if u.strip()]
     try:
-        model_client = VllmModelClient.from_discovery(urls, timeout=_VLLM_TIMEOUT)
+        model_client = VllmModelClient.from_discovery(urls, api_key=_VLLM_API_KEY,
+                                                      timeout=_VLLM_TIMEOUT)
     except Exception:
         model_client = StubModelClient()
 elif _VLLM_URL:
     try:
-        model_client = VllmModelClient.from_server(_VLLM_URL, timeout=_VLLM_TIMEOUT)
+        model_client = VllmModelClient.from_server(_VLLM_URL, api_key=_VLLM_API_KEY,
+                                                   timeout=_VLLM_TIMEOUT)
     except Exception:
         model_client = VllmModelClient(_VLLM_URL, timeout=_VLLM_TIMEOUT)
 else:

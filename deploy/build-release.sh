@@ -42,6 +42,12 @@ copy --exclude 'data/' --exclude 'page_cache/' --exclude 'uploads/' --exclude '*
      "$ROOT/GP/backend/gpf" "$ROOT/GP/backend/web" "$ROOT/GP/backend/pyproject.toml" \
      "$ROOT/GP/backend/requirements.txt" "$REL/GP/backend/"
 copy "$ROOT/deploy" "$REL/"
+# The model services' launchers and units, so systemd runs them from this release (root-owned
+# /opt/pension/current/infra) rather than from anyone's working tree (audit 6 Oct 2026, item 7).
+mkdir -p "$REL/infra"
+copy "$ROOT/infra/serve-qwen3-vl.sh" "$ROOT/infra/serve-paddleocr-vl.sh" "$ROOT/infra/warmup-vision.sh" \
+     "$ROOT/infra/vllm-qwen3-vl.service" "$ROOT/infra/paddleocr-vl.service" \
+     "$ROOT/infra/qwen3-embedding.service" "$ROOT/infra/models" "$REL/infra/"
 cp "$ROOT/docs/DEPLOYMENT.md" "$REL/docs/"
 cp "$ROOT/deploy/requirements.txt" "$REL/requirements.txt"
 # The rules search index the pipeline cites from (rag/store.py); seeded into the data folder.

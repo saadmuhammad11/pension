@@ -28,6 +28,12 @@ UI_PORT=5184
 export PENSION_VISION_URL="${PENSION_VISION_URL:-http://127.0.0.1:8011/v1/chat/completions}"
 export PENSION_OCR_URL="${PENSION_OCR_URL:-http://127.0.0.1:8012/v1/chat/completions}"
 export PENSION_EMBED_URL="${PENSION_EMBED_URL:-http://127.0.0.1:8093/v1/embeddings}"
+# The model servers' key (audit 6 Oct 2026, item 7): once the keyed units are installed every /v1
+# request needs it. Read from the same file the units load (root:tmc 640) unless already set.
+if [[ -z "${PENSION_MODEL_API_KEY:-}" && -r /etc/pension/models.env ]]; then
+  PENSION_MODEL_API_KEY="$(sed -n 's/^VLLM_API_KEY=//p' /etc/pension/models.env | tail -1)"
+fi
+export PENSION_MODEL_API_KEY="${PENSION_MODEL_API_KEY:-}"
 MODEL_HOST=127.0.0.1
 LOGS="$ROOT/artifacts/logs"
 API_LOG="$LOGS/api.log"

@@ -42,7 +42,7 @@ StartLimitIntervalSec=0
 Type=simple
 User=tmc
 Group=tmc
-WorkingDirectory=/home/tmc/Desktop/Pension-AG/infra
+WorkingDirectory=/home/tmc
 
 Environment=HOME=/home/tmc
 Environment=HF_HOME=/home/tmc/.cache/huggingface
@@ -53,6 +53,11 @@ Environment=HF_HUB_DISABLE_TELEMETRY=1
 Environment=VLLM_NO_USAGE_STATS=1
 Environment=DO_NOT_TRACK=1
 Environment=PATH=/home/tmc/vllm_env/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin
+
+# The model key (audit 6 Oct 2026, item 7): VLLM_API_KEY=<48+ random chars>, root:tmc 640. vLLM
+# reads it from the environment and refuses /v1 requests without it (/health stays open for the
+# ExecStartPost probe). The pipeline and GP Fund send the same value as PENSION_MODEL_API_KEY.
+EnvironmentFile=/etc/pension/models.env
 
 # --runner pooling --convert embed turns the Qwen3ForCausalLM checkpoint into an
 # embedding model; vLLM picks up last-token pooling from 1_Pooling/config.json.
@@ -74,6 +79,9 @@ Environment=PATH=/home/tmc/vllm_env/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/
 # 90% of MemAvailable (7.49 GiB here). The boot ordering above is what keeps that true -- this unit loads
 # only after the ones before it have finished claiming memory.
 ExecStartPre=/bin/bash -c 'test -s /models/qwen3-embedding-4b/config.json'
+# No key, no server: vLLM would otherwise start open to anyone who can reach the port.
+# "$$" is systemd's escape for a literal "$", so bash, not systemd, expands these.
+ExecStartPre=/bin/bash -c 'k="$${VLLM_API_KEY:-}"; [ $${#k} -ge 32 ] && [ "$${k#*CHANGE_ME}" = "$$k" ] || { echo "VLLM_API_KEY missing, placeholder or short: set it in /etc/pension/models.env" >&2; exit 1; }'
 
 ExecStart=/home/tmc/vllm_env/bin/vllm serve /models/qwen3-embedding-4b \
   --served-model-name qwen3-embedding-4b \
@@ -82,7 +90,7 @@ ExecStart=/home/tmc/vllm_env/bin/vllm serve /models/qwen3-embedding-4b \
   --max-model-len 32768 \
   --gpu-memory-utilization 0.14 \
   --safetensors-load-strategy prefetch \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port 8093
 
 # Health gate, inlined. systemd's "-" prefix makes a non-zero exit non-fatal, so a slow or wedged

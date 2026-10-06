@@ -30,7 +30,9 @@ set -uo pipefail
 
 PORT="${PORT:-8011}"
 URL="http://127.0.0.1:${PORT}"
-PROJECT="${PROJECT:-/home/tmc/Desktop/Pension-AG}"
+# The release this script ships in (infra/..), not another checkout: the warmup must exercise the
+# client this deployment runs. It once imported a different developer's tree (audit 6 Oct 2026).
+PROJECT="${PROJECT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PYTHON="${PYTHON:-/home/tmc/vllm_env/bin/python}"
 DEADLINE=$(( SECONDS + ${WARMUP_TIMEOUT:-900} ))
 
@@ -48,9 +50,13 @@ done
 
 cd "$PROJECT" || { echo "warmup: project dir $PROJECT not found"; exit 0; }
 
+# The server wants its key on /v1 (VLLM_API_KEY, from the same EnvironmentFile); the client sends
+# PENSION_MODEL_API_KEY, so hand it the one this server was started with.
+PROJECT="$PROJECT" PENSION_VISION_URL="${URL}/v1/chat/completions" \
+PENSION_MODEL_API_KEY="${VLLM_API_KEY:-${PENSION_MODEL_API_KEY:-}}" \
 "$PYTHON" - "$WARMUP_W" "$WARMUP_H" <<'PY'
-import io, sys, tempfile, pathlib
-sys.path.insert(0, "/home/tmc/Desktop/Pension-AG")
+import io, os, sys, tempfile, pathlib
+sys.path.insert(0, os.environ["PROJECT"])
 
 width, height = int(sys.argv[1]), int(sys.argv[2])
 

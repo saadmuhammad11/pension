@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from extraction.classify import classify_pay_label
+from extraction.model_auth import model_headers
 from extraction.schemas import SCHEMAS
 
 #: The vision model. PENSION_VISION_URL points a deployment at its own GPU box (docs/DEPLOYMENT.md F4).
@@ -248,9 +249,7 @@ def extract_page(
         ],
     }
 
-    req = urllib.request.Request(
-        endpoint, json.dumps(payload).encode(), {"Content-Type": "application/json"}
-    )
+    req = urllib.request.Request(endpoint, json.dumps(payload).encode(), model_headers())
     started = time.time()
     try:
         raw = urllib.request.urlopen(req, timeout=timeout_s).read()

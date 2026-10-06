@@ -42,12 +42,39 @@ fi
 VENV="${VENV:-/home/tmc/vllm_env}"
 MODEL_PATH="${MODEL_PATH:-/models/qwen3-vl-30b-a3b-fp8}"
 SERVED_NAME="${SERVED_NAME:-qwen3-vl-30b-a3b-fp8}"
-HOST="${HOST:-0.0.0.0}"
+# Loopback only: the pipeline and the GP Fund module call it from this box. On 0.0.0.0 with no key
+# anyone on the LAN could use the GPU and read the prompts (audit 6 Oct 2026, item 7).
+HOST="${HOST:-127.0.0.1}"
+# vLLM reads VLLM_API_KEY from the environment and then refuses any /v1 request without
+# "Authorization: Bearer <key>" (/health stays open for the start-up probes). It comes from
+# /etc/pension/models.env (systemd EnvironmentFile), never the command line, where `ps` shows it.
+VLLM_API_KEY="${VLLM_API_KEY:-}"
 PORT="${PORT:-8011}"                       # 8010 is reserved by serve-vision-fp8-node2.sh
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.35}"       # ~42GB of 121GB: ~31GB FP8 weights + ~11GB KV
-MAX_NUM_SEQS="${MAX_NUM_SEQS:-4}"
-EAGER="${EAGER:-1}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.45}"       # ~42GB of 121GB: ~31GB FP8 weights + ~11GB KV
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-16}"
+# CUDA GRAPHS ON, measured 23 September 2026. Revert with EAGER=1 if this ever misbehaves.
+#
+# The header above says to prove the service first and then try EAGER=0 and measure the decode
+# gain. Measured on an idle box at max-num-seqs 16 / gpu-mem 0.45, same pages both times:
+#
+#                            --enforce-eager      CUDA graphs
+#     extract_page              33.1s                28.7s
+#     extract_page_confirmed    64.2s                51.3s      -20%
+#     decode rate               38.8 tok/s           47.3 tok/s +22%
+#     identify, conc 1/2/4/8    2.8/2.0/1.4/1.2      2.4/1.8/1.5/1.2   (unchanged)
+#
+# The win is on the LONG calls, which is where the time is: stage 6 is the dominant cost of a
+# run and is entirely confirming double reads of ~1,300 output tokens each. Graph capture cost
+# 0.15 GiB and took KV cache from 22.01 to 21.77 GiB, which is nothing.
+#
+# ONE REAL COST, and it is the one this header predicted: "the JIT is a latency spike". The
+# FIRST benchmark after the restart read 3.6/3.0/2.4/2.4 -- every level worse -- and the
+# identical benchmark immediately after read 2.4/1.8/1.5/1.2. That gap is per-image-shape
+# compilation, paid once per shape after every start. Restart=always means an unattended
+# restart makes the first case of the day slower; warmup-vision.sh covers some of it, and
+# widening the shapes it warms is the obvious next refinement.
+EAGER="${EAGER:-0}"
 
 # Safetensors load strategy. Left unset (vLLM default) the engine memory-maps lazily and
 # auto-prefetches only when it recognises a network FS. It never does here: /models appears in
@@ -115,6 +142,10 @@ export PATH="/usr/local/cuda/bin:$PATH"
 
 # --- Preflight ----------------------------------------------------------------------------------
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+[[ ${#VLLM_API_KEY} -ge 32 && "$VLLM_API_KEY" != *CHANGE_ME* ]] || die "VLLM_API_KEY is missing, \
+the placeholder, or under 32 characters. Set it in /etc/pension/models.env (openssl rand -base64 48)."
+export VLLM_API_KEY
 
 [[ -d "$MODEL_PATH" ]] || die "model path not found: $MODEL_PATH
 Weights are never downloaded. If this artifact is absent, that is a blocking operational

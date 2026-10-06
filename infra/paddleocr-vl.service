@@ -1,0 +1,84 @@
+#
+# PaddleOCR-VL-1.6 (0.9B) — document OCR / table / formula / chart recognition.
+# Endpoint: POST /v1/chat/completions (OpenAI-compatible), image + task prompt.
+# Task is selected by the text prompt: "OCR:", "Table Recognition:",
+# "Formula Recognition:", "Chart Recognition:". Table output is OTSL, not HTML.
+[Unit]
+Description=PaddleOCR-VL-1.6 document OCR (vLLM, OpenAI API) on :8012
+Documentation=file:/opt/pension/current/infra/serve-paddleocr-vl.sh
+After=network-online.target remote-fs.target
+Wants=network-online.target
+
+# /models is an x-systemd.automount NFS export from spark-46ef (192.168.100.10).
+# Without this the boot-time start races the automount and the script's preflight
+# dies with "model path not found".
+# 2026-09-30: was RequiresMountsFor=/models. That is a HARD dependency: on the 27 Sep
+# reboot models.mount failed for ~11 s ("Network is unreachable" -- 46ef not exporting yet),
+# this unit got 'Dependency failed' and was never started or retried. Restart= does not
+# cover dependency failures, and a drop-in cannot clear RequiresMountsFor on systemd 255.
+# Soft Wants= + the ExecStartPre wait below turn a slow mount into an ordinary, retried start.
+Wants=models.mount
+After=models.mount models.automount
+StartLimitIntervalSec=0
+
+# Starts after the two always-on units so it profiles memory last, the same
+# cold-start ordering that qwen3-embedding.service relies on. Ordering only --
+# no Requires= -- so OCR still starts if either is stopped or absent.
+After=qwen3guard.service qwen3-embedding.service
+
+[Service]
+Type=simple
+User=tmc
+Group=tmc
+WorkingDirectory=/home/tmc
+
+Environment=HOME=/home/tmc
+Environment=CUDA_HOME=/usr/local/cuda
+Environment=HF_HOME=/home/tmc/.cache/huggingface
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+Environment=VLLM_NO_USAGE_STATS=1
+Environment=DO_NOT_TRACK=1
+Environment=PATH=/usr/local/cuda/bin:/home/tmc/vllm_env/bin:/usr/local/bin:/usr/bin:/bin
+
+# The model key (audit 6 Oct 2026, item 7): VLLM_API_KEY=<48+ random chars>, root:tmc 640. vLLM
+# reads it from the environment and refuses /v1 requests without it; the launcher refuses to
+# start without it. The pipeline and GP Fund send the same value as PENSION_MODEL_API_KEY.
+EnvironmentFile=/etc/pension/models.env
+
+# 0.08 of 121 GiB = ~10 GiB, NOT the 0.25 used for the interactive bring-up.
+# Weights are only 1.8 GiB BF16; at 0.25 the engine allocated a 1.61M-token KV
+# cache (98x concurrency at 16k), which is far past what page-at-a-time OCR uses.
+# 0.08 still leaves roughly 35x concurrency and keeps the boot-time footprint
+# small enough to coexist with vllm-qwen3-vl.service (0.35) if that is ever
+# re-enabled -- the 2026-07-15 unified-memory OOM freeze is the reason to be
+# conservative here rather than claim memory this service will not use.
+Environment=GPU_MEM_UTIL=0.08
+
+# Run the script, not an inlined vllm command: it carries the model-path preflight
+# and ends in `exec vllm serve`, so the main PID is the engine itself.
+# NOTE: invoked WITHOUT --detach, so it stays in the foreground under systemd.
+# Wait up to 300 s for the weights to be readable (ls triggers the automount), then start.
+# If they never appear the start fails and Restart= retries it -- no more silent 'dead'.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do ls /models/ >/dev/null 2>&1; [ -r /models/paddleocr-vl-1.6/config.json ] && exit 0; sleep 2; done; echo "/models not readable after 300s - is spark-46ef up and exporting?" >&2; exit 1'
+ExecStart=/opt/pension/current/infra/serve-paddleocr-vl.sh
+
+# Health gate, inlined. The "-" prefix makes a non-zero exit non-fatal, so a slow
+# engine delays this unit but never fails it; timeout(1) bounds the wait because
+# TimeoutStartSec=0 gives systemd no deadline of its own. This is what makes the
+# After= ordering real -- Type=simple would report active the instant it forks.
+ExecStartPost=-/usr/bin/timeout 600 /bin/bash -c 'until curl -sf -m 3 http://127.0.0.1:8012/health >/dev/null 2>&1; do sleep 5; done'
+
+Restart=always
+RestartSec=10
+TimeoutStartSec=0
+KillMode=mixed
+LimitNOFILE=1048576
+
+# Under unified-memory pressure prefer killing OCR over the co-hosted voice and
+# retrieval services; this one is cheap to restart (1.8 GiB of weights).
+OOMScoreAdjust=300
+
+[Install]
+WantedBy=multi-user.target
