@@ -80,8 +80,12 @@ if _CORS:
 
 
 @app.get("/api/health")
-def health() -> dict:
-    return {"ok": True, "runs": len(RUNS)}
+def health() -> JSONResponse:
+    """The database, the disk, the model servers and GP Fund (api.health). 503 when the API cannot
+    do its job; a model or GP Fund being down is reported as ``degraded`` but does not fail it."""
+    from api.health import report
+    body, status = report()
+    return JSONResponse(body, status_code=status)
 
 
 @app.get("/api/gpu")
