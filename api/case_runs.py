@@ -76,7 +76,31 @@ def documents_sha(conn: sqlite3.Connection, case_id: str) -> str:
     return hashlib.sha256("\n".join(r["sha256"] or "" for r in rows).encode()).hexdigest()
 
 
+#: Cases whose verification this process is starting now: between RUN_CHECK (status AI_CHECKING,
+#: no current run) and the run row. The sweep leaves them alone however long the start takes -- a
+#: GP Fund start renders and uploads every page first -- and, after a restart, when this set is
+#: empty, fails a start that died only after its grace period (audit 6 Oct 2026).
+_STARTING: set[str] = set()
+_STARTING_LOCK = threading.Lock()
+
+
+def _is_starting(case_id: str) -> bool:
+    with _STARTING_LOCK:
+        return case_id in _STARTING
+
+
 def start_check(conn: sqlite3.Connection, case: sqlite3.Row, user) -> dict:
+    """Start (or resume) the verification of a case; see ``_start_check``."""
+    with _STARTING_LOCK:
+        _STARTING.add(case["id"])
+    try:
+        return _start_check(conn, case, user)
+    finally:
+        with _STARTING_LOCK:
+            _STARTING.discard(case["id"])
+
+
+def _start_check(conn: sqlite3.Connection, case: sqlite3.Row, user) -> dict:
     """Start (or resume) the verification over the case's documents; record the run on the case.
 
     A pension case goes to the pension pipeline; a GP Fund case to the GP Fund module's reader
@@ -454,8 +478,10 @@ def sync_run_states(conn: sqlite3.Connection) -> int:
             "WHERE c.status = ? AND (cr.id IS NULL OR cr.state IN ('done', 'failed'))",
             (workflow.AI_CHECKING,)).fetchall():
         if case["run_state"] is None:
-            # No run row at all: the start failed after the status moved. Only after a grace
-            # period, since start_check may be between its two steps right now.
+            # No run row at all: the start failed after the status moved. Not while this process
+            # is still starting it, and otherwise only after a grace period.
+            if _is_starting(case["id"]):
+                continue
             try:
                 age = (datetime.fromisoformat(db.now()) - datetime.fromisoformat(case["updated_at"])).total_seconds()
             except ValueError:

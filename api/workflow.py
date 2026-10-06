@@ -198,7 +198,12 @@ def transition(conn: sqlite3.Connection, case: sqlite3.Row, action: str, actor: 
     with db.transaction(conn):
         # Conditional on the status this decision was taken against: two officers deciding at
         # once, or the reconciler racing an override, cannot both win.
-        cur = conn.execute("UPDATE cases SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+        # A new verification forgets the previous run in the same statement. Otherwise the sweep,
+        # finding the case in AI_CHECKING still pointing at the old finished run, applied that
+        # run's outcome to it before the new run was recorded, and the new run's result was then
+        # never applied: the case stayed where the old one put it (audit 6 Oct 2026).
+        forget_run = ", current_run_id = NULL" if action == "RUN_CHECK" else ""
+        cur = conn.execute(f"UPDATE cases SET status = ?, updated_at = ?{forget_run} WHERE id = ? AND status = ?",
                            (new_status, db.now(), case["id"], case["status"]))
         if cur.rowcount != 1:
             raise WorkflowError(409, "the case changed while you were working on it; reload and try again")
