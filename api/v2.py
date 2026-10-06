@@ -1494,7 +1494,7 @@ def case_dispositions(case_id: str, run_id: str, user: User = Depends(current_us
 @router.post("/cases/{case_id}/runs/{run_id}/dispositions", status_code=201)
 def case_disposition(case_id: str, run_id: str, body: dict = Body(...),
                      user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
-                     conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+                     conn: sqlite3.Connection = Depends(get_conn), request: Request = None) -> dict:
     from api.dispositions import DispositionError, calculation_gate, current, record
     run = _run_for(conn, user, case_id, run_id, acting=True)
     rep = report(run)
@@ -1510,18 +1510,35 @@ def case_disposition(case_id: str, run_id: str, body: dict = Body(...),
                        ground=str(body.get("ground", "")), flag=flag)
     except DispositionError as exc:
         raise HTTPException(422, str(exc)) from None
+    _audit_clearance(conn, user, request, case_id, run_id, f"FINDING_{entry.get('action', '')}", entry)
     from api.checklist_actions import apply
     gate = calculation_gate(apply(rep, run.run_dir), run.run_dir)
     settled = _settle(conn, case_id, user, run_id, gate)
     return {**entry, "gate": gate, "current": current(run.run_dir), **({"case": settled} if settled else {})}
 
 
+def _audit_clearance(conn: sqlite3.Connection, user: User, request: Request | None, case_id: str,
+                     run_id: str, action: str, entry: dict) -> None:
+    """An officer's waiver, correction or checklist action, on the append-only audit trail.
+
+    These are what let a case approve itself, and they were kept only in the run folder's
+    .jsonl files, under a display name and a fixed role: no account id, no address, and
+    editable by anyone with the files (audit 6 Oct 2026). The run folder keeps its copy."""
+    case = conn.execute("SELECT id FROM cases WHERE id = ? OR case_no = ?", (case_id, case_id)).fetchone()
+    detail = {k: v for k, v in entry.items() if k not in ("officer", "role", "at")}
+    workflow.audit(conn, actor=user, action=action.upper(), entity_type="case",
+                   entity_id=case["id"] if case else case_id, before=None, after={"run_id": run_id, **detail},
+                   reason=str(entry.get("ground") or ""), ip=_client_address(request) if request else None)
+
+
 def _settle(conn: sqlite3.Connection, case_id: str, user: User, run_id: str, gate: dict) -> dict | None:
     """Clearing the last finding (or the last missing paper) approves the case by itself."""
-    row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
-    if row is None or not case_runs.settle(conn, row, run_id, gate, user.display_name):
+    # By id or case number, as _case_or_404 accepts: a clearance sent with the case number
+    # never approved the case before (audit 6 Oct 2026).
+    row = conn.execute("SELECT * FROM cases WHERE id = ? OR case_no = ?", (case_id, case_id)).fetchone()
+    if row is None or not case_runs.settle(conn, row, run_id, gate, user.display_name, by=user):
         return None
-    fresh = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+    fresh = conn.execute("SELECT * FROM cases WHERE id = ?", (row["id"],)).fetchone()
     return _redact(_case_dict(conn, fresh, full=True), user)
 
 
@@ -1537,7 +1554,7 @@ def case_checklist_actions(case_id: str, run_id: str, user: User = Depends(curre
 @router.post("/cases/{case_id}/runs/{run_id}/checklist-actions", status_code=201)
 def case_checklist_action(case_id: str, run_id: str, body: dict = Body(...),
                           user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
-                          conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+                          conn: sqlite3.Connection = Depends(get_conn), request: Request = None) -> dict:
     from api import checklist_actions
     from api.artefacts import report_dict
     from api.dispositions import calculation_gate
@@ -1555,6 +1572,7 @@ def case_checklist_action(case_id: str, run_id: str, body: dict = Body(...),
             name_id=(str(body["name_id"]) if body.get("name_id") else None))
     except checklist_actions.ChecklistActionError as exc:
         raise HTTPException(422, str(exc)) from None
+    _audit_clearance(conn, user, request, case_id, run_id, f"CHECKLIST_{entry.get('action', '')}", entry)
     applied = checklist_actions.apply(rep, run.run_dir)
     gate = calculation_gate(applied, run.run_dir)
     settled = _settle(conn, case_id, user, run_id, gate)
@@ -1608,12 +1626,13 @@ def run_dispositions_by_id(run_id: str, user: User = Depends(current_user), conn
 
 
 @router.post("/runs/{run_id}/dispositions", status_code=201)
-def run_disposition_by_id(run_id: str, body: dict = Body(...), user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
+def run_disposition_by_id(run_id: str, request: Request, body: dict = Body(...),
+                          user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
                           conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
     if link is None:
         raise HTTPException(404, "no such run")
-    return case_disposition(link["case_id"], run_id, body, user, conn)
+    return case_disposition(link["case_id"], run_id, body, user, conn, request)
 
 
 @router.get("/runs/{run_id}/checklist-actions")
@@ -1625,12 +1644,13 @@ def run_checklist_by_id(run_id: str, user: User = Depends(current_user), conn: s
 
 
 @router.post("/runs/{run_id}/checklist-actions", status_code=201)
-def run_checklist_action_by_id(run_id: str, body: dict = Body(...), user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
+def run_checklist_action_by_id(run_id: str, request: Request, body: dict = Body(...),
+                               user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
                                conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
     if link is None:
         raise HTTPException(404, "no such run")
-    return case_checklist_action(link["case_id"], run_id, body, user, conn)
+    return case_checklist_action(link["case_id"], run_id, body, user, conn, request)
 
 
 # -- admin -------------------------------------------------------------------------------------

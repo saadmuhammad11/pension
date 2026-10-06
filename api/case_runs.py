@@ -285,21 +285,31 @@ def mirror_decision(run_id: str, action: str, officer: str, role: str, remark: s
         pass
 
 
-def settle(conn: sqlite3.Connection, case: sqlite3.Row, run_id: str, gate: dict, officer: str) -> dict | None:
+def settle(conn: sqlite3.Connection, case: sqlite3.Row, run_id: str, gate: dict, officer: str,
+           by=None) -> dict | None:
     """Approve a case under review the moment nothing is outstanding on its verification.
 
     Called after every disposition and checklist action with the gate those computed: every
     finding cleared and no document missing. Returns the history row, or None if nothing moved.
+    ``by`` is the account whose clearance this was: the approval is the system's (AUTO_APPROVE),
+    but the history and the audit trail name that officer by account, not only in the remark.
     """
     if case["status"] != workflow.UNDER_REVIEW or case["current_run_id"] != run_id or not gate.get("open"):
         return None
     remark = (f"Approved: every finding cleared by {officer} and every required document present "
               f"({gate.get('flags_cleared', 0)} finding(s) cleared).")
+    cleared_by = ({"id": by.id, "username": by.username, "name": by.display_name, "role": by.role}
+                  if by is not None else None)
     try:
         entry = workflow.transition(conn, case, "AUTO_APPROVE", None, run_id=run_id, remark=remark,
-                                    payload={"auto": True, "gate": gate})
+                                    payload={"auto": True, "gate": gate,
+                                             **({"cleared_by": cleared_by} if cleared_by else {})})
     except workflow.WorkflowError:
         return None
+    if by is not None:
+        workflow.audit(conn, actor=by, action="CASE_APPROVED_ON_CLEARANCE", entity_type="case",
+                       entity_id=case["id"], before={"status": case["status"]},
+                       after={"status": workflow.APPROVED, "run_id": run_id, "gate": gate}, reason=remark)
     mirror_decision(run_id, "FORWARD", f"System, on {officer}'s clearance", "Auditor, Pension wing (AG / DAO)", remark)
     return entry
 
