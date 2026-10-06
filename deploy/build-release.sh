@@ -69,6 +69,9 @@ echo "== checking for claimant data"
 "$PY" "$ROOT/deploy/check-release-pii.py" "$REL"
 
 mkdir -p "$OUT"
-tar czf "$OUT/pension-$VERSION.tgz" -C "$STAGE" "pension-$VERSION"
+# Owned by root in the archive: the files were staged as whoever built the release (uid 1000 on
+# the trial box), and unpacked by root with their ids kept, /opt/pension/current belonged to a
+# login account on the server (audit 6 Oct 2026, D1). The service user only ever needs to read it.
+tar czf "$OUT/pension-$VERSION.tgz" --owner=0 --group=0 --numeric-owner -C "$STAGE" "pension-$VERSION"
 ( cd "$OUT" && sha256sum "pension-$VERSION.tgz" > "pension-$VERSION.tgz.sha256" )
 echo "built $OUT/pension-$VERSION.tgz ($(du -h "$OUT/pension-$VERSION.tgz" | cut -f1))"
