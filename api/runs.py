@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -579,6 +580,29 @@ def persist_intake(run: Run) -> None:
     }, indent=2), encoding="utf-8")
 
 
+def _max_concurrent_runs() -> int:
+    try:
+        return max(1, int(os.environ.get("PENSION_MAX_CONCURRENT_RUNS", "2")))
+    except ValueError:
+        return 2
+
+
+#: Verifications on the models at once. Every "Verify" started its own thread straight onto the
+#: GPU, so a busy morning queued dozens of runs inside the model servers, each timing out in turn
+#: (audit 6 Oct 2026). A run past the limit waits here, still "queued", and says so.
+_RUN_SLOTS = threading.BoundedSemaphore(_max_concurrent_runs())
+
+
+def _execute_when_free(run: Run) -> None:
+    if not _RUN_SLOTS.acquire(blocking=False):
+        run.emit("queue", "waiting for a free verification slot")
+        _RUN_SLOTS.acquire()
+    try:
+        execute(run)
+    finally:
+        _RUN_SLOTS.release()
+
+
 def start_run(body: bytes, filename: str, variant: str | None = None,
               annual_pay: dict | None = None, commutation_percent: str = "",
               retirement_date: str = "", pension_in_payment: str = "",
@@ -640,7 +664,7 @@ def start_run(body: bytes, filename: str, variant: str | None = None,
                   pension_in_payment=pension_in_payment or "",
                   date_of_death=date_of_death or "")
         RUNS[run_id] = run
-    threading.Thread(target=execute, args=(run,), daemon=True).start()
+    threading.Thread(target=_execute_when_free, args=(run,), daemon=True).start()
     return {"run_id": run_id, "state": "queued", "file": upload.name,
             "sha256": digest, "resumed": resumed, "variant": variant,
             "bundle": bundled}
