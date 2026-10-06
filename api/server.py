@@ -208,6 +208,33 @@ def _signed_in(request: Request | None):
     return getattr(getattr(request, "state", None), "user", None) if request is not None else None
 
 
+def _refuse_recompute_behind_a_decision(run_id: str) -> None:
+    """A run that belongs to a case is rebuilt only while that case is still open on it.
+
+    The old route had no idea of the case: an administrator could rebuild the report behind an
+    approved or rejected case, or behind a run the case had already moved on from, and the
+    register would show figures nobody had decided on (audit 6 Oct 2026, C3). A run with no case
+    (the old register's own uploads) is unaffected.
+    """
+    from api import db as _db
+    from api import workflow
+    conn = _db.connect()
+    try:
+        link = conn.execute(
+            "SELECT c.case_no, c.status, c.current_run_id FROM case_runs cr JOIN cases c ON c.id = cr.case_id "
+            "WHERE cr.run_id = ? ORDER BY cr.rowid DESC LIMIT 1", (run_id,)).fetchone()
+    finally:
+        conn.close()
+    if link is None:
+        return
+    if link["status"] in (workflow.APPROVED, workflow.REJECTED):
+        raise HTTPException(409, f"case {link['case_no']} is {link['status'].lower()}; the report it was decided on "
+                                 f"is part of that decision and is not rebuilt")
+    if link["current_run_id"] and link["current_run_id"] != run_id:
+        raise HTTPException(409, f"case {link['case_no']} has moved on to a newer examination; "
+                                 f"this run's report is history and is not rebuilt")
+
+
 def _officer(request: Request | None, typed: str) -> str:
     """Who is recorded as acting: the signed-in account's name, never one typed into the request."""
     user = _signed_in(request)
@@ -637,6 +664,7 @@ def recompute_run(request: Request, run_id: str, x_desk: str | None = Header(def
     run = _get(run_id)
     if run.state in ("queued", "running"):
         raise HTTPException(409, "the run is still in progress; recompute it once it has finished")
+    _refuse_recompute_behind_a_decision(run_id)
     try:
         result = recompute(run)
     except FileNotFoundError as exc:
