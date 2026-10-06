@@ -543,6 +543,8 @@ python3 -m api.check_inventory
 - [ ] All model `/health` endpoints OK; first extraction after a restart returns real amounts (warm-up worked)
 - [ ] `python3 -m api.check_inventory` reports no differences
 - [ ] HTTPS works with no browser warning; HTTP redirects to HTTPS
+- [ ] `pip install PyJWT==2.15.0` into the services' venv (the pin in `requirements.txt`; the trial box still has 2.13.0), then restart `pension-api`, `pension-portal` and `pension-gpf`
+- [ ] Model units run with `--host 127.0.0.1` and `VLLM_API_KEY` set (`infra/*.service` from the release, §3.5); `ss -ltnp` shows 8011, 8012, 8093 on `127.0.0.1` only. Until then `lock-model-ports.sh` (installed at `/usr/local/sbin`, `pension-model-ports.service`) is the stop-gap
 - [ ] Ports 5184, 8110, 8201, 8011, 8012, 8093, 8094 are **not** reachable from a user PC (`nmap` from outside)
 - [ ] `/docs`, `/openapi.json`, `/__portals`, `start.html` return 404 from outside
 - [ ] No account uses `1234`; trial accounts removed; `credentials.csv` not on the server

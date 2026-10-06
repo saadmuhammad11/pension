@@ -9,7 +9,7 @@ S/R/C/G/D/L = medium and low by area, N = new items raised while fixing. The las
 code ran all three suites: pension 777 OK, GP backend 83 passed, GP Fund engine OK.
 
 **Totals.** Earlier audit (69 items): 25 fixed, 3 partly fixed, 15 need a business decision, 26 not
-fixed. New items (11): 4 fixed, 1 needs a business decision, 6 not fixed.
+fixed. New items (11): 5 fixed, 1 needs a business decision, 5 not fixed.
 
 ## Real claimant data (M8 / N2 / N4 / N6)
 
@@ -40,7 +40,7 @@ fixed. New items (11): 4 fixed, 1 needs a business decision, 6 not fixed.
 | M4 | Critical | Every GP Fund scan read crashed (NameError) | **FIXED** | `b519e24`. `GP/backend/tests/test_scan_read_e2e.py` (failed before, passes after). The running GP module hasn't been restarted |
 | M5 | Critical | TIFF/GIF image bomb runs the server out of memory | **FIXED** | `d3577df`. `tests/test_image_limits.py` (200-frame bomb refused; 133 MB peak) |
 | M6 | Critical | LibreOffice fetches addresses / reads local files | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` (live listener receives no requests). Content checks; no sandbox is possible on this box |
-| M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live:** 8011, 8012 and 8093 still listen on `0.0.0.0` (files only, as asked). Someone's uncommitted `deploy/lock-model-ports.sh` firewall script exists; whether it's applied is unknown |
+| M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** (stop-gap live 6 Oct 2026) | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live:** `deploy/lock-model-ports.sh` (`5e15060`) applied and persisted on the trial box (`/usr/local/sbin/lock-model-ports.sh`, `pension-model-ports.service`): 8011/8012/8093 answer on loopback (HTTP 200) and time out from a laptop. The lasting fix, `--host 127.0.0.1` plus an API key in `infra/*.service`, rolls out at deploy (checklist §8.1) |
 | M8 | Critical | Real CNICs and names in code and history | **FIXED** (6 Oct 2026) | Code: `f329438`, plus `deploy/check-release-pii.py` (passes on all 21 commits and on every blob in the local object store). History rewritten; GitHub recreated clean, `63185d3` no longer served (N2). Local copies shredded (N4). Remaining copies: the demos (N6) and the session transcripts (N11) |
 | H1 | High | Two reads of a page disagree, figures used anyway | **NEEDS BUSINESS DECISION** | The agreement result is stored but never read. Item 3 |
 | H2 | High | Pay lines from several documents summed; §8.4 check never called | **NEEDS BUSINESS DECISION** | `reconcile_*` still has no callers. Item 4 |
@@ -56,7 +56,7 @@ fixed. New items (11): 4 fixed, 1 needs a business decision, 6 not fixed.
 | N1 | High | **New:** none of today's fixes is live | **NOT FIXED** | API and GP module started 5 Oct; portal bundle not rebuilt; branches not merged or pushed |
 | N2 | High | **New:** GitHub still serves the pre-scrub commit | **FIXED** (6 Oct 2026) | Repository deleted and recreated. `git ls-remote origin main` = `f329438`; `gh api repos/…/commits/63185d3` → "No commit found for SHA" (HTTP 422) |
 | N3 | High | **New:** HTML renamed `.doc`/`.rtf` and `.docx` linked images also made LibreOffice fetch | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` |
-| S1 | Medium | Session tokens written to nginx's access log | **NOT FIXED** | No `log_format` change. Held back because of uncommitted edits in `deploy/` |
+| S1 | Medium | Session tokens written to nginx's access log | **NOT FIXED** | No `log_format` change. No longer blocked: the `deploy/` edits are committed (N5) |
 | S2 | Medium | Uploaded HTML/SVG opens on the portal's address | **FIXED** | `ae9ce8b`. `tests/test_documents_cannot_run.py` |
 | S3 | Medium | GP Fund uploads served inline (`.html`/`.js`) | **FIXED** | `0afba15`. `GP/backend/tests/test_scan_types.py` |
 | S4 | Medium | GP Fund cookie survives sign-out | **FIXED** | `dd2acef`. `tests/test_signout_clears_gpf.py`. Takes effect on the next portal rebuild |
@@ -80,10 +80,10 @@ fixed. New items (11): 4 fixed, 1 needs a business decision, 6 not fixed.
 | G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **NEEDS BUSINESS DECISION** | `"ADMIN": "dag"` unchanged |
 | G7 | Medium | No locking on GP Fund case state | **NOT FIXED** | |
 | D1 | Medium | Release files owned by uid 1000 | **NOT FIXED** | |
-| D2 | Medium | PyJWT 2.13 advisories | **PARTLY FIXED** | Pinned to 2.15 in someone's uncommitted edit; 2.13.0 is still installed |
+| D2 | Medium | PyJWT 2.13 advisories | **PARTLY FIXED** | Pinned to 2.15.0 in `8011f41` (HS256 with a string `sub`: compatible). 2.13.0 is still installed in the services' venv; install and restart are on the deploy checklist (§8.1) |
 | D3 | Medium | `numpy`/`opencv`/`zxingcpp` missing from requirements | **NOT FIXED** | |
 | N4 | Medium | **New:** local copies of real data remain | **FIXED** (6 Oct 2026) | 306 MB shredded: `artifacts/backup-pii-scrub-20261006/` (`originals.tar`, `pre-scrub.bundle`), `dist-release/pension-1.0.0-rc1.tgz`, two session scratchpads under `/tmp/claude-1000`, `~/pension_check-backup-2026-09-09.tgz`, `artifacts/backup-flags-ocr-20260925/`, `artifacts/archive-ediary-bridge-20260925/`, both `ediary-hesk-*.sql`, `backup-portal-db-2026092{5,9}/` and `-20260930/`. Re-check after: repo clean, `/tmp/claude-1000` clean, fresh release build passes the CNIC check; only the live trial data (above) is still flagged. Live data is git-ignored, excluded from the release, and set to 700/600 |
-| N5 | Medium | **New:** uncommitted `deploy/` edits of unknown owner | **NOT FIXED** | nginx redirect, PyJWT pin, firewall script |
+| N5 | Medium | **New:** uncommitted `deploy/` edits of unknown owner | **FIXED** (6 Oct 2026) | Owner found: the audit session of 6 Oct (13:18–13:21). Reviewed and all three kept, committed separately: nginx redirect `e5018b9`, PyJWT pin `8011f41`, firewall script `5e15060` |
 | N6 | Medium | **New:** single-file demos contain real CNICs | **NOT FIXED** | `pension-portal.html`, `pension-portal rd new.html`, `demo/pension-demo.html` and `portals/dist-demo/` each embed real scans; the CNIC check finds 7 real numbers in each (28 hits). Untracked, git-ignored, never shipped; the scans can't be faked. **Do not share these files outside the team.** |
 | L1 | Low | 2-digit years read as 20xx | **NOT FIXED** | Fails safe |
 | L2 | Low | GP Fund cookie never gets `Secure` | **NOT FIXED** | |
@@ -106,6 +106,6 @@ fixed. New items (11): 4 fixed, 1 needs a business decision, 6 not fixed.
 ## Action items
 
 1. Merge and deploy the two branches (N1); until then, none of the FIXED rows is live.
-2. Say whose the `deploy/` edits are (N5), which unblocks S1, D2 and D3.
+2. At deploy: `pip install PyJWT==2.15.0` into the services' venv and restart them (D2); switch the model units to `--host 127.0.0.1` plus the API key (M7). Both are on the go-live checklist, `docs/DEPLOYMENT.md` §8.1.
 3. Settle the business-decision items (decision sheet: `docs/pension-rules-decisions.md`).
 4. When the fix work is complete, purge the session transcripts (N11) and decide what to do with the demos (N6).
