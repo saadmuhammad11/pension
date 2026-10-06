@@ -247,6 +247,19 @@ def _copy_capped(src, dst, budget: _Budget, declared: int) -> None:
         dst.write(chunk)
 
 
+def _unclaimed(target: Path, taken: set[Path]) -> Path:
+    """``target`` if no earlier member of this extraction took it (and nothing is there), else
+    the first ``name (2).ext``, ``name (3).ext``... that is free."""
+    if target not in taken and not target.exists():
+        return target
+    n = 2
+    while True:
+        candidate = target.with_name(f"{target.stem} ({n}){target.suffix}")
+        if candidate not in taken and not candidate.exists():
+            return candidate
+        n += 1
+
+
 def _safe_extract(data: bytes, into: Path, *, depth: int = 1, budget: _Budget | None = None,
                   problems: dict[str, str] | None = None) -> list[tuple[str, Path]]:
     """Extract a zip to ``into``, refusing anything that would write outside it.
@@ -271,6 +284,7 @@ def _safe_extract(data: bytes, into: Path, *, depth: int = 1, budget: _Budget | 
     budget.admit(len(members), sum(i.file_size for i in members))
 
     out: list[tuple[str, Path]] = []
+    taken: set[Path] = set()
     for info in sorted(members, key=lambda i: _natural_key(i.filename)):
         rel = Path(*(p for p in Path(info.filename).parts
                      if p not in ("..", "/", "\\") and not p.startswith("/")))
@@ -279,6 +293,11 @@ def _safe_extract(data: bytes, into: Path, *, depth: int = 1, budget: _Budget | 
         target = (into / rel).resolve()
         if not str(target).startswith(str(into.resolve())):
             continue                                   # member tried to escape; drop it
+        # Two members may land on one name once the path is rooted here ("a.pdf" and "../a.pdf"),
+        # or a zip may simply hold the name twice: the second used to overwrite the first and a
+        # page of the case went missing without a word (audit 6 Oct 2026, L6). Each gets its own.
+        target = _unclaimed(target, taken)
+        taken.add(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
             with archive.open(info) as src, target.open("wb") as dst:
