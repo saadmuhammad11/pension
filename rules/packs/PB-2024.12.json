@@ -1,0 +1,257 @@
+{
+  "id": "PB-2024.12",
+  "jurisdiction": "PUNJAB",
+  "cohort": "DEFINED_BENEFIT",
+  "effective_from": "2024-12-02",
+  "effective_to": null,
+  "source": "Finance Department notification NO.FD.SR-III-4-244/2023(B), Lahore, 2 December 2024, amending the Punjab Civil Services Pension Rules with immediate effect. Signed Mujahid Sherdil, Finance Secretary.",
+  "_note_on_types": [
+    "Every numeric value in this file is a STRING, deliberately.",
+    "json.load turns a JSON number into a Python float, and FMT-02 forbids float money.",
+    "A commutation factor of 12.3719 read as a float and multiplied by a gross pension is",
+    "exactly the class of silent precision loss the rule exists to prevent, so the loader",
+    "refuses floats and converts these strings with Decimal instead."
+  ],
+  "_what_changed_from_PB-2026.02": [
+    "This pack exists because the December 2024 amendment reaches almost every figure the",
+    "engine computes, and the pack in the repository predated it. Each change below is a",
+    "different pension, not a different wording:",
+    "",
+    "1. THE BASE. Rule 4.4(4) was substituted outright. The pension base is no longer the",
+    "   last drawn six-component reckonable pay; it is the average of BASIC PAY INCLUDING",
+    "   PERSONAL PAY over the last three years, taken from 1 July of each. Two changes at",
+    "   once: an average rather than a last-drawn figure, and two components rather than six.",
+    "   This resolves BLOCKING-01, and in a third way that neither prior reading anticipated.",
+    "",
+    "2. COMMUTATION. Rule 8.1: 'one half' becomes '25%'. The retired pack recorded 35% for",
+    "   Punjab and said explicitly that the federal 25% did not apply. It does now.",
+    "",
+    "3. FAMILY PENSION DURATION. Rule 4.10(1)-(6) substituted: a spouse's family pension runs",
+    "   for TEN YEARS or until re-marriage, whichever comes first -- not for life. An issueless",
+    "   spouse keeps it for life or until re-marriage. More than one widow: divided equally.",
+    "",
+    "4. VOLUNTARY RETIREMENT. A reduction factor by age at retirement, new in this amendment.",
+    "",
+    "5. ANNUAL INCREASE. Granted at 50% of the adhoc relief allowance for the financial year.",
+    "",
+    "Nothing here changes the 7/300 accrual or the 30-year cap: the amendment restates both."
+  ],
+  "unverified": [
+    "BLOCKING-02",
+    "BLOCKING-03",
+    "BLOCKING-05",
+    "BLOCKING-06",
+    "BLOCKING-16",
+    "BLOCKING-18",
+    "BLOCKING-19",
+    "BLOCKING-20",
+    "BLOCKING-21"
+  ],
+  "rules": {
+    "QS-01": {
+      "description": "Qualifying service runs from first regular entry to retirement, death, or notional superannuation.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.1"
+    },
+    "QS-07": {
+      "description": "Fractions of a year: 6 months or more rounds up to a full year; less than 6 months is ignored.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.1"
+    },
+    "QS-08": {
+      "description": "A maximum of 30 years is reckoned for pension, restated by the 2024 amendment's formula.",
+      "citation": "FD notification 2 December 2024, rule 4.4(1); BRAIN §9.1"
+    },
+    "QS-10": {
+      "description": "Superannuation at age 60, taking effect on the afternoon of the day preceding the 60th birthday.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.1"
+    },
+    "QS-16": {
+      "description": "Day-counting convention for qualifying service is EXCLUSIVE of the date of first entry.",
+      "citation": "BRAIN §9.1; convention fixed by this pack",
+      "unverified": "BLOCKING-16"
+    },
+    "EMOL-BASE": {
+      "description": "The pension base is the average BASIC PAY, INCLUDING PERSONAL PAY, over the last three years, reckoned from 1 July of each of the three years before retirement. Not last-drawn, and not the six-component reckonable pay.",
+      "citation": "FD notification 2 December 2024, substituting rule 4.4(4)"
+    },
+    "EMOL-NOTE-1": {
+      "description": "Pay drawn in an autonomous or semi-autonomous body whose authorised capital is wholly subscribed by the Federal and/or a Provincial Government, in a post whose appointment and salary are fixed by Government, counts as pay drawn in Government service.",
+      "citation": "FD notification 2 December 2024, rule 4.4(4) Note (1)"
+    },
+    "EMOL-NOTE-2": {
+      "description": "'Pay' excludes pay drawn in Foreign Service and additional pay for performing the duties of another post.",
+      "citation": "FD notification 2 December 2024, rule 4.4(4) Note (2)"
+    },
+    "CALC-01": {
+      "description": "Gross pension per month = average basic pay (EMOL-BASE) x length of service, capped at 30 years, x 7 / 300.",
+      "citation": "FD notification 2 December 2024, rule 4.4(1)"
+    },
+    "VOL-RED-01": {
+      "description": "On VOLUNTARY retirement the pension is reduced by a factor set by age at retirement: 59 years 2%, 58 years 4%, 57 years 6%, 56 years 8%, 55 years 10%. The amendment states no factor below 55 or above 59.",
+      "citation": "FD notification 2 December 2024, rule 4.4(1) proviso",
+      "unverified": "BLOCKING-19"
+    },
+    "INC-01": {
+      "description": "The annual pension increase is granted at 50% of the adhoc relief allowance sanctioned for the respective financial year.",
+      "citation": "FD notification 2 December 2024, rule 4.4(1) proviso"
+    },
+    "FAM-IS-01": {
+      "description": "On death in service the deceased's pay continues to the family until the notional superannuation date; family pension commences thereafter.",
+      "citation": "FD.SR-1/3-10/2004 dated 15-08-2017"
+    },
+    "FAM-IS-03": {
+      "description": "Family pension = gross pension x 75/100 per month.",
+      "citation": "Punjab FD reformed pension procedure; BRAIN §9.7"
+    },
+    "FAM-IS-04": {
+      "description": "Gratuity on death in service. INTERPRETATION DISPUTED - two readings, no single figure.",
+      "citation": "FD-SR-II-4-108/2010(D) dated 15-07-2010; relief-package table",
+      "unverified": "BLOCKING-06"
+    },
+    "FAM-IS-05": {
+      "description": "Family pension commences the day after the notional superannuation date.",
+      "citation": "FD.SR-1/3-10/2004 dated 15-08-2017"
+    },
+    "FAM-DUR-01": {
+      "description": "A spouse's family pension runs for 10 years from commencement, or until re-marriage, whichever is earlier.",
+      "citation": "FD notification 2 December 2024, substituting rule 4.10(1)"
+    },
+    "FAM-DUR-02": {
+      "description": "An ISSUELESS spouse receives family pension for life, or until re-marriage. The 10-year limit does not apply.",
+      "citation": "FD notification 2 December 2024, rule 4.10(1) first proviso"
+    },
+    "FAM-DUR-03": {
+      "description": "Where the servant had more than one wife, the family pension is divided EQUALLY among the widows.",
+      "citation": "FD notification 2 December 2024, rule 4.10(1) second proviso"
+    },
+    "ADD-02": {
+      "description": "Medical allowance: 25% of pension for BPS 1-15, 20% for BPS 16 and above. BASE DISPUTED.",
+      "citation": "Long-standing FD rate; base unresolved",
+      "unverified": "BLOCKING-03"
+    },
+    "ADD-03": {
+      "description": "Minimum pension and minimum family pension floors, per FD notification.",
+      "citation": "Punjab FD notification - current values not loaded",
+      "unverified": "BLOCKING-02"
+    },
+    "COMM-01": {
+      "description": "Maximum commutation is 25% of gross pension. The 2024 amendment substituted '25%' for 'one half' in rule 8.1, superseding the 35% this engine previously applied for Punjab.",
+      "citation": "FD notification 2 December 2024, amending rule 8.1"
+    },
+    "COMM-TABLE": {
+      "description": "Age factor by age next birthday. The loaded table is INCOMPLETE - four benchmark ages only.",
+      "citation": "Pension Rules / Compendium 2018 - full table not yet obtained",
+      "unverified": "BLOCKING-05"
+    },
+    "FMT-01": {
+      "description": "Monthly pension amounts round to the nearest whole rupee, half up.",
+      "citation": "BRAIN §9.14"
+    },
+    "EMOL-07": {
+      "description": "Orderly allowance. Whether it is reckonable was disputed under the pre-amendment base. The 2024 amendment narrows the base to basic pay including personal pay, which excludes it - but the amendment does not say so in terms, so the dispute is recorded rather than declared resolved.",
+      "citation": "FD notification 2 December 2024, rule 4.4(4); BRAIN §9.3",
+      "unverified": "BLOCKING-18"
+    }
+  },
+  "reference_data": {
+    "_note_on_the_base": [
+      "The 2024 amendment substituted rule 4.4(4) in full. The base is now an AVERAGE over",
+      "three years of two components, where it was a last-drawn figure over six.",
+      "",
+      "The engine cannot compute this from a single pay slip. It needs the basic pay and",
+      "personal pay in force on 1 July in each of the three years before retirement, which",
+      "means three pay records, not one. Until the extraction supplies them, a determination",
+      "on this pack has to say so rather than substitute the last-drawn figure -- substituting",
+      "would overstate a pension for life on every rising pay scale."
+    ],
+    "pension_base": {
+      "method": "average_last_3_years",
+      "years_averaged": "3",
+      "reckoned_from_month": "7",
+      "reckoned_from_day": "1",
+      "components": [
+        "basic_pay",
+        "personal_pay"
+      ]
+    },
+    "reckonable_components": [
+      "basic_pay",
+      "personal_pay"
+    ],
+    "qualifying_service": {
+      "max_years_reckoned": "30",
+      "min_years_for_monthly_pension": "10",
+      "min_years_for_service_gratuity": "5",
+      "round_up_from_months": "6",
+      "superannuation_age": "60",
+      "day_counting": "exclusive"
+    },
+    "gross_pension": {
+      "numerator": "7",
+      "denominator": "300"
+    },
+    "_note_on_voluntary_retirement": [
+      "The table states factors for ages 55 to 59 only. It says nothing about a voluntary",
+      "retirement below 55, and nothing about one at 60 or above -- at 60 superannuation",
+      "applies and no reduction arises. An age outside the table raises rather than",
+      "interpolating or defaulting to zero (BLOCKING-19): a missing factor is not a 0%",
+      "factor, and treating it as one would pay a full pension where a reduced one is due."
+    ],
+    "voluntary_retirement_reduction_percent_by_age": {
+      "55": "10",
+      "56": "8",
+      "57": "6",
+      "58": "4",
+      "59": "2"
+    },
+    "annual_increase": {
+      "percent_of_adhoc_relief": "50",
+      "_note": "50% of the adhoc relief allowance sanctioned for the respective financial year. The adhoc relief rates themselves are annual notifications and are not loaded (BLOCKING-20)."
+    },
+    "family_pension_death_in_service": {
+      "rate_numerator": "75",
+      "rate_denominator": "100",
+      "gratuity_rate_numerator": "25",
+      "gratuity_rate_denominator": "100"
+    },
+    "family_pension_duration": {
+      "spouse_years": "10",
+      "spouse_ends_on_remarriage": true,
+      "issueless_spouse_for_life": true,
+      "multiple_widows_share": "equal"
+    },
+    "medical_allowance": {
+      "bps_1_to_15": "25",
+      "bps_16_and_above": "20",
+      "denominator": "100",
+      "base": null,
+      "base_candidates": [
+        "family_pension",
+        "gross_pension"
+      ]
+    },
+    "commutation": {
+      "max_percent_of_gross": "25",
+      "months_multiplier": "12",
+      "table_is_complete": false,
+      "age_factor_by_age_next_birthday": {
+        "20": "40.5043",
+        "60": "12.3719",
+        "70": "7.8778",
+        "80": "4.6321"
+      }
+    },
+    "minimum_pension": {
+      "pension": null,
+      "family_pension": null
+    },
+    "reckonable_disputed": [
+      "orderly_allowance"
+    ]
+  },
+  "_blocking_21_pack_selection": {
+    "id": "BLOCKING-21",
+    "question": "Which date selects the rule pack for a death in service: the date of death, or the notional superannuation date on which the family pension commences?",
+    "why_it_matters": "The December 2024 amendment falls between the two on the reference case. Death 29-07-2021 selects the pre-amendment pack; notional superannuation 18-02-2026 selects the amended one, which narrows the base from six pay components to a three-year average of two. The same case computes differently depending on the answer.",
+    "assumed_pending_a_ruling": "The date of the event. A pension right crystallises when the servant dies or retires, and this engine will not apply an amendment made three years after a death unless told to."
+  }
+}

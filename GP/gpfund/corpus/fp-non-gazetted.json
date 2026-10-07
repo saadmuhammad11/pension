@@ -1,0 +1,721 @@
+{
+ "claim": {
+  "amount": 74178,
+  "basis": "100% of the balance on Form 06, Rs 74,178 on the June 2026 SAP pay slip",
+  "residualMadeOf": "the 2025-26 interest (Rs 8,154), credited after the June pay slip was drawn"
+ },
+ "custom": [
+  "NG-ADJUST",
+  "NG-PERIOD",
+  "NG-SCALE"
+ ],
+ "dept": "Highway Mechanical Division, Lahore (C&W)",
+ "diary": "214465 / 989082, 11-08-2026",
+ "docs": {
+  "changeForm": {
+   "cnic": "00001-0000102-9",
+   "ddoSigned": true,
+   "ddoStamp": "Executive Engineer, Highway Mechanical Division, Lahore",
+   "label": "FORM PAY 06",
+   "name": "Fazal Din",
+   "note": "100% of balance ticked. \"For the month of 08/2026\" is the processing month of the entry, not a deduction month.",
+   "oldGpfNo": "017-00-171471",
+   "page": 5,
+   "personalNo": "90000374",
+   "present": true,
+   "sigKind": "signature"
+  },
+  "cnics": [
+   {
+    "attested": true,
+    "attestedBy": "Executive Engineer, HMD Lahore",
+    "expiry": "lifetime",
+    "name": "Fazal Din",
+    "number": "00001-0000102-9",
+    "page": 3,
+    "type": "old",
+    "whose": "subscriber"
+   }
+  ],
+  "covering": {
+   "author": "the Executive Engineer, Highway Mechanical Division, Lahore",
+   "nature": "Pre-printed forwarding endorsement at the foot of the GPF-10",
+   "page": 1,
+   "present": true
+  },
+  "gpf10": {
+   "accountNo": "90000374",
+   "corroboration": "The old number 017-00-171471 is on Form 06, the Service Book cover and the SAP pay slip (Old # 01700171471)",
+   "crop": "fp-non-gazetted_p001_gpf10_name_dor_account.png",
+   "missing": [
+    "old GP Fund A/c number"
+   ],
+   "page": 1,
+   "present": true
+  },
+  "notification": {
+   "crop": "fp-non-gazetted_p002_office_order_402_body.png",
+   "date": "03-06-2026",
+   "label": "Retirement office order",
+   "no": "402/E/HMC",
+   "note": "Driver (BS-05), retired w.e.f. 09-06-2026 (A.N.) on superannuation; attested by the Executive Engineer HMD Lahore.",
+   "page": 2,
+   "present": true
+  },
+  "serviceBook": {
+   "entries": {
+    "dor": false,
+    "leave": false,
+    "order": false
+   },
+   "note": "cover No. 3194307 and the particulars page only",
+   "pages": [
+    6,
+    7
+   ],
+   "present": true
+  }
+ },
+ "family": "FINAL_PAYMENT",
+ "gazetted": "non-gazetted",
+ "key": "fp-non-gazetted",
+ "kind": "final",
+ "label": "Final Payment, Non-Gazetted",
+ "note": "Fazal Din, Driver, retired 09-06-2026. SAP pay slip and report in the case. Service Book pages lack the retirement entries; SAP shows an unexplained posting of Rs 74,178.",
+ "pages": 9,
+ "persNos": [
+  {
+   "doc": "GPF-10 (account no.)",
+   "page": 1,
+   "value": "90000374"
+  },
+  {
+   "doc": "FORM PAY 06",
+   "page": 5,
+   "value": "90000374"
+  },
+  {
+   "doc": "SAP pay slip, June 2026",
+   "page": 8,
+   "value": "90000374"
+  },
+  {
+   "doc": "GPF Final Re-calculation Report",
+   "page": 9,
+   "value": "90000374"
+  }
+ ],
+ "personnelNo": "90000374",
+ "qr": [
+  {
+   "decoded": false,
+   "doc": "old-style CNIC back",
+   "id": "cnic-barcode",
+   "page": 4,
+   "remedy": "Verify CNIC 00001-0000102-9 through NADRA Verisys, or upload a clear scan of the back of the card.",
+   "symbology": "PDF417 barcode",
+   "why": "halftone photocopy"
+  }
+ ],
+ "record": [
+  [
+   "Subscriber",
+   "Fazal Din s/o Qutab-ud-Din, Driver",
+   "GPF-10 · office order · CNIC · SAP",
+   0.98,
+   1
+  ],
+  [
+   "Personnel no. / GP Fund A/c",
+   "90000374",
+   "GPF-10 · Form 06 · Service Book · SAP",
+   0.99,
+   1
+  ],
+  [
+   "Old GP Fund A/c",
+   "017-00-171471 (SAP Old # 01700171471); not on the GPF-10",
+   "Form 06 · Service Book · pay slip",
+   0.97,
+   5
+  ],
+  [
+   "CNIC",
+   "00001-0000102-9 (old-style card, attested)",
+   "CNIC · Form 06 · pay slip",
+   0.97,
+   3
+  ],
+  [
+   "Retirement",
+   "09-06-2026 (A.N.), Office Order 402/E/HMC of 03-06-2026",
+   "Office order",
+   0.99,
+   2
+  ],
+  [
+   "Scale",
+   "BS-05 on the office order; 06 on Form 06 and the SAP pay slip",
+   "Office order · Form 06 · pay slip",
+   0.93,
+   2
+  ],
+  [
+   "DDO code",
+   "LO5361 (previous version misread it as 405361)",
+   "Form 06 · pay slip",
+   0.95,
+   5
+  ],
+  [
+   "SAP balance, June 2026 pay slip",
+   "Rs 74,178 (principal, before 2025-26 interest)",
+   "SAP pay slip",
+   0.98,
+   8
+  ],
+  [
+   "SAP closing 30-06-2026",
+   "Rs 82,332",
+   "SAP re-calculation report",
+   0.98,
+   9
+  ],
+  [
+   "SAP posting 2026-27",
+   "Permanent advance Rs 74,178, leaving Rs 8,154",
+   "SAP re-calculation report",
+   0.96,
+   9
+  ],
+  [
+   "Service Book",
+   "Cover and particulars page only",
+   "Pages 6 and 7",
+   0.95,
+   6
+  ]
+ ],
+ "sap": {
+  "payslip": {
+   "attested": false,
+   "basicPay": 40960,
+   "bps": "06",
+   "cnic": "0000100001029",
+   "ddoCode": "LO5361 XEN Highways Mechanical Division",
+   "designation": "DRIVER",
+   "gpfBalance": 74178,
+   "gpfNo": "UPDATED",
+   "gpfSubscription": 1420,
+   "loanBalance": null,
+   "loanInstalment": null,
+   "month": "June 2026",
+   "name": "FAZAL DIN",
+   "oldGpfNo": "01700171471",
+   "osdPost": "",
+   "page": 8,
+   "persNo": "90000374"
+  },
+  "recalc": {
+   "page": 9,
+   "persNo": "90000374",
+   "reportDate": "10.09.2026",
+   "rows": [
+    {
+     "adjustments": 0,
+     "closing": 77,
+     "end": "30.06.1989",
+     "interest": 2,
+     "opening": 0,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1988",
+     "subscription": 75,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 427,
+     "end": "30.06.1990",
+     "interest": 50,
+     "opening": 77,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1989",
+     "subscription": 300,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 849,
+     "end": "30.06.1991",
+     "interest": 122,
+     "opening": 427,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1990",
+     "subscription": 300,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 1358,
+     "end": "30.06.1992",
+     "interest": 209,
+     "opening": 849,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1991",
+     "subscription": 300,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 1973,
+     "end": "30.06.1993",
+     "interest": 315,
+     "opening": 1358,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1992",
+     "subscription": 300,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 2704,
+     "end": "30.06.1994",
+     "interest": 431,
+     "opening": 1973,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1993",
+     "subscription": 300,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 3579,
+     "end": "30.06.1995",
+     "interest": 575,
+     "opening": 2704,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1994",
+     "subscription": 300,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 4935,
+     "end": "30.06.1996",
+     "interest": 781,
+     "opening": 3579,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1995",
+     "subscription": 575,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 6681,
+     "end": "30.06.1997",
+     "interest": 1146,
+     "opening": 4935,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1996",
+     "subscription": 600,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 8876,
+     "end": "30.06.1998",
+     "interest": 1595,
+     "opening": 6681,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1997",
+     "subscription": 600,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 11500,
+     "end": "30.06.1999",
+     "interest": 2074,
+     "opening": 8876,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1998",
+     "subscription": 550,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 14685,
+     "end": "30.06.2000",
+     "interest": 2465,
+     "opening": 11500,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.1999",
+     "subscription": 720,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 18056,
+     "end": "30.06.2001",
+     "interest": 2291,
+     "opening": 14685,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2000",
+     "subscription": 1080,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 22433,
+     "end": "30.06.2002",
+     "interest": 2817,
+     "opening": 18056,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2001",
+     "subscription": 1560,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 27886,
+     "end": "30.06.2003",
+     "interest": 3413,
+     "opening": 22433,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2002",
+     "subscription": 2040,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 24120,
+     "end": "30.06.2004",
+     "interest": 3694,
+     "opening": 27886,
+     "permanentAdvance": 0,
+     "recTempAdvance": 500,
+     "start": "01.07.2003",
+     "subscription": 2040,
+     "tempAdvance": 10000
+    },
+    {
+     "adjustments": 670,
+     "closing": 36327,
+     "end": "30.06.2005",
+     "interest": 3497,
+     "opening": 24120,
+     "permanentAdvance": 0,
+     "recTempAdvance": 6000,
+     "start": "01.07.2004",
+     "subscription": 2040,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 45649,
+     "end": "30.06.2006",
+     "interest": 4182,
+     "opening": 36327,
+     "permanentAdvance": 0,
+     "recTempAdvance": 3000,
+     "start": "01.07.2005",
+     "subscription": 2140,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 53086,
+     "end": "30.06.2007",
+     "interest": 5157,
+     "opening": 45649,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2006",
+     "subscription": 2280,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 62368,
+     "end": "30.06.2008",
+     "interest": 6802,
+     "opening": 53086,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2007",
+     "subscription": 2480,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 36322,
+     "end": "30.06.2009",
+     "interest": 9134,
+     "opening": 62368,
+     "permanentAdvance": 0,
+     "recTempAdvance": 1100,
+     "start": "01.07.2008",
+     "subscription": 3320,
+     "tempAdvance": 39600
+    },
+    {
+     "adjustments": 0,
+     "closing": 59352,
+     "end": "30.06.2010",
+     "interest": 6350,
+     "opening": 36322,
+     "permanentAdvance": 0,
+     "recTempAdvance": 13200,
+     "start": "01.07.2009",
+     "subscription": 3480,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 85743,
+     "end": "30.06.2011",
+     "interest": 9711,
+     "opening": 59352,
+     "permanentAdvance": 0,
+     "recTempAdvance": 13200,
+     "start": "01.07.2010",
+     "subscription": 3480,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 116352,
+     "end": "30.06.2012",
+     "interest": 13104,
+     "opening": 85743,
+     "permanentAdvance": 0,
+     "recTempAdvance": 12100,
+     "start": "01.07.2011",
+     "subscription": 5405,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 59957,
+     "end": "30.06.2013",
+     "interest": 8025,
+     "opening": 116352,
+     "permanentAdvance": 70000,
+     "recTempAdvance": 0,
+     "start": "01.07.2012",
+     "subscription": 5580,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 74039,
+     "end": "30.06.2014",
+     "interest": 8502,
+     "opening": 59957,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2013",
+     "subscription": 5580,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 36226,
+     "end": "30.06.2015",
+     "interest": 6607,
+     "opening": 74039,
+     "permanentAdvance": 50000,
+     "recTempAdvance": 0,
+     "start": "01.07.2014",
+     "subscription": 5580,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 46163,
+     "end": "30.06.2016",
+     "interest": 4357,
+     "opening": 36226,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2015",
+     "subscription": 5580,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 23444,
+     "end": "30.06.2017",
+     "interest": 4044,
+     "opening": 46163,
+     "permanentAdvance": 35000,
+     "recTempAdvance": 0,
+     "start": "01.07.2016",
+     "subscription": 8237,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 37382,
+     "end": "30.06.2018",
+     "interest": 3403,
+     "opening": 23444,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2017",
+     "subscription": 10535,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 54256,
+     "end": "30.06.2019",
+     "interest": 6194,
+     "opening": 37382,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2018",
+     "subscription": 10680,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 24441,
+     "end": "30.06.2020",
+     "interest": 4505,
+     "opening": 54256,
+     "permanentAdvance": 45000,
+     "recTempAdvance": 0,
+     "start": "01.07.2019",
+     "subscription": 10680,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 37509,
+     "end": "30.06.2021",
+     "interest": 2388,
+     "opening": 24441,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2020",
+     "subscription": 10680,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 53557,
+     "end": "30.06.2022",
+     "interest": 5368,
+     "opening": 37509,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2021",
+     "subscription": 10680,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 76870,
+     "end": "30.06.2023",
+     "interest": 8673,
+     "opening": 53557,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2022",
+     "subscription": 14640,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 35985,
+     "end": "30.06.2024",
+     "interest": 11155,
+     "opening": 76870,
+     "permanentAdvance": 68000,
+     "recTempAdvance": 0,
+     "start": "01.07.2023",
+     "subscription": 15960,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 58558,
+     "end": "30.06.2025",
+     "interest": 5623,
+     "opening": 35985,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2024",
+     "subscription": 16950,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": -1420,
+     "closing": 82332,
+     "end": "30.06.2026",
+     "interest": 8154,
+     "opening": 58558,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2025",
+     "subscription": 17040,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 8154,
+     "end": "30.06.2027",
+     "interest": 0,
+     "opening": 82332,
+     "permanentAdvance": 74178,
+     "recTempAdvance": 0,
+     "start": "01.07.2026",
+     "subscription": 0,
+     "tempAdvance": 0
+    }
+   ]
+  },
+  "source": "case"
+ },
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000374\nName: FAZAL DIN\nDesignation: DRIVER\nCNIC: 0000100001029\nMonth: June 2026\nBPS: 06\nDDO Code: LO5361 XEN Highways Mechanical Division\nGPF No: UPDATED\nOld GPF No: 01700171471\nGPF Balance: 74178\nGPF Subscription: 1420\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 40960\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000374\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.1988|30.06.1989|0|75|0|0|0|0|2|77\n01.07.1989|30.06.1990|77|300|0|0|0|0|50|427\n01.07.1990|30.06.1991|427|300|0|0|0|0|122|849\n01.07.1991|30.06.1992|849|300|0|0|0|0|209|1358\n01.07.1992|30.06.1993|1358|300|0|0|0|0|315|1973\n01.07.1993|30.06.1994|1973|300|0|0|0|0|431|2704\n01.07.1994|30.06.1995|2704|300|0|0|0|0|575|3579\n01.07.1995|30.06.1996|3579|575|0|0|0|0|781|4935\n01.07.1996|30.06.1997|4935|600|0|0|0|0|1146|6681\n01.07.1997|30.06.1998|6681|600|0|0|0|0|1595|8876\n01.07.1998|30.06.1999|8876|550|0|0|0|0|2074|11500\n01.07.1999|30.06.2000|11500|720|0|0|0|0|2465|14685\n01.07.2000|30.06.2001|14685|1080|0|0|0|0|2291|18056\n01.07.2001|30.06.2002|18056|1560|0|0|0|0|2817|22433\n01.07.2002|30.06.2003|22433|2040|0|0|0|0|3413|27886\n01.07.2003|30.06.2004|27886|2040|0|10000|500|0|3694|24120\n01.07.2004|30.06.2005|24120|2040|670|0|6000|0|3497|36327\n01.07.2005|30.06.2006|36327|2140|0|0|3000|0|4182|45649\n01.07.2006|30.06.2007|45649|2280|0|0|0|0|5157|53086\n01.07.2007|30.06.2008|53086|2480|0|0|0|0|6802|62368\n01.07.2008|30.06.2009|62368|3320|0|39600|1100|0|9134|36322\n01.07.2009|30.06.2010|36322|3480|0|0|13200|0|6350|59352\n01.07.2010|30.06.2011|59352|3480|0|0|13200|0|9711|85743\n01.07.2011|30.06.2012|85743|5405|0|0|12100|0|13104|116352\n01.07.2012|30.06.2013|116352|5580|0|0|0|70000|8025|59957\n01.07.2013|30.06.2014|59957|5580|0|0|0|0|8502|74039\n01.07.2014|30.06.2015|74039|5580|0|0|0|50000|6607|36226\n01.07.2015|30.06.2016|36226|5580|0|0|0|0|4357|46163\n01.07.2016|30.06.2017|46163|8237|0|0|0|35000|4044|23444\n01.07.2017|30.06.2018|23444|10535|0|0|0|0|3403|37382\n01.07.2018|30.06.2019|37382|10680|0|0|0|0|6194|54256\n01.07.2019|30.06.2020|54256|10680|0|0|0|45000|4505|24441\n01.07.2020|30.06.2021|24441|10680|0|0|0|0|2388|37509\n01.07.2021|30.06.2022|37509|10680|0|0|0|0|5368|53557\n01.07.2022|30.06.2023|53557|14640|0|0|0|0|8673|76870\n01.07.2023|30.06.2024|76870|15960|0|0|0|68000|11155|35985\n01.07.2024|30.06.2025|35985|16950|0|0|0|0|5623|58558\n01.07.2025|30.06.2026|58558|17040|-1420|0|0|0|8154|82332\n01.07.2026|30.06.2027|82332|0|0|0|0|74178|0|8154\n",
+ "signatures": [
+  {
+   "authority": "Executive Engineer, Highway Mechanical Division, Lahore",
+   "bbox": [
+    1300,
+    2270,
+    2150,
+    2740
+   ],
+   "crop": "fp-non-gazetted_p001_gpf10_ddo_ee_signature_stamp.png",
+   "doc": "GPF-10 forwarding",
+   "forMarker": false,
+   "id": "gpf10-ddo",
+   "page": 1,
+   "role": "ddo",
+   "roleLabel": "DDO signature",
+   "signedBy": "Executive Engineer, Highway Mechanical Division"
+  }
+ ],
+ "slug": "fp-non-gazetted",
+ "sub": "Final payment on superannuation, non-gazetted",
+ "subject": "Fazal Din, Driver (BS-05/06)",
+ "thumbs": [],
+ "verifications": {}
+}

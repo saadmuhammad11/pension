@@ -1,0 +1,45 @@
+{
+  "_about": "Specimen signatures of Pension Sanctioning Authorities, as sent to the DAG (Pension) by the administrative departments. Reference data (BUILD §5, SOP §4.8): each entry records its authority -- the department's own letter -- and the dates it is in force. A new specimen for the same post closes the old one by setting its effective_to; nothing is deleted. Loaded by the Reference-Data Administrator; see rules/specimens.py and docs/specimen-signatures.md.",
+  "specimens": [
+    {
+      "id": "SGAD-AS-ADMN-2025-09-09",
+      "department": "Services & General Administration Department",
+      "department_aliases": [
+        "S&GAD",
+        "S & GAD",
+        "SGAD",
+        "Services and General Administration",
+        "Services & General Administration"
+      ],
+      "post": "Additional Secretary (Admn)",
+      "post_aliases": [
+        "Additional Secretary (Admn.)",
+        "Additional Secretary (Administration)",
+        "Addl. Secretary (Admn)",
+        "Addl Secretary Admn",
+        "AS (Admn)"
+      ],
+      "officer": "Mr. Mudassir Ahmed Shah",
+      "capacity": "Pension Sanctioning Authority",
+      "scope": "ex-PCS / ex-PSS & PMS (BS-17) officers",
+      "effective_from": "2025-09-09",
+      "effective_to": null,
+      "stamp_text": "Additional Secretary (Admn.) / Govt. of the Punjab / S&GAD",
+      "images": [
+        "SGAD-AS-ADMN-2025-09-09-1.jpg",
+        "SGAD-AS-ADMN-2025-09-09-2.jpg",
+        "SGAD-AS-ADMN-2025-09-09-3.jpg"
+      ],
+      "authority": {
+        "letter_no": "No.SO.A.III(S&GAD)7-7/2025",
+        "dated": "2025-09-09",
+        "from": "Section Officer (Admn-III), S&GAD (Zafar Ahmad)",
+        "to": "Deputy Accountant General (Pension), O/o the Accountant General, Punjab",
+        "received": "PFC diary 181552, 19-09-2025",
+        "source_file": "S&GAD specimen sign.pdf",
+        "source_sha256": "0526c7a224d520967ba232c7fcc1d5707106150f4843ae83f886dc6e9973906d",
+        "images_from": "page 2, the three specimen rows, each with the officer's stamp"
+      }
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "id": "PB-2026.02",
+  "jurisdiction": "PUNJAB",
+  "cohort": "DEFINED_BENEFIT",
+  "effective_from": "2017-08-15",
+  "effective_to": "2024-12-01",
+  "_note_on_types": [
+    "Every numeric value in this file is a STRING, deliberately.",
+    "json.load turns a JSON number into a Python float, and FMT-02 forbids float money.",
+    "A commutation factor of 12.3719 read as a float and multiplied by a gross pension is",
+    "exactly the class of silent precision loss the rule exists to prevent, so the loader",
+    "refuses floats and converts these strings with Decimal instead."
+  ],
+  "unverified": [
+    "BLOCKING-01",
+    "BLOCKING-02",
+    "BLOCKING-03",
+    "BLOCKING-05",
+    "BLOCKING-06",
+    "BLOCKING-16",
+    "BLOCKING-18",
+    "BLOCKING-21"
+  ],
+  "rules": {
+    "QS-01": {
+      "description": "Qualifying service runs from first regular entry to retirement, death, or notional superannuation.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.1"
+    },
+    "QS-07": {
+      "description": "Fractions of a year: 6 months or more rounds up to a full year; less than 6 months is ignored.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.1"
+    },
+    "QS-08": {
+      "description": "A maximum of 30 years is reckoned for pension. At the cap the gross pension is 70% of emoluments.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.1"
+    },
+    "QS-10": {
+      "description": "Superannuation at age 60, taking effect on the afternoon of the day preceding the 60th birthday.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.1"
+    },
+    "QS-16": {
+      "description": "Day-counting convention for qualifying service is EXCLUSIVE of the date of first entry.",
+      "citation": "BRAIN §9.1; convention fixed by this pack",
+      "unverified": "BLOCKING-16"
+    },
+    "EMOL-BASE": {
+      "description": "Reckonable emoluments are the LAST DRAWN reckonable pay, not a 24-month average.",
+      "citation": "Punjab FD; federal 24-month averaging NOT adopted for Punjab on present evidence",
+      "unverified": "BLOCKING-01"
+    },
+    "CALC-01": {
+      "description": "Gross pension per month = reckonable emoluments x qualifying service x 7 / 300.",
+      "citation": "Punjab Civil Services Pension Rules; BRAIN §9.2"
+    },
+    "FAM-IS-01": {
+      "description": "On death in service the deceased's pay continues to the family until the notional superannuation date; family pension commences thereafter.",
+      "citation": "FD.SR-1/3-10/2004 dated 15-08-2017"
+    },
+    "FAM-IS-03": {
+      "description": "Family pension = gross pension x 75/100 per month.",
+      "citation": "Punjab FD reformed pension procedure; BRAIN §9.7"
+    },
+    "FAM-IS-04": {
+      "description": "Gratuity on death in service. INTERPRETATION DISPUTED - two readings, no single figure.",
+      "citation": "FD-SR-II-4-108/2010(D) dated 15-07-2010; relief-package table",
+      "unverified": "BLOCKING-06"
+    },
+    "FAM-IS-05": {
+      "description": "Family pension commences the day after the notional superannuation date.",
+      "citation": "FD.SR-1/3-10/2004 dated 15-08-2017"
+    },
+    "ADD-02": {
+      "description": "Medical allowance: 25% of pension for BPS 1-15, 20% for BPS 16 and above. BASE DISPUTED.",
+      "citation": "Long-standing FD rate; base unresolved",
+      "unverified": "BLOCKING-03"
+    },
+    "ADD-03": {
+      "description": "Minimum pension and minimum family pension floors, per FD notification.",
+      "citation": "Punjab FD notification - current values not loaded",
+      "unverified": "BLOCKING-02"
+    },
+    "COMM-01": {
+      "description": "Punjab maximum commutation is 35% of gross pension. The federal 25% does NOT apply to Punjab.",
+      "citation": "Punjab FD prescribed forms; BRAIN §9.4"
+    },
+    "COMM-TABLE": {
+      "description": "Age factor by age next birthday. The loaded table is INCOMPLETE - four benchmark ages only.",
+      "citation": "Pension Rules / Compendium 2018 - full table not yet obtained",
+      "unverified": "BLOCKING-05"
+    },
+    "FMT-01": {
+      "description": "Monthly pension amounts round to the nearest whole rupee, half up.",
+      "citation": "BRAIN §9.14"
+    },
+    "EMOL-07": {
+      "description": "Orderly allowance. Whether it is reckonable for pension is DISPUTED - three project sources give three readings. No determination may sum it either way until resolved.",
+      "citation": "BRAIN §9.3 lists EMOL-07 as reckonable; Form B-I/D-I Note 2 lists only the six components and places 'Orderly Allowance (if any)' as a separate numbered clause OUTSIDE 'Total pay'; scope/ai-system-scope §3.2 says '6-component reckonable pay + orderly allowance'",
+      "unverified": "BLOCKING-18"
+    }
+  },
+  "reference_data": {
+    "_note_on_reckonable_components": [
+      "The closed list of Note 2, as component names. extraction/classify.py maps a PRINTED",
+      "LABEL onto one of these names - that is a reading task. Whether a name is reckonable",
+      "is a RULE with a rupee consequence, so it lives here, in versioned data, and is the",
+      "single source of truth the engine sums against.",
+      "On the golden case the excluded allowances total 161,765 against reckonable pay of",
+      "192,030: moving one label across this line changes a pension for life."
+    ],
+    "reckonable_components": [
+      "basic_pay",
+      "special_pay",
+      "personal_pay",
+      "qualification_pay",
+      "technical_pay",
+      "senior_post_allowance"
+    ],
+    "qualifying_service": {
+      "max_years_reckoned": "30",
+      "min_years_for_monthly_pension": "10",
+      "min_years_for_service_gratuity": "5",
+      "round_up_from_months": "6",
+      "superannuation_age": "60",
+      "day_counting": "exclusive"
+    },
+    "gross_pension": {
+      "numerator": "7",
+      "denominator": "300"
+    },
+    "family_pension_death_in_service": {
+      "rate_numerator": "75",
+      "rate_denominator": "100",
+      "gratuity_rate_numerator": "25",
+      "gratuity_rate_denominator": "100"
+    },
+    "medical_allowance": {
+      "bps_1_to_15": "25",
+      "bps_16_and_above": "20",
+      "denominator": "100",
+      "base": null,
+      "base_candidates": [
+        "family_pension",
+        "gross_pension"
+      ]
+    },
+    "commutation": {
+      "max_percent_of_gross": "35",
+      "months_multiplier": "12",
+      "table_is_complete": false,
+      "age_factor_by_age_next_birthday": {
+        "20": "40.5043",
+        "60": "12.3719",
+        "70": "7.8778",
+        "80": "4.6321"
+      }
+    },
+    "minimum_pension": {
+      "pension": null,
+      "family_pension": null
+    },
+    "_note_on_disputed_components": [
+      "orderly_allowance is NOT in reckonable_components and NOT simply excluded either.",
+      "The prescribed form prints the six Note-2 components, closes them with 'Total pay Rs.',",
+      "and then asks for '(2) Orderly Allowance (if any) Rs. ____' as a separate clause. That",
+      "layout is also what made the vision model report 'Orderly Allowance 192,030' -- it paired",
+      "the printed total with the label that follows it.",
+      "Summing it would overstate a pension for life; excluding it would understate one. So a",
+      "case that actually carries an orderly allowance raises and routes to human determination",
+      "(BRAIN §15.1: never resolve a BLOCKING item by reasoning)."
+    ],
+    "reckonable_disputed": [
+      "orderly_allowance"
+    ]
+  },
+  "_note_on_dating": [
+    "This pack states the rules as they stood BEFORE the Finance Department amendment of",
+    "2 December 2024 (NO.FD.SR-III-4-244/2023(B)). It was originally dated from 2026-01-01,",
+    "which cannot be right: by then the amendment had been in force for more than a year,",
+    "and this pack contradicts it on the pension base, the commutation ceiling and the",
+    "duration of a spouse's family pension.",
+    "",
+    "The END date is exact -- the amendment took effect the following day. The START date is",
+    "approximate: it is the date of FD.SR-1/3-10/2004 of 15-08-2017, the notification behind",
+    "the family-pension rules here, and is the earliest date this pack can be said to state.",
+    "A case whose governing date falls before it will be refused rather than computed on a",
+    "pack that does not claim to cover it.",
+    "",
+    "It is kept, not deleted: a pension sanctioned under the old rules was lawfully sanctioned",
+    "under them, and an audit years from now must be able to recompute what was actually paid."
+  ],
+  "_blocking_21_pack_selection": {
+    "id": "BLOCKING-21",
+    "question": "Which date selects the rule pack for a death in service: the date of death, or the notional superannuation date on which the family pension commences?",
+    "why_it_matters": "The December 2024 amendment falls between the two on the reference case. Death 29-07-2021 selects the pre-amendment pack; notional superannuation 18-02-2026 selects the amended one, which narrows the base from six pay components to a three-year average of two. The same case computes differently depending on the answer.",
+    "assumed_pending_a_ruling": "The date of the event. A pension right crystallises when the servant dies or retires, and this engine will not apply an amendment made three years after a death unless told to."
+  }
+}

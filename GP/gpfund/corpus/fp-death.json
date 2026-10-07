@@ -1,0 +1,608 @@
+{
+ "claim": {
+  "amount": 92482,
+  "basis": "SAP closing balance at 30-06-2025 of Rs 87,182 plus five months at Rs 1,060",
+  "expected": 92482,
+  "page": 12,
+  "residualMadeOf": "the 2025-26 interest (Rs 8,071) and one further month’s subscription (Rs 1,060), neither in the claim"
+ },
+ "custom": [
+  "DEATH-PERSNO",
+  "DEATH-CLAIM",
+  "DEATH-POSTDEATH",
+  "DEATH-PERIOD"
+ ],
+ "dept": "Govt. Associate College (W) Mustafabad, Lahore (Education)",
+ "diary": "20064, 24-02-2026",
+ "docs": {
+  "changeForm": {
+   "crop": "fp-death_p012_loan_details_amount.png",
+   "ddoCrop": "fp-death_p012_ddo_signature_stamp.png",
+   "ddoSigned": true,
+   "ddoStamp": "Principal, Govt. Associate College (W) Mustafabad",
+   "label": "FORM PAY 06",
+   "name": "Yousaf Masih",
+   "note": "Payee noted as the widow, Mst Zubaida Bibi; amount Rs 92,482; annotated \"(Death case) OSD post created\".",
+   "oldGpfNo": "",
+   "oldGpfNoState": "written as what seems to read \"-nil-\"",
+   "page": 12,
+   "personalNo": "30890417",
+   "present": true,
+   "sigKind": "thumb"
+  },
+  "cnics": [
+   {
+    "attested": true,
+    "attestedBy": "Principal, GAC (W) Mustafabad",
+    "crop": "fp-death_p005_cnic_subscriber_front.png",
+    "name": "Yousaf Masih",
+    "number": "00001-0000107-1",
+    "page": 5,
+    "type": "old",
+    "whose": "deceased subscriber"
+   },
+   {
+    "attested": true,
+    "attestedBy": "Principal, GAC (W) Mustafabad",
+    "crop": "fp-death_p006_cnic_widow_front.png",
+    "name": "Zubaida Bibi",
+    "number": "00001-0000103-8",
+    "page": 6,
+    "sigCrop": "fp-death_p006_cnic_widow_holder_signature_box.png",
+    "type": "smart",
+    "whose": "widow"
+   }
+  ],
+  "covering": {
+   "author": "the Principal, Govt. Associate College (W) Mustafabad",
+   "nature": "Revised GPF-10 issued under Memo No. 667/GACWM dated 24-07-2025 with the printed forwarding line",
+   "page": 1,
+   "present": true
+  },
+  "death": {
+   "affidavit": {
+    "label": "The undertaking on Rs 100 stamp paper",
+    "note": "It covers liability for Government dues, is worded for family pension, is undated, and the claimant has not signed it. The NADRA FRC and the court application support her status but are not the affidavit.",
+    "original": false,
+    "page": 9,
+    "present": true
+   },
+   "heirs": [
+    {
+     "cnicCopy": true,
+     "name": "Zubaida Bibi",
+     "relation": "widow"
+    },
+    {
+     "cnicCopy": false,
+     "name": "Javed Masih",
+     "relation": "son, born 17-08-2004"
+    },
+    {
+     "cnicCopy": false,
+     "name": "Hina Yousaf",
+     "relation": "daughter, born 28-09-2007, 18 since 28-09-2025"
+    }
+   ],
+   "osdAnnotation": {
+    "crop": "fp-death_p012_osd_post_annotation.png",
+    "page": 12,
+    "text": "(Death case) OSD post created",
+    "where": "Form 06 page 12"
+   },
+   "successionNote": "one widow, and the heirs (widow, son, daughter) are all family, so circular A.2(vi) does not require a certificate. The case holds a NADRA decline, given because an heir was a minor, and a court application with no grant.",
+   "successionRequired": false,
+   "widowClaim": true
+  },
+  "gpf10": {
+   "accountNo": "90000417",
+   "crop": "fp-death_p001_item3_family_list_blank.png",
+   "missing": [
+    "item 3(ii), the family members entitled under Rule 1.34, the rule and their applications"
+   ],
+   "page": 1,
+   "present": true
+  },
+  "notification": {
+   "date": "06-04-2024",
+   "label": "Obituary notification",
+   "no": "1612/GACWM",
+   "note": "Death on 03-04-2024; the NADRA death registration certificate agrees.",
+   "page": 2,
+   "present": true
+  },
+  "serviceBook": {
+   "present": false
+  }
+ },
+ "family": "FINAL_PAYMENT",
+ "gazetted": "non-gazetted",
+ "key": "fp-death",
+ "kind": "death",
+ "label": "Final Payment, Death Case",
+ "note": "Yousaf Masih, Sweeper, died 03-04-2024. The Rs 92,482 claim reconciles to SAP. The widow thumbs; no affidavit for lawful widow, no Service Book, CNIC copies missing for two heirs, and Form 06 carries a personnel number one digit off.",
+ "pages": 13,
+ "persNos": [
+  {
+   "doc": "GPF-10 (account no.)",
+   "page": 1,
+   "value": "90000417"
+  },
+  {
+   "doc": "FORM PAY 06",
+   "page": 12,
+   "value": "30890417"
+  },
+  {
+   "doc": "SAP pay slip, November 2023",
+   "page": 11,
+   "value": "90000417"
+  },
+  {
+   "doc": "GPF Final Re-calculation Report",
+   "page": 13,
+   "value": "90000417"
+  }
+ ],
+ "personnelNo": "90000417",
+ "qr": [
+  {
+   "compare": [
+    {
+     "docLabel": "certificate and its Code 39 barcode",
+     "docVal": "300101007531",
+     "field": "document number",
+     "match": true,
+     "qrVal": "300101007531"
+    }
+   ],
+   "crop": "fp-death_p003_qr_decline_cert.png",
+   "decoded": true,
+   "doc": "NADRA succession decline certificate",
+   "host": "id.nadra.gov.pk",
+   "id": "decline-qr",
+   "page": 3,
+   "payload": "https://id.nadra.gov.pk/e-succession_certificate?300101007531",
+   "portal": {
+    "checkedOn": "15-09-2026",
+    "ok": false,
+    "result": "NADRA refused the request from outside its network, HTTP 403"
+   },
+   "route": "online",
+   "symbology": "QR code"
+  },
+  {
+   "compare": [
+    {
+     "docLabel": "certificate",
+     "docVal": "EA80580288",
+     "field": "Code 39 document no.",
+     "match": true,
+     "qrVal": "EA80580288"
+    }
+   ],
+   "crop": "fp-death_p004_qr_frc.png",
+   "decoded": true,
+   "doc": "NADRA family registration certificate",
+   "host": "id.nadra.gov.pk",
+   "id": "frc-qr",
+   "page": 4,
+   "payload": "https://id.nadra.gov.pk/e-frc/verifyFrcApplication?505295769494",
+   "portal": {
+    "checkedOn": "15-09-2026",
+    "ok": false,
+    "result": "NADRA refused the request from outside its network, HTTP 403"
+   },
+   "route": "online",
+   "symbology": "QR code"
+  },
+  {
+   "compare": [
+    {
+     "docLabel": "card",
+     "docVal": "00001-0000103-8",
+     "field": "CNIC number",
+     "match": true,
+     "qrVal": "00001-0000103-8"
+    }
+   ],
+   "crop": "fp-death_p006_qr_smart_cnic_widow.png",
+   "decoded": true,
+   "doc": "widow’s smart CNIC back",
+   "id": "widow-cnic-qr",
+   "page": 6,
+   "payload": "50459132685600001000010381",
+   "symbology": "QR code"
+  },
+  {
+   "compare": [],
+   "crop": "fp-death_p010_qr_death_registration.png",
+   "decoded": true,
+   "doc": "NADRA death registration certificate",
+   "host": "crms.nadra.gov.pk",
+   "id": "death-cert-qr",
+   "page": 10,
+   "payload": "https://crms.nadra.gov.pk/verify?TrackingID=OxyaJaOyf6Rl2ZxYviapTA==",
+   "portal": {
+    "checkedOn": "15-09-2026",
+    "ok": false,
+    "result": "the CRMS server refused the connection"
+   },
+   "route": "online",
+   "symbology": "QR code"
+  },
+  {
+   "decoded": false,
+   "doc": "deceased’s old CNIC back",
+   "id": "old-cnic-barcode",
+   "page": 5,
+   "symbology": "PDF417 barcode",
+   "why": "faded photocopy"
+  }
+ ],
+ "record": [
+  [
+   "Deceased subscriber",
+   "Yousaf Masih s/o Bota Masih, Sweeper (BS-02)",
+   "GPF-10 · obituary · NADRA · SAP",
+   0.98,
+   1
+  ],
+  [
+   "Personnel no. / GP Fund A/c",
+   "90000417; Form 06 reads 30890417",
+   "GPF-10 · SAP · report · Form 06",
+   0.93,
+   12
+  ],
+  [
+   "CNIC",
+   "00001-0000107-1 (old card, attested; the faded copy reads ...071-1, NADRA documents and SAP give ...676-1)",
+   "CNIC · NADRA certificates · pay slip",
+   0.95,
+   5
+  ],
+  [
+   "Death",
+   "03-04-2024 in service; first entry into service 02-11-2008",
+   "Obituary No. 1612/GACWM · NADRA death certificate",
+   0.98,
+   2
+  ],
+  [
+   "Claimant",
+   "Mst Zubaida Bibi, widow, 00001-0000103-8 (smart card)",
+   "CNIC · FRC · Form 06",
+   0.96,
+   6
+  ],
+  [
+   "Legal heirs (NADRA FRC)",
+   "Widow; son Javed Masih (born 17-08-2004); daughter Hina Yousaf (born 28-09-2007, 18 since 28-09-2025)",
+   "FRC · decline certificate · court application",
+   0.95,
+   4
+  ],
+  [
+   "Claimed",
+   "Rs 92,482 on Form 06",
+   "Form 06",
+   0.97,
+   12
+  ],
+  [
+   "SAP basis of the claim",
+   "Closing 30-06-2025 Rs 87,182 plus five months at Rs 1,060",
+   "Re-calculation report",
+   0.97,
+   13
+  ],
+  [
+   "SAP posting",
+   "Permanent advance Rs 92,482 in 2025-26, leaving Rs 9,131",
+   "Re-calculation report",
+   0.97,
+   13
+  ],
+  [
+   "Advances",
+   "Rs 36,000 (2019-20) fully recovered; Rs 78,000 (2023-24) with Rs 60,000 unrecovered, already netted",
+   "Report · pay slip",
+   0.95,
+   13
+  ],
+  [
+   "OSD post",
+   "Form 06 annotated \"(Death case) OSD post created\"; NADRA decline lists \"Creation The OSD Post\"; pay slip on file predates the death",
+   "Form 06 · decline certificate",
+   0.9,
+   12
+  ],
+  [
+   "Succession",
+   "NADRA decline (a minor heir) and a court application; no grant",
+   "Pages 3, 7, 8",
+   0.95,
+   3
+  ]
+ ],
+ "sap": {
+  "payslip": {
+   "attested": true,
+   "basicPay": 20190,
+   "bps": "02",
+   "cnic": "0000100001071",
+   "ddoCode": "L04734 Principal, Govt. Associate College (W) Mustafabad",
+   "designation": "SWEEPER",
+   "gpfBalance": 50791,
+   "gpfNo": "",
+   "gpfSubscription": 1060,
+   "loanBalance": 72000,
+   "loanInstalment": 3000,
+   "month": "November 2023",
+   "name": "YOUSAF MASIH",
+   "oldGpfNo": "",
+   "osdPost": "",
+   "page": 11,
+   "persNo": "90000417"
+  },
+  "recalc": {
+   "page": 13,
+   "persNo": "90000417",
+   "reportDate": "10.09.2026",
+   "rows": [
+    {
+     "adjustments": 0,
+     "closing": 673,
+     "end": "30.06.2010",
+     "interest": 23,
+     "opening": 0,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2009",
+     "subscription": 650,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 2449,
+     "end": "30.06.2011",
+     "interest": 216,
+     "opening": 673,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2010",
+     "subscription": 1560,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 5424,
+     "end": "30.06.2012",
+     "interest": 513,
+     "opening": 2449,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2011",
+     "subscription": 2462,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 8784,
+     "end": "30.06.2013",
+     "interest": 816,
+     "opening": 5424,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2012",
+     "subscription": 2544,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 12700,
+     "end": "30.06.2014",
+     "interest": 1372,
+     "opening": 8784,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2013",
+     "subscription": 2544,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 16898,
+     "end": "30.06.2015",
+     "interest": 1654,
+     "opening": 12700,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2014",
+     "subscription": 2544,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 21471,
+     "end": "30.06.2016",
+     "interest": 2029,
+     "opening": 16898,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2015",
+     "subscription": 2544,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 27843,
+     "end": "30.06.2017",
+     "interest": 2642,
+     "opening": 21471,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2016",
+     "subscription": 3730,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 36134,
+     "end": "30.06.2018",
+     "interest": 3554,
+     "opening": 27843,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2017",
+     "subscription": 4737,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 50147,
+     "end": "30.06.2019",
+     "interest": 5803,
+     "opening": 36134,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2018",
+     "subscription": 8210,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 35448,
+     "end": "30.06.2020",
+     "interest": 3781,
+     "opening": 50147,
+     "permanentAdvance": 0,
+     "recTempAdvance": 9000,
+     "start": "01.07.2019",
+     "subscription": 8520,
+     "tempAdvance": 36000
+    },
+    {
+     "adjustments": 0,
+     "closing": 59646,
+     "end": "30.06.2021",
+     "interest": 3678,
+     "opening": 35448,
+     "permanentAdvance": 0,
+     "recTempAdvance": 12000,
+     "start": "01.07.2020",
+     "subscription": 8520,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 88940,
+     "end": "30.06.2022",
+     "interest": 8774,
+     "opening": 59646,
+     "permanentAdvance": 0,
+     "recTempAdvance": 12000,
+     "start": "01.07.2021",
+     "subscription": 8520,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 117491,
+     "end": "30.06.2023",
+     "interest": 13881,
+     "opening": 88940,
+     "permanentAdvance": 0,
+     "recTempAdvance": 3000,
+     "start": "01.07.2022",
+     "subscription": 11670,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 77523,
+     "end": "30.06.2024",
+     "interest": 10492,
+     "opening": 117491,
+     "permanentAdvance": 0,
+     "recTempAdvance": 18000,
+     "start": "01.07.2023",
+     "subscription": 9540,
+     "tempAdvance": 78000
+    },
+    {
+     "adjustments": 0,
+     "closing": 87182,
+     "end": "30.06.2025",
+     "interest": 9659,
+     "opening": 77523,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2024",
+     "subscription": 0,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 9131,
+     "end": "30.06.2026",
+     "interest": 8071,
+     "opening": 87182,
+     "permanentAdvance": 92482,
+     "recTempAdvance": 0,
+     "start": "01.07.2025",
+     "subscription": 6360,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 9131,
+     "end": "30.06.2027",
+     "interest": 0,
+     "opening": 9131,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2026",
+     "subscription": 0,
+     "tempAdvance": 0
+    }
+   ]
+  },
+  "source": "case"
+ },
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000417\nName: YOUSAF MASIH\nDesignation: SWEEPER\nCNIC: 0000100001071\nMonth: November 2023\nBPS: 02\nDDO Code: L04734 Principal, Govt. Associate College (W) Mustafabad\nGPF No: \nOld GPF No: \nGPF Balance: 50791\nGPF Subscription: 1060\nGPF Loan Instalment: 3000\nGPF Loan Balance: 72000\nBasic Pay: 20190\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000417\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2009|30.06.2010|0|650|0|0|0|0|23|673\n01.07.2010|30.06.2011|673|1560|0|0|0|0|216|2449\n01.07.2011|30.06.2012|2449|2462|0|0|0|0|513|5424\n01.07.2012|30.06.2013|5424|2544|0|0|0|0|816|8784\n01.07.2013|30.06.2014|8784|2544|0|0|0|0|1372|12700\n01.07.2014|30.06.2015|12700|2544|0|0|0|0|1654|16898\n01.07.2015|30.06.2016|16898|2544|0|0|0|0|2029|21471\n01.07.2016|30.06.2017|21471|3730|0|0|0|0|2642|27843\n01.07.2017|30.06.2018|27843|4737|0|0|0|0|3554|36134\n01.07.2018|30.06.2019|36134|8210|0|0|0|0|5803|50147\n01.07.2019|30.06.2020|50147|8520|0|36000|9000|0|3781|35448\n01.07.2020|30.06.2021|35448|8520|0|0|12000|0|3678|59646\n01.07.2021|30.06.2022|59646|8520|0|0|12000|0|8774|88940\n01.07.2022|30.06.2023|88940|11670|0|0|3000|0|13881|117491\n01.07.2023|30.06.2024|117491|9540|0|78000|18000|0|10492|77523\n01.07.2024|30.06.2025|77523|0|0|0|0|0|9659|87182\n01.07.2025|30.06.2026|87182|6360|0|0|0|92482|8071|9131\n01.07.2026|30.06.2027|9131|0|0|0|0|0|0|9131\n",
+ "signatures": [
+  {
+   "authority": "Principal, Govt. Associate College (W) Mustafabad, Lahore",
+   "crop": "fp-death_p001_ddo_signature_stamp.png",
+   "doc": "GPF-10",
+   "forMarker": false,
+   "id": "gpf10-ddo",
+   "page": 1,
+   "role": "ddo",
+   "roleLabel": "DDO signature",
+   "signedBy": "Principal, Govt. Associate College (W) Mustafabad"
+  }
+ ],
+ "slug": "fp-death",
+ "sub": "Final payment on death in service, claim by the widow",
+ "subject": "Yousaf Masih (deceased), Sweeper (BS-02)",
+ "thumbs": [
+  {
+   "crop": "fp-death_p001_thumb_gpf10.png",
+   "doc": "GPF-10",
+   "id": "gpf10",
+   "page": 1,
+   "whose": "The claimant (not named at the mark; presumably the widow)"
+  },
+  {
+   "crop": "fp-death_p012_employee_specimen_thumbs.png",
+   "doc": "FORM PAY 06, three impressions in the specimen signature block",
+   "id": "form06",
+   "page": 12,
+   "whose": "The claimant (not named; the form names the widow as payee)"
+  }
+ ],
+ "verifications": {}
+}

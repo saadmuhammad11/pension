@@ -1,0 +1,4 @@
+arch=Qwen3VLMoeForConditionalGeneration shards=4 bytes=32251954920 cheap_sha256=2ccd239d5cc74d0056b4a573fba9c07d4fb2b304bf892d4bcf7316ce1e299e8d
+recorded_at=2026-09-02T12:35:40+05:00
+model_path=/models/qwen3-vl-30b-a3b-fp8
+shard_sha256=not-verified

@@ -1,0 +1,468 @@
+{
+ "claim": {
+  "amount": 451065,
+  "basis": "the balance on Form 06 before the section’s zakat and interest working",
+  "residualNote": "It is the 2023-24 interest, which the interest check covers."
+ },
+ "custom": [
+  "DIS-APPEAL",
+  "DIS-CREDITS",
+  "DIS-INTEREST"
+ ],
+ "dept": "City Traffic Police, Chief Traffic Officer, Lahore",
+ "diary": "983415 / 208238, 21-05-2026",
+ "docs": {
+  "changeForm": {
+   "cnic": "00001-0000105-9",
+   "ddoCrop": "fp-dismissal_p001_ddo_signature_cto_stamp.png",
+   "ddoSigned": true,
+   "ddoStamp": "Chief Traffic Officer, Lahore",
+   "label": "FORM PAY 06",
+   "name": "Faizan Siddiqui",
+   "note": "The handwriting across the form (both computations, \"31-12-2023\") is the AG office’s own working, not a department entry.",
+   "oldGpfNo": "",
+   "oldGpfNoState": "carrying only the AG token T.NO 983415",
+   "page": 1,
+   "personalNo": "90000834",
+   "present": true,
+   "sigKind": "signature"
+  },
+  "cnics": [
+   {
+    "attested": false,
+    "crop": "fp-dismissal_p006_cnic_front_copy.png",
+    "expiry": "07-08-2033",
+    "name": "Faizan Siddiqui",
+    "number": "00001-0000105-9",
+    "page": 6,
+    "sigCrop": "fp-dismissal_p006_cnic_holder_signature_area.png",
+    "type": "smart",
+    "whose": "subscriber"
+   }
+  ],
+  "covering": {
+   "author": "the Chief Traffic Officer, Lahore",
+   "nature": "Forwarding No. 7082/CTO/Acctt dated 04-05-2026 on the application",
+   "page": 2,
+   "present": true
+  },
+  "gpf10": {
+   "accountNo": "90000834 (personnel no.)",
+   "missing": [],
+   "note": "Item 2(i) reads \"Rs nil\" while the December 2023 SAP pay slip shows a subscription of Rs 3,900; not a B2-i ground.",
+   "page": 2,
+   "present": true
+  },
+  "notification": {
+   "date": "30-12-2023",
+   "label": "Punishment order, dismissal from service",
+   "no": "1823-33/PA-STO/S",
+   "note": "Signed by Ikram Ullah Malik, Senior Traffic Officer, Saddar Division, Lahore; attested by the Accountant, City Traffic Police.",
+   "page": 4,
+   "present": true
+  },
+  "serviceBook": {
+   "present": false,
+   "reportedAttached": "The CTO’s forwarding note says the original service roll is attached."
+  }
+ },
+ "family": "FINAL_PAYMENT",
+ "gazetted": "non-gazetted",
+ "key": "fp-dismissal",
+ "kind": "dismissal",
+ "label": "Final Payment, Dismissal from Service",
+ "note": "Faizan Siddiqui, dismissed 30-12-2023. Every circular document except the Service Book is in the scan. E-stamp verified on the Punjab portal; the punishment order QR cannot be read.",
+ "pages": 9,
+ "persNos": [
+  {
+   "doc": "FORM PAY 06",
+   "page": 1,
+   "value": "90000834"
+  },
+  {
+   "doc": "Application (GPF-10)",
+   "page": 2,
+   "value": "90000834"
+  },
+  {
+   "doc": "SAP pay slip, December 2023",
+   "page": 7,
+   "value": "90000834"
+  },
+  {
+   "doc": "GPF Final Re-calculation Report",
+   "page": 9,
+   "value": "90000834"
+  }
+ ],
+ "personnelNo": "90000834",
+ "qr": [
+  {
+   "compare": [
+    {
+     "docLabel": "portal record",
+     "docVal": "PB-LHR-50661BB59AF39C23",
+     "field": "stamp id",
+     "match": true,
+     "qrVal": "PB-LHR-50661BB59AF39C23"
+    }
+   ],
+   "crop": "fp-dismissal_p006_estamp_qr.png",
+   "decoded": true,
+   "doc": "e-stamp affidavit",
+   "host": "es.punjab-zameen.gov.pk",
+   "id": "estamp",
+   "page": 6,
+   "payload": "Url: https://es.punjab-zameen.gov.pk/eStampCitizenPortal/GeneratePDF/Stamp_Receipt?id=PB-LHR-50661BB59AF39C23",
+   "portal": {
+    "checkedOn": "15-09-2026",
+    "ok": true,
+    "result": "e-stamp PB-LHR-50661BB59AF39C23 found and valid, Rs 100, \"certificate or other document\", issued 22-04-2026 and usable to 29-04-2026, applicant Faizan Siddiqui, CNIC 00001-0000105-9, father Zulqarnain Butt. The affidavit is dated 22-04-2026, within validity, and name, CNIC and father name agree with the case."
+   },
+   "route": "online",
+   "symbology": "QR code"
+  },
+  {
+   "crop": "fp-dismissal_p004_qr_punishment_order.png",
+   "decoded": false,
+   "doc": "punishment order",
+   "id": "order-qr",
+   "page": 4,
+   "remedy": "Scan the QR code on the original order, or obtain the department’s verification, and upload it.",
+   "symbology": "QR code",
+   "why": "modules degraded by photocopying"
+  },
+  {
+   "doc": "smart CNIC",
+   "id": "cnic-back",
+   "notSupplied": "Only the front of the smart CNIC is copied, on the e-stamp affidavit; the back, which carries the QR code, is not in the case.",
+   "page": 6,
+   "remedy": "Upload a copy of the back of the CNIC.",
+   "symbology": "QR code"
+  }
+ ],
+ "record": [
+  [
+   "Subscriber",
+   "Faizan Siddiqui s/o Zulqarnain Butt, Traffic Warden No. 2709/TW",
+   "Form 06 · application · CNIC · e-stamp",
+   0.97,
+   1
+  ],
+  [
+   "Personnel no.",
+   "90000834",
+   "Form 06 · application · SAP",
+   0.99,
+   1
+  ],
+  [
+   "CNIC",
+   "00001-0000105-9 (smart card, front only)",
+   "Form 06 · Urdu application · CNIC copy",
+   0.97,
+   6
+  ],
+  [
+   "Dismissal",
+   "30-12-2023, Order 1823-33/PA-STO/S of the Senior Traffic Officer, Saddar Division",
+   "Punishment order · application",
+   0.93,
+   4
+  ],
+  [
+   "Forwarding",
+   "CTO Lahore No. 7082/CTO/Acctt dated 04-05-2026",
+   "Application",
+   0.96,
+   2
+  ],
+  [
+   "E-stamp affidavit",
+   "PB-LHR-50661BB59AF39C23, dated 22-04-2026; verified on the Punjab e-Stamp portal",
+   "E-stamp · portal",
+   0.99,
+   6
+  ],
+  [
+   "SAP pay slip, December 2023",
+   "GPF balance Rs 445,013; earlier advance Rs 390,000, repaid Rs 169,000, balance Rs 221,000",
+   "SAP pay slip",
+   0.97,
+   7
+  ],
+  [
+   "SAP posting",
+   "Permanent advance Rs 451,065 in 2023-24 (the final payment)",
+   "SAP re-calculation report",
+   0.96,
+   9
+  ],
+  [
+   "Section working on Form 06",
+   "451,065 less Zakat 11,276, plus 16,900 interest: net Rs 456,689",
+   "Form 06 (office hand)",
+   0.88,
+   1
+  ],
+  [
+   "Thumb impressions",
+   "Beside the subscriber’s signatures on Form 06 and the affidavit; they accompany signatures, so R7 does not arise",
+   "Form 06 · affidavit",
+   0.95,
+   1
+  ]
+ ],
+ "sap": {
+  "payslip": {
+   "attested": false,
+   "basicPay": 52110,
+   "bps": "14",
+   "cnic": "",
+   "ddoCode": "L04087 Chief Traffic Officer Lahore",
+   "designation": "TRAFFIC WARDEN",
+   "gpfBalance": 445013,
+   "gpfNo": "",
+   "gpfSubscription": 3900,
+   "loanBalance": 221000,
+   "loanInstalment": 13000,
+   "month": "December 2023",
+   "name": "FAIZAN SIDDIQUI",
+   "oldGpfNo": "",
+   "osdPost": "",
+   "page": 7,
+   "persNo": "90000834"
+  },
+  "recalc": {
+   "page": 9,
+   "persNo": "90000834",
+   "reportDate": "10.09.2026",
+   "rows": [
+    {
+     "adjustments": 0,
+     "closing": 5323,
+     "end": "30.06.2009",
+     "interest": 223,
+     "opening": 0,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2008",
+     "subscription": 5100,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 17042,
+     "end": "30.06.2010",
+     "interest": 1519,
+     "opening": 5323,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2009",
+     "subscription": 10200,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 30447,
+     "end": "30.06.2011",
+     "interest": 3205,
+     "opening": 17042,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2010",
+     "subscription": 10200,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 51710,
+     "end": "30.06.2012",
+     "interest": 5321,
+     "opening": 30447,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2011",
+     "subscription": 15942,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 75449,
+     "end": "30.06.2013",
+     "interest": 7275,
+     "opening": 51710,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2012",
+     "subscription": 16464,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 92942,
+     "end": "30.06.2014",
+     "interest": 10633,
+     "opening": 75449,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2013",
+     "subscription": 6860,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 121375,
+     "end": "30.06.2015",
+     "interest": 11969,
+     "opening": 92942,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2014",
+     "subscription": 16464,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 152302,
+     "end": "30.06.2016",
+     "interest": 14463,
+     "opening": 121375,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2015",
+     "subscription": 16464,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 195161,
+     "end": "30.06.2017",
+     "interest": 18610,
+     "opening": 152302,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2016",
+     "subscription": 24249,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 250952,
+     "end": "30.06.2018",
+     "interest": 24777,
+     "opening": 195161,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2017",
+     "subscription": 31014,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 320847,
+     "end": "30.06.2019",
+     "interest": 38455,
+     "opening": 250952,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2018",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 392832,
+     "end": "30.06.2020",
+     "interest": 40545,
+     "opening": 320847,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2019",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 456651,
+     "end": "30.06.2021",
+     "interest": 32379,
+     "opening": 392832,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2020",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 546827,
+     "end": "30.06.2022",
+     "interest": 58736,
+     "opening": 456651,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2021",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 343613,
+     "end": "30.06.2023",
+     "interest": 52826,
+     "opening": 546827,
+     "permanentAdvance": 0,
+     "recTempAdvance": 91000,
+     "start": "01.07.2022",
+     "subscription": 42960,
+     "tempAdvance": 390000
+    },
+    {
+     "adjustments": 6052,
+     "closing": 17968,
+     "end": "30.06.2024",
+     "interest": 17968,
+     "opening": 343613,
+     "permanentAdvance": 451065,
+     "recTempAdvance": 78000,
+     "start": "01.07.2023",
+     "subscription": 23400,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 17968,
+     "end": "30.06.2025",
+     "interest": 2239,
+     "opening": 17968,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2024",
+     "subscription": 0,
+     "tempAdvance": 0
+    }
+   ]
+  },
+  "source": "case"
+ },
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000834\nName: FAIZAN SIDDIQUI\nDesignation: TRAFFIC WARDEN\nCNIC: \nMonth: December 2023\nBPS: 14\nDDO Code: L04087 Chief Traffic Officer Lahore\nGPF No: \nOld GPF No: \nGPF Balance: 445013\nGPF Subscription: 3900\nGPF Loan Instalment: 13000\nGPF Loan Balance: 221000\nBasic Pay: 52110\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000834\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2008|30.06.2009|0|5100|0|0|0|0|223|5323\n01.07.2009|30.06.2010|5323|10200|0|0|0|0|1519|17042\n01.07.2010|30.06.2011|17042|10200|0|0|0|0|3205|30447\n01.07.2011|30.06.2012|30447|15942|0|0|0|0|5321|51710\n01.07.2012|30.06.2013|51710|16464|0|0|0|0|7275|75449\n01.07.2013|30.06.2014|75449|6860|0|0|0|0|10633|92942\n01.07.2014|30.06.2015|92942|16464|0|0|0|0|11969|121375\n01.07.2015|30.06.2016|121375|16464|0|0|0|0|14463|152302\n01.07.2016|30.06.2017|152302|24249|0|0|0|0|18610|195161\n01.07.2017|30.06.2018|195161|31014|0|0|0|0|24777|250952\n01.07.2018|30.06.2019|250952|31440|0|0|0|0|38455|320847\n01.07.2019|30.06.2020|320847|31440|0|0|0|0|40545|392832\n01.07.2020|30.06.2021|392832|31440|0|0|0|0|32379|456651\n01.07.2021|30.06.2022|456651|31440|0|0|0|0|58736|546827\n01.07.2022|30.06.2023|546827|42960|0|390000|91000|0|52826|343613\n01.07.2023|30.06.2024|343613|23400|6052|0|78000|451065|17968|17968\n01.07.2024|30.06.2025|17968|0|0|0|0|0|2239|17968\n",
+ "signatures": [
+  {
+   "authority": "Chief Traffic Officer, Lahore",
+   "crop": "fp-dismissal_p001_ddo_signature_cto_stamp.png",
+   "doc": "FORM PAY 06",
+   "forMarker": false,
+   "id": "form06-ddo",
+   "page": 1,
+   "role": "ddo",
+   "roleLabel": "DDO signature",
+   "signedBy": "Chief Traffic Officer, Lahore"
+  }
+ ],
+ "slug": "fp-dismissal",
+ "sub": "Final payment after dismissal from service",
+ "subject": "Faizan Siddiqui, Traffic Warden (BS-14)",
+ "thumbs": [],
+ "verifications": {}
+}

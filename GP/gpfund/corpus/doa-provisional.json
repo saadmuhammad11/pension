@@ -1,0 +1,191 @@
+{
+ "status": "provisional",
+ "version": "Provisional, built on 15-09-2026 from the signatories in the eight case files. The office will supply the approved list and specimens.",
+ "authorities": [
+  {
+   "id": "police-dig-ops",
+   "dept": "Punjab Police",
+   "authority": "Deputy Inspector General of Police, Operations, Lahore",
+   "aliases": [
+    "DIG Operations Lahore"
+   ],
+   "source": "Refundable advance: sanction and Form 05",
+   "signatories": [
+    {
+     "id": "dig",
+     "post": "Deputy Inspector General of Police, Operations, Lahore",
+     "name": "",
+     "mayFor": false,
+     "powers": "Sanction of GP Fund advances",
+     "specimen": null
+    },
+    {
+     "id": "sphq",
+     "post": "SP Headquarters",
+     "name": "",
+     "mayFor": true,
+     "powers": "Signs advance sanctions and Form 05 for the DIG",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "sed-dea-lahore",
+   "dept": "School Education Department",
+   "authority": "Chief Executive Officer, District Education Authority Lahore",
+   "aliases": [
+    "CEO (DEA) Lahore"
+   ],
+   "source": "Non-refundable advance: sanction",
+   "signatories": [
+    {
+     "id": "ceo",
+     "post": "Chief Executive Officer (DEA) Lahore",
+     "name": "",
+     "mayFor": false,
+     "powers": "Sanction of GP Fund advances",
+     "specimen": null
+    },
+    {
+     "id": "adadmin",
+     "post": "Assistant Director (Admin)",
+     "name": "",
+     "mayFor": true,
+     "powers": "Signs advance sanctions for the CEO",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "gghs-ra-bazar",
+   "dept": "School Education Department",
+   "authority": "Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore",
+   "source": "Non-refundable advance: Form 06 (DDO LV6280)",
+   "signatories": [
+    {
+     "id": "shm",
+     "post": "Senior Headmistress",
+     "name": "",
+     "mayFor": false,
+     "powers": "DDO LV6280: change forms",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "hmd-lahore",
+   "dept": "Communication and Works",
+   "authority": "Executive Engineer, Highway Mechanical Division, Lahore",
+   "source": "Final payment, non-gazetted: GPF-10 and Form 06 (DDO LO5361)",
+   "signatories": [
+    {
+     "id": "xen",
+     "post": "Executive Engineer, Highway Mechanical Division",
+     "name": "",
+     "mayFor": false,
+     "powers": "DDO LO5361: GPF-10, change forms",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "cto-lahore",
+   "dept": "Punjab Police, City Traffic Police",
+   "authority": "Chief Traffic Officer, Lahore",
+   "source": "Final payment, dismissal: Form 06 (DDO L04087)",
+   "signatories": [
+    {
+     "id": "cto",
+     "post": "Chief Traffic Officer, Lahore",
+     "name": "",
+     "mayFor": false,
+     "powers": "DDO L04087: change forms, forwarding",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "pimh",
+   "dept": "Specialized Healthcare and Medical Education",
+   "authority": "Executive Director, Punjab Institute of Mental Health, Lahore",
+   "source": "Residual payment: Form 06 (DDO L04578)",
+   "signatories": [
+    {
+     "id": "ed",
+     "post": "Executive Director, Punjab Institute of Mental Health",
+     "name": "",
+     "mayFor": false,
+     "powers": "DDO L04578: change forms",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "gac-mustafabad",
+   "dept": "Higher Education Department",
+   "authority": "Principal, Govt. Associate College (W) Mustafabad, Lahore",
+   "source": "Final payment, death case: GPF-10 and Form 06",
+   "signatories": [
+    {
+     "id": "principal",
+     "post": "Principal, Govt. Associate College (W) Mustafabad",
+     "name": "",
+     "mayFor": false,
+     "powers": "DDO: GPF-10, change forms, attestation",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "treasury-lahore",
+   "dept": "Finance Department, Treasury",
+   "authority": "Treasury Office, Lahore",
+   "source": "Missing credits: verification of challans",
+   "signatories": [
+    {
+     "id": "dto",
+     "post": "Deputy Treasury Officer, Lahore",
+     "name": "",
+     "mayFor": false,
+     "powers": "Verification of challans",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "dpr-fsd",
+   "dept": "Directorate General Public Relations",
+   "authority": "Director Public Relations, Faisalabad",
+   "source": "Balance transfer: proforma",
+   "signatories": [
+    {
+     "id": "dpr",
+     "post": "Director Public Relations, Faisalabad (DDO)",
+     "name": "",
+     "mayFor": false,
+     "powers": "Balance transfer proforma",
+     "specimen": null
+    }
+   ]
+  },
+  {
+   "id": "dao-fsd",
+   "dept": "Finance Department, District Accounts",
+   "authority": "District Accounts Office, Faisalabad",
+   "aliases": [
+    "District Accounts Officer Faisalabad"
+   ],
+   "source": "Balance transfer: DAO confirmation",
+   "signatories": [
+    {
+     "id": "dao",
+     "post": "District Accounts Officer, Faisalabad",
+     "name": "",
+     "mayFor": false,
+     "powers": "Confirms GP Fund account, forwards to AG",
+     "specimen": null
+    }
+   ]
+  }
+ ]
+}

@@ -17,6 +17,7 @@ Run:  python3 -m unittest tests.test_identify_live -v
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 # So the file runs directly as well as under `-m unittest` from the project root.
@@ -29,7 +30,8 @@ import urllib.error
 import urllib.request
 
 VISION_HEALTH = "http://192.168.1.1:8011/health"
-FIXTURES = Path(__file__).parent / "fixtures"
+# Rendered into a temporary folder, never into the tree: a stale render under tests/fixtures/
+# kept a real claimant's name after the code was scrubbed (found 7 Oct 2026, N12).
 
 
 def vision_available() -> bool:
@@ -94,8 +96,10 @@ class IdentifyLive(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        cls._tmp = tempfile.TemporaryDirectory(prefix="identify-live-")
+        cls.addClassCleanup(cls._tmp.cleanup)
         try:
-            cls.pages = make_pages(FIXTURES)
+            cls.pages = make_pages(Path(cls._tmp.name))
         except ImportError as exc:  # pragma: no cover
             raise unittest.SkipTest(f"Pillow unavailable: {exc}") from exc
 

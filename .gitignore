@@ -105,3 +105,13 @@ portals/dist-demo/
 !GP/backend/tests/ground_truth.json
 !GP/agofficegpfund/prototype/sap-samples/*.txt
 !GP/prototype
+# ---- Rule packs, specimen register, GP corpus, model fingerprints (N12 reopened, 7 Oct 2026) ----
+# Still missing from a clone after the lines above: the rules engine found no pack (every
+# determination failed), the GP engine did not import. All pass the CNIC check; the corpus and the
+# packs are synthetic/reference data, the specimens are the S&GAD register's reference signatures.
+# tests/fixtures/ stays ignored: the live-identify test renders its pages itself.
+!rules/packs/*.json
+!rules/specimens/*.json
+!rules/specimens/*.jpg
+!GP/gpfund/corpus/*.json
+!infra/models/*.fingerprint

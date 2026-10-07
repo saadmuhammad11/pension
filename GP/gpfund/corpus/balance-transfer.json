@@ -1,0 +1,162 @@
+{
+ "custom": [],
+ "dept": "Office of the Director Public Relations, Faisalabad",
+ "diary": "14580 / 243780 / 988477, 03-08-2026",
+ "docs": {
+  "covering": {
+   "author": "the Director Public Relations Faisalabad and the DAO Faisalabad",
+   "crop": "balance-transfer_p001_hod_forwarding_note.png",
+   "nature": "Handwritten forwarding on the proforma and DAO endorsement",
+   "page": 1,
+   "present": true
+  },
+  "proforma": {
+   "crop": "balance-transfer_p001_particulars_name_father_designation.png",
+   "daoConfirmed": "The GP Fund A/C No: P# 90000847 Is Hereby Confirmed",
+   "daoCrop": "balance-transfer_p001_dao_endorsement_stamp_signature.png",
+   "designation": "Director",
+   "father": "Mian Nawab",
+   "lastDeduction": "",
+   "name": "Rafaqat Ahmad",
+   "newAc": "Personal No:- 90000847",
+   "oldAc": "Personal No:- 90000847",
+   "page": 1,
+   "periods": "Lahore 24-04-1999 to March 2009, March 2011 to March 2013, October 2018 to August 2019, March 2021 to March 2025",
+   "periodsCrop": "balance-transfer_p001_col7_period_of_posting.png"
+  }
+ },
+ "family": "BALANCE_TRANSFER",
+ "gazetted": "unknown",
+ "key": "balance-transfer",
+ "kind": "balance_transfer",
+ "label": "Balance Transfer",
+ "note": "Rafaqat Ahmad, Director PR Faisalabad. One-page proforma. The DAO has confirmed P# 90000847 as the GP Fund account; old account and last deduction to come from SAP.",
+ "pages": 1,
+ "persNos": [
+  {
+   "doc": "Proforma column 4",
+   "page": 1,
+   "value": "90000847"
+  },
+  {
+   "doc": "Proforma column 5",
+   "page": 1,
+   "value": "90000847"
+  },
+  {
+   "doc": "DAO Faisalabad endorsement",
+   "page": 1,
+   "value": "90000847"
+  }
+ ],
+ "personnelNo": "90000847",
+ "qr": [],
+ "record": [
+  [
+   "Subscriber",
+   "Rafaqat Ahmad s/o Mian Nawab, Director",
+   "Proforma columns 1 to 3",
+   0.97,
+   1
+  ],
+  [
+   "Office",
+   "Office of the Director Public Relations, Faisalabad",
+   "Proforma header",
+   0.97,
+   1
+  ],
+  [
+   "Old A/c no. (column 4)",
+   "\"Personal No:- 90000847\", the personnel number",
+   "Proforma",
+   0.99,
+   1
+  ],
+  [
+   "New A/c no. in DAO (column 5)",
+   "\"Personal No:- 90000847\", confirmed by DAO Faisalabad",
+   "Proforma · DAO endorsement",
+   0.98,
+   1
+  ],
+  [
+   "Last deduction (column 6)",
+   "Blank",
+   "Proforma",
+   0.99,
+   1
+  ],
+  [
+   "Column 7",
+   "Used for the posting periods; no advance figure or nil",
+   "Proforma",
+   0.95,
+   1
+  ],
+  [
+   "Posting periods",
+   "Lahore 24-04-1999 to 03-2009; 03-2011 to 03-2013; 10-2018 to 08-2019; 03-2021 to 03-2025",
+   "Proforma column 7",
+   0.93,
+   1
+  ],
+  [
+   "DAO endorsement",
+   "No. DAO/FSD/HM/212 dated 13-05-2026, forwarded to AG Punjab, \"GP Fund A/C No: P# 90000847 Is Hereby Confirmed\"",
+   "Proforma",
+   0.92,
+   1
+  ],
+  [
+   "DDO signature",
+   "Present; no office stamp, name or date",
+   "Proforma",
+   0.95,
+   1
+  ]
+ ],
+ "sap": null,
+ "sapSample": null,
+ "signatures": [
+  {
+   "authority": "Director Public Relations, Faisalabad",
+   "bbox": [
+    2036,
+    1347,
+    2635,
+    1602
+   ],
+   "crop": "balance-transfer_p001_ddo_signature_no_stamp.png",
+   "doc": "proforma",
+   "forMarker": false,
+   "id": "ddo",
+   "page": 1,
+   "role": "ddo",
+   "roleLabel": "DDO signature",
+   "signedBy": "unidentified signatory (no stamp, name or date)"
+  },
+  {
+   "authority": "District Accounts Office, Faisalabad",
+   "bbox": [
+    1527,
+    1168,
+    2215,
+    1677
+   ],
+   "crop": "balance-transfer_p001_dao_endorsement_stamp_signature.png",
+   "doc": "DAO endorsement",
+   "forMarker": false,
+   "id": "dao",
+   "page": 1,
+   "role": "certifying",
+   "roleLabel": "DAO confirmation",
+   "signedBy": "District Accounts Officer, Faisalabad"
+  }
+ ],
+ "slug": "balance-transfer",
+ "sub": "Transfer of GP Fund balances, Lahore postings to DAO Faisalabad",
+ "subject": "Rafaqat Ahmad, Director",
+ "thumbs": [],
+ "verifications": {}
+}

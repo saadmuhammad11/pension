@@ -1,0 +1,442 @@
+{
+ "custom": [
+  "RES-RECON"
+ ],
+ "dept": "Punjab Institute of Mental Health, Lahore",
+ "diary": "206984 / 982288",
+ "docs": {
+  "changeForm": {
+   "cnic": "00001-0000106-4",
+   "ddoCrop": "residual_p001_ddo_signature_stamp.png",
+   "ddoSigned": true,
+   "ddoStamp": "Executive Director, Punjab Institute of Mental Health",
+   "label": "FORM PAY 06",
+   "name": "Shabnam",
+   "note": "The printed form number is under a blank pink note; the heading \"Permanent Loan Details\" identifies Form 06.",
+   "oldGpfNo": "",
+   "oldGpfNoState": "blank",
+   "page": 1,
+   "personalNo": "90000687",
+   "present": true,
+   "sigCrop": "residual_p001_employee_specimen_signatures.png",
+   "sigKind": "signature"
+  },
+  "cnics": [
+   {
+    "attested": true,
+    "attestedBy": "Office Superintendent, PIMH",
+    "crop": "residual_p004_cnic_front_only.png",
+    "expiry": "lifetime",
+    "name": "Shabnam",
+    "number": "00001-0000106-4",
+    "page": 4,
+    "sigCrop": "residual_p004_cnic_holder_signature.png",
+    "type": "smart",
+    "whose": "subscriber"
+   }
+  ],
+  "covering": {
+   "author": "the subscriber",
+   "nature": "Subscriber’s application to the AG for residual payment",
+   "page": 2,
+   "present": true
+  },
+  "gpf10": {
+   "present": false
+  },
+  "notification": {
+   "date": "03-09-2024",
+   "label": "Retirement notification",
+   "no": "SO(NC)10-1/15",
+   "note": "Retirement w.e.f. 07-11-2024 on superannuation. Attested by the Office Superintendent, PIMH.",
+   "page": 3,
+   "present": true
+  }
+ },
+ "family": "FINAL_PAYMENT",
+ "gazetted": "gazetted",
+ "key": "residual",
+ "kind": "residual",
+ "label": "Residual Payment",
+ "note": "Mst Shabnam, retired 07-11-2024. Rs 31,408 residual. The SAP report now in the case shows a debit balance and a possible double posting. No Form 10.",
+ "pages": 6,
+ "persNos": [
+  {
+   "doc": "FORM PAY 06",
+   "page": 1,
+   "value": "90000687"
+  },
+  {
+   "doc": "Application",
+   "page": 2,
+   "value": "90000687"
+  },
+  {
+   "doc": "SAP payroll register, October 2024",
+   "page": 5,
+   "value": "90000687"
+  },
+  {
+   "doc": "GPF Final Re-calculation Report",
+   "page": 6,
+   "value": "90000687"
+  }
+ ],
+ "personnelNo": "90000687",
+ "qr": [
+  {
+   "crop": "residual_p003_barcode.png",
+   "decoded": false,
+   "doc": "retirement notification",
+   "id": "notif-barcode",
+   "page": 3,
+   "readable": "\"*0000100001064R 2884*\", whose CNIC part agrees with the notification",
+   "remedy": "Upload a clean copy of the notification, or confirm it with the SHC&ME Department.",
+   "symbology": "1-D barcode",
+   "why": "bars merged in the photocopy"
+  },
+  {
+   "doc": "smart CNIC",
+   "id": "cnic-back",
+   "notSupplied": "Only the front of the smart CNIC is copied; the back, which carries the QR code, is not in the case.",
+   "page": 4,
+   "remedy": "Upload a copy of the back of the CNIC.",
+   "symbology": "QR code"
+  }
+ ],
+ "record": [
+  [
+   "Subscriber",
+   "Mst Shabnam w/o Abid Javed, Head Nurse (BS-17), gazetted",
+   "Form 06 · CNIC · SAP register",
+   0.97,
+   1
+  ],
+  [
+   "Personnel no.",
+   "90000687",
+   "Form 06 · application · SAP",
+   0.99,
+   1
+  ],
+  [
+   "CNIC",
+   "00001-0000106-4 (smart card, lifetime); front only",
+   "Form 06 · CNIC · notification",
+   0.97,
+   4
+  ],
+  [
+   "Retirement",
+   "07-11-2024 on superannuation, Notification SO(NC)10-1/15 of 03-09-2024",
+   "Notification",
+   0.97,
+   3
+  ],
+  [
+   "Claimed",
+   "Rs 31,408 residual, handwritten on Form 06",
+   "Form 06",
+   0.95,
+   1
+  ],
+  [
+   "GPF balance, October 2024 register",
+   "Rs 340,330, before the final payment",
+   "SAP payroll register",
+   0.97,
+   5
+  ],
+  [
+   "Report, 2024-25 row",
+   "Adjustment 31,408; permanent advance 712,068; interest 20,807; closing 340,330 debit",
+   "SAP re-calculation report",
+   0.93,
+   6
+  ],
+  [
+   "Form 10",
+   "Not in the case",
+   "",
+   0.99,
+   null
+  ],
+  [
+   "Zakat",
+   "\"No Zakat deducted (Christian)\" written on Form 06",
+   "Form 06",
+   0.9,
+   1
+  ]
+ ],
+ "sap": {
+  "payslip": {
+   "attested": true,
+   "basicPay": 110050,
+   "bps": "17",
+   "cnic": "",
+   "ddoCode": "L04578 Punjab Institute of Mental Health",
+   "designation": "HEAD NURSE",
+   "gpfBalance": 340330,
+   "gpfNo": "",
+   "gpfSubscription": 6350,
+   "loanBalance": null,
+   "loanInstalment": null,
+   "month": "October 2024",
+   "name": "SHABNAM",
+   "oldGpfNo": "",
+   "osdPost": "",
+   "page": 5,
+   "persNo": "90000687"
+  },
+  "recalc": {
+   "page": 6,
+   "persNo": "90000687",
+   "reportDate": "10.09.2026",
+   "rows": [
+    {
+     "adjustments": 0,
+     "closing": 2328,
+     "end": "30.06.2008",
+     "interest": 48,
+     "opening": 0,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2007",
+     "subscription": 2280,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 15638,
+     "end": "30.06.2009",
+     "interest": 1290,
+     "opening": 2328,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2008",
+     "subscription": 12020,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 31383,
+     "end": "30.06.2010",
+     "interest": 3145,
+     "opening": 15638,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2009",
+     "subscription": 12600,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 49409,
+     "end": "30.06.2011",
+     "interest": 5426,
+     "opening": 31383,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2010",
+     "subscription": 12600,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 38246,
+     "end": "30.06.2012",
+     "interest": 5927,
+     "opening": 49409,
+     "permanentAdvance": 0,
+     "recTempAdvance": 7500,
+     "start": "01.07.2011",
+     "subscription": 20410,
+     "tempAdvance": 45000
+    },
+    {
+     "adjustments": 0,
+     "closing": 84498,
+     "end": "30.06.2013",
+     "interest": 7132,
+     "opening": 38246,
+     "permanentAdvance": 0,
+     "recTempAdvance": 18000,
+     "start": "01.07.2012",
+     "subscription": 21120,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 55955,
+     "end": "30.06.2014",
+     "interest": 10837,
+     "opening": 84498,
+     "permanentAdvance": 80000,
+     "recTempAdvance": 19500,
+     "start": "01.07.2013",
+     "subscription": 21120,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 39153,
+     "end": "30.06.2015",
+     "interest": 6078,
+     "opening": 55955,
+     "permanentAdvance": 0,
+     "recTempAdvance": 6000,
+     "start": "01.07.2014",
+     "subscription": 21120,
+     "tempAdvance": 50000
+    },
+    {
+     "adjustments": 0,
+     "closing": 96376,
+     "end": "30.06.2016",
+     "interest": 7303,
+     "opening": 39153,
+     "permanentAdvance": 0,
+     "recTempAdvance": 24000,
+     "start": "01.07.2015",
+     "subscription": 25920,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 170530,
+     "end": "30.06.2017",
+     "interest": 14588,
+     "opening": 96376,
+     "permanentAdvance": 0,
+     "recTempAdvance": 20000,
+     "start": "01.07.2016",
+     "subscription": 39566,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 244197,
+     "end": "30.06.2018",
+     "interest": 23118,
+     "opening": 170530,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2017",
+     "subscription": 50549,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 115329,
+     "end": "30.06.2019",
+     "interest": 19892,
+     "opening": 244197,
+     "permanentAdvance": 200000,
+     "recTempAdvance": 0,
+     "start": "01.07.2018",
+     "subscription": 51240,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 79739,
+     "end": "30.06.2020",
+     "interest": 13170,
+     "opening": 115329,
+     "permanentAdvance": 100000,
+     "recTempAdvance": 0,
+     "start": "01.07.2019",
+     "subscription": 51240,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 59430,
+     "end": "30.06.2021",
+     "interest": 5451,
+     "opening": 79739,
+     "permanentAdvance": 77000,
+     "recTempAdvance": 0,
+     "start": "01.07.2020",
+     "subscription": 51240,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 121481,
+     "end": "30.06.2022",
+     "interest": 10811,
+     "opening": 59430,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2021",
+     "subscription": 51240,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 136614,
+     "end": "30.06.2023",
+     "interest": 17393,
+     "opening": 121481,
+     "permanentAdvance": 0,
+     "recTempAdvance": 27780,
+     "start": "01.07.2022",
+     "subscription": 69960,
+     "tempAdvance": 100000
+    },
+    {
+     "adjustments": 0,
+     "closing": 309382,
+     "end": "30.06.2024",
+     "interest": 29896,
+     "opening": 136614,
+     "permanentAdvance": 0,
+     "recTempAdvance": 66672,
+     "start": "01.07.2023",
+     "subscription": 76200,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 31408,
+     "closing": -340330,
+     "end": "30.06.2025",
+     "interest": 20807,
+     "opening": 309382,
+     "permanentAdvance": 712068,
+     "recTempAdvance": 5548,
+     "start": "01.07.2024",
+     "subscription": 25400,
+     "tempAdvance": 0
+    }
+   ]
+  },
+  "source": "case"
+ },
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000687\nName: SHABNAM\nDesignation: HEAD NURSE\nCNIC: \nMonth: October 2024\nBPS: 17\nDDO Code: L04578 Punjab Institute of Mental Health\nGPF No: \nOld GPF No: \nGPF Balance: 340330\nGPF Subscription: 6350\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 110050\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000687\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2007|30.06.2008|0|2280|0|0|0|0|48|2328\n01.07.2008|30.06.2009|2328|12020|0|0|0|0|1290|15638\n01.07.2009|30.06.2010|15638|12600|0|0|0|0|3145|31383\n01.07.2010|30.06.2011|31383|12600|0|0|0|0|5426|49409\n01.07.2011|30.06.2012|49409|20410|0|45000|7500|0|5927|38246\n01.07.2012|30.06.2013|38246|21120|0|0|18000|0|7132|84498\n01.07.2013|30.06.2014|84498|21120|0|0|19500|80000|10837|55955\n01.07.2014|30.06.2015|55955|21120|0|50000|6000|0|6078|39153\n01.07.2015|30.06.2016|39153|25920|0|0|24000|0|7303|96376\n01.07.2016|30.06.2017|96376|39566|0|0|20000|0|14588|170530\n01.07.2017|30.06.2018|170530|50549|0|0|0|0|23118|244197\n01.07.2018|30.06.2019|244197|51240|0|0|0|200000|19892|115329\n01.07.2019|30.06.2020|115329|51240|0|0|0|100000|13170|79739\n01.07.2020|30.06.2021|79739|51240|0|0|0|77000|5451|59430\n01.07.2021|30.06.2022|59430|51240|0|0|0|0|10811|121481\n01.07.2022|30.06.2023|121481|69960|0|100000|27780|0|17393|136614\n01.07.2023|30.06.2024|136614|76200|0|0|66672|0|29896|309382\n01.07.2024|30.06.2025|309382|25400|31408|0|5548|712068|20807|-340330\n",
+ "signatures": [
+  {
+   "authority": "Executive Director, Punjab Institute of Mental Health, Lahore",
+   "bbox": [
+    250,
+    2600,
+    850,
+    3150
+   ],
+   "crop": "residual_p001_ddo_signature_stamp.png",
+   "doc": "FORM PAY 06",
+   "forMarker": false,
+   "id": "form06-ddo",
+   "page": 1,
+   "role": "ddo",
+   "roleLabel": "DDO signature",
+   "signedBy": "Executive Director, Punjab Institute of Mental Health"
+  }
+ ],
+ "slug": "residual",
+ "sub": "Residual GP Fund payment after final payment drawn",
+ "subject": "Shabnam, Head Nurse (BS-17)",
+ "thumbs": [],
+ "verifications": {}
+}

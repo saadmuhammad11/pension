@@ -1,0 +1,316 @@
+{
+ "custom": [
+  "REF-PAYROLL-UNIT"
+ ],
+ "dept": "Punjab Police, Office of the DIG Operations, Lahore",
+ "diary": "214253 / 988890, 10-08-2026",
+ "docs": {
+  "changeForm": {
+   "cnic": "",
+   "ddoCrop": "refundable_p004_form05_ddo_signatory_stamp.png",
+   "ddoSigned": true,
+   "ddoStamp": "SP Headquarters for DIG Operations, Lahore",
+   "label": "FORM PAY 05",
+   "name": "Barkat Ali",
+   "page": 4,
+   "personalNo": "90000227",
+   "present": true,
+   "sigCrop": "refundable_p004_form05_employee_specimen_signatures.png",
+   "sigKind": "signature"
+  },
+  "cnics": [
+   {
+    "attested": false,
+    "crop": "refundable_p002_cnic_front_details.png",
+    "expiry": "05-11-2030",
+    "name": "Barkit Ali",
+    "number": "00001-0000101-3",
+    "page": 2,
+    "sigCrop": "refundable_p002_cnic_holder_signature.png",
+    "type": "smart",
+    "whose": "subscriber"
+   }
+  ],
+  "sanction": {
+   "amount": 58000,
+   "balanceStated": null,
+   "basicPay": 19040,
+   "crop": "refundable_p001_sanction_order_text.png",
+   "date": "07-08-2026",
+   "dept": "Punjab Police",
+   "limitClause": "1.14(1)(d)(i)",
+   "orderNo": "1463/GPF-Ops",
+   "page": 1,
+   "present": true,
+   "printedAuthority": "Deputy Inspector General of Police, Operations, Lahore",
+   "qrId": null,
+   "reason": "Repair of house",
+   "rule": "Rule 1.14(1)(a)(iv)(d)(i) of the Punjab GP Fund Rules 1978"
+  }
+ },
+ "family": "ADVANCE",
+ "gazetted": "non-gazetted",
+ "key": "refundable",
+ "kind": "refundable",
+ "label": "Refundable Advance",
+ "nameNote": "The English spelling on the card is \"Barkit\"; the Urdu name is the same.",
+ "nameVariants": [
+  "Barkit Ali"
+ ],
+ "note": "Constable Barkat Ali. Rs 58,000 for house repair, signed for the DIG Operations by SP Headquarters. Pay slip and re-calculation report already in the case.",
+ "pages": 6,
+ "persNos": [
+  {
+   "doc": "Sanction order",
+   "page": 1,
+   "value": "90000227"
+  },
+  {
+   "doc": "FORM PAY 05",
+   "page": 4,
+   "value": "90000227"
+  },
+  {
+   "doc": "SAP pay slip, August 2026",
+   "page": 5,
+   "value": "90000227"
+  },
+  {
+   "doc": "GPF Final Re-calculation Report",
+   "page": 6,
+   "value": "90000227"
+  }
+ ],
+ "personnelNo": "90000227",
+ "qr": [
+  {
+   "compare": [
+    {
+     "docLabel": "card",
+     "docVal": "00001-0000101-3",
+     "field": "CNIC number",
+     "match": true,
+     "qrVal": "00001-0000101-3"
+    },
+    {
+     "docLabel": "number printed under the code",
+     "docVal": "108261290869",
+     "field": "card number",
+     "match": true,
+     "qrVal": "108261290869"
+    }
+   ],
+   "crop": "refundable_p003_cnic_back_qr.png",
+   "decoded": true,
+   "doc": "smart CNIC back",
+   "id": "cnic-back",
+   "page": 3,
+   "payload": "10826129086900001000010131",
+   "symbology": "QR code"
+  }
+ ],
+ "record": [
+  [
+   "Subscriber",
+   "Barkat Ali s/o Liaqat Ali, Constable No. 7156",
+   "Sanction · CNIC · SAP pay slip",
+   0.97,
+   1
+  ],
+  [
+   "Personnel no.",
+   "90000227",
+   "Sanction · Form 05 · pay slip · report",
+   0.99,
+   4
+  ],
+  [
+   "CNIC",
+   "00001-0000101-3 (smart card, valid to 05-11-2030)",
+   "CNIC front and back · QR · pay slip",
+   0.98,
+   2
+  ],
+  [
+   "Sanction",
+   "No. 1463/GPF-Ops dated 07-08-2026, Rs 58,000",
+   "Sanction order",
+   0.98,
+   1
+  ],
+  [
+   "Rule quoted",
+   "1.14(1)(a)(iv)(d)(i): house repair, limit 24 months’ pay or 80% of balance",
+   "Sanction order",
+   0.95,
+   1
+  ],
+  [
+   "Recovery",
+   "29 instalments of Rs 2,000",
+   "Sanction · Form 05",
+   0.96,
+   1
+  ],
+  [
+   "Basic pay",
+   "Rs 19,040 on the sanction; Rs 22,890 on the August 2026 SAP pay slip",
+   "Sanction · pay slip",
+   0.92,
+   5
+  ],
+  [
+   "GPF balance on pay slip",
+   "Rs 19,194, after this advance was posted",
+   "SAP pay slip, August 2026",
+   0.97,
+   5
+  ],
+  [
+   "Balance before the advance",
+   "Rs 79,899 at 01-07-2026",
+   "SAP re-calculation report",
+   0.98,
+   6
+  ],
+  [
+   "Advance posted in SAP",
+   "Rs 58,000 in 2026-27, Rs 2,000 recovered, balance Rs 56,000",
+   "Report · pay slip",
+   0.97,
+   6
+  ],
+  [
+   "Payroll unit in SAP",
+   "LO0056 DIG Special Protection Unit (sanction and Form 05: DIG Operations, DDO LO5313)",
+   "Pay slip · Form 05",
+   0.9,
+   5
+  ]
+ ],
+ "sap": {
+  "payslip": {
+   "attested": false,
+   "basicPay": 22890,
+   "bps": "07",
+   "cnic": "0000100001013",
+   "ddoCode": "LO0056 DIG Special Protection Unit",
+   "designation": "CONSTABLE",
+   "gpfBalance": 19194,
+   "gpfNo": "",
+   "gpfSubscription": 1500,
+   "loanBalance": 56000,
+   "loanInstalment": 2000,
+   "month": "August 2026",
+   "name": "BARKAT ALI",
+   "oldGpfNo": "",
+   "osdPost": "",
+   "page": 5,
+   "persNo": "90000227"
+  },
+  "recalc": {
+   "page": 6,
+   "persNo": "90000227",
+   "reportDate": "10.09.2026",
+   "rows": [
+    {
+     "adjustments": 919,
+     "closing": 10303,
+     "end": "30.06.2023",
+     "interest": 384,
+     "opening": 0,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2022",
+     "subscription": 9000,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 31104,
+     "end": "30.06.2024",
+     "interest": 2801,
+     "opening": 10303,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2023",
+     "subscription": 18000,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 54194,
+     "end": "30.06.2025",
+     "interest": 5090,
+     "opening": 31104,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2024",
+     "subscription": 18000,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 79899,
+     "end": "30.06.2026",
+     "interest": 7705,
+     "opening": 54194,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2025",
+     "subscription": 18000,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 26899,
+     "end": "30.06.2027",
+     "interest": 0,
+     "opening": 79899,
+     "permanentAdvance": 0,
+     "recTempAdvance": 2000,
+     "start": "01.07.2026",
+     "subscription": 3000,
+     "tempAdvance": 58000
+    }
+   ]
+  },
+  "source": "case"
+ },
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000227\nName: BARKAT ALI\nDesignation: CONSTABLE\nCNIC: 0000100001013\nMonth: August 2026\nBPS: 07\nDDO Code: LO0056 DIG Special Protection Unit\nGPF No: \nOld GPF No: \nGPF Balance: 19194\nGPF Subscription: 1500\nGPF Loan Instalment: 2000\nGPF Loan Balance: 56000\nBasic Pay: 22890\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000227\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2022|30.06.2023|0|9000|919|0|0|0|384|10303\n01.07.2023|30.06.2024|10303|18000|0|0|0|0|2801|31104\n01.07.2024|30.06.2025|31104|18000|0|0|0|0|5090|54194\n01.07.2025|30.06.2026|54194|18000|0|0|0|0|7705|79899\n01.07.2026|30.06.2027|79899|3000|0|58000|2000|0|0|26899\n",
+ "signatures": [
+  {
+   "authority": "Deputy Inspector General of Police, Operations, Lahore",
+   "bbox": [
+    1395,
+    2165,
+    2225,
+    2480
+   ],
+   "crop": "refundable_p001_sanction_signatory_for_dig.png",
+   "doc": "sanction order",
+   "forMarker": true,
+   "id": "sanction",
+   "page": 1,
+   "role": "sanctioning",
+   "roleLabel": "Sanctioning signature",
+   "signedBy": "SP Headquarters"
+  },
+  {
+   "authority": "Deputy Inspector General of Police, Operations, Lahore",
+   "crop": "refundable_p004_form05_ddo_signatory_stamp.png",
+   "doc": "FORM PAY 05",
+   "forMarker": true,
+   "id": "form05-ddo",
+   "page": 4,
+   "role": "ddo",
+   "roleLabel": "DDO signature",
+   "signedBy": "SP Headquarters"
+  }
+ ],
+ "slug": "refundable",
+ "sub": "Refundable advance for house repair, Rule 1.14(1)(a)(iv)",
+ "subject": "Barkat Ali, Constable (BS-07)",
+ "thumbs": [],
+ "verifications": {}
+}

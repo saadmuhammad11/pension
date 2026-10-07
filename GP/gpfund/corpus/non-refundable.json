@@ -1,0 +1,493 @@
+{
+ "custom": [
+  "NR-OFFICE-ANNOT"
+ ],
+ "dept": "School Education Department, GGHS R.A. Bazar, Lahore Cantt",
+ "diary": "987752 / 212877, 23-07-2026",
+ "docs": {
+  "changeForm": {
+   "cnic": "00010-0000104-4",
+   "cnicCrop": "non-refundable_p004_personal_no_and_cnic.png",
+   "ddoCrop": "non-refundable_p004_ddo_signature_stamp.png",
+   "ddoSigned": true,
+   "ddoStamp": "Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore",
+   "label": "FORM PAY 06",
+   "name": "Mrs. Rubina Tariq",
+   "page": 4,
+   "personalNo": "90000216",
+   "present": true,
+   "sigCrop": "non-refundable_p004_employee_specimen_signatures.png",
+   "sigKind": "signature"
+  },
+  "cnics": [
+   {
+    "attested": true,
+    "attestedBy": "Senior Headmistress, GGHS R.A. Bazar",
+    "crop": "non-refundable_p002_cnic_number_issue.png",
+    "expiry": "08-08-2032",
+    "name": "Rubina Tariq",
+    "number": "00001-0000104-4",
+    "page": 2,
+    "sigCrop": "non-refundable_p002_cnic_holder_signature.png",
+    "type": "smart",
+    "whose": "subscriber"
+   }
+  ],
+  "sanction": {
+   "ageAtSanction": {
+    "m": 8,
+    "y": 51
+   },
+   "amount": 490955,
+   "balanceStated": 613694,
+   "crop": "non-refundable_p001_sanction_signatory_stamp.png",
+   "date": "14-07-2026",
+   "dept": "School Education Department",
+   "limitClause": "1.16",
+   "orderNo": "113909/LHR/2026",
+   "page": 1,
+   "present": true,
+   "printedAuthority": "Chief Executive Officer (DEA) Lahore",
+   "qrId": "sanction",
+   "reason": "Age over 45 (born 05-11-1974)",
+   "rule": "Rule 1.16 of the Punjab GP Fund Rules 1978, with FD notification FD-SR-1-2-1/2000 of 12-12-2002"
+  }
+ },
+ "family": "ADVANCE",
+ "gazetted": "non-gazetted",
+ "key": "non-refundable",
+ "kind": "nonrefundable",
+ "label": "Non-Refundable Advance",
+ "note": "Mrs Rubina Tariq, PST. Rs 490,955 under Rule 1.16. QR-coded sanction and smart CNIC both scan and agree. CNIC digits transposed on Form 6-B.",
+ "pages": 7,
+ "persNos": [
+  {
+   "doc": "Sanction order",
+   "page": 1,
+   "value": "90000216"
+  },
+  {
+   "doc": "FORM PAY 06",
+   "page": 4,
+   "value": "90000216"
+  },
+  {
+   "doc": "SAP pay slip, August 2026",
+   "page": 5,
+   "value": "90000216"
+  },
+  {
+   "doc": "GPF Final Re-calculation Report",
+   "page": 7,
+   "value": "90000216"
+  }
+ ],
+ "personnelNo": "90000216",
+ "qr": [
+  {
+   "compare": [
+    {
+     "docLabel": "sanction",
+     "docVal": "Mrs. Rubina Tariq",
+     "field": "name",
+     "match": true,
+     "qrVal": "Rubina Tariq"
+    },
+    {
+     "docLabel": "sanction",
+     "docVal": "0000100001044",
+     "field": "CNIC",
+     "match": true,
+     "qrVal": "0000100001044"
+    },
+    {
+     "docLabel": "sanction",
+     "docVal": "PST (BS-14)",
+     "field": "post",
+     "match": true,
+     "qrVal": "PST (BS-14)"
+    },
+    {
+     "docLabel": "sanction",
+     "docVal": "GGHS R.A. Bazar",
+     "field": "school",
+     "match": true,
+     "qrVal": "GGHS R.A. Bazar, Lahore"
+    }
+   ],
+   "crop": "non-refundable_p001_sanction_qr.png",
+   "decoded": true,
+   "doc": "sanction order",
+   "id": "sanction",
+   "page": 1,
+   "payload": "Rubina Tariq CNIC# 0000100001044 posted as a PST (BS-14), posted at GGHS  R.A. BAZAR, Tehsil CANTT, District LAHORE",
+   "symbology": "QR code"
+  },
+  {
+   "compare": [
+    {
+     "docLabel": "card",
+     "docVal": "00001-0000104-4",
+     "field": "CNIC number",
+     "match": true,
+     "qrVal": "00001-0000104-4"
+    },
+    {
+     "docLabel": "number printed under the code",
+     "docVal": "505293991186",
+     "field": "card number",
+     "match": true,
+     "qrVal": "505293991186"
+    }
+   ],
+   "crop": "non-refundable_p003_cnic_back_qr.png",
+   "decoded": true,
+   "doc": "smart CNIC back",
+   "id": "cnic-back",
+   "page": 3,
+   "payload": "50529399118600001000010441",
+   "symbology": "QR code"
+  }
+ ],
+ "record": [
+  [
+   "Subscriber",
+   "Mrs Rubina Tariq w/o Tariq Ur Rehman, Primary School Teacher",
+   "Sanction · CNIC · SAP pay slip",
+   0.97,
+   1
+  ],
+  [
+   "Personnel no.",
+   "90000216",
+   "Sanction · Form 06 · pay slip · report",
+   0.99,
+   4
+  ],
+  [
+   "CNIC",
+   "00001-0000104-4 (smart card); Form 06 writes 00010-0000104-4",
+   "Card · QR codes · pay slip · Form 06",
+   0.97,
+   2
+  ],
+  [
+   "Date of birth, age at sanction",
+   "05-11-1974; 51 years 8 months on 14-07-2026",
+   "Sanction · CNIC · pay slip",
+   0.98,
+   1
+  ],
+  [
+   "Sanction",
+   "No. 113909/LHR/2026 dated 14-07-2026, Rs 490,955",
+   "Sanction order",
+   0.98,
+   1
+  ],
+  [
+   "Rule quoted",
+   "1.16, with FD notification FD-SR-1-2-1/2000 of 12-12-2002",
+   "Sanction order",
+   0.96,
+   1
+  ],
+  [
+   "Balance stated on sanction",
+   "Rs 613,694 (Rs 490,955 is exactly 80% of it)",
+   "Sanction order",
+   0.95,
+   1
+  ],
+  [
+   "GPF balance on pay slip",
+   "Rs 260,522, after this advance was posted",
+   "SAP pay slip, August 2026",
+   0.98,
+   5
+  ],
+  [
+   "Balance before the advance",
+   "Rs 743,677 at 30-06-2026",
+   "SAP re-calculation report",
+   0.98,
+   7
+  ],
+  [
+   "Office annotation on Form 06",
+   "490,955 less 12,274 (2.5%), net Rs 478,681",
+   "Form 06 foot",
+   0.9,
+   4
+  ]
+ ],
+ "sap": {
+  "payslip": {
+   "attested": false,
+   "basicPay": 50050,
+   "bps": "14",
+   "cnic": "0000100001044",
+   "ddoCode": "LV6280 Govt. Girls High School R.A. Bazar Lahore",
+   "designation": "PRIMARY SCHOOL TEACHER",
+   "gpfBalance": 260522,
+   "gpfNo": "",
+   "gpfSubscription": 3900,
+   "loanBalance": null,
+   "loanInstalment": null,
+   "month": "August 2026",
+   "name": "RUBINA TARIQ",
+   "oldGpfNo": "",
+   "osdPost": "",
+   "page": 5,
+   "persNo": "90000216"
+  },
+  "recalc": {
+   "page": 7,
+   "persNo": "90000216",
+   "reportDate": "10.09.2026",
+   "rows": [
+    {
+     "adjustments": 0,
+     "closing": 1503,
+     "end": "30.06.2011",
+     "interest": 43,
+     "opening": 0,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2010",
+     "subscription": 1460,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 8858,
+     "end": "30.06.2012",
+     "interest": 675,
+     "opening": 1503,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2011",
+     "subscription": 6680,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 17525,
+     "end": "30.06.2013",
+     "interest": 1527,
+     "opening": 8858,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2012",
+     "subscription": 7140,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 27553,
+     "end": "30.06.2014",
+     "interest": 2888,
+     "opening": 17525,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2013",
+     "subscription": 7140,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 38385,
+     "end": "30.06.2015",
+     "interest": 3692,
+     "opening": 27553,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2014",
+     "subscription": 7140,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 50215,
+     "end": "30.06.2016",
+     "interest": 4690,
+     "opening": 38385,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2015",
+     "subscription": 7140,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 67016,
+     "end": "30.06.2017",
+     "interest": 6282,
+     "opening": 50215,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2016",
+     "subscription": 10519,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 98376,
+     "end": "30.06.2018",
+     "interest": 8989,
+     "opening": 67016,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2017",
+     "subscription": 22371,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 146377,
+     "end": "30.06.2019",
+     "interest": 16561,
+     "opening": 98376,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2018",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 197426,
+     "end": "30.06.2020",
+     "interest": 19609,
+     "opening": 146377,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2019",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 245808,
+     "end": "30.06.2021",
+     "interest": 16942,
+     "opening": 197426,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2020",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 309840,
+     "end": "30.06.2022",
+     "interest": 32592,
+     "opening": 245808,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2021",
+     "subscription": 31440,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 399963,
+     "end": "30.06.2023",
+     "interest": 47163,
+     "opening": 309840,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2022",
+     "subscription": 42960,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 506179,
+     "end": "30.06.2024",
+     "interest": 59416,
+     "opening": 399963,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2023",
+     "subscription": 46800,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 619208,
+     "end": "30.06.2025",
+     "interest": 66229,
+     "opening": 506179,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2024",
+     "subscription": 46800,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 743677,
+     "end": "30.06.2026",
+     "interest": 77669,
+     "opening": 619208,
+     "permanentAdvance": 0,
+     "recTempAdvance": 0,
+     "start": "01.07.2025",
+     "subscription": 46800,
+     "tempAdvance": 0
+    },
+    {
+     "adjustments": 0,
+     "closing": 260522,
+     "end": "30.06.2027",
+     "interest": 0,
+     "opening": 743677,
+     "permanentAdvance": 490955,
+     "recTempAdvance": 0,
+     "start": "01.07.2026",
+     "subscription": 7800,
+     "tempAdvance": 0
+    }
+   ]
+  },
+  "source": "case"
+ },
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000216\nName: RUBINA TARIQ\nDesignation: PRIMARY SCHOOL TEACHER\nCNIC: 0000100001044\nMonth: August 2026\nBPS: 14\nDDO Code: LV6280 Govt. Girls High School R.A. Bazar Lahore\nGPF No: \nOld GPF No: \nGPF Balance: 260522\nGPF Subscription: 3900\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 50050\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000216\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2010|30.06.2011|0|1460|0|0|0|0|43|1503\n01.07.2011|30.06.2012|1503|6680|0|0|0|0|675|8858\n01.07.2012|30.06.2013|8858|7140|0|0|0|0|1527|17525\n01.07.2013|30.06.2014|17525|7140|0|0|0|0|2888|27553\n01.07.2014|30.06.2015|27553|7140|0|0|0|0|3692|38385\n01.07.2015|30.06.2016|38385|7140|0|0|0|0|4690|50215\n01.07.2016|30.06.2017|50215|10519|0|0|0|0|6282|67016\n01.07.2017|30.06.2018|67016|22371|0|0|0|0|8989|98376\n01.07.2018|30.06.2019|98376|31440|0|0|0|0|16561|146377\n01.07.2019|30.06.2020|146377|31440|0|0|0|0|19609|197426\n01.07.2020|30.06.2021|197426|31440|0|0|0|0|16942|245808\n01.07.2021|30.06.2022|245808|31440|0|0|0|0|32592|309840\n01.07.2022|30.06.2023|309840|42960|0|0|0|0|47163|399963\n01.07.2023|30.06.2024|399963|46800|0|0|0|0|59416|506179\n01.07.2024|30.06.2025|506179|46800|0|0|0|0|66229|619208\n01.07.2025|30.06.2026|619208|46800|0|0|0|0|77669|743677\n01.07.2026|30.06.2027|743677|7800|0|0|0|490955|0|260522\n",
+ "signatures": [
+  {
+   "authority": "Chief Executive Officer, District Education Authority Lahore",
+   "bbox": [
+    1660,
+    1950,
+    2330,
+    2650
+   ],
+   "crop": "non-refundable_p001_sanction_signatory_stamp.png",
+   "doc": "sanction order",
+   "forMarker": true,
+   "id": "sanction",
+   "page": 1,
+   "role": "sanctioning",
+   "roleLabel": "Sanctioning signature",
+   "signedBy": "Assistant Director (Admin)"
+  },
+  {
+   "authority": "Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore",
+   "crop": "non-refundable_p004_ddo_signature_stamp.png",
+   "doc": "FORM PAY 06",
+   "forMarker": false,
+   "id": "form06-ddo",
+   "page": 4,
+   "role": "ddo",
+   "roleLabel": "DDO signature",
+   "signedBy": "Senior Headmistress"
+  }
+ ],
+ "slug": "non-refundable",
+ "sub": "Non-refundable advance at age 50 or over, Rule 1.16",
+ "subject": "Rubina Tariq, PST (BS-14)",
+ "thumbs": [],
+ "verifications": {}
+}
