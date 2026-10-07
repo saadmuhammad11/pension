@@ -1,16 +1,38 @@
 # Audit status — `fix/high-findings`
 
-Reconciled status of every audit item, as of **6 October 2026** (night). Statuses describe the
-code on the branch `fix/high-findings` plus the data-handling work done on this box today. Nothing
-on the branch is pushed, merged or deployed yet (see N1), so none of the FIXED rows is live until it is.
+Reconciled status of every audit item, re-verified on **7 October 2026** (morning) against the
+code on `fix/high-findings` (`ef13f50`), the three test suites and the live trial box. Nothing on
+the branch is pushed, merged or deployed (see N1), so none of the FIXED rows is live until it is.
 
 Severity and numbering follow the audit report of 6 October 2026: M = critical findings, H = high,
-S/R/C/G/D/L = medium and low by area, N = new items raised while fixing (N12–N17 added in the
-evening pass, which also reconciled the later report of 6 Oct, 13:22, items 1–11). Every commit on
-the branch passed all three suites (pension, GP Fund engine, GP Fund backend), run on a snapshot of
-that commit; the portal type-checks.
+S/R/C/G/D/L = medium and low by area, N = new items raised while fixing (N12–N17 from the evening
+pass of 6 Oct, which also reconciled the later report of 6 Oct, 13:22, items 1–11; N19 from the
+7 Oct verification).
 
-**Totals.** Earlier audit (57 items): 42 fixed, 1 partly fixed, 13 need a business decision, 1 not fixed. New items (17): 11 fixed, 2 need a decision, 4 not fixed. Remaining open across both: 5 not fixed (N1, N6, L1, N11, N15), 1 partly fixed (M7), 15 awaiting a decision.
+**Verification of 7 Oct 2026.** Every commit hash cited below is on the branch, every test file cited
+exists, and the three suites were run on a `git archive` snapshot of `ef13f50`:
+
+| Suite | Result |
+|---|---|
+| Pension (`tests/`) | 806 tests, OK (9 skipped, 1 expected failure), 254 s |
+| GP Fund engine (`GP/gpfund/tests`) | 184 tests, OK |
+| GP Fund backend (`GP/backend`, pytest) | 95 passed, 0 failed |
+| Portal `tsc --noEmit` | passes |
+| `deploy/check-release-pii.py` on the snapshot | passes |
+
+The suites pass only after copying five git-ignored folders into the snapshot (`rules/packs`,
+`rules/specimens`, `tests/fixtures`, `GP/gpfund/corpus/*.json`, `infra/models`); a bare clone fails
+116 pension tests with `PackError: no rule packs found` and cannot import the GP engine at all. That
+is N12 reopened as PARTLY FIXED (see the row). Live box: model ports 8011/8012/8093 time out from
+Spark-1 while 5184 answers (firewall rule active); PyJWT 2.15.0 in the services' venv; the three HESK
+containers still up with 3306/3307/5672/15672 reachable from the LAN; 88 of 93 accounts on `1234`;
+API, portal and GP module running since 6 Oct 16:28 from this working tree at commit `74a31c5`, 30
+commits behind the branch head.
+
+**Totals.** Earlier audit (57 items): 41 fixed, 1 partly fixed, 13 need a business decision, 1 not
+fixed, 1 deploy step. New items (18): 10 fixed, 1 partly fixed, 2 need a decision, 3 not fixed,
+2 deploy steps. **Still left: 24 rows** — 15 awaiting a decision (14 pension-rules, 1 operations),
+4 not fixed (N6, N11, L1, N15), 2 partly fixed (M7, N12), 3 deploy steps (N1, D2, N19).
 
 ## Real claimant data (M8 / N2 / N4 / N6)
 
@@ -28,8 +50,8 @@ that commit; the portal type-checks.
   `artifacts/portal.sqlite3`, `artifacts/golden`, `GP/backend/data`, `GP/agofficegpfund/_wip-*`, the
   root case PDFs, `SacnCases.rar`, `agofficegpfund (2).zip`). All of it is git-ignored, excluded by
   `deploy/build-release.sh`, owned by `tmc` (the user every service runs as) and set to owner-only
-  access (700/600). The single-file demos (N6) and the Claude session transcripts (N11) are the two
-  remaining copies that need handling.
+  access (700/600). The single-file demos (N6, set to owner-only on 7 Oct) and the Claude session
+  transcripts (N11) are the two remaining copies that need handling.
 - **Sign-in sheet (6 Oct, evening):** `artifacts/credentials/credentials.csv` and `.html` were stale
   (generated passwords from 25 Sep; every trial account is on `1234`). Rewritten with
   `python3 -m api.db refresh-credentials 1234` (`599efc5`): 88 accounts, owner-only files, no
@@ -41,11 +63,11 @@ that commit; the portal type-checks.
 |---|---|---|---|---|
 | M1 | Critical | Auto-approval ignores the engine's verdict | **NEEDS BUSINESS DECISION** | `outcome()` still has no verdict check. Decision sheet item 1. (Later report item 1.) |
 | M2 | Critical | `CHANGE_ME`/short JWT secret accepted | **FIXED** | `2280c44`. `tests/test_production_hardening.py` F11 (4 tests, including the real process exiting with code 1) |
-| M3 | Critical | Qualifying service loses a year at 6 months | **NEEDS BUSINESS DECISION** | Re-run today: still `29y 5m 30d`. Decision sheet item 2 |
-| M4 | Critical | Every GP Fund scan read crashed (NameError) | **FIXED** | `b519e24`. `GP/backend/tests/test_scan_read_e2e.py` (failed before, passes after). The running GP module hasn't been restarted |
+| M3 | Critical | Qualifying service loses a year at 6 months | **NEEDS BUSINESS DECISION** | Re-run 7 Oct: entry 1 Jan 1997, retirement 30 Jun 2026 → `29y 5m 29d` (exclusive) / `29y 5m 30d` (inclusive) → 29 years reckoned; the day after → 30. Decision sheet item 2 |
+| M4 | Critical | Every GP Fund scan read crashed (NameError) | **FIXED** | `b519e24`. `GP/backend/tests/test_scan_read_e2e.py` (failed before, passes after). Live since the 6 Oct 16:28 restart (the fix predates it) |
 | M5 | Critical | TIFF/GIF image bomb runs the server out of memory | **FIXED** | `d3577df`. `tests/test_image_limits.py` (200-frame bomb refused; 133 MB peak) |
 | M6 | Critical | LibreOffice fetches addresses / reads local files | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` (live listener receives no requests). Content checks; no sandbox is possible on this box |
-| M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** (stop-gap live 6 Oct 2026) | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live:** `deploy/lock-model-ports.sh` (`5e15060`) applied and persisted on the trial box (`/usr/local/sbin/lock-model-ports.sh`, `pension-model-ports.service`): 8011/8012/8093 answer on loopback (HTTP 200) and time out from a laptop. The lasting fix, `--host 127.0.0.1` plus an API key in `infra/*.service`, rolls out at deploy (checklist §8.1). (Later report item 4.) |
+| M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** (stop-gap live) | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live, re-checked 7 Oct from Spark-1:** 8011/8012/8093 time out, 5184 answers, so the nftables rule from `deploy/lock-model-ports.sh` is in force. `pension-model-ports.service` is enabled but shows `inactive`: the rule was applied by hand, the unit never started; it re-applies at boot. The three vLLM processes still run from `~/Desktop/Pension-AG/infra`, on `0.0.0.0`, with no key; `/etc/pension/models.env` does not exist yet. The lasting fix (`--host 127.0.0.1` plus the key in `infra/*.service`) is a deploy step (checklist §8.1). (Later report item 4.) |
 | M8 | Critical | Real CNICs and names in code and history | **FIXED** (6 Oct 2026) | Code: `f329438`, plus `deploy/check-release-pii.py` (passes on every commit and on every blob in the local object store). History rewritten; GitHub recreated clean, `63185d3` no longer served (N2). Local copies shredded (N4). Remaining copies: the demos (N6) and the session transcripts (N11) |
 | H1 | High | Two reads of a page disagree, figures used anyway | **NEEDS BUSINESS DECISION** | The agreement result is stored but never read. Item 3 |
 | H2 | High | Pay lines from several documents summed; §8.4 check never called | **NEEDS BUSINESS DECISION** | `reconcile_*` still has no callers. Item 4 |
@@ -58,10 +80,11 @@ that commit; the portal type-checks.
 | H9 | High | Re-verify race (old run's result applied) | **FIXED** | `ef18463`. `tests/test_reverify_race.py` (fails without the fix) |
 | H10 | High | Waivers and approvals not on the audit trail | **FIXED** | `fab85f4`. `tests/test_clearance_audit.py`. Waivers carried into a resubmission are a policy question (item 11) |
 | H11 | High | GP Fund actions on rejected or returned cases | **FIXED** | `a861ade`. `tests/test_gpf_actions_follow_status.py` |
-| N1 | High | **New:** none of today's fixes is live | **NOT FIXED** | API, portal and GP module restarted 6 Oct 16:28 for PyJWT only (D2); the branch is not merged, pushed or deployed; the portal bundle is not rebuilt |
+| N1 | High | **New:** none of the fixes is live | **DEPLOY STEP** | API (8110), portal (5184) and GP module (8201) have run since 6 Oct 16:28 from this working tree, then at `74a31c5`: 30 commits and 37 runtime files behind `ef13f50` (live `/api/health` still returns the old `{"ok":true,"runs":0}`). Portal bundle built 6 Oct 15:54: has S2/S4/S5, lacks L5 and L9. Branch is 57 commits ahead of `origin/main` and not pushed |
 | N2 | High | **New:** GitHub still serves the pre-scrub commit | **FIXED** (6 Oct 2026) | Repository deleted and recreated. `git ls-remote origin main` = `f329438`; `gh api repos/…/commits/63185d3` → "No commit found for SHA" (HTTP 422) |
 | N3 | High | **New:** HTML renamed `.doc`/`.rtf` and `.docx` linked images also made LibreOffice fetch | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` |
 | N13 | High | **New (later report 2):** in production, the first person to type `1234` takes the account | **FIXED** (6 Oct 2026) | `2cc3476`. In production a weak password signs nobody in (403 "trial password is no longer accepted"); the administrator's reset hands out a password the officer replaces at first sign-in. `tests/test_trial_password_refused_in_production.py` |
+| N19 | Medium | **New (7 Oct):** the live database is still the trial's accounts | **DEPLOY STEP** | 88 of 93 accounts verify against `1234` (86 DDOs, `ag.reviewer`, `admin`): by design for the trial, and N13 refuses them in production, but the checklist (§8.1) requires no `1234` and no trial accounts on the production server. Leftover test accounts: `audit.tmp2` (DDO) is still **active**; `audit.tmp1`, `sectest.audit`, `legacy.import`, `ahmed` disabled. `artifacts/credentials/credentials.csv` (owner-only) must not go to the server (`forget-credentials`, F7) |
 | S1 | Medium | Session tokens written to nginx's access log | **FIXED** (6 Oct 2026) | `72a5666`. `log_format pension` with the request line rewritten to `token=[redacted]`, used by both server blocks. The API runs without an access log and the portal server logs at warning level, so nginx was the only copy. `tests/test_nginx_access_log_redacts_token.py`. (Later report item 6; the bearer token outliving sign-out is N15.) |
 | S2 | Medium | Uploaded HTML/SVG opens on the portal's address | **FIXED** | `ae9ce8b`. `tests/test_documents_cannot_run.py` |
 | S3 | Medium | GP Fund uploads served inline (`.html`/`.js`) | **FIXED** | `0afba15`. `GP/backend/tests/test_scan_types.py` |
@@ -86,16 +109,16 @@ that commit; the portal type-checks.
 | G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **NEEDS BUSINESS DECISION** | `"ADMIN": "dag"` unchanged |
 | G7 | Medium | No locking on GP Fund case state | **FIXED** (6 Oct 2026) | `6ecb0b3`. One re-entrant lock per case around every mutating service method; other cases not held up. `GP/backend/tests/test_case_lock.py` |
 | D1 | Medium | Release files owned by uid 1000 | **FIXED** (6 Oct 2026) | `4054f55`. `tar --owner=0 --group=0 --numeric-owner`; the test packs a stand-in stage with the script's own flags and reads the entries back. `tests/test_release_archive_ownership.py` |
-| D2 | Medium | PyJWT 2.13 advisories | **FIXED** (6 Oct 2026) | Pinned to 2.15.0 in `8011f41`. Installed into the services' venv (`uv pip install --no-deps`) and API, portal and GP Fund restarted 16:28 with no run in progress; all three health checks OK; sign-in and `/auth/me` on the new token both 200. The production server gets it from the checklist (§8.1). (Later report item 7.) |
+| D2 | Medium | PyJWT 2.13 advisories | **DEPLOY STEP** (done on the trial box) | Pinned to 2.15.0 in `8011f41`; verified 7 Oct: `/home/tmc/vllm_env` has 2.15.0 and the services were restarted on it 6 Oct 16:28. The production server gets it from the checklist (§8.1; that line still says the trial box has 2.13.0 — stale). (Later report item 7.) |
 | D3 | Medium | `numpy`/`opencv`/`zxingcpp` missing from requirements | **FIXED** (6 Oct 2026) | `c901d96`. `numpy==2.3.5`, `opencv-python-headless==5.0.0.93`, `zxing-cpp==3.1.1`; a test maps the shipped code's imports to distributions and expects each pinned. `tests/test_requirements_cover_imports.py` |
 | N4 | Medium | **New:** local copies of real data remain | **FIXED** (6 Oct 2026) | 306 MB shredded: `artifacts/backup-pii-scrub-20261006/` (`originals.tar`, `pre-scrub.bundle`), `dist-release/pension-1.0.0-rc1.tgz`, two session scratchpads under `/tmp/claude-1000`, `~/pension_check-backup-2026-09-09.tgz`, `artifacts/backup-flags-ocr-20260925/`, `artifacts/archive-ediary-bridge-20260925/`, both `ediary-hesk-*.sql`, `backup-portal-db-2026092{5,9}/` and `-20260930/`. Re-check after: repo clean, `/tmp/claude-1000` clean, fresh release build passes the CNIC check; only the live trial data (above) is still flagged. Live data is git-ignored, excluded from the release, and set to 700/600 |
 | N5 | Medium | **New:** uncommitted `deploy/` edits of unknown owner | **FIXED** (6 Oct 2026) | Owner found: the audit session of 6 Oct (13:18–13:21). Reviewed and all three kept, committed separately: nginx redirect `e5018b9`, PyJWT pin `8011f41`, firewall script `5e15060` |
-| N6 | Medium | **New:** single-file demos contain real CNICs | **NOT FIXED** | `pension-portal.html`, `pension-portal rd new.html`, `demo/pension-demo.html` and `portals/dist-demo/` each embed real scans; the CNIC check finds 7 real numbers in each (28 hits). Untracked, git-ignored, never shipped; the scans can't be faked. **Do not share these files outside the team.** |
-| N12 | Medium | **New:** `config/case_types.json`, the GP fixtures and the GP test data were not in git | **FIXED** (6 Oct 2026) | `664ce02`. The code-extension whitelist ignored every `.json`, so a fresh clone could not start the API or run the GP suites (the release build worked only because it copies from the working tree). Tracked now (all pass the CNIC check); `tests/test_clone_has_what_the_code_needs.py` keeps them so |
-| N14 | Medium | **New (later report 5):** the old HESK helpdesk containers still run, MariaDB on 3306/3307 and RabbitMQ on 5672/15672 open to the network | **NEEDS DECISION (operations)** | Re-checked 6 Oct night: `agpension-hesk-web-1` (:8080), `agpension-hesk-db-1` (0.0.0.0:3306, :3307), `agpension-hesk-rabbitmq-1` (0.0.0.0:5672, :5673, :15672, :15673) are up. They belong to the abandoned e-diary stack (`~/Desktop/Pension-AG/Code Pension`), not to this repository; nothing here uses them. Stopping them is an operations action on a shared box: `docker compose down` in that folder, or at least publish those ports on 127.0.0.1 only |
+| N6 | Medium | **New:** single-file demos contain real CNICs | **NOT FIXED** | `pension-portal.html`, `pension-portal rd new.html`, `demo/pension-demo.html` and `portals/dist-demo/` each embed real scans (7 real numbers each). Untracked, git-ignored, never shipped; set to owner-only (600/700) on 7 Oct. Decide: delete, or keep team-only. **Do not share these files outside the team.** |
+| N12 | High | **New:** data files the code needs are not in git | **PARTLY FIXED** (reopened 7 Oct) | `664ce02` tracked `config/case_types.json`, the GP fixtures and test data. Still ignored by the `.gitignore` whitelist: `rules/packs/*.json` (both rule packs), `rules/specimens/` (register + 3 signature scans), `tests/fixtures/`, `GP/gpfund/corpus/*.json`, `infra/models/`. A bare clone cannot determine any case (`PackError: no rule packs found`), 116 pension tests error and the GP engine does not import; the release works only because `build-release.sh` copies from the working tree. All five pass the CNIC check (300 KB). Track them and extend `tests/test_clone_has_what_the_code_needs.py` |
+| N14 | Medium | **New (later report 5):** the old HESK helpdesk containers still run, MariaDB on 3306/3307 and RabbitMQ on 5672/15672 open to the network | **NEEDS DECISION (operations)** | Re-checked 7 Oct: `agpension-hesk-web-1` (:8080), `agpension-hesk-db-1` (0.0.0.0:3306, :3307), `agpension-hesk-rabbitmq-1` (0.0.0.0:5672, :5673, :15672, :15673) up 47 h; from Spark-1 the 3306 banner and the RabbitMQ console (15672, HTTP 200) are reachable. Started from `~/Desktop/Pension-AG/Code Pension/docker-compose.yml`, the abandoned e-diary stack; nothing here uses them. `docker compose down` there, or publish those ports on 127.0.0.1 only |
 | N16 | Medium | **New (later report 8):** every open browser's 3-second poll made the API call GP Fund | **FIXED** (6 Oct 2026) | `7c5f435`. Request-path syncs do nothing within `PENSION_SYNC_MIN_INTERVAL_S` (1 s) of the last; the reconciler's timer always syncs. `tests/test_sync_throttle.py` |
 | N17 | Medium | **New (later report 11):** `/api/health` checked nothing | **FIXED** (6 Oct 2026) | `77bf493`. 503 when the database cannot be read or the artefact disk is below its reserve; the model servers and GP Fund reported as `degraded`, probed at most every 30 s with a 2 s timeout. `tests/test_health_checks_something.py` |
-| L1 | Low | 2-digit years read as 20xx | **NOT FIXED** | Fails safe |
+| L1 | Low | 2-digit years read as 20xx | **NOT FIXED** | `rules/case_type.py` death date: `year < 100` → `+2000`, then a 1940–2100 range check. Fails safe (a 19xx death date read as 20xx fails the entry < death check or lands in the future) |
 | L2 | Low | GP Fund cookie never gets `Secure` | **FIXED** (6 Oct 2026) | `b347792`. Secure over HTTPS and always in production; the HTTP-only trial unchanged. `tests/test_gpf_cookie_secure.py` |
 | L3 | Low | nginx and the app send conflicting headers | **FIXED** (6 Oct 2026) | `8e11d0b`. nginx adds only HSTS; the portal server sets the rest. `tests/test_headers_single_source.py` |
 | L4 | Low | Re-enabled trial account keeps its 1234 password | **FIXED** (6 Oct 2026) | `b8706de`. Enabling an account in production sets `must_change_password`; the trial unchanged. `tests/test_reenabled_account_changes_password.py` |
@@ -111,14 +134,13 @@ that commit; the portal type-checks.
 | N8 | Low | **New:** new settings missing from `pension.env.example` | **FIXED** (6 Oct 2026) | `b5e602e`. Every `PENSION_*`/`GPF_*` the code reads is listed with what it does; `tests/test_env_example_is_complete.py` fails on a missing or stale one |
 | N9 | Low | **New:** `docs/*.md` not tracked in git | **FIXED** (6 Oct 2026) | `docs/STATUS.md`, `docs/DEPLOYMENT.md` and `docs/pension-rules-decisions.md` tracked on `fix/high-findings`; `.gitignore` whitelists `docs/*.md` |
 | N10 | Low | **New:** domain brief wrongly says day-counting is "immaterial" | **NEEDS BUSINESS DECISION** | Settled together with M3 |
-| N11 | Low | **New:** Claude session transcripts hold real CNICs | **NOT FIXED** (deliberate) | `~/.claude/projects/-home-tmc-Desktop-pension/` (~2,060 hits in 50 transcripts, 293 MB) plus a few in neighbouring project folders. `~/.claude` set to owner-only (700/600) on 6 Oct. **Purge the transcripts after the fix work is complete**; they are the working history of the fixes until then |
-| N15 | Low | **New (later report 6b):** sign-out ends the tab's copy of the token, not the token | **NOT FIXED** | `/api/v2/auth/logout` clears the GP Fund frame cookie only; the bearer token stays valid until its 12-hour expiry. Ending it needs either a token_version bump (ends every session of that officer, all devices) or a server-side list of signed-out tokens. Low: the token lives in the tab, never in a cookie or on disk |
+| N11 | Low | **New:** Claude session transcripts hold real CNICs | **NOT FIXED** (deliberate) | `~/.claude/projects/-home-tmc-Desktop-pension/` (30 transcripts, 299 MB on 7 Oct) plus a few in neighbouring project folders. `~/.claude` owner-only (700). **Purge the transcripts after the fix work is complete**; they are the working history of the fixes until then |
+| N15 | Low | **New (later report 6b):** sign-out ends the tab's copy of the token, not the token | **NOT FIXED** | Re-checked 7 Oct: `/api/v2/auth/logout` still only deletes the GP Fund frame cookie; the bearer token stays valid until its 12-hour expiry. Ending it needs a token_version bump (ends every session of that officer) or a server-side list of signed-out tokens. Low: the token lives in the tab, never in a cookie or on disk |
 
 ## Action items
 
-1. Merge and deploy the branch (N1); until then, none of the FIXED rows is live. Rebuild the portal bundle (S4, L5, L9 take effect then).
-2. At deploy: switch the model units to `--host 127.0.0.1` plus the API key (M7), and install PyJWT 2.15.0 on the production server (done on the trial box, D2). Both are on the go-live checklist, `docs/DEPLOYMENT.md` §8.1.
-3. Decide on the HESK containers (N14): stop them, or publish 3306/3307/5672/15672 on 127.0.0.1 only.
-4. Settle the business-decision items (decision sheet: `docs/pension-rules-decisions.md`).
-5. When the fix work is complete, purge the session transcripts (N11) and decide what to do with the demos (N6).
-6. Remaining low items: L1 (fails safe), N15 (sign-out and the bearer token).
+1. **Pension-rules owner:** settle the decision sheet (`docs/pension-rules-decisions.md`, items 1–11): M1, M3, H1–H8, C1, G1, G6, N10. M1 and M3 are critical and block go-live.
+2. **Claude:** track the five git-ignored data folders and extend the clone test (N12); end the bearer token at sign-out (N15); 2-digit year pivot (L1). Full suites after each.
+3. **Deploy (user):** push and merge the branch, rebuild the portal bundle, build the release (N1); on the production server install the model units with `--host 127.0.0.1` and the key in `/etc/pension/models.env` (M7), PyJWT 2.15.0 (D2), a fresh database or reset passwords with the trial and test accounts removed and no `credentials.csv` (N19). Restart only with no run in progress.
+4. **Operations (user):** stop the HESK containers or bind 3306/3307/5672/15672 to 127.0.0.1 (N14); stop the model servers run from `~/Desktop/Pension-AG` once the keyed units are in.
+5. After go-live: purge the session transcripts (N11); delete or keep the demos team-only (N6).
