@@ -87,6 +87,8 @@ PERMISSIONS: dict[str, dict[str, object]] = {
 #: administrator runs the deployment and maintains the reference data; a DDO submits.
 ACCOUNT_DESKS: dict[str, tuple[str, ...]] = {
     "AG_REVIEWER": ("AG_REVIEWER", "AG_DETERMINING", "DAG_PENSION"),
+    # The Deputy AG (role AG_DAG, 7 Oct 2026) holds the DAG desk and may act at the desks below it.
+    "AG_DAG": ("DAG_PENSION", "AG_DETERMINING", "AG_REVIEWER", "REFERENCE_ADMIN"),
     "ADMIN": ("SYSTEM_ADMIN", "REFERENCE_ADMIN"),
     "DEPT_OFFICER": ("AD_SUBMITTER",),
 }

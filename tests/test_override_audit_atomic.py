@@ -31,7 +31,7 @@ class OverrideAuditAtomic(unittest.TestCase):
         case_id = self.create(police)["case"]["id"]
         reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
-        admin = self.login("admin", "ag")
+        admin = self.login("fatima.hameed", "ag")   # the override is the Deputy AG's (G6)
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=admin).json()["status"], "UNDER_REVIEW")
         return case_id, admin
 
@@ -51,7 +51,7 @@ class OverrideAuditAtomic(unittest.TestCase):
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=admin).json()
         self.assertEqual(case["status"], "UNDER_REVIEW")                 # the move did not happen...
         self.assertNotIn("OVERRIDE", [e["action"] for e in case["events"]])   # ...and left no history row
-        log = self.client.get("/api/v2/admin/audit-log", headers=admin).json()
+        log = self.client.get("/api/v2/admin/audit-log", headers=self.login("admin", "ag")).json()
         self.assertNotIn("CASE_OVERRIDE", [row["action"] for row in log])
 
     def test_a_completed_override_still_carries_its_audit_row(self) -> None:
@@ -59,10 +59,11 @@ class OverrideAuditAtomic(unittest.TestCase):
         r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=admin,
                              json={"to_status": "RETURNED", "reason": "Filed against the wrong claimant."})
         self.assertEqual(r.status_code, 200, r.text)
-        log = self.client.get("/api/v2/admin/audit-log", headers=admin).json()
-        self.assertEqual(log[0]["action"], "CASE_OVERRIDE")
-        self.assertEqual((log[0]["before"], log[0]["after"]), ({"status": "UNDER_REVIEW"}, {"status": "RETURNED"}))
-        self.assertEqual(log[0]["reason"], "Filed against the wrong claimant.")
+        log = self.client.get("/api/v2/admin/audit-log", headers=self.login("admin", "ag")).json()
+        row = next(r for r in log if r["action"] == "CASE_OVERRIDE")
+        self.assertEqual((row["before"], row["after"]), ({"status": "UNDER_REVIEW"}, {"status": "RETURNED"}))
+        self.assertEqual(row["reason"], "Filed against the wrong claimant.")
+        self.assertEqual(row["actor_role"], "AG_DAG")                    # the Deputy AG, by name (G6)
 
 
 if __name__ == "__main__":

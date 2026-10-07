@@ -58,7 +58,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
 
     def test_every_view_agrees_through_every_status_change(self) -> None:
         from api import db
-        ag, admin = self.login("syed.haider"), self.login("admin")
+        ag, admin = self.login("syed.haider"), self.login("fatima.hameed")   # the Deputy AG overrides (G6)
         self._check("start")
 
         # A new case in each of two departments, and one of a department with no section (HEALTH, a

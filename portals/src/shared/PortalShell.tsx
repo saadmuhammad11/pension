@@ -40,7 +40,7 @@ const AG_WAITING: CaseStatus[] = ['FORWARDED', 'AI_FAILED', 'UNDER_REVIEW']
 type Home = 'register' | 'review' | 'admin'
 
 function homeFor(user: SessionUser): Home {
-  if (user.role === 'AG_REVIEWER') return 'review'
+  if (user.role === 'AG_REVIEWER' || user.role === 'AG_DAG') return 'review'
   if (user.role === 'ADMIN') return 'admin'
   return 'register'
 }

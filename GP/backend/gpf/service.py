@@ -40,9 +40,16 @@ def _now() -> str:
 
 
 def _officer(officer_id: str) -> dict:
-    o = next((x for x in OFFICERS if x["id"] == officer_id), None)
+    """The acting officer: a band (``ao``), or ``band|Name`` where the pension portal named the
+    signed-in officer (G6). The band gives the powers and the designation; the name, where
+    given, is the one every record carries -- the placeholder name is recorded only when the
+    module is used on its own."""
+    band, _, name = (officer_id or "").partition("|")
+    o = next((x for x in OFFICERS if x["id"] == band.strip()), None)
     if not o:
-        raise ServiceError(f"Unknown officer '{officer_id}'.", 400)
+        raise ServiceError(f"Unknown officer '{band}'.", 400)
+    if name.strip():
+        return {**o, "name": name.strip(), "named": True}
     return o
 
 

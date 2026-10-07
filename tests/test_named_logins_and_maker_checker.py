@@ -75,14 +75,14 @@ class NamedLogins(unittest.TestCase):
         conn = db.connect()
         try:
             pw = db.add_reviewer("ayesha.khan", "Ayesha Khan (Auditor, Pension Wing)", conn=conn)
-            pw_dag = db.add_reviewer("fatima.hameed", "Fatima Hameed (DAG Pension)", dag=True, conn=conn)
+            pw_dag = db.add_reviewer("fatima.ali", "Fatima Ali (DAG Pension)", dag=True, conn=conn)
             with self.assertRaises(ValueError):
                 db.add_reviewer("dag", "Desk", dag=True, conn=conn)          # a desk, not a name
             with self.assertRaises(ValueError):
                 db.add_reviewer("ayesha.khan", "Again", conn=conn)
         finally:
             conn.close()
-        for username, password, role in (("ayesha.khan", pw, "AG_REVIEWER"), ("fatima.hameed", pw_dag, "AG_DAG")):
+        for username, password, role in (("ayesha.khan", pw, "AG_REVIEWER"), ("fatima.ali", pw_dag, "AG_DAG")):
             r = self.client.post("/api/v2/auth/login", json={"username": username, "password": password}, headers={"X-Portal": "ag"})
             self.assertEqual(r.status_code, 200, r.text)
             self.assertEqual(r.json()["user"]["role"], role)
@@ -134,16 +134,22 @@ class MakerChecker(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()["case"]["status"], "APPROVED")
 
-    def test_an_administrator_who_filed_the_case_cannot_approve_it_by_override(self) -> None:
-        admin = self.login("admin", "ag")
-        case_id = self.create(admin, department_code="PUNJAB_POLICE")["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+    def test_the_deputy_ag_cannot_override_to_approved_a_case_she_submitted(self) -> None:
+        police = self.login("punjab-police", "punjab-police")
+        case_id = self.create(police)["case"]["id"]
+        reviewer, dag = self.login("syed.haider", "ag"), self.login("fatima.hameed", "ag")
         self.verify(reviewer, case_id)
-        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=admin,
+        conn = db.connect()
+        try:
+            me = conn.execute("SELECT id FROM users WHERE username = 'fatima.hameed'").fetchone()["id"]
+            conn.execute("UPDATE cases SET created_by = ? WHERE id = ?", (me, case_id)); conn.commit()
+        finally:
+            conn.close()
+        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag,
                              json={"to_status": "APPROVED", "remark": "Override to approved by the person who filed it."})
         self.assertEqual(r.status_code, 403, r.text)
         self.assertIn("maker-checker", r.json()["detail"])
-        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=admin,
+        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag,
                              json={"to_status": "RETURNED", "remark": "Override to returned; not an approval."})
         self.assertEqual(r.status_code, 200, r.text)
 

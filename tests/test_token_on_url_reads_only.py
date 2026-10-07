@@ -21,7 +21,7 @@ class TokenOnTheAddress(unittest.TestCase):
     login = _v2.V2Test.login
 
     def _token(self) -> str:
-        return self.login("admin", "ag")["Authorization"].split(" ", 1)[1]
+        return self.login("fatima.hameed", "ag")["Authorization"].split(" ", 1)[1]   # the Deputy AG writes on the old register
 
     def test_a_read_may_carry_the_token_on_the_address(self) -> None:
         r = self.client.get("/api/runs", params={"token": self._token()})

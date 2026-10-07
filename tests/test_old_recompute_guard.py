@@ -33,7 +33,7 @@ class RecomputeGuard(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)                     # no automatic approval since M1
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()["status"], "APPROVED")
         with mock.patch.object(runs, "recompute", lambda run: {"rebuilt": True}) as _:
-            r = self.client.post(f"/api/runs/{run_id}/recompute", headers=self.login("admin", "ag"))
+            r = self.client.post(f"/api/runs/{run_id}/recompute", headers=self.login("fatima.hameed", "ag"))
         self.assertEqual(r.status_code, 409, r.text)
         self.assertIn("approved", r.json()["detail"])
 
@@ -45,7 +45,7 @@ class RecomputeGuard(unittest.TestCase):
         run_id = self.verify(reviewer, case_id)["run_id"]
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()["status"], "UNDER_REVIEW")
         with mock.patch.object(runs, "recompute", lambda run: {"rebuilt": True}):
-            r = self.client.post(f"/api/runs/{run_id}/recompute", headers=self.login("admin", "ag"))
+            r = self.client.post(f"/api/runs/{run_id}/recompute", headers=self.login("fatima.hameed", "ag"))
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json(), {"rebuilt": True})
 
@@ -65,10 +65,10 @@ class RecomputeGuard(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/forward", headers=police, json={}).status_code, 200)
         second = self.verify(reviewer, case_id)["run_id"]
         self.assertNotEqual(first, second)
-        admin = self.login("admin", "ag")
+        dag = self.login("fatima.hameed", "ag")                   # writes on the old register are the Deputy AG's (G6)
         with mock.patch.object(runs, "recompute", lambda run: {"rebuilt": True}):
-            old = self.client.post(f"/api/runs/{first}/recompute", headers=admin)
-            new = self.client.post(f"/api/runs/{second}/recompute", headers=admin)
+            old = self.client.post(f"/api/runs/{first}/recompute", headers=dag)
+            new = self.client.post(f"/api/runs/{second}/recompute", headers=dag)
         self.assertEqual(old.status_code, 409, old.text)
         self.assertIn("newer examination", old.json()["detail"])
         self.assertEqual(new.status_code, 200, new.text)

@@ -355,16 +355,16 @@ export const ACTION_META: Record<CaseAction, { label: string; tone: 'primary' | 
   REQUEST_DOCS: { label: 'Request additional documents', tone: 'plain', needsRemark: 'always',
                   prompt: 'Name the documents required. The department will attach them and resubmit the case.', done: 'Request for documents recorded and communicated.' },
   OVERRIDE: { label: 'Override decision', tone: 'danger', needsRemark: 'always',
-              prompt: 'Administrative override. The reason is entered in the audit log.', done: 'Decision overridden and entered in the audit log.' },
+              prompt: "The Deputy Accountant General's override. The reason is entered in the audit log.", done: 'Decision overridden and entered in the audit log.' },
 }
 
 /** The one thing to do next on a case, for the big button. */
 export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] }, role: string): { action: CaseAction | null; title: string; text: string } {
   // The register has no allowed_actions per row; there, assume the role's usual powers.
   const a = new Set<CaseAction>(c.allowed_actions.length ? c.allowed_actions
-    : (role === 'AG_REVIEWER' ? ['RUN_CHECK', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'] : ['ADD_DOCS', 'FORWARD']))
+    : (role === 'AG_REVIEWER' || role === 'AG_DAG' ? ['RUN_CHECK', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'] : role === 'ADMIN' ? [] : ['ADD_DOCS', 'FORWARD']))
   const m = STATUS_META[c.status]
-  const dept = role === 'DEPT_OFFICER' || (role === 'ADMIN' && m.side === 'department')
+  const dept = role === 'DEPT_OFFICER'
   if (dept) {
     if ((c.status === 'DRAFT' || c.status === 'AI_CHECKED') && a.has('FORWARD')) return { action: 'FORWARD', title: 'Not yet submitted', text: 'The documents are attached. Submit the case to the Accountant General, where it is verified with AI.' }
     if ((c.status === 'RETURNED' || c.status === 'DOCS_REQUESTED') && a.has('ADD_DOCS')) return { action: 'ADD_DOCS', title: m.label, text: m.dept }

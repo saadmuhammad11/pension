@@ -866,9 +866,11 @@ async def _v1_requires_a_token(request: Request, call_next):
         # The old routes know nothing of departments: a run there is any run. So they are for
         # the administrator, and read-only for the Pension Wing; a department officer's token
         # opens only the case system, which scopes every run to its case.
-        allowed = user.role == "ADMIN" or (user.role == "AG_REVIEWER" and request.method in ("GET", "HEAD"))
+        # Writes on the old register are the Deputy AG's (G6: the administrator takes no case
+        # action); the administrator and the reviewers read.
+        allowed = user.role == "AG_DAG" or (user.role in ("AG_REVIEWER", "ADMIN") and request.method in ("GET", "HEAD"))
         if not allowed:
-            return JSONResponse({"detail": "this address is for the administrator; use the case system"}, status_code=403)
+            return JSONResponse({"detail": "this address is read-only for your role; case actions are taken in the case system"}, status_code=403)
     return await call_next(request)
 
 

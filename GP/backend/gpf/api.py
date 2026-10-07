@@ -120,11 +120,19 @@ async def _service_error(_: Request, exc: ServiceError):
 #: set it. Where it is present it decides who acts, whatever ``officer`` the page put in the body
 #: -- the page's own choice is what an edited frame address could change.
 ACTING_OFFICER_HEADER = "x-gpf-officer"
+#: The signed-in officer's own name, set by the pension portal's server beside the band (business
+#: decision G6, 7 Oct 2026). The module records every action under this name, with the band's
+#: powers; without it the band's placeholder name is recorded, as before.
+ACTING_USER_HEADER = "x-gpf-user"
 
 
 def _acting(request: Request, claimed: str) -> str:
+    """Who acts: the band the portal fixed (else the one the page claimed), and the officer's own
+    name where the portal sent it -- encoded ``band|name``, which ``service._officer`` reads."""
     fixed = (request.headers.get(ACTING_OFFICER_HEADER) or "").strip()
-    return fixed or claimed
+    band = fixed or claimed
+    name = (request.headers.get(ACTING_USER_HEADER) or "").strip()
+    return f"{band}|{name}" if fixed and name else band
 
 
 # ── request models ────────────────────────────────────────────────────────────
@@ -206,7 +214,8 @@ def reading_schema(artefact: str):
 def acting(request: Request):
     """Who the pension portal says is acting, for the page to show (and to stop it offering a
     choice that the actions would ignore). None where the module is used on its own."""
-    return {"officer": (request.headers.get(ACTING_OFFICER_HEADER) or "").strip() or None}
+    return {"officer": (request.headers.get(ACTING_OFFICER_HEADER) or "").strip() or None,
+            "name": (request.headers.get(ACTING_USER_HEADER) or "").strip() or None}
 
 
 @app.get("/api/officers")

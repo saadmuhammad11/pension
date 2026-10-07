@@ -60,8 +60,11 @@ AG_HOLDS = frozenset({FORWARDED, AI_CHECKING, AI_FAILED, UNDER_REVIEW})
 #: Statuses after which adding documents opens a new round of papers.
 SENT_BACK = frozenset({RETURNED, DOCS_REQUESTED})
 
-DEPARTMENT_SIDE = ("DEPT_OFFICER", "ADMIN")
-AG_SIDE = ("AG_REVIEWER", "AG_DAG", "ADMIN")   # ADMIN leaves this tuple with decision G6
+#: Who acts on each side of a case. The administrator is on neither (business decision G6, 7 Oct
+#: 2026): the IT administrator manages users and reads the audit log, and takes no case action in
+#: pension or GP Fund. The override belongs to the Deputy AG.
+DEPARTMENT_SIDE = ("DEPT_OFFICER",)
+AG_SIDE = ("AG_REVIEWER", "AG_DAG")
 
 #: action -> (roles, from-statuses, to-status). ``None`` as the target means "unchanged".
 TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
@@ -78,10 +81,10 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
     "REJECT":       (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), REJECTED),
     "RETURN":       (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), RETURNED),
     "REQUEST_DOCS": (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), DOCS_REQUESTED),
-    "OVERRIDE":     (("ADMIN",), frozenset(STATUSES), None),         # target given by the admin
+    "OVERRIDE":     (("AG_DAG",), frozenset(STATUSES), None),        # target given by the Deputy AG (G6)
     # The case type (29 Sep 2026): a department may change its declaration while the case is on
     # its side; the AG and the administrator may correct it at any point, with a remark.
-    "SET_CASE_TYPE": (("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG", "ADMIN"), frozenset(STATUSES), None),
+    "SET_CASE_TYPE": (("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG"), frozenset(STATUSES), None),
 }
 
 #: Where a department may still change what it declared: the same statuses it may add papers in.
@@ -129,10 +132,9 @@ def check(role: str, status: str, action: str) -> None:
 def owns_side(user_role: str, user_department: str | None, case: sqlite3.Row | dict) -> bool:
     """May this user act on the department's side of this case?
 
-    A department officer, on their own department's cases. An admin, on any.
+    A department officer, on their own department's cases. Nobody else (the administrator acts
+    on no case, G6).
     """
-    if user_role == "ADMIN":
-        return True
     if user_role == "DEPT_OFFICER":
         return case["department_code"] == user_department
     return False

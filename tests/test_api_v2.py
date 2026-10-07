@@ -40,6 +40,23 @@ FLAGGED_REPORT = {"claimant_name": "Fozia Akhtar",
                   "recommendation": {"verdict": "RETURN_FOR_CORRECTION", "blocking_flags": ["F-1"]}}
 
 
+def ensure_deputy_ag() -> None:
+    """A named Deputy AG (role AG_DAG; decisions C1/G6) on the seed password, for the tests that need
+    the senior officer's powers: the override, and the GP Fund DAG band. The administrator has
+    neither any more."""
+    from api.auth import hash_password
+    conn = db.connect()
+    try:
+        if not conn.execute("SELECT 1 FROM users WHERE username = 'fatima.hameed'").fetchone():
+            conn.execute("INSERT INTO users(id, username, display_name, password_hash, role, department_code, active, "
+                         "token_version, must_change_password, created_at, updated_at) VALUES (?, 'fatima.hameed', "
+                         "'Fatima Hameed (Deputy AG, Pension)', ?, 'AG_DAG', NULL, 1, 1, 0, ?, ?)",
+                         (db.new_id(), hash_password(db.SEED_PASSWORD), db.now(), db.now()))
+            conn.commit()
+    finally:
+        conn.close()
+
+
 class V2Test(unittest.TestCase):
     report_to_write: dict = CLEAN_REPORT
     fail_runs: bool = False
@@ -82,6 +99,7 @@ class V2Test(unittest.TestCase):
         runs.RUNS.clear()
         db.migrate()
         db.seed(quiet=True)
+        ensure_deputy_ag()
         from api.server import app
         self.client = TestClient(app, client=("127.0.0.1", 50000))   # the peer the proxy is, so X-Forwarded-For counts
 
@@ -552,8 +570,8 @@ class V2Test(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v2/cases?status_filter=JUNK", headers=police).status_code, 422)
         self.assertEqual(self.client.get("/api/v2/cases?department=SCHOOL_EDUCATION", headers=police).status_code, 403)
         case_id = self.create(police)["case"]["id"]
-        admin = self.login("admin", "ag")
-        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=admin,
+        dag = self.login("fatima.hameed", "ag")
+        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag,
                              json={"to_status": "FORWARDED", "reason": "nothing changes here"})
         self.assertEqual(r.status_code, 409, r.text)
 
@@ -606,10 +624,14 @@ class V2Test(unittest.TestCase):
         self.assertEqual(r.status_code, 422)                         # approving over a finding needs a real reason
         r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "Verified by hand; in order."})
         self.assertEqual(r.status_code, 200, r.text)
+        dag = self.login("fatima.hameed", "ag")
         admin = self.login("admin", "ag")
-        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=admin, json={"to_status": "RETURNED"})
+        # The administrator takes no case action (G6); the Deputy AG overrides.
+        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/override", headers=admin,
+                                          json={"to_status": "RETURNED", "reason": "Approved on the wrong file."}).status_code, 403)
+        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag, json={"to_status": "RETURNED"})
         self.assertEqual(r.status_code, 422)                         # reason required
-        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=admin,
+        r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag,
                              json={"to_status": "RETURNED", "reason": "Approved on the wrong file."})
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()["case"]["status"], "RETURNED")

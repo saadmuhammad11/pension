@@ -413,6 +413,8 @@ class RoundsOverTheApi(unittest.TestCase):
         runs.RUNS.clear()
         db.migrate()
         db.seed(quiet=True)
+        from tests.test_api_v2 import ensure_deputy_ag
+        ensure_deputy_ag()
         from api.server import app
         self.client = TestClient(app, client=("127.0.0.1", 50000))
         self.db = db

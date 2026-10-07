@@ -279,15 +279,20 @@ class PortalApp:
                                         headers={"X-GPF-Session": token}) as r:
                 if r.status != 200:
                     return None
-                officer = str((await r.json()).get("officer") or "")
+                answer = await r.json()
+                officer = str(answer.get("officer") or "")
+                name = str(answer.get("name") or "")
         except (aiohttp.ClientError, ValueError):
             return None
         if not officer:
             return None
         if len(self._gpf_ok) > 1000:
             self._gpf_ok.clear()
-        self._gpf_ok[token] = (now + GPF_CHECK_TTL_S, officer)
-        return officer
+        # The band and the officer's own name travel together; the name is what the module records
+        # the action under (G6). Encoded as band|name, the form the module's api reads.
+        acting = f"{officer}|{name}" if name else officer
+        self._gpf_ok[token] = (now + GPF_CHECK_TTL_S, acting)
+        return acting
 
     def forget_frame_sign_in(self, token: str | None) -> None:
         """Drop a frame cookie from the remembered checks: sign-out must take effect at once, not
@@ -336,9 +341,12 @@ class PortalApp:
         # The module gets neither the portal's cookies (the frame's sign-in among them) nor its token,
         # and the officer it records is the signed-in account's: a browser's X-GPF-Officer is dropped.
         headers = {k: v for k, v in request.headers.items()
-                   if k.lower() not in _HOP_BY_HOP and k.lower() not in ("host", "cookie", "authorization", "x-gpf-officer")}
+                   if k.lower() not in _HOP_BY_HOP and k.lower() not in ("host", "cookie", "authorization", "x-gpf-officer", "x-gpf-user")}
         if officer:
-            headers["X-GPF-Officer"] = officer
+            band, _, name = officer.partition("|")
+            headers["X-GPF-Officer"] = band
+            if name:
+                headers["X-GPF-User"] = name.encode("ascii", "replace").decode()
         body = await request.body()
         try:
             async with self.session.request(request.method, url, headers=headers, data=body, allow_redirects=False) as up:

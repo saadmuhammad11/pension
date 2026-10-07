@@ -120,7 +120,9 @@ class F2DeskFromTheAccount(_Fixture):
         r = self.client.post("/api/runs/abc123/decision", headers={**admin, "X-Desk": "AG_REVIEWER"},
                              json={"action": "FORWARD", "officer": "Someone Else"})
         self.assertEqual(r.status_code, 403)
-        self.assertIn("does not hold the desk", r.json()["detail"])
+        # Since G6 the administrator takes no case action at all, so the refusal comes from the
+        # role gate before the desk is even asked.
+        self.assertIn("read-only for your role", r.json()["detail"])
 
 
 class F3NoApiDescriptionInProduction(unittest.TestCase):

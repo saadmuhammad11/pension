@@ -148,12 +148,12 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const run = c.latest_run
   const m = STATUS_META[c.status]
   const hasIssues = run ? (run.verdict !== 'FORWARD' || (run.high_flags ?? 0) > 0 || (run.blocking_flags ?? []).length > 0) : true
-  const deptSide = deptView || (role === 'ADMIN' && m.side === 'department')
+  const deptSide = deptView                       // the administrator acts on no side (G6)
   const canReview = !!can?.dispose && (m.side === 'ag' || !!can?.override)
   // The documents an automatic return (or the AG's own return) asked for, for this round.
   const sentBack = m.side === 'department' ? [...c.events].reverse().find(e => ['AUTO_RETURN', 'RETURN', 'REQUEST_DOCS'].includes(e.action)) : undefined
   const missingDocs = (sentBack?.payload as { missing_checklist?: { id: string; requirement: string; status?: string }[] } | undefined)?.missing_checklist ?? []
-  const agRemarks = c.events.filter(e => (e.actor_role === 'AG_REVIEWER' || e.actor_role === 'ADMIN') && e.remark && e.action !== 'CREATE' && e.action !== 'FORWARD')
+  const agRemarks = c.events.filter(e => (e.actor_role === 'AG_REVIEWER' || e.actor_role === 'AG_DAG' || e.actor_role === 'ADMIN') && e.remark && e.action !== 'CREATE' && e.action !== 'FORWARD')
   const lastAg = agRemarks[agRemarks.length - 1]
   // The tab's count is the number of findings listed under it, the same as the Flags tab inside.
   const findings = report?.flags.length ?? 0

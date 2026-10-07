@@ -40,7 +40,8 @@ GAZETTED = ("unknown", "gazetted", "non-gazetted")
 
 #: The module's officer band an account acts as. The Accounts Officer (level 2) may pass a case
 #: for payment; the administrator acts as the DAG (Funds), who may also clear a second return.
-OFFICER_FOR_ROLE = {"AG_REVIEWER": "ao", "AG_DAG": "dag", "ADMIN": "dag", "DEPT_OFFICER": "da"}
+#: The administrator has no band: it takes no action in GP Fund (G6).
+OFFICER_FOR_ROLE = {"AG_REVIEWER": "ao", "AG_DAG": "dag", "DEPT_OFFICER": "da"}
 
 
 class GpfError(Exception):
@@ -50,10 +51,14 @@ class GpfError(Exception):
 
 
 def _request(method: str, path: str, *, body: bytes | None = None, content_type: str | None = None,
-             timeout: float = TIMEOUT) -> dict:
+             timeout: float = TIMEOUT, acting_name: str | None = None) -> dict:
     req = urllib.request.Request(GPF_URL + path, data=body, method=method)
     if content_type:
         req.add_header("Content-Type", content_type)
+    if acting_name:
+        # The signed-in officer's own name (G6): the module records the action under it, with the
+        # band's powers. Header-safe: one line, ASCII where the name is not.
+        req.add_header("X-GPF-User", acting_name.replace("\r", " ").replace("\n", " ").encode("ascii", "replace").decode())
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8") or "{}")
@@ -191,17 +196,18 @@ def case(gpf_case_id: str) -> dict:
     return _request("GET", f"/api/cases/{gpf_case_id}", timeout=10)
 
 
-def act(gpf_case_id: str, action: str, payload: dict) -> dict:
+def act(gpf_case_id: str, action: str, payload: dict, *, acting_name: str | None = None) -> dict:
     """One officer action on the module's case, as its own screen sends it (30 Sep 2026: the
     portal now draws the GP Fund examination itself). ``action`` is verify | dispositions |
     dispose | sap; the payload carries the officer. The module decides and enforces who may."""
     if action not in ("verify", "dispositions", "dispose", "sap"):
         raise GpfError(400, f"unknown GP Fund action {action!r}")
     return _request("POST", f"/api/cases/{gpf_case_id}/{action}", body=json.dumps(payload).encode(),
-                    content_type="application/json", timeout=60)
+                    content_type="application/json", timeout=60, acting_name=acting_name)
 
 
-def cure(gpf_case_id: str, result_id: str, officer: str, values: dict, file: tuple[str, bytes] | None) -> dict:
+def cure(gpf_case_id: str, result_id: str, officer: str, values: dict, file: tuple[str, bytes] | None,
+         *, acting_name: str | None = None) -> dict:
     """Cure an item by a document or by values (a QR's payload), as the module's screen does."""
     boundary = "----pension" + uuid.uuid4().hex
     out = bytearray()
@@ -213,7 +219,7 @@ def cure(gpf_case_id: str, result_id: str, officer: str, values: dict, file: tup
                 f"Content-Type: application/octet-stream\r\n\r\n").encode() + content + b"\r\n"
     out += f"--{boundary}--\r\n".encode()
     return _request("POST", f"/api/cases/{gpf_case_id}/cure", body=bytes(out),
-                    content_type=f"multipart/form-data; boundary={boundary}", timeout=120)
+                    content_type=f"multipart/form-data; boundary={boundary}", timeout=120, acting_name=acting_name)
 
 
 def issue_pack(gpf_case_id: str) -> dict:

@@ -49,11 +49,14 @@ class TransitionTable(unittest.TestCase):
         self.assertNotIn("AUTO_APPROVE", workflow.SYSTEM_ACTIONS)
         self.assertTrue(all(workflow.TRANSITIONS[a][2] != workflow.APPROVED for a in workflow.SYSTEM_ACTIONS))
 
-    def test_admin_may_override_from_anywhere_and_only_admin(self) -> None:
+    def test_the_deputy_ag_may_override_from_anywhere_and_nobody_else(self) -> None:
         for s in workflow.STATUSES:
-            workflow.check("ADMIN", s, "OVERRIDE")
-        with self.assertRaises(workflow.WorkflowError):
-            workflow.check("AG_REVIEWER", workflow.APPROVED, "OVERRIDE")
+            workflow.check("AG_DAG", s, "OVERRIDE")
+        for role in ("AG_REVIEWER", "ADMIN", "DEPT_OFFICER"):          # the administrator takes no case action (G6)
+            with self.assertRaises(workflow.WorkflowError):
+                workflow.check(role, workflow.APPROVED, "OVERRIDE")
+        for action in ("FORWARD", "ADD_DOCS", "RUN_CHECK", "APPROVE", "REJECT", "RETURN", "REQUEST_DOCS", "TAKE_UP"):
+            self.assertNotIn("ADMIN", workflow.TRANSITIONS[action][0], action)
 
     def test_scoping(self) -> None:
         police_case = {"department_code": "PUNJAB_POLICE", "created_via": "DEPARTMENT"}
@@ -61,7 +64,8 @@ class TransitionTable(unittest.TestCase):
         self.assertTrue(workflow.may_see("DEPT_OFFICER", "PUNJAB_POLICE", police_case))
         self.assertFalse(workflow.may_see("DEPT_OFFICER", "SCHOOL_EDUCATION", police_case))
         self.assertTrue(workflow.may_see("AG_REVIEWER", None, police_case))
-        self.assertTrue(workflow.owns_side("ADMIN", None, other_case))
+        self.assertFalse(workflow.owns_side("ADMIN", None, other_case))   # the administrator acts on no side (G6)
+        self.assertTrue(workflow.may_see("ADMIN", None, other_case))        # but reads everything
         self.assertFalse(workflow.owns_side("AG_REVIEWER", None, other_case))
         self.assertFalse(workflow.owns_side("DEPT_OFFICER", "PUNJAB_POLICE", other_case))
 
@@ -142,7 +146,7 @@ class Database(unittest.TestCase):
 
     def test_history_and_audit_are_append_only(self) -> None:
         case = self._case(workflow.AI_CHECKED)
-        workflow.transition(self.conn, case, "FORWARD", Actor("ADMIN"), remark="x")
+        workflow.transition(self.conn, case, "FORWARD", Actor("DEPT_OFFICER"), remark="x")
         with self.assertRaises(sqlite3.IntegrityError):
             self.conn.execute("UPDATE case_events SET remark = 'edited'")
         with self.assertRaises(sqlite3.IntegrityError):

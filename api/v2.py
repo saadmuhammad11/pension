@@ -133,7 +133,7 @@ GPF_COOKIE = "pension_gpf"
 
 
 @router.post("/auth/gpf-session")
-def gpf_session(request: Request, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN"))):
+def gpf_session(request: Request, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG"))):
     """Sign the GP Fund frame in. The AG's case screen shows the module's own page in a frame,
     and a frame cannot carry the Authorization header; this sets a cookie the portal server
     checks on every /gpf/ request (docs/DEPLOYMENT.md F10). AG and administrator only: the
@@ -195,7 +195,9 @@ def gpf_check(x_gpf_session: str | None = Header(default=None),
     user = _gpf_frame_user(x_gpf_session, conn)
     # The officer band the module records this account's actions under; the portal server passes
     # it on as X-GPF-Officer, and the module takes it over whatever the page claims.
-    return {"ok": True, "user": user.username, "officer": gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao")}
+    # ... and the officer's own name, which the module records every action under (G6).
+    return {"ok": True, "user": user.username, "name": user.display_name,
+            "officer": gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao")}
 
 
 def _gpf_frame_user(token: str | None, conn: sqlite3.Connection) -> User:
@@ -206,7 +208,7 @@ def _gpf_frame_user(token: str | None, conn: sqlite3.Connection) -> User:
         user = user_for_token(token, conn, scope=GPF_SCOPE)
     except AuthError as exc:
         _raise(exc)
-    if user.role not in ("AG_REVIEWER", "AG_DAG", "ADMIN") or user.must_change_password:
+    if user.role not in ("AG_REVIEWER", "AG_DAG") or user.must_change_password:
         raise HTTPException(403, "this account may not open the GP Fund module")
     return user
 
@@ -229,17 +231,19 @@ def gpf_act_check(x_gpf_session: str | None = Header(default=None),
 
 def capabilities(user: User) -> dict:
     """What the screens may offer this user. The server re-checks every one of them."""
-    dept_side = user.role in ("DEPT_OFFICER", "ADMIN")
-    ag_side = user.role in ("AG_REVIEWER", "AG_DAG", "ADMIN")
+    # The administrator manages users and reads; it takes no case action (business decision G6,
+    # 7 Oct 2026). The override is the Deputy AG's.
+    dept_side = user.role == "DEPT_OFFICER"
+    ag_side = user.role in ("AG_REVIEWER", "AG_DAG")
     return {
         "create_case": dept_side, "add_documents": dept_side, "run_check": ag_side,
-        "forward": dept_side, "pick_department": user.role == "ADMIN",
-        "intake_choices": user.role in ("AG_REVIEWER", "AG_DAG", "ADMIN"),
-        # The declared case type (29 Sep 2026): the AG and the administrator may correct it, with a remark.
+        "forward": dept_side, "pick_department": False,
+        "intake_choices": ag_side,
+        # The declared case type (29 Sep 2026): the AG may correct it, with a remark.
         "correct_case_type": ag_side,
-        "review": ag_side, "dispose": ag_side, "override": user.role == "ADMIN",
+        "review": ag_side, "dispose": ag_side, "override": user.role == "AG_DAG",
         "manage_users": user.role == "ADMIN", "audit_log": user.role == "ADMIN",
-        "all_departments": ag_side,
+        "all_departments": ag_side or user.role == "ADMIN",
     }
 
 
@@ -920,7 +924,7 @@ def create_case(
     gpf_kind: str | None = Form(default=None),
     gazetted: str | None = Form(default=None),
     case_type: str | None = Form(default=None),
-    user: User = Depends(require_roles("DEPT_OFFICER", "ADMIN")),
+    user: User = Depends(require_roles("DEPT_OFFICER")),
     conn: sqlite3.Connection = Depends(get_conn),
 ) -> dict:
     """A new case with its documents, submitted to the Accountant General at once (decision of
@@ -1028,8 +1032,8 @@ def get_case(case_id: str, user: User = Depends(current_user),
                             if a != "OVERRIDE" and (a in ("TAKE_UP", "RUN_CHECK", "APPROVE", "REJECT", "RETURN", "REQUEST_DOCS")
                                                     or workflow.owns_side(user.role, user.department_code, row))
                             and (a not in DECISIONS_NEED_VERIFICATION or _verified(conn, row))]
-    if user.role == "ADMIN":
-        d["allowed_actions"].append("OVERRIDE")
+    if user.role == "AG_DAG":
+        d["allowed_actions"].append("OVERRIDE")               # the Deputy AG's, not the administrator's (G6)
     if "APPROVE" in d["allowed_actions"] and user.id in _submitters(conn, row):
         d["allowed_actions"].remove("APPROVE")           # maker-checker (C1): the submitter does not approve
     return d
@@ -1088,7 +1092,7 @@ def case_types(user: User = Depends(current_user)) -> dict:
 
 @router.post("/cases/{case_id}/case-type")
 def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
-                  user: User = Depends(require_roles("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG", "ADMIN")),
+                  user: User = Depends(require_roles("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG")),
                   conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """Change the case type. A department may change its declaration while the case is on its
     side (not yet forwarded, or sent back); the Accountant General and the administrator may
@@ -1136,7 +1140,7 @@ def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
 
 @router.post("/cases/{case_id}/documents", status_code=201)
 def add_documents(case_id: str, files: list[UploadFile] = File(default=[]),
-                        user: User = Depends(require_roles("DEPT_OFFICER", "ADMIN")),
+                        user: User = Depends(require_roles("DEPT_OFFICER")),
                         conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """More papers on the case. After an AG return this opens the next round of submission, and the
     case goes to DRAFT ("not yet resubmitted"), so the next document added does not open yet
@@ -1216,7 +1220,7 @@ def _request_items_or_422(conn: sqlite3.Connection, row: sqlite3.Row, items: Any
 
 @router.post("/cases/{case_id}/documents/{doc_id}/replace", status_code=201)
 def replace_document(case_id: str, doc_id: str, files: list[UploadFile] = File(default=[]),
-                           user: User = Depends(require_roles("DEPT_OFFICER", "ADMIN")),
+                           user: User = Depends(require_roles("DEPT_OFFICER")),
                            conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """Put a corrected paper in place of one already filed (30 Sep 2026).
 
@@ -1309,7 +1313,7 @@ def download_document(case_id: str, doc_id: str, user: User = Depends(current_us
 
 
 @router.post("/cases/{case_id}/check", status_code=202)
-def run_check(case_id: str, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+def run_check(case_id: str, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
               conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """"Verify case with AI": the Accountant General's button. The outcome moves the case by
     itself (api.case_runs): returned with the missing documents, approved, or under review."""
@@ -1407,49 +1411,49 @@ def _act(conn: sqlite3.Connection, user: User, case_id: str, action: str, body: 
 
 @router.post("/cases/{case_id}/forward")
 def forward(case_id: str, body: dict = Body(default={}),
-            user: User = Depends(require_roles("DEPT_OFFICER", "ADMIN")),
+            user: User = Depends(require_roles("DEPT_OFFICER")),
             conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "FORWARD", body)
 
 
 @router.post("/cases/{case_id}/take-up")
 def take_up(case_id: str, body: dict = Body(default={}),
-            user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+            user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
             conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "TAKE_UP", body)
 
 
 @router.post("/cases/{case_id}/approve")
 def approve(case_id: str, body: dict = Body(default={}),
-            user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+            user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
             conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "APPROVE", body)
 
 
 @router.post("/cases/{case_id}/reject")
 def reject(case_id: str, body: dict = Body(default={}),
-           user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+           user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
            conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "REJECT", body)
 
 
 @router.post("/cases/{case_id}/return")
 def return_case(case_id: str, body: dict = Body(default={}),
-                user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                 conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "RETURN", body)
 
 
 @router.post("/cases/{case_id}/request-docs")
 def request_docs(case_id: str, body: dict = Body(default={}),
-                 user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                 user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                  conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "REQUEST_DOCS", body)
 
 
 @router.post("/cases/{case_id}/override")
 def override(case_id: str, request: Request, body: dict = Body(...),
-             user: User = Depends(require_roles("ADMIN")),
+             user: User = Depends(require_roles("AG_DAG")),
              conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     body = {**body, "remark": body.get("reason") or body.get("remark")}
     return _act(conn, user, case_id, "OVERRIDE", body, request)
@@ -1497,7 +1501,7 @@ def _gpf_after(conn: sqlite3.Connection, row: sqlite3.Row, user: User, what: str
 
 @router.post("/cases/{case_id}/gpf/{action}")
 def case_gpf_action(case_id: str, action: str, body: dict = Body(default={}),
-                    user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                    user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                     conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """An officer's action on the GP Fund examination, drawn by the portal (30 Sep 2026):
     verify (a verification task), dispositions (uphold / waive / correct / refer an observation),
@@ -1512,7 +1516,7 @@ def case_gpf_action(case_id: str, action: str, body: dict = Body(default={}),
     payload = {k: body[k] for k in allowed[action] if k in body}
     payload["officer"] = officer
     try:
-        res = gpf_bridge.act(row["gpf_case_id"], action, payload)
+        res = gpf_bridge.act(row["gpf_case_id"], action, payload, acting_name=user.display_name)
     except gpf_bridge.GpfError as exc:
         raise HTTPException(exc.status if 400 <= exc.status < 600 else 502, exc.detail) from None
     return {**res, **_gpf_after(conn, row, user, action, {k: v for k, v in payload.items() if k != "text"})}
@@ -1521,7 +1525,7 @@ def case_gpf_action(case_id: str, action: str, body: dict = Body(default={}),
 @router.post("/cases/{case_id}/gpf-cure")
 def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = Form("{}"),
                         file: UploadFile | None = File(default=None),
-                        user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                        user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                         conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     """Cure an examination item by a document or by values, through the module."""
     row = _gpf_case_or_404(conn, case_id, user, acting=True)
@@ -1536,7 +1540,7 @@ def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = Form("{
             raise HTTPException(413, f"{file.filename} exceeds {MAX_UPLOAD // 1048576} MB")
         content = (file.filename or "document", body)
     try:
-        res = gpf_bridge.cure(row["gpf_case_id"], resultId, gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao"), parsed, content)
+        res = gpf_bridge.cure(row["gpf_case_id"], resultId, gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao"), parsed, content, acting_name=user.display_name)
     except gpf_bridge.GpfError as exc:
         raise HTTPException(exc.status if 400 <= exc.status < 600 else 502, exc.detail) from None
     return {**res, **_gpf_after(conn, row, user, "cure", {"resultId": resultId, "file": content[0] if content else None})}
@@ -1691,7 +1695,7 @@ def case_dispositions(case_id: str, run_id: str, user: User = Depends(current_us
 
 @router.post("/cases/{case_id}/runs/{run_id}/dispositions", status_code=201)
 def case_disposition(case_id: str, run_id: str, body: dict = Body(...),
-                     user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                     user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                      conn: sqlite3.Connection = Depends(get_conn), request: Request = None) -> dict:
     from api.dispositions import DispositionError, calculation_gate, in_force, record
     run = _run_for(conn, user, case_id, run_id, acting=True)
@@ -1752,7 +1756,7 @@ def case_checklist_actions(case_id: str, run_id: str, user: User = Depends(curre
 
 @router.post("/cases/{case_id}/runs/{run_id}/checklist-actions", status_code=201)
 def case_checklist_action(case_id: str, run_id: str, body: dict = Body(...),
-                          user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                          user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                           conn: sqlite3.Connection = Depends(get_conn), request: Request = None) -> dict:
     from api import checklist_actions
     from api.artefacts import report_dict
@@ -1827,7 +1831,7 @@ def run_dispositions_by_id(run_id: str, user: User = Depends(current_user), conn
 
 @router.post("/runs/{run_id}/dispositions", status_code=201)
 def run_disposition_by_id(run_id: str, request: Request, body: dict = Body(...),
-                          user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                          user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                           conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
     if link is None:
@@ -1845,7 +1849,7 @@ def run_checklist_by_id(run_id: str, user: User = Depends(current_user), conn: s
 
 @router.post("/runs/{run_id}/checklist-actions", status_code=201)
 def run_checklist_action_by_id(run_id: str, request: Request, body: dict = Body(...),
-                               user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+                               user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
                                conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
     if link is None:
