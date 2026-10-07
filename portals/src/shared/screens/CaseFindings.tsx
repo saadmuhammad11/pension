@@ -290,7 +290,8 @@ function FlagDisposition(
 export function CaseFindings(
   { report: given, runId, canDispose, onProceed, proceedLabel, onSettled }:
   { report: CaseReport; runId: string; canDispose: boolean; onProceed?: () => void; proceedLabel?: string
-    /** Called when clearing a finding (or a checklist item) approved the case by itself. */
+    /** Called when clearing a finding (or a checklist item) left nothing outstanding: the parent
+     *  reloads the case so the decision buttons reflect it. Nothing is approved by itself (M1). */
     onSettled?: () => void },
 ) {
   // The report as the officer has since settled its checklist; replaced by each checklist

@@ -5,9 +5,11 @@ current documents, namespaced by the case id so two departments' identical paper
 runs. The pipeline thread writes its artefacts as it always has and never touches the
 database; :func:`sync_run_states` -- called on a timer and on every case read -- notices a run
 that has finished, copies the handful of figures the queue needs into ``case_runs`` and moves
-the case on by the outcome (decision of 28 Sep 2026): documents missing -> returned to the
-department with the list; nothing missing and no findings -> approved; findings -> under review
-at the AG, and approved by itself once the officer has cleared the last one (:func:`settle`).
+the case on by the outcome (decision of 28 Sep 2026, narrowed 7 Oct 2026): documents missing ->
+returned to the department with the list; otherwise -> under review at the AG. Nothing is
+approved by the system: a clean verification, the officer's last clearance and a GP Fund
+examination that passed all wait for an officer's own decision (business decision M1, 7 Oct
+2026). :func:`settle` only records that nothing is left outstanding.
 """
 from __future__ import annotations
 
@@ -254,14 +256,19 @@ def outcome(issues: dict) -> str:
       them. Unless pages could not be identified: a paper reported "not found" may be on one of
       them, and returning a case for a paper that is in the bundle is the error the office most
       wants to avoid -- so those go to the AG (UNDER_REVIEW) to name the pages first.
-    * nothing missing, a checklist applied, no findings -> AUTO_APPROVE.
-    * otherwise -> CHECK_DONE (UNDER_REVIEW): the AG clears the findings, or decides by hand.
+    * otherwise -> CHECK_DONE (UNDER_REVIEW): the AG clears the findings and decides. A clean
+      verification goes the same way: nothing is approved without an officer's decision
+      (business decision M1, 7 Oct 2026; until then a clean case was AUTO_APPROVEd).
     """
     if issues["missing_checklist"] and not issues["unidentified_pages"]:
         return "AUTO_RETURN"
-    if not issues["missing_checklist"] and not issues["flags_total"] and issues["checklist_present"]:
-        return "AUTO_APPROVE"
     return "CHECK_DONE"
+
+
+def nothing_outstanding(issues: dict) -> bool:
+    """Every required document present, a checklist applied and no finding: the shape that used
+    to approve a case by itself. Said in the history now, decided by an officer."""
+    return bool(not issues["missing_checklist"] and not issues["flags_total"] and issues["checklist_present"])
 
 
 def _return_remark(issues: dict) -> str:
@@ -291,31 +298,24 @@ def mirror_decision(run_id: str, action: str, officer: str, role: str, remark: s
 
 def settle(conn: sqlite3.Connection, case: sqlite3.Row, run_id: str, gate: dict, officer: str,
            by=None) -> dict | None:
-    """Approve a case under review the moment nothing is outstanding on its verification.
+    """Record that nothing is left outstanding on a case under review; move nothing.
 
-    Called after every disposition and checklist action with the gate those computed: every
-    finding cleared and no document missing. Returns the history row, or None if nothing moved.
-    ``by`` is the account whose clearance this was: the approval is the system's (AUTO_APPROVE),
-    but the history and the audit trail name that officer by account, not only in the remark.
+    Called after every disposition and checklist action with the gate those computed. Until
+    7 Oct 2026 an open gate approved the case by itself (AUTO_APPROVE); business decision M1
+    removed every automatic approval, so the officer who cleared the last finding now also
+    decides the case, by hand, with a remark. What is kept is the audit row: the account whose
+    clearance completed the review and the gate it opened, so the trail still shows the moment
+    the review was complete. Returns None always (nothing moved).
     """
     if case["status"] != workflow.UNDER_REVIEW or case["current_run_id"] != run_id or not gate.get("open"):
         return None
-    remark = (f"Approved: every finding cleared by {officer} and every required document present "
-              f"({gate.get('flags_cleared', 0)} finding(s) cleared).")
-    cleared_by = ({"id": by.id, "username": by.username, "name": by.display_name, "role": by.role}
-                  if by is not None else None)
-    try:
-        entry = workflow.transition(conn, case, "AUTO_APPROVE", None, run_id=run_id, remark=remark,
-                                    payload={"auto": True, "gate": gate,
-                                             **({"cleared_by": cleared_by} if cleared_by else {})})
-    except workflow.WorkflowError:
-        return None
     if by is not None:
-        workflow.audit(conn, actor=by, action="CASE_APPROVED_ON_CLEARANCE", entity_type="case",
-                       entity_id=case["id"], before={"status": case["status"]},
-                       after={"status": workflow.APPROVED, "run_id": run_id, "gate": gate}, reason=remark)
-    mirror_decision(run_id, "FORWARD", f"System, on {officer}'s clearance", "Auditor, Pension wing (AG / DAO)", remark)
-    return entry
+        workflow.audit(conn, actor=by, action="CLEARANCE_COMPLETE", entity_type="case",
+                       entity_id=case["id"], before=None,
+                       after={"run_id": run_id, "gate": gate},
+                       reason=(f"Every finding cleared by {officer} and every required document present "
+                               f"({gate.get('flags_cleared', 0)} finding(s) cleared). The case awaits a decision."))
+    return None
 
 
 #: How long a GP Fund reading may go unconfirmed (module down, slow, restarting) before it is
@@ -529,8 +529,6 @@ def sync_run_states(conn: sqlite3.Connection, *, force: bool = False) -> int:
             continue                              # the database was busy; the next sweep records it
         changed += 1
         _move_case_on(conn, row["case_id"], row["run_id"], state, issues, error)
-        if gpf_view is None and state == "done" and (row["mode"] if "mode" in row.keys() else "FULL") == "INCREMENTAL":
-            _settle_carried(conn, row)
     # A case left in AI_CHECKING whose run has already been recorded as finished (a crash or a
     # busy database between the two steps above) is moved on here, so nothing stays stuck.
     for case in conn.execute(
@@ -564,28 +562,14 @@ def sync_run_states(conn: sqlite3.Connection, *, force: bool = False) -> int:
     return changed
 
 
-def _settle_carried(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
-    """A resubmission that went under review with every finding already cleared by the officer
-    on the earlier round, and nothing missing, is approved by the same rule as an officer's last
-    clearance (``settle``): the gate is open, so nothing is outstanding."""
-    from api.dispositions import calculation_gate
-    from api.checklist_actions import apply
-    from api.runs import ARTIFACTS
-    case = conn.execute("SELECT * FROM cases WHERE id = ?", (row["case_id"],)).fetchone()
-    if case is None or case["status"] != workflow.UNDER_REVIEW:
-        return
-    run_dir = ARTIFACTS / f"run-{row['run_id']}"
-    rep = report_dict(run_dir)
-    if rep is None or not (run_dir / "carried_decisions.json").exists():
-        return
-    gate = calculation_gate(apply(rep, run_dir), run_dir)
-    settle(conn, case, row["run_id"], gate, "the officer (decisions carried from the earlier round)")
-
-
 def sync_gpf_case(conn: sqlite3.Connection, case: sqlite3.Row) -> dict | None:
-    """A GP Fund case under review moves by what the officer did in the module's own screens:
-    passed for payment, or nothing left open -> approved; returned -> back to the department with
-    the hard stops. Called on every read of such a case. Returns the history row, or None."""
+    """A GP Fund case under review follows a RETURN the officer made in the module's own screens:
+    back to the department with the hard stops. Called on every read of such a case. Returns the
+    history row, or None.
+
+    Until 7 Oct 2026 "passed for payment" in the module, or nothing left open, approved the
+    pension-side case by itself. Business decision M1: no automatic approval. The examination's
+    state is on the case screen; the AG approves the case by hand, with a remark."""
     if case["status"] != workflow.UNDER_REVIEW or not case["gpf_case_id"]:
         return None
     try:
@@ -600,11 +584,6 @@ def sync_gpf_case(conn: sqlite3.Connection, case: sqlite3.Row) -> dict | None:
                       + (". Documents to attach — " + "; ".join(f"{m['id']} {m['requirement']}" for m in issues["missing_checklist"])
                          if issues["missing_checklist"] else "") + ".")
             return workflow.transition(conn, case, "RETURN", _system_officer(), run_id=run_id,
-                                       payload={**issues, "auto": True}, remark=remark)
-        if issues["gpf_passed"] or not issues["has_issues"]:
-            remark = ("Passed for payment by the Accountant General in the GP Fund examination." if issues["gpf_passed"]
-                      else "Approved: every hard stop, verification task and SAP item on the GP Fund examination is cleared.")
-            return workflow.transition(conn, case, "AUTO_APPROVE", None, run_id=run_id,
                                        payload={**issues, "auto": True}, remark=remark)
     except (workflow.WorkflowError, sqlite3.OperationalError):
         return None
@@ -639,14 +618,11 @@ def _move_case_on(conn: sqlite3.Connection, case_id: str, run_id: str | None, st
                                 remark=_return_remark(issues))
             mirror_decision(run_id, "RETURN_FOR_CORRECTION", "System (AI verification)",
                             "Auditor, Pension wing (AG / DAO)", _return_remark(issues))
-        elif action == "AUTO_APPROVE":
-            remark = "Approved: the AI verification found every required document and no finding."
-            workflow.transition(conn, case, action, None, run_id=run_id, payload={**issues, "auto": True},
-                                remark=remark)
-            mirror_decision(run_id, "FORWARD", "System (AI verification)", "Auditor, Pension wing (AG / DAO)", remark)
         else:
-            workflow.transition(conn, case, "CHECK_DONE", None, run_id=run_id, payload=issues,
-                                remark=_summary_line(issues))
+            clean = nothing_outstanding(issues)
+            workflow.transition(conn, case, "CHECK_DONE", None, run_id=run_id,
+                                payload={**issues, **({"nothing_outstanding": True} if clean else {})},
+                                remark=_clean_remark() if clean else _summary_line(issues))
     except (workflow.WorkflowError, sqlite3.OperationalError):
         pass                                  # somebody moved the case meanwhile, or the database was busy
 
@@ -660,6 +636,11 @@ def _plain_failure(error: str | None) -> str:
         return "None of the attached files could be read as a document; attach the papers as PDF or scanned images and run the verification again."
     text = text.split("BundleError:")[-1].split("Error:")[-1].strip()
     return (text[:160] + "…") if len(text) > 160 else text or "The verification did not complete."
+
+
+def _clean_remark() -> str:
+    return ("AI verification complete: every required document present and no finding. "
+            "The case awaits the Accountant General's decision; nothing is approved automatically.")
 
 
 def _summary_line(issues: dict) -> str:

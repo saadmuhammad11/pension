@@ -5,11 +5,14 @@ files the papers and the case goes straight to the AG; the AG presses "Verify ca
 the outcome moves the case by itself.
 
     DRAFT --submit--> FORWARDED --verify (AG)--> AI_CHECKING --.
-      ^                  |                         |            |-> APPROVED    (nothing missing, no findings)
-      |                  |                         |            |-> RETURNED    (documents missing: the list travels back)
-      |                  |                         |            '-> UNDER_REVIEW (findings for the AG to clear; the last
-      |                  |                         '-> AI_FAILED (verify again)                  one cleared -> APPROVED)
-      '--add documents-- RETURNED / DOCS_REQUESTED <-- return, request docs (AG, by hand)      REJECTED (AG, by hand)
+      ^                  |                         |            |-> RETURNED    (documents missing: the list travels back)
+      |                  |                         |            '-> UNDER_REVIEW (the AG clears the findings and decides:
+      |                  |                         '-> AI_FAILED (verify again)   APPROVED / REJECTED / RETURNED, by hand)
+      '--add documents-- RETURNED / DOCS_REQUESTED <-- return, request docs (AG, by hand)
+
+No case is approved by the system (business decision M1, 7 Oct 2026). Until then a clean
+verification, or the officer's last clearance, approved the case by itself (AUTO_APPROVE); that
+action name remains in histories written before, and in nothing else.
 
 Every transition is a row in ``case_events`` -- who, when, from what to what, with the remark
 -- and that table is append-only. The department sees every AG remark through it, and the list
@@ -70,7 +73,6 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
     "CHECK_DONE":   ((), frozenset({AI_CHECKING}), UNDER_REVIEW),    # by the system: findings for the AG
     "CHECK_FAILED": ((), frozenset({AI_CHECKING}), AI_FAILED),       # by the system: verify again
     "AUTO_RETURN":  ((), frozenset({AI_CHECKING}), RETURNED),        # by the system: documents missing
-    "AUTO_APPROVE": ((), frozenset({AI_CHECKING, UNDER_REVIEW}), APPROVED),   # by the system: nothing outstanding
     "TAKE_UP":      (AG_SIDE, frozenset({FORWARDED}), UNDER_REVIEW),
     "APPROVE":      (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), APPROVED),
     "REJECT":       (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), REJECTED),
@@ -85,8 +87,9 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
 #: Where a department may still change what it declared: the same statuses it may add papers in.
 CASE_TYPE_EDITABLE_BY_DEPARTMENT = frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_REQUESTED})
 
-#: What the system may do on its own: record a verification's outcome, and act on it.
-SYSTEM_ACTIONS = frozenset({"CHECK_DONE", "CHECK_FAILED", "AUTO_RETURN", "AUTO_APPROVE"})
+#: What the system may do on its own: record a verification's outcome, and return a case whose
+#: documents are missing. Never approve (M1, 7 Oct 2026).
+SYSTEM_ACTIONS = frozenset({"CHECK_DONE", "CHECK_FAILED", "AUTO_RETURN"})
 
 #: Actions whose remark is required whatever the case looks like.
 REMARK_REQUIRED = frozenset({"APPROVE", "REJECT", "RETURN", "REQUEST_DOCS", "OVERRIDE"})

@@ -29,6 +29,8 @@ class RecomputeGuard(unittest.TestCase):
         case_id = self.create(police)["case"]["id"]
         reviewer = self.login("ag.reviewer", "ag")
         run_id = self.verify(reviewer, case_id)["run_id"]
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "In order; approved by hand."})
+        self.assertEqual(r.status_code, 200, r.text)                     # no automatic approval since M1
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()["status"], "APPROVED")
         with mock.patch.object(runs, "recompute", lambda run: {"rebuilt": True}) as _:
             r = self.client.post(f"/api/runs/{run_id}/recompute", headers=self.login("admin", "ag"))

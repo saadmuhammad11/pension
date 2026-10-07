@@ -45,7 +45,9 @@ class TransitionTable(unittest.TestCase):
             workflow.check("DEPT_OFFICER", workflow.FORWARDED, "ADD_DOCS")
         self.assertEqual(cm.exception.status, 409)                       # the AG holds it now
         self.assertIn(workflow.RETURNED, workflow.TRANSITIONS["AUTO_RETURN"][1] | {workflow.RETURNED})
-        self.assertEqual(workflow.TRANSITIONS["AUTO_APPROVE"][2], workflow.APPROVED)
+        self.assertNotIn("AUTO_APPROVE", workflow.TRANSITIONS)             # no automatic approval (M1, 7 Oct 2026)
+        self.assertNotIn("AUTO_APPROVE", workflow.SYSTEM_ACTIONS)
+        self.assertTrue(all(workflow.TRANSITIONS[a][2] != workflow.APPROVED for a in workflow.SYSTEM_ACTIONS))
 
     def test_admin_may_override_from_anywhere_and_only_admin(self) -> None:
         for s in workflow.STATUSES:
@@ -132,8 +134,11 @@ class Database(unittest.TestCase):
         self.assertEqual(case["status"], workflow.UNDER_REVIEW)
         with self.assertRaises(workflow.WorkflowError):
             workflow.transition(self.conn, case, "RETURN", None, remark="x")
-        workflow.transition(self.conn, case, "AUTO_APPROVE", None, remark="cleared")
-        self.assertEqual(self.conn.execute("SELECT status FROM cases WHERE id='c1'").fetchone()[0], workflow.APPROVED)
+        with self.assertRaises(workflow.WorkflowError):                 # the system never approves (M1)
+            workflow.transition(self.conn, case, "AUTO_APPROVE", None, remark="cleared")
+        with self.assertRaises(workflow.WorkflowError):
+            workflow.transition(self.conn, case, "APPROVE", None, remark="cleared")
+        self.assertEqual(self.conn.execute("SELECT status FROM cases WHERE id='c1'").fetchone()[0], workflow.UNDER_REVIEW)
 
     def test_history_and_audit_are_append_only(self) -> None:
         case = self._case(workflow.AI_CHECKED)

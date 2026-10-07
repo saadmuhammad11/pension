@@ -59,7 +59,7 @@ class SweepInTheStartGap(unittest.TestCase):
         actions = [e["action"] for e in case["events"]]
         after_restart = actions[len(actions) - 1 - actions[::-1].index("RUN_CHECK"):]
         self.assertNotIn("CHECK_FAILED", after_restart, actions)
-        self.assertEqual(case["status"], "APPROVED", case["events"][-1])
+        self.assertEqual(case["status"], "UNDER_REVIEW", case["events"][-1])     # clean: the AG decides (M1)
 
     def test_a_first_verification_is_not_failed_while_it_is_still_starting(self) -> None:
         # No old run at all: the sweep used to fail any AI_CHECKING case with no run row once two
@@ -83,7 +83,7 @@ class SweepInTheStartGap(unittest.TestCase):
             self.verify(reviewer, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         self.assertNotIn("CHECK_FAILED", [e["action"] for e in case["events"]])
-        self.assertEqual(case["status"], "APPROVED", case["events"][-1])
+        self.assertEqual(case["status"], "UNDER_REVIEW", case["events"][-1])
 
 
 if __name__ == "__main__":

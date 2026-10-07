@@ -300,7 +300,7 @@ export function CaseRegister(
               const cleared = run?.state === 'done' && r.status === 'APPROVED'
               const ai = !run ? { text: 'Not run', pill: 'neutral', title: 'The verification has not been run on this case.' }
                 : run.state === 'done' ? (cleared
-                    ? { text: 'Cleared', pill: 'low', title: 'Every finding was cleared and every required document present; the case is approved.' }
+                    ? { text: 'Cleared', pill: 'low', title: 'Every finding was cleared and every required document present; the case was approved by an officer.' }
                   : run.high_flags
                     ? { text: `${run.high_flags} finding${run.high_flags === 1 ? '' : 's'}`, pill: 'medium', title: `The verification found ${run.high_flags} finding${run.high_flags === 1 ? '' : 's'} for the Accountant General to clear.` }
                     : incomplete

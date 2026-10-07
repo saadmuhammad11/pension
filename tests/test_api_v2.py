@@ -203,7 +203,7 @@ class V2Test(unittest.TestCase):
 
     # -- lifecycle --------------------------------------------------------------------------
 
-    def test_filing_submits_and_a_clean_verification_approves_by_itself(self) -> None:
+    def test_filing_submits_and_a_clean_verification_waits_for_the_ag_s_decision(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         made = self.create(police, claimant_name="Gulshan Jan")
         case_id = made["case"]["id"]
@@ -220,16 +220,24 @@ class V2Test(unittest.TestCase):
         self.assertIn("RUN_CHECK", case["allowed_actions"])
         run_id = self.verify(reviewer, case_id)["run_id"]
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
-        self.assertEqual(case["status"], "APPROVED")                     # nothing missing, no finding
-        self.assertEqual([e["action"] for e in case["events"]], ["CREATE", "FORWARD", "RUN_CHECK", "AUTO_APPROVE"])
+        # Nothing missing, no finding -- and still nobody's decision but an officer's (M1, 7 Oct 2026).
+        self.assertEqual(case["status"], "UNDER_REVIEW", case["events"][-1])
+        self.assertEqual([e["action"] for e in case["events"]], ["CREATE", "FORWARD", "RUN_CHECK", "CHECK_DONE"])
         self.assertEqual(case["events"][-1]["actor_role"], "SYSTEM")
+        self.assertTrue(case["events"][-1]["payload"]["nothing_outstanding"])
+        self.assertIn("nothing is approved automatically", case["events"][-1]["remark"])
         self.assertEqual(case["latest_run"]["verdict"], "FORWARD")
+        self.assertIn("APPROVE", case["allowed_actions"])
         rep = self.client.get(f"/api/v2/cases/{case_id}/runs/{run_id}/report", headers=reviewer)
         self.assertEqual(rep.json()["claimant_name"], "Mst. Gulshan Jan")
-        # The department sees the approval, not the AI's reading.
+        # The reviewer approves, by hand and with a remark; the department sees the decision, not the AI's reading.
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer,
+                             json={"remark": "Papers complete and in order; approved."})
+        self.assertEqual(r.status_code, 200, r.text)
         seen = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
         self.assertEqual(seen["status"], "APPROVED")
-        self.assertIn("Approved", seen["events"][-1]["remark"])
+        self.assertEqual(seen["events"][-1]["action"], "APPROVE")
+        self.assertEqual(seen["events"][-1]["actor_role"], "AG_REVIEWER")
         self.assertNotIn("verdict", seen["latest_run"])
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}/runs/{run_id}/report", headers=police).status_code, 403)
         # The old register agrees: a FORWARD decision was mirrored onto the run.
@@ -258,9 +266,9 @@ class V2Test(unittest.TestCase):
         self.assertEqual(r.json()["case"]["status"], "FORWARDED")
         self.report_to_write = CLEAN_REPORT
         self.verify(reviewer, case_id)
-        self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()["status"], "APPROVED")
+        self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()["status"], "UNDER_REVIEW")
 
-    def test_findings_wait_for_the_ag_and_clearing_the_last_one_approves(self) -> None:
+    def test_findings_wait_for_the_ag_and_clearing_the_last_one_leaves_the_decision_to_the_ag(self) -> None:
         self.report_to_write = FLAGS_ONLY_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
@@ -272,16 +280,20 @@ class V2Test(unittest.TestCase):
         # Approving over an uncleared finding needs a real reason.
         r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "ok"})
         self.assertEqual(r.status_code, 422)
-        # Clearing the finding approves the case by itself, and the department sees it.
+        # Clearing the finding opens the gate; the case still waits for the officer's own decision (M1).
         r = self.client.post(f"/api/v2/cases/{case_id}/runs/{run_id}/dispositions", headers=reviewer,
                              json={"flag_id": "F-1", "action": "WAIVE", "ground": "Recovery verified by hand against the LPC."})
         self.assertEqual(r.status_code, 201, r.text)
         self.assertTrue(r.json()["gate"]["open"])
-        self.assertEqual(r.json()["case"]["status"], "APPROVED")
+        self.assertNotIn("case", r.json())
         seen = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
-        self.assertEqual(seen["status"], "APPROVED")
-        self.assertEqual(seen["events"][-1]["action"], "AUTO_APPROVE")
-        self.assertIn("cleared", seen["events"][-1]["remark"])
+        self.assertEqual(seen["status"], "UNDER_REVIEW")
+        self.assertEqual(seen["events"][-1]["action"], "CHECK_DONE")
+        # With the gate open a plain remark approves (no override needed), and the officer is named.
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "Cleared; approved."})
+        self.assertEqual(r.status_code, 200, r.text)
+        seen = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
+        self.assertEqual((seen["status"], seen["events"][-1]["action"]), ("APPROVED", "APPROVE"))
 
     def test_return_by_hand_add_documents_and_resubmit(self) -> None:
         edu = self.login("school-education", "school-education")
@@ -303,7 +315,7 @@ class V2Test(unittest.TestCase):
         self.report_to_write = CLEAN_REPORT                # the corrected papers verify clean
         run_id = self.verify(reviewer, case_id)["run_id"]
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
-        self.assertEqual(case["status"], "APPROVED")
+        self.assertEqual(case["status"], "UNDER_REVIEW")   # clean, and still the AG's decision (M1)
         self.assertEqual(case["latest_run"]["submission_no"], 2)
         self.assertEqual(case["latest_run"]["run_id"], run_id)
 
@@ -419,7 +431,8 @@ class V2Test(unittest.TestCase):
         self.fail_runs = False
         self.verify(reviewer, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
-        self.assertEqual(case["status"], "APPROVED", case["events"][-1])
+        self.assertEqual(case["status"], "UNDER_REVIEW", case["events"][-1])
+        self.assertEqual(case["events"][-1]["action"], "CHECK_DONE")
         self.assertEqual(len(case["runs"]), 1, "a re-run of the same papers is the same run, not a second row")
 
     # -- GP Fund cases: the second product, examined by the GP Fund module ---------------------
@@ -492,20 +505,23 @@ class V2Test(unittest.TestCase):
         self.verify(reviewer, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         self.assertEqual(case["status"], "UNDER_REVIEW")               # a verification task: the officer decides
-        # The officer passes the case for payment in the module's own screens; the next read follows.
+        # The officer passes the case for payment in the module's own screens. The pension-side case
+        # still waits for the AG's own approval (M1, 7 Oct 2026): nothing moves it by itself.
         self._gpf_module(self._gpf_view(conf=False, disp="passed for payment"))
-        case = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
-        self.assertEqual(case["status"], "APPROVED")
-        self.assertEqual(case["events"][-1]["action"], "AUTO_APPROVE")
-        self.assertIn("Passed for payment", case["events"][-1]["remark"])
+        case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
+        self.assertEqual(case["status"], "UNDER_REVIEW")
+        self.assertIn("APPROVE", case["allowed_actions"])
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "Passed in the GP Fund examination; approved."})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()["status"], "APPROVED")
 
-    def test_a_clean_gp_fund_examination_approves_and_a_return_carries_the_hard_stops(self) -> None:
+    def test_a_clean_gp_fund_examination_waits_for_the_ag_and_a_return_carries_the_hard_stops(self) -> None:
         self._gpf_module(self._gpf_view())
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police, product="GPF", gpf_kind="balance_transfer")["case"]["id"]
         reviewer = self.login("ag.reviewer", "ag")
         self.verify(reviewer, case_id)
-        self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()["status"], "APPROVED")
+        self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()["status"], "UNDER_REVIEW")
         # A second case: the officer returns it from the module after examination.
         self._gpf_module(self._gpf_view(conf=True))
         other = self.create(police, product="GPF", gpf_kind="death")["case"]["id"]

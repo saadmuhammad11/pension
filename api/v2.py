@@ -1701,7 +1701,7 @@ def _audit_clearance(conn: sqlite3.Connection, user: User, request: Request | No
                      run_id: str, action: str, entry: dict) -> None:
     """An officer's waiver, correction or checklist action, on the append-only audit trail.
 
-    These are what let a case approve itself, and they were kept only in the run folder's
+    These decide what is outstanding on a case, and they were kept only in the run folder's
     .jsonl files, under a display name and a fixed role: no account id, no address, and
     editable by anyone with the files (audit 6 Oct 2026). The run folder keeps its copy."""
     case = conn.execute("SELECT id FROM cases WHERE id = ? OR case_no = ?", (case_id, case_id)).fetchone()
@@ -1712,7 +1712,8 @@ def _audit_clearance(conn: sqlite3.Connection, user: User, request: Request | No
 
 
 def _settle(conn: sqlite3.Connection, case_id: str, user: User, run_id: str, gate: dict) -> dict | None:
-    """Clearing the last finding (or the last missing paper) approves the case by itself."""
+    """Clearing the last finding (or the last missing paper) is recorded; the case is not moved
+    (business decision M1, 7 Oct 2026: no automatic approval). Returns None."""
     # By id or case number, as _case_or_404 accepts: a clearance sent with the case number
     # never approved the case before (audit 6 Oct 2026).
     row = conn.execute("SELECT * FROM cases WHERE id = ? OR case_no = ?", (case_id, case_id)).fetchone()

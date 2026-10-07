@@ -53,29 +53,29 @@ class _Fixture(unittest.TestCase):
         finally:
             conn.close()
 
-    def _assert_approved_by_reviewer(self, case_no: str, reviewer: dict, action: str) -> None:
+    def _assert_cleared_by_reviewer(self, case_no: str, reviewer: dict, action: str) -> None:
+        # The clearance is audited and completes the review; the case is NOT approved by it (M1).
         case = self.client.get(f"/api/v2/cases/{case_no}", headers=reviewer).json()
-        self.assertEqual(case["status"], "APPROVED", case["events"][-1])
-        last = case["events"][-1]
-        self.assertEqual(last["action"], "AUTO_APPROVE")
-        self.assertEqual(last["payload"]["cleared_by"]["username"], "ag.reviewer")
+        self.assertEqual(case["status"], "UNDER_REVIEW", case["events"][-1])
+        self.assertEqual(case["events"][-1]["action"], "CHECK_DONE")
         rows = self._audit(case["id"])
         acts = [(r["action"], r["username"]) for r in rows]
         self.assertIn((action, "ag.reviewer"), acts)
-        self.assertIn(("CASE_APPROVED_ON_CLEARANCE", "ag.reviewer"), acts)
+        self.assertIn(("CLEARANCE_COMPLETE", "ag.reviewer"), acts)
+        self.assertNotIn("CASE_APPROVED_ON_CLEARANCE", [a for a, _ in acts])
         act = next(r for r in rows if r["action"] == action)
         self.assertTrue(act["ip"], "the address is recorded")
         self.assertTrue(act["reason"], "the ground is recorded")
 
 
 class FindingWaiver(_Fixture):
-    def test_a_waiver_sent_by_case_number_is_audited_and_approves(self) -> None:
+    def test_a_waiver_sent_by_case_number_is_audited_and_completes_the_review(self) -> None:
         case, run_id, reviewer = self._under_review()
         r = self.client.post(f"/api/v2/cases/{case['case_no']}/runs/{run_id}/dispositions", headers=reviewer,
                              json={"flag_id": "F-1", "action": "WAIVE",
                                    "ground": "Recovery verified by hand against the LPC."})
         self.assertEqual(r.status_code, 201, r.text)
-        self._assert_approved_by_reviewer(case["case_no"], reviewer, "FINDING_WAIVE")
+        self._assert_cleared_by_reviewer(case["case_no"], reviewer, "FINDING_WAIVE")
         row = next(r for r in self._audit(case["id"]) if r["action"] == "FINDING_WAIVE")
         after = json.loads(row["after_json"])
         self.assertEqual((after["run_id"], after["flag_id"]), (run_id, "F-1"))
@@ -85,13 +85,13 @@ class FindingWaiver(_Fixture):
 class ChecklistWaiver(_Fixture):
     report_to_write = MISSING_PAPER_REPORT
 
-    def test_a_checklist_waiver_by_run_id_is_audited_and_approves(self) -> None:
+    def test_a_checklist_waiver_by_run_id_is_audited_and_completes_the_review(self) -> None:
         case, run_id, reviewer = self._under_review()
         r = self.client.post(f"/api/v2/runs/{run_id}/checklist-actions", headers=reviewer,
                              json={"action": "WAIVE", "item_id": "A3",
                                    "ground": "FRC seen in the original file at the counter on 6 Oct."})
         self.assertEqual(r.status_code, 201, r.text)
-        self._assert_approved_by_reviewer(case["case_no"], reviewer, "CHECKLIST_WAIVE")
+        self._assert_cleared_by_reviewer(case["case_no"], reviewer, "CHECKLIST_WAIVE")
 
 
 if __name__ == "__main__":

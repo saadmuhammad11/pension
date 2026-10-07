@@ -541,15 +541,19 @@ class RoundsOverTheApi(unittest.TestCase):
         # F-2 was never cleared, so the case waits for the AG.
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
         self.assertEqual(case["status"], "UNDER_REVIEW")
-        # Clearing it now approves the case by the existing rule: every finding cleared, nothing missing.
+        # Clearing it opens the gate; the AG then approves by hand (M1: nothing is approved automatically).
         run_id = run.run_id
         r = self.client.post(f"/api/v2/cases/{case_id}/runs/{run_id}/dispositions", headers=ag,
                              json={"flag_id": "F-2", "action": "WAIVE", "ground": "Relationship shown on the FRC."})
         self.assertIn(r.status_code, (200, 201), r.text)
+        self.assertTrue(r.json()["gate"]["open"])
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
-        self.assertEqual(case["status"], "APPROVED")
+        self.assertEqual(case["status"], "UNDER_REVIEW")
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=ag, json={"remark": "Both findings cleared; approved."})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()["status"], "APPROVED")
 
-    def test_carried_clearances_that_clear_every_finding_approve_by_the_same_rule(self) -> None:
+    def test_carried_clearances_that_clear_every_finding_still_wait_for_the_ag(self) -> None:
         dept, ag = self.login("school-education"), self.login("ag.reviewer")
         case_id = self.file(dept)
         self.report = {**FRC_ON_FILE, "checklist": MISSING_FRC["checklist"],
@@ -569,11 +573,15 @@ class RoundsOverTheApi(unittest.TestCase):
         self.report = FRC_ON_FILE
         self.verify(ag, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
-        self.assertEqual(case["status"], "APPROVED")
+        self.assertEqual(case["status"], "UNDER_REVIEW")                  # carried waivers approve nothing (M1)
         rounds = self.client.get(f"/api/v2/cases/{case_id}/rounds", headers=ag).json()["rounds"]
         self.assertEqual(rounds[1]["requests"][0]["action"], "REQUEST_DOCS")
         self.assertEqual(rounds[1]["checks"][0]["resolution"][0]["resolution"], "RESOLVED")
-        self.assertEqual(rounds[1]["closed_action"], "AUTO_APPROVE")
+        self.assertIsNone(rounds[1]["closed_action"])
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=ag, json={"remark": "Resubmission complete; approved."})
+        self.assertEqual(r.status_code, 200, r.text)
+        rounds = self.client.get(f"/api/v2/cases/{case_id}/rounds", headers=ag).json()["rounds"]
+        self.assertEqual(rounds[1]["closed_action"], "APPROVE")
 
 
 class BackfillOfExistingCases(unittest.TestCase):
