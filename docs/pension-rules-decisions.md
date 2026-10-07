@@ -2,7 +2,9 @@
 
 **For:** the pension rules owner (AG Punjab, Pension Wing)
 **From:** the production audit of 6 October 2026
-**Status:** decisions pending. No code has been changed for any item on this sheet.
+**Status:** **decided 7 October 2026** by the pension rules owner; recorded below under each item and implemented on `fix/high-findings` (see `docs/STATUS.md` for the commit of each).
+
+**Scope decision (7 Oct 2026).** This release does **no pension calculations**. The system parses, checks and reviews the documents of a case; every computed amount (pension, commutation, gratuity, family-pension share, qualifying service as a payable figure, the emoluments base) is removed from the portal, the reports, the exports, the API and the AG's view. The rules engine may run internally only where its output is never shown or stored as a result. Items 2, 6, 7 and 9 (and the day-counting note, N10) are therefore **closed as out of scope** for this release and stay on this sheet for the release that computes.
 
 Each item below is a place where the system computes a pension or makes a decision in a way that may be wrong, and where the correct behaviour is a matter of rule or office practice rather than programming. For each item the sheet gives:
 
@@ -20,19 +22,19 @@ The rule IDs (`QS-07`, `CALC-01` and so on) are those in the rule packs (`rules/
 
 ## Summary
 
-| # | Item | Effect today | Recommended |
-|---|---|---|---|
-| 1 | Auto-approval ignores the engine's verdict | Cases the engine put on HOLD, or for which it computed no pension, are approved with no officer | Approve automatically only on a clean FORWARD verdict with a computed pension |
-| 2 | Qualifying service at the 6-month mark | Loses a whole year (about 3.3% of pension for life) | Count the end date as served; then apply QS-07 |
-| 3 | Two reads of a page disagree | The second read's figures are used anyway | Do not use any figure from that page; route to an officer |
-| 4 | Pay lines from several documents | Different amounts for the same component are added together | Take the base from one authoritative document; refuse on conflict |
-| 5 | Form D-I dates not checked against each other | A misread date of birth starts family pension before the death | Refuse unless entry < death ≤ notional superannuation; apply QS-02 |
-| 6 | Voluntary retirement at 59 | Paid as superannuation, without the 2% reduction | Superannuation only if retirement falls on the superannuation date |
-| 7 | Re-grant to a second family member | 75% may be applied to a pension that is already 75% | Never take the base from a family-pension PPO; route to an officer |
-| 8 | Family pension relations and eligibility | Grandchildren, in-laws and adult sons paid 75%; a "wife d/o" read as a child | Recognise spouse first; refuse relations not in the rules; route sons |
-| 9 | Zero or negative pay base | Rs 0 pension computed, and can be auto-approved | Refuse |
-| 10 | Waivers tied to finding numbers | After a recompute, an old waiver can clear a different finding | Tie each waiver to what the finding says; clear waivers on recompute |
-| 11 | Waivers carried into a resubmission (already traceable) | A resubmission can be approved with no new officer action | Policy decision (see Appendix) |
+| # | Item | Effect today | Recommended | Decision (7 Oct 2026) |
+|---|---|---|---|---|
+| 1 | Auto-approval ignores the engine's verdict | Cases the engine put on HOLD, or for which it computed no pension, are approved with no officer | Approve automatically only on a clean FORWARD verdict with a computed pension | C — no automatic approval |
+| 2 | Qualifying service at the 6-month mark | Loses a whole year (about 3.3% of pension for life) | Count the end date as served; then apply QS-07 | Closed, out of scope |
+| 3 | Two reads of a page disagree | The second read's figures are used anyway | Do not use any figure from that page; route to an officer | A |
+| 4 | Pay lines from several documents | Different amounts for the same component are added together | Take the base from one authoritative document; refuse on conflict | B — LPC governs; never sum |
+| 5 | Form D-I dates not checked against each other | A misread date of birth starts family pension before the death | Refuse unless entry < death ≤ notional superannuation; apply QS-02 | B — hard stop; <10 y finding |
+| 6 | Voluntary retirement at 59 | Paid as superannuation, without the 2% reduction | Superannuation only if retirement falls on the superannuation date | Closed, out of scope |
+| 7 | Re-grant to a second family member | 75% may be applied to a pension that is already 75% | Never take the base from a family-pension PPO; route to an officer | Closed, out of scope |
+| 8 | Family pension relations and eligibility | Grandchildren, in-laws and adult sons paid 75%; a "wife d/o" read as a child | Recognise spouse first; refuse relations not in the rules; route sons | B — fixed list (Appendix B) |
+| 9 | Zero or negative pay base | Rs 0 pension computed, and can be auto-approved | Refuse | Closed, out of scope |
+| 10 | Waivers tied to finding numbers | After a recompute, an old waiver can clear a different finding | Tie each waiver to what the finding says; clear waivers on recompute | C — exact finding |
+| 11 | Waivers carried into a resubmission (already traceable) | A resubmission can be approved with no new officer action | Policy decision (see Appendix) | Follows item 10 |
 
 ---
 
@@ -71,7 +73,7 @@ A case where the engine **refused** to compute is also approved if the checklist
 
 **Recommendation.** **A** for go-live, with **C** as a fallback if the office prefers a period of full manual approval to build confidence. B only after the provisional-PPO process is written down.
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** ☒ **C** — automatic approval is removed completely. Every case, including one with no findings, needs a human decision. Automatic *return* of a case with missing or defective documents stays.
 
 ---
 
@@ -107,7 +109,7 @@ The "inclusive" option in the code does not fix it either: it adds one day witho
 
 **Recommendation.** **A.** The servant was in service on the day of retirement (retirement takes effect in the afternoon, `QS-10`), and the department's own figure in the golden case counts that day (32y 2m 11d against the engine's 32y 2m 10d). Ask the office to confirm against two or three past determinations that sat at the 6-month mark.
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** **Closed — out of scope.** No qualifying service is computed or shown in this release. Reopen with the calculation release.
 
 ---
 
@@ -129,7 +131,7 @@ The "inclusive" option in the code does not fix it either: it adds one day witho
 
 **Recommendation.** **A** now, since it is what the code was meant to do. C is a good refinement once item 4 is in.
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** ☒ **A** — when two reads of a page disagree, no figure from that page is used; a finding is raised for human review.
 
 ---
 
@@ -159,7 +161,7 @@ Reckoned basic pay: **Rs 203,200**, marked as needing no human. The true figure 
 
 **Recommendation.** **B.** Please also confirm the order of authority for the base document.
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________  Order of authority: ____________________
+**Decision (7 Oct 2026):** ☒ **B** — the LPC is the source of truth for pay components. A different amount for the same component on another document raises a finding. Amounts are never summed across documents. Order of authority: **LPC** first; nothing else supplies a component.
 
 ---
 
@@ -189,7 +191,7 @@ A second example: entry date 01-01-2022 after a death on 29-07-2021. The engine 
 
 **Recommendation.** **B.**
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** ☒ **B** — on Form D-I an impossible set of dates (death before birth, family pension starting before the death, entry after the death, and the like) is a hard stop. Service under 10 years raises a finding for the reviewer (no computation of the entitlement in this release).
 
 ---
 
@@ -218,7 +220,7 @@ A second example: entry date 01-01-2022 after a death on 29-07-2021. The engine 
 
 **Recommendation.** **A + B**: decide from the dates when they are clear, and route when they are not. Please also confirm the reduction table (`BLOCKING-19`).
 
-**Decision:** ☐ A ☐ B ☐ A+B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** **Closed — out of scope.** No pension is computed, so no reduction is applied or shown. Reopen with the calculation release.
 
 ---
 
@@ -245,7 +247,7 @@ This is likely rather than confirmed end to end; the path is confirmed in code.
 
 **Recommendation.** **C** until the rate and base are confirmed (`BLOCKING-07`), then **B** if office practice confirms that a re-grant continues the same amount.
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** **Closed — out of scope.** No re-grant amount is computed in this release. Reopen with the calculation release.
 
 ---
 
@@ -278,7 +280,7 @@ The eligibility steps (age, marriage, income) exist in the rule file but are lef
 
 **Recommendation.** **A** now; **B** once `BLOCKING-08` is settled.
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________  Sons' age limit (BLOCKING-08): ________
+**Decision (7 Oct 2026):** ☒ **B** — a fixed list of eligible family-pension relations, each with the proof it needs (age, marital status, income), drawn from the pension rules. A relation not on the list, or with its proof missing, raises a finding. The "Wife d/o" misread is fixed. **The draft list is in Appendix B below, for the rules owner to confirm before it is treated as final.** Sons' age limit (BLOCKING-08): as in the draft list, to be confirmed.
 
 ---
 
@@ -296,7 +298,7 @@ The eligibility steps (age, marriage, income) exist in the rule file but are lef
 
 **Recommendation.** **A.**
 
-**Decision:** ☐ A ☐ B ☐ Other: ____________________
+**Decision (7 Oct 2026):** **Closed — out of scope.** No pay base and no pension are computed in this release. Reopen with the calculation release.
 
 ---
 
@@ -318,7 +320,7 @@ The eligibility steps (age, marriage, income) exist in the rule file but are lef
 
 **Recommendation.** **C.** This one is mostly technical, but it changes what an officer must re-do after a recompute, so it is listed for decision.
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** ☒ **C** — each waiver is tied to the exact finding: rule id, document, field and value. If that finding changes or disappears on a re-check the waiver lapses and the finding needs fresh human review.
 
 ---
 
@@ -340,10 +342,14 @@ These were in the audit's High list, are technical, and are fixed in code on bra
 
 **Recommendation.** **B.**
 
-**Decision:** ☐ A ☐ B ☐ C ☐ Other: ____________________
+**Decision (7 Oct 2026):** settled by item 10 — a carried waiver stands only while the exact finding it was given against is unchanged in the new round; otherwise it lapses and the officer reviews afresh. No approval follows from carried waivers alone, since item 1 removed automatic approval.
 
-**Related, also policy.** There is no maker-checker today: one administrator account can file a case for any department and approve it, and all AG reviewers share one `ag.reviewer` login. The office should decide whether approvals need a second person, and should issue individual AG accounts before go-live.
+**Related, also policy — decided 7 Oct 2026.** Named logins for every reviewer; the shared `ag.reviewer` account is retired. Maker-checker: the user who submits a case cannot approve it, administrators included. The IT administrator manages users only and takes no case action in pension or GP Fund; every action is logged under the real user's name, never a role placeholder. In GP Fund only the DAG may clear a hard stop, and written grounds are mandatory.
+
+## Appendix B: eligible family-pension relations (draft for confirmation)
+
+*Filled in with the implementation of item 8; see the table there.*
 
 ---
 
-*Recorded by:* ____________________  *Designation:* ____________________  *Date:* ____________
+*Recorded by:* the pension rules owner, through the project lead  *Date:* 7 October 2026

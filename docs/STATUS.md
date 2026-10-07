@@ -34,10 +34,15 @@ commits behind the branch head.
 `25d3afb` L1, `8363a51` the stale PyJWT note in the deployment checklist. The leftover `audit.tmp2`
 account was disabled on the trial box through the administrator's API (audit row `USER_DISABLE`).
 
-**Totals.** Earlier audit (57 items): 42 fixed, 1 partly fixed, 13 need a business decision,
-1 deploy step. New items (18): 12 fixed, 2 need a decision, 2 not fixed, 2 deploy steps.
-**Still left: 21 rows** — 15 awaiting a decision (14 pension-rules, 1 operations), 2 not fixed
-(N6, N11), 1 partly fixed (M7), 3 deploy steps (N1, D2, N19).
+**Business decisions, 7 Oct 2026 (afternoon).** Every pension-rules item is decided (`docs/pension-rules-decisions.md`).
+Scope: this release does no pension calculations, so M3, H4, H5, H7 and N10 are **closed as out of scope**. The
+remaining decided items (scope, M1, H1, H2, H3, H6, H8, C1, G1, G6) are being implemented one commit each, suites
+green after each; their rows read DECIDED — IN PROGRESS until the commit lands.
+
+**Totals.** Earlier audit (57 items): 42 fixed, 1 partly fixed, 4 closed out of scope, 9 decided and in progress,
+1 deploy step. New items (18): 12 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 2 not fixed,
+2 deploy steps. **Still left: 16 rows** — 9 decided and in progress, 1 operations decision, 2 not fixed (N6, N11),
+1 partly fixed (M7), 3 deploy steps (N1, D2, N19).
 
 ## Real claimant data (M8 / N2 / N4 / N6)
 
@@ -66,22 +71,22 @@ account was disabled on the trial box through the administrator's API (audit row
 
 | # | Sev | Item | Status | Evidence / what remains |
 |---|---|---|---|---|
-| M1 | Critical | Auto-approval ignores the engine's verdict | **NEEDS BUSINESS DECISION** | `outcome()` still has no verdict check. Decision sheet item 1. (Later report item 1.) |
+| M1 | Critical | Auto-approval ignores the engine's verdict | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (sheet item 1, C): no automatic approval at all; every case needs a human decision. Automatic return of a case with missing documents stays |
 | M2 | Critical | `CHANGE_ME`/short JWT secret accepted | **FIXED** | `2280c44`. `tests/test_production_hardening.py` F11 (4 tests, including the real process exiting with code 1) |
-| M3 | Critical | Qualifying service loses a year at 6 months | **NEEDS BUSINESS DECISION** | Re-run 7 Oct: entry 1 Jan 1997, retirement 30 Jun 2026 → `29y 5m 29d` (exclusive) / `29y 5m 30d` (inclusive) → 29 years reckoned; the day after → 30. Decision sheet item 2 |
+| M3 | Critical | Qualifying service loses a year at 6 months | **CLOSED — out of scope** (7 Oct 2026) | No pension or qualifying service is computed or shown in this release (scope decision). Decision sheet item 2 stays for the calculation release |
 | M4 | Critical | Every GP Fund scan read crashed (NameError) | **FIXED** | `b519e24`. `GP/backend/tests/test_scan_read_e2e.py` (failed before, passes after). Live since the 6 Oct 16:28 restart (the fix predates it) |
 | M5 | Critical | TIFF/GIF image bomb runs the server out of memory | **FIXED** | `d3577df`. `tests/test_image_limits.py` (200-frame bomb refused; 133 MB peak) |
 | M6 | Critical | LibreOffice fetches addresses / reads local files | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` (live listener receives no requests). Content checks; no sandbox is possible on this box |
 | M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** (stop-gap live) | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live, re-checked 7 Oct from Spark-1:** 8011/8012/8093 time out, 5184 answers, so the nftables rule from `deploy/lock-model-ports.sh` is in force. `pension-model-ports.service` is enabled but shows `inactive`: the rule was applied by hand, the unit never started; it re-applies at boot. The three vLLM processes still run from `~/Desktop/Pension-AG/infra`, on `0.0.0.0`, with no key; `/etc/pension/models.env` does not exist yet. The lasting fix (`--host 127.0.0.1` plus the key in `infra/*.service`) is a deploy step (checklist §8.1). (Later report item 4.) |
 | M8 | Critical | Real CNICs and names in code and history | **FIXED** (6 Oct 2026) | Code: `f329438`, plus `deploy/check-release-pii.py` (passes on every commit and on every blob in the local object store). History rewritten; GitHub recreated clean, `63185d3` no longer served (N2). Local copies shredded (N4). Remaining copies: the demos (N6) and the session transcripts (N11) |
-| H1 | High | Two reads of a page disagree, figures used anyway | **NEEDS BUSINESS DECISION** | The agreement result is stored but never read. Item 3 |
-| H2 | High | Pay lines from several documents summed; §8.4 check never called | **NEEDS BUSINESS DECISION** | `reconcile_*` still has no callers. Item 4 |
-| H3 | High | Form D-I dates not cross-checked; no 10-year minimum | **NEEDS BUSINESS DECISION** | Item 5 |
-| H4 | High | Voluntary retirement at 59 paid as superannuation | **NEEDS BUSINESS DECISION** | Item 6 |
-| H5 | High | Re-grant may apply 75% twice | **NEEDS BUSINESS DECISION** | Item 7 |
-| H6 | High | Family relations misread; no eligibility checks | **NEEDS BUSINESS DECISION** | Item 8 |
-| H7 | High | Zero pay base gives a Rs 0 pension | **NEEDS BUSINESS DECISION** | Re-run today: an empty pay list gives Rs 0 with "needs human" false. Item 9 |
-| H8 | High | Waivers tied to finding numbers that change | **NEEDS BUSINESS DECISION** | Still keyed by `flag_id`. Item 10 |
+| H1 | High | Two reads of a page disagree, figures used anyway | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 3, A): no figure from a page whose two reads disagree; a finding for human review |
+| H2 | High | Pay lines from several documents summed; §8.4 check never called | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 4, B): the LPC is the source of truth for pay components; a differing amount elsewhere is a finding; never summed |
+| H3 | High | Form D-I dates not cross-checked; no 10-year minimum | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 5, B): impossible dates are a hard stop; service under 10 years is a finding for the reviewer |
+| H4 | High | Voluntary retirement at 59 paid as superannuation | **CLOSED — out of scope** (7 Oct 2026) | No pension computed in this release. Sheet item 6 |
+| H5 | High | Re-grant may apply 75% twice | **CLOSED — out of scope** (7 Oct 2026) | No re-grant amount computed in this release. Sheet item 7 |
+| H6 | High | Family relations misread; no eligibility checks | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 8, B): fixed list of eligible relations with the proof each needs (draft in the sheet, Appendix B, for the rules owner to confirm); "Wife d/o" misread fixed |
+| H7 | High | Zero pay base gives a Rs 0 pension | **CLOSED — out of scope** (7 Oct 2026) | No pay base or pension computed in this release. Sheet item 9 |
+| H8 | High | Waivers tied to finding numbers that change | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 10, C): a waiver is tied to rule id + document + field + value and lapses when that finding changes or disappears |
 | H9 | High | Re-verify race (old run's result applied) | **FIXED** | `ef18463`. `tests/test_reverify_race.py` (fails without the fix) |
 | H10 | High | Waivers and approvals not on the audit trail | **FIXED** | `fab85f4`. `tests/test_clearance_audit.py`. Waivers carried into a resubmission are a policy question (item 11) |
 | H11 | High | GP Fund actions on rejected or returned cases | **FIXED** | `a861ade`. `tests/test_gpf_actions_follow_status.py` |
@@ -103,15 +108,15 @@ account was disabled on the trial box through the administrator's API (audit row
 | R6 | Medium | Failed migration doesn't stop the server | **FIXED** | `2c1f512`. `tests/test_startup_failure.py` |
 | R7 | Medium | No limit on runs reaching the GPU | **FIXED** (6 Oct 2026) | Cap in `6d6679a` (`tests/test_run_concurrency.py`). Remainder in `631e29f`: a run past `PENSION_RUN_DEADLINE_MIN` (90) is reported failed by the reconciler and stops itself at its next stage boundary; finished runs leave the in-memory registry after `PENSION_RUN_REGISTRY_KEEP_MIN` (60) minutes and are rebuilt from disk on demand. `tests/test_run_deadline_and_registry.py` |
 | R8 | Medium | No disk quota or cleanup of old runs | **FIXED** (6 Oct 2026) | `fc4e96c`. Uploads and verifications refused (507) below `PENSION_MIN_FREE_GB` (5) free, before the case is moved; the reconciler sweeps run folders with no report and no case after `PENSION_RUN_ORPHAN_DAYS` (7), with their uploads, and stale upload staging files. A run a case refers to is never touched. `tests/test_disk_quota_and_cleanup.py` |
-| C1 | Medium | No maker-checker; shared `ag.reviewer` account | **NEEDS BUSINESS DECISION** | `ADMIN` is still on both sides |
+| C1 | Medium | No maker-checker; shared `ag.reviewer` account | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct: named logins for every reviewer, `ag.reviewer` retired; the user who submits a case cannot approve it, administrators included |
 | C2 | Medium | Admin override's audit row written outside its transaction | **FIXED** (6 Oct 2026) | `c5e88b9`. `transition()` takes a callback run inside its transaction; the override's audit row is written there, so the move and the row happen together or not at all. `tests/test_override_audit_atomic.py` |
 | C3 | Medium | Old `/api` recompute can change the report behind an approved case | **FIXED** (6 Oct 2026) | `a878c73`. Refused (409) when the run's case is approved or rejected, or when the case has moved on to a newer run; runs with no case unaffected. `tests/test_old_recompute_guard.py` |
-| G1 | Medium | Accounts Officer clears a hard stop with "correct" | **NEEDS BUSINESS DECISION** | Still allowed from level 2 (AO) |
+| G1 | Medium | Accounts Officer clears a hard stop with "correct" | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct: in GP Fund only the DAG clears a hard stop, and written grounds are mandatory |
 | G2 | Medium | GP Fund waivers stay attached after the amount changes | **FIXED** (6 Oct 2026) | `2e6ab7c`. A disposition records what it was given against; a re-run that changes the observation marks it stale, keeps it for the record, and the item counts as open until an officer disposes of the new finding. Old dispositions (no fingerprint) are not disturbed. `GP/backend/tests/test_waiver_goes_stale_on_change.py` |
 | G3 | Medium | SAP trailing minus read as positive | **FIXED** (6 Oct 2026) | `7e3ec96`. `num("1,234.00-")` is −1,234; `"1,234/-"` stays positive. `GP/backend/tests/test_format_num.py` |
 | G4 | Medium | Unread advance balance means "no advance outstanding" | **FIXED** (6 Oct 2026) | `4d8e721`. An unread balance is a verification task with the SAP cure; zero still passes. `GP/gpfund/tests/test_unread_advance_balance.py` |
 | G5 | Medium | Signature-authority register lost on restart | **FIXED** (6 Oct 2026) | `69eeefb`. Every change written to `GPF_DATA_DIR/doa.json` (whole file, renamed into place) and loaded at start. `GP/backend/tests/test_doa_register_persists.py` |
-| G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **NEEDS BUSINESS DECISION** | `"ADMIN": "dag"` unchanged |
+| G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct: the IT administrator manages users only, no case action in pension or GP Fund; every action logged under the real user's name |
 | G7 | Medium | No locking on GP Fund case state | **FIXED** (6 Oct 2026) | `6ecb0b3`. One re-entrant lock per case around every mutating service method; other cases not held up. `GP/backend/tests/test_case_lock.py` |
 | D1 | Medium | Release files owned by uid 1000 | **FIXED** (6 Oct 2026) | `4054f55`. `tar --owner=0 --group=0 --numeric-owner`; the test packs a stand-in stage with the script's own flags and reads the entries back. `tests/test_release_archive_ownership.py` |
 | D2 | Medium | PyJWT 2.13 advisories | **DEPLOY STEP** (done on the trial box) | Pinned to 2.15.0 in `8011f41`; verified 7 Oct: `/home/tmc/vllm_env` has 2.15.0 and the services were restarted on it 6 Oct 16:28. The production server gets it from the checklist (§8.1; its stale "still has 2.13.0" note corrected in `8363a51`). (Later report item 7.) |
@@ -138,7 +143,7 @@ account was disabled on the trial box through the administrator's API (audit row
 | N7 | Low | **New:** reranker/guard units still on `0.0.0.0` | **FIXED** (6 Oct 2026) | `f50a40c`. Guard on 127.0.0.1 (unused here). The reranker serves this box from Spark-1 over the LAN, so it cannot be loopback: it loads `/etc/pension/models.env` and refuses to start without a proper key, as the other units do. `tests/test_model_units_gated.py` |
 | N8 | Low | **New:** new settings missing from `pension.env.example` | **FIXED** (6 Oct 2026) | `b5e602e`. Every `PENSION_*`/`GPF_*` the code reads is listed with what it does; `tests/test_env_example_is_complete.py` fails on a missing or stale one |
 | N9 | Low | **New:** `docs/*.md` not tracked in git | **FIXED** (6 Oct 2026) | `docs/STATUS.md`, `docs/DEPLOYMENT.md` and `docs/pension-rules-decisions.md` tracked on `fix/high-findings`; `.gitignore` whitelists `docs/*.md` |
-| N10 | Low | **New:** domain brief wrongly says day-counting is "immaterial" | **NEEDS BUSINESS DECISION** | Settled together with M3 |
+| N10 | Low | **New:** domain brief wrongly says day-counting is "immaterial" | **CLOSED — out of scope** (7 Oct 2026) | Closed with M3 for this release |
 | N11 | Low | **New:** Claude session transcripts hold real CNICs | **NOT FIXED** (deliberate) | `~/.claude/projects/-home-tmc-Desktop-pension/` (30 transcripts, 299 MB on 7 Oct) plus a few in neighbouring project folders. `~/.claude` owner-only (700). **Purge the transcripts after the fix work is complete**; they are the working history of the fixes until then |
 | N15 | Low | **New (later report 6b):** sign-out ends the tab's copy of the token, not the token | **FIXED** (7 Oct 2026) | `7bf42ff`. `/api/v2/auth/logout` with a valid token bumps the officer's `token_version`, so that token and the GP Fund frame token (same version) are refused from then on, and the sign-out is on the audit trail (`SIGN_OUT`); without a token, or with a dead one, it still answers 200. The portal's `end()` sends the token before dropping it. Ends every session of that officer, as a password reset does. `tests/test_signout_ends_token.py`; `tsc --noEmit` passes |
 
