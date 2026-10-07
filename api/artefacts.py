@@ -35,7 +35,10 @@ def report(run: Run) -> Any:
     if not path.exists():
         return JSONResponse({"error": "report not ready", "state": run.state}, status_code=409)
     from api.checklist_actions import apply
-    return apply(json.loads(path.read_text()), run.run_dir)
+    from rules.scope import scrub_report
+    # Scrubbed on the way out as well as when written: reports written before 7 Oct 2026 carry
+    # computed amounts this release does not show (rules.scope).
+    return scrub_report(apply(json.loads(path.read_text()), run.run_dir))
 
 
 def report_dict(run_dir: Path) -> dict | None:

@@ -9,9 +9,10 @@
 export interface Step {
   rule_id: string
   description: string
-  computation_shown: string
-  amount: number | null
-  unit: string
+  computation_shown?: string
+  /** Absent in this release: no amount is computed or shown (rules/scope.py). */
+  amount?: number | null
+  unit?: string
   exact_before_rounding?: string
   rounding?: string
   note?: string
@@ -115,15 +116,14 @@ export interface PayComponent {
   printed_label: string
   component: string
   amount: number
-  reckonable: boolean
+  reckonable?: boolean
   page: number | null
 }
 
+/** The pay lines as the pay documents print them. No total is computed in this release
+ *  (business decision of 7 Oct 2026); the form's own printed total is a reading. */
 export interface Emoluments {
-  reckonable_total: number
-  excluded_total: number
   printed_total: number | null
-  reconciled: boolean
   components: PayComponent[]
 }
 
@@ -203,6 +203,8 @@ export interface CaseReport {
     unreadable: { page: number; document: string; reason: string }[]
   } | null
   determination: Determination | null
+  /** False in this release: the report carries the engine's checks and no computed amount. */
+  calculations_in_scope?: boolean
   /** Why no pension was computed. A refusal the officer has to read: the engine declines
    *  rather than guessing, and "Not computed." on its own tells them nothing. */
   self_pension_error: string | null

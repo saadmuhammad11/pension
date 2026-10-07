@@ -43,6 +43,7 @@ from rules import (
 from rules.case_type import canonical_office_type, declared_case_type_result, pipeline_types_for
 from rules.emoluments import Emoluments, PayComponent
 from rules.notifications import notify
+from rules.scope import scrub_determination, scrub_emoluments
 from .ingest import atomic_write_text
 
 
@@ -1301,8 +1302,10 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         "pages": identities,
         # Stage 4 output, where it has run. Still null rather than fixture-filled when it
         # has not: §15 rule 12, never demonstrate an untested path as working.
-        "emoluments": stage4.get("emoluments"),
-        "determination": stage4.get("determination"),
+        # ... and never with a computed figure in it (business decision of 7 Oct 2026: this
+        # release does no pension calculations; rules.scope). The engine's checks remain.
+        "emoluments": scrub_emoluments(stage4.get("emoluments")),
+        "determination": scrub_determination(stage4.get("determination")),
         "checklist": _found_as({**checklist.to_dict(), "result_line": checklist.result_line}, run, variant) if checklist else None,
         # Pages the bundle contains that produced no document. A MISSING line can only be
         # trusted when this is empty: the widow's affidavit was on page 12, classified OTHER

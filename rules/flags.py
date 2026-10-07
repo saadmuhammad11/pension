@@ -1395,14 +1395,12 @@ def check_emoluments_reconciliation(record: CaseRecord, pack: RulePack) -> list[
         id="",
         severity=HIGH,
         flag_class=CONTRA_MONEY,
-        title="Reckonable pay does not reconcile with the form's printed total",
+        title="Pay lines do not add up to the form's printed total",
         finding=finding,
         required_action=(
             "Department to re-issue the sanction form with every reckonable component and "
             "the total as per the AG pay record, or state why the line is not reckonable "
-            "for this servant. Officer to confirm the pay lines against the original. The "
-            "determination shown is computed on the pay records and is provisional until "
-            "the form agrees."
+            "for this servant. Officer to confirm the pay lines against the original."
         ),
         owner="DEPARTMENT",
         asserted=asserted,

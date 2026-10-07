@@ -98,7 +98,7 @@ def recommend(
                 f"{', '.join(blocking)}"
             )
         if determination is not None and not bad_items:
-            reasons.append("pension otherwise fully calculable")
+            reasons.append("no other open item")
         return Recommendation(
             verdict=RETURN_FOR_CORRECTION,
             blocking_flags=blocking,
@@ -133,6 +133,6 @@ def recommend(
         blocking_flags=(),
         rationale=(
             f"Checklist complete ({checklist.satisfied}/{checklist.required}); no HIGH flag; "
-            "no unresolved rule item engaged. Figures pre-filled for officer confirmation."
+            "no unresolved rule item engaged. For the officer's decision."
         ),
     )

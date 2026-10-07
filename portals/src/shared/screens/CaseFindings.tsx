@@ -511,39 +511,34 @@ export function CaseFindings(
         )}
 
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Emoluments</h3>
-          {!emol ? (
+          <h3 style={{ marginTop: 0 }}>Pay lines as printed</h3>
+          {/* What the pay documents print, line by line, with the page each was read on. No
+              total is computed and no line is classed as pensionable: this release checks
+              documents and computes nothing (business decision of 7 Oct 2026). */}
+          {!emol || emol.components.length === 0 ? (
             <p className="muted">
-              Computed only where the pension is built from a pay table — a death in service.
-              This case takes its base from a figure the prescribed form states.
+              No pay table was read on this case. Pay lines appear here where the bundle carries
+              a pay document the reader got through.
             </p>
           ) : (
             <>
               <table>
-                <thead><tr><th>Component</th><th>Rs./month</th><th>Reckonable</th><th>Source</th></tr></thead>
+                <thead><tr><th>Line as printed</th><th>Rs./month, as printed</th><th>Source</th></tr></thead>
                 <tbody>
                   {emol.components.map(c => (
-                    <tr key={c.printed_label}>
+                    <tr key={`${c.printed_label}-${c.page ?? ''}`}>
                       <td>{c.printed_label}</td>
                       <td>{c.amount.toLocaleString('en-PK')}</td>
-                      <td>{c.reckonable ? 'Yes' : 'No'}</td>
                       <td>{c.page && <span className="chip">p.{c.page}</span>}</td>
                     </tr>
                   ))}
-                  <tr className="total">
-                    <td>Reckonable total</td>
-                    <td>{emol.reckonable_total.toLocaleString('en-PK')}</td>
-                    <td colSpan={2}>
-                      {emol.reconciled
-                        ? `Reconciles with the form's printed total (${emol.printed_total?.toLocaleString('en-PK')})`
-                        : 'Does not reconcile with the form'}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="muted">Excluded (non-reckonable)</td>
-                    <td className="muted">{emol.excluded_total.toLocaleString('en-PK')}</td>
-                    <td className="muted" colSpan={2}>not pensionable, however large</td>
-                  </tr>
+                  {emol.printed_total != null && (
+                    <tr className="total">
+                      <td>Total Pay the form prints</td>
+                      <td>{emol.printed_total.toLocaleString('en-PK')}</td>
+                      <td className="muted">as printed; whether the lines add up to it is a finding, not a figure</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </>

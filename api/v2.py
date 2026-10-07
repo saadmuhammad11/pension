@@ -1757,7 +1757,8 @@ def case_checklist_action(case_id: str, run_id: str, body: dict = Body(...),
     applied = checklist_actions.apply(rep, run.run_dir)
     gate = calculation_gate(applied, run.run_dir)
     settled = _settle(conn, case_id, user, run_id, gate)
-    return {**entry, "report": applied, "gate": gate, **({"case": settled} if settled else {})}
+    from rules.scope import scrub_report
+    return {**entry, "report": scrub_report(applied), "gate": gate, **({"case": settled} if settled else {})}
 
 
 # -- the same artefacts, keyed by run id alone -----------------------------------------------

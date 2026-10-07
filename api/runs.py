@@ -628,14 +628,16 @@ def execute(run: Run) -> None:
             # pension in payment, not a pay table -- and indexing None here raised AFTER the
             # determination had been written, so every D-II case was logged "routed to
             # human" beside a determination that existed.
+            # No figure in the event log either (rules.scope, 7 Oct 2026): the log reaches
+            # the officer's screen through /events.
             if e:
                 run.emit("determine",
-                         f"reckonable {e['reckonable_total']:,} / excluded "
-                         f"{e['excluded_total']:,} · reconciled={e['reconciled']}")
+                         f"{len(e.get('components') or [])} pay line(s) read · "
+                         f"form total {'reconciles' if e.get('reconciled') else 'does not reconcile'}")
             run.emit("determine",
-                     f"rule pack {d['rule_pack_id']} · {len(d['steps'])} steps · "
+                     f"rule pack {d['rule_pack_id']} · {len(d['steps'])} rule step(s) checked · "
                      f"{len(d['ambiguities'])} unresolved reading(s) · "
-                     f"{'PROVISIONAL' if d['provisional'] else 'final'}")
+                     f"{'PROVISIONAL' if d['provisional'] else 'checks complete'} · no amount computed for this release")
         except Exception as exc:                          # noqa: BLE001
             # A determination gap is a routing outcome, not a crash. BRAIN §15.2: the
             # degradation path is always flag, cite, escalate -- never guess.
@@ -691,9 +693,9 @@ def recompute(run: Run) -> dict:
         det = stage_determine(run.run_dir, computed_at=computed_at)
         d = det["determination"]
         run.emit("determine",
-                 f"recomputed · rule pack {d['rule_pack_id']} · {len(d['steps'])} steps · "
+                 f"re-checked · rule pack {d['rule_pack_id']} · {len(d['steps'])} rule step(s) checked · "
                  f"{len(d['ambiguities'])} unresolved reading(s) · "
-                 f"{'PROVISIONAL' if d['provisional'] else 'final'}")
+                 f"{'PROVISIONAL' if d['provisional'] else 'checks complete'}")
     except Exception as exc:                              # noqa: BLE001
         run.emit("determine", f"routed to human — {exc}", level="warn")
         _record_gap(run, "determine", str(exc))

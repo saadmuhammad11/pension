@@ -402,7 +402,8 @@ def run_report(run_id: str) -> Any:
     if not path.exists():
         return JSONResponse({"error": "report not ready", "state": run.state}, status_code=409)
     from api.checklist_actions import apply
-    return apply(json.loads(path.read_text()), run.run_dir)
+    from rules.scope import scrub_report
+    return scrub_report(apply(json.loads(path.read_text()), run.run_dir))
 
 
 @app.post("/api/runs/{run_id}/remove")
@@ -651,7 +652,8 @@ def make_checklist_action(request: Request, run_id: str, body: dict = Body(...))
     applied = checklist_actions.apply(report, run.run_dir)
     run.emit("checklist", f"{entry['action']} {entry.get('item_id') or entry.get('document_name')} "
                           f"by {entry['officer']}")
-    return {**entry, "report": applied, "gate": calculation_gate(applied, run.run_dir)}
+    from rules.scope import scrub_report
+    return {**entry, "report": scrub_report(applied), "gate": calculation_gate(applied, run.run_dir)}
 
 
 @app.post("/api/runs/{run_id}/recompute")
