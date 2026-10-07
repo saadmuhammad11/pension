@@ -39,6 +39,10 @@ def _now() -> str:
     return datetime.datetime.now().strftime("%d-%m-%Y %H:%M")
 
 
+#: Long enough to say what was seen and why -- the same bar the pension side sets on a waiver.
+MIN_GROUND = 15
+
+
 def _officer(officer_id: str) -> dict:
     """The acting officer: a band (``ao``), or ``band|Name`` where the pension portal named the
     signed-in officer (G6). The band gives the powers and the designation; the name, where
@@ -347,8 +351,14 @@ class CaseService:
             raise ServiceError(f"Unknown disposition '{action}'.", 400)
         if not may(action, sev, officer):
             raise ServiceError(f"{action.title()} on a {sev} observation needs {who_can(action, sev)}.", 403)
-        if action == "waive" and not (ground and authority):
-            raise ServiceError("A waiver needs both a ground and the authority relied on.", 400)
+        # Written grounds for every disposition (business decision G1, 7 Oct 2026): upholding,
+        # correcting and referring were recorded with nothing said, and a decision with no
+        # reason cannot be checked by the next desk.
+        if len((ground or "").strip()) < MIN_GROUND:
+            raise ServiceError(f"Every disposition needs written grounds of at least {MIN_GROUND} characters "
+                               f"(what was seen, and why the item is {action}{'ed' if action != 'refer' else 'red'}).", 400)
+        if action == "waive" and not (authority or "").strip():
+            raise ServiceError("A waiver needs the authority relied on as well as its ground.", 400)
         s.disp[result_id] = {"action": action, "ground": ground, "authority": authority,
                              "by": officer["name"], "desig": officer["desig"], "at": _now(),
                              # What the officer saw when deciding; a re-run that changes the

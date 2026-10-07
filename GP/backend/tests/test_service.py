@@ -43,7 +43,7 @@ def test_sap_cure_then_verify_then_pay(svc):
     for r in v["lists"]["conf"]:
         svc.verify(cid, r["cure"]["vid"], True, "checked", officer_id="ao")
     for r in svc.view(cid)["lists"]["adv"]:
-        svc.set_disposition(cid, r["id"], "waive", ground="R5", authority="AO", officer_id="ao")
+        svc.set_disposition(cid, r["id"], "waive", ground="Checked against the ledger; the advisory is answered.", authority="AO", officer_id="ao")
     v = svc.view(cid)
     assert v["position"]["conf"] == 0 and v["position"]["open"] == 0
     pay = next(o for o in v["disposalOptions"] if o["action"] == "pay")
@@ -64,8 +64,50 @@ def test_dealing_assistant_cannot_waive_hard_stop(svc):
     cid = svc.create_case("residual", officer_id="da")
     hard = svc.view(cid)["lists"]["hard"][0]
     with pytest.raises(ServiceError) as e:
-        svc.set_disposition(cid, hard["id"], "waive", ground="g", authority="a", officer_id="da")
+        svc.set_disposition(cid, hard["id"], "waive", ground="Verified by hand against the file.", authority="a", officer_id="da")
     assert e.value.status == 403
+
+
+# -- only the DAG clears a hard stop, and every disposition carries written grounds (G1, 7 Oct 2026) --
+
+def _hard_case(svc):
+    cid = svc.create_case("residual", officer_id="ao")          # residual has a hard stop
+    hard = svc.view(cid)["lists"]["hard"][0]
+    return cid, hard
+
+
+def test_the_accounts_officer_cannot_clear_a_hard_stop_by_recording_it_corrected(svc):
+    cid, hard = _hard_case(svc)
+    with pytest.raises(ServiceError) as e:
+        svc.set_disposition(cid, hard["id"], "correct", ground="The department has since filed the attested copy.", officer_id="ao")
+    assert e.value.status == 403
+    assert "Deputy Accountant General" in str(e.value)
+    assert svc.view(cid)["position"]["hard"] == 1                  # still a hard stop
+
+
+def test_the_dag_clears_a_hard_stop_with_written_grounds(svc):
+    cid, hard = _hard_case(svc)
+    svc.set_disposition(cid, hard["id"], "correct", ground="The department has since filed the attested copy; seen in original.", officer_id="dag")
+    v = svc.view(cid)
+    assert v["position"]["hard"] == 0 and v["position"]["corrected"] == 1
+    cid2, hard2 = _hard_case(svc)
+    svc.set_disposition(cid2, hard2["id"], "waive", ground="Condoned under the office order of 3 March 2026 for this class.",
+                        authority="Office order 12/2026", officer_id="dag")
+    assert svc.view(cid2)["position"]["hard"] == 0
+
+
+def test_every_disposition_needs_written_grounds(svc):
+    cid, hard = _hard_case(svc)
+    for action, officer in (("uphold", "ao"), ("refer", "ao"), ("correct", "dag"), ("waive", "dag")):
+        with pytest.raises(ServiceError) as e:
+            svc.set_disposition(cid, hard["id"], action, ground="ok", authority="A", officer_id=officer)
+        assert e.value.status == 400 and "written grounds" in str(e.value), action
+    with pytest.raises(ServiceError) as e:
+        svc.set_disposition(cid, hard["id"], "waive", ground="A full ground of more than fifteen characters.", authority="", officer_id="dag")
+    assert "authority" in str(e.value)
+    svc.set_disposition(cid, hard["id"], "uphold", ground="The attested copy is still not on file; the stop stands.", officer_id="ao")
+    item = next(x for x in svc.view(cid)["lists"]["hard"] if x["id"] == hard["id"])
+    assert item["disposition"]["ground"].startswith("The attested copy")
 
 
 def test_pay_blocked_while_hard_open(svc):

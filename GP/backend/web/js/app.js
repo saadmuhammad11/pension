@@ -496,13 +496,13 @@ async function handleAction(id, c, r, act) {
       const res = await api.verify(id, r.cure.vid, ok, note, state.officer);
       toast('Verification recorded'); return refresh(id, res.diff);
     }
-    if (act === 'disp-uphold') {
-      const res = await api.setDisposition(id, r.id, 'uphold', '', '', state.officer);
-      toast('Upheld'); return refresh(id);
-    }
-    if (act === 'disp-refer') {
-      const res = await api.setDisposition(id, r.id, 'refer', '', '', state.officer);
-      toast('Referred upward'); return refresh(id);
+    if (act === 'disp-uphold' || act === 'disp-refer') {
+      // Written grounds on every disposition (G1, 7 Oct 2026): the next desk reads why.
+      const what = act === 'disp-uphold' ? 'uphold' : 'refer';
+      const ground = prompt(`Grounds for ${what === 'uphold' ? 'upholding' : 'referring'} this observation (at least 15 characters)`, '') || '';
+      if (ground.trim().length < 15) { toast('Written grounds of at least 15 characters are required.', true); return; }
+      await api.setDisposition(id, r.id, what, ground.trim(), '', state.officer);
+      toast(what === 'uphold' ? 'Upheld' : 'Referred upward'); return refresh(id);
     }
     if (act === 'disp-waive') return waiveModal(id, r);
     if (act === 'cure-doc') return cureDocModal(id, r);
@@ -512,7 +512,7 @@ async function handleAction(id, c, r, act) {
 
 function waiveModal(id, r) {
   openModal('Waive observation — ' + (r.code || r.id), `
-    <p class="small muted">A waiver needs a ground and the authority relied on (recorded in the office copy).</p>
+    <p class="small muted">A waiver needs written grounds (at least 15 characters) and the authority relied on (recorded in the office copy). A hard stop is waived by the DAG alone.</p>
     <div class="field"><label>Ground for the waiver</label><input type="text" id="w-ground"></div>
     <div class="field"><label>Authority relied on</label><input type="text" id="w-auth"></div>
     <button class="btn primary" id="w-go">Waive</button>`);

@@ -234,7 +234,7 @@ function FindingCard({ f, index, canAct, onPage, disposition, onDispose, onCure 
     onDispose: (action: string, ground: string, authority: string) => Promise<void>
     onCure: (file: File) => Promise<void> }) {
   const tone = KIND[f.status]
-  const [open, setOpen] = useState<null | 'waive'>(null)
+  const [open, setOpen] = useState<null | 'uphold' | 'waive' | 'correct' | 'refer'>(null)
   const [ground, setGround] = useState('')
   const [authority, setAuthority] = useState('')
   const [busy, setBusy] = useState(false)
@@ -279,24 +279,37 @@ function FindingCard({ f, index, canAct, onPage, disposition, onDispose, onCure 
           </div>
         ) : !canAct ? (
           <div className="muted" style={{ fontSize: 'var(--t-small)' }}>Findings are disposed of by the Accounts Office.</div>
-        ) : open === 'waive' ? (
+        ) : open ? (
           <div>
-            <div className="label" style={{ marginBottom: 4 }}>Ground for the waiver, and the authority relied on</div>
-            <textarea rows={2} value={ground} onChange={e => setGround(e.target.value)} placeholder="Ground…" autoFocus />
-            <input value={authority} onChange={e => setAuthority(e.target.value)} placeholder="Authority (rule, order or instruction)" style={{ marginTop: 6, width: '100%' }} />
+            {/* Written grounds on every disposition, and the authority on a waiver (G1, 7 Oct 2026).
+                A hard stop is waived or recorded corrected by the Deputy AG alone; the module refuses
+                anyone else, and says so above. */}
+            <div className="label" style={{ marginBottom: 4 }}>
+              {open === 'waive' ? 'Grounds for the waiver, and the authority relied on'
+                : open === 'uphold' ? 'Grounds for upholding this observation'
+                : open === 'correct' ? 'What was corrected, and how it was checked'
+                : 'Why this observation is referred upward'}
+              {' '}(at least 15 characters)
+            </div>
+            <textarea rows={2} value={ground} onChange={e => setGround(e.target.value)} placeholder="Grounds…" autoFocus />
+            {open === 'waive' && (
+              <input value={authority} onChange={e => setAuthority(e.target.value)} placeholder="Authority (rule, order or instruction)" style={{ marginTop: 6, width: '100%' }} />
+            )}
             <div className="row" style={{ gap: 'var(--s2)', marginTop: 6 }}>
-              <button className="gold" disabled={busy || ground.trim().length < 5 || authority.trim().length < 2}
-                      onClick={() => act(() => onDispose('waive', ground.trim(), authority.trim()))}>{busy ? 'Recording…' : 'Waive'}</button>
+              <button className="gold" disabled={busy || ground.trim().length < 15 || (open === 'waive' && authority.trim().length < 2)}
+                      onClick={() => act(() => onDispose(open, ground.trim(), open === 'waive' ? authority.trim() : ''))}>
+                {busy ? 'Recording…' : open === 'waive' ? 'Waive' : open === 'uphold' ? 'Uphold' : open === 'correct' ? 'Record corrected' : 'Refer'}
+              </button>
               <button onClick={() => setOpen(null)}>Cancel</button>
             </div>
           </div>
         ) : (
           <div className="row" style={{ gap: 'var(--s2)', flexWrap: 'wrap' }}>
             {observation && <>
-              <button disabled={busy} style={SMALL} onClick={() => act(() => onDispose('uphold', '', ''))}>Uphold</button>
+              <button disabled={busy} style={SMALL} onClick={() => setOpen('uphold')}>Uphold…</button>
               <button disabled={busy} style={SMALL} onClick={() => setOpen('waive')}>Waive…</button>
-              <button disabled={busy} style={SMALL} onClick={() => act(() => onDispose('correct', '', ''))}>Corrected</button>
-              <button disabled={busy} style={SMALL} onClick={() => act(() => onDispose('refer', '', ''))}>Refer</button>
+              <button disabled={busy} style={SMALL} onClick={() => setOpen('correct')}>Corrected…</button>
+              <button disabled={busy} style={SMALL} onClick={() => setOpen('refer')}>Refer…</button>
             </>}
             {f.cure?.kind === 'doc' && (
               <label className="btn" style={{ ...SMALL, cursor: 'pointer', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600 }}>

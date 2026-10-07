@@ -144,7 +144,10 @@ def may(action: str, sev: Optional[str], officer: dict) -> bool:
     if action == "refer":
         return L <= 2
     if action == "correct":
-        return L >= 2
+        # Clearing a hard stop -- by waiver or by recording it corrected -- is the DAG's alone
+        # (business decision G1, 7 Oct 2026). An Accounts Officer may still record an advisory
+        # corrected.
+        return L >= 3 if sev == "hard" else L >= 2
     if action == "waive":
         return L >= 3 if sev == "hard" else L >= 2
     if action == "verify":
@@ -156,7 +159,8 @@ def may(action: str, sev: Optional[str], officer: dict) -> bool:
 
 def who_can(action: str, sev: Optional[str]) -> str:
     if action == "correct":
-        return "the Accounts Officer or above"
+        return ("the Deputy Accountant General (Funds)" if sev == "hard"
+                else "the Accounts Officer or above")
     if action == "verify":
         return "the Accounts Officer or above"
     if action == "waive":
