@@ -74,7 +74,7 @@ python3 -m venv /tmp/gpf-test && /tmp/gpf-test/bin/pip install -q -e ".[dev]"
 ## The skin is the pension portal's
 
 `web/styles.css` carries the AI Pension Portal's palette, type scale and primitives,
-transcribed from `portal/src/tokens.css` rather than re-derived — the same green
+transcribed from the old portal's `tokens.css` (that UI was removed on 7 Oct 2026) rather than re-derived — the same green
 (`#1B4332`), gold, sage and severity ramp, the same Segoe UI stack and 11→30px type steps,
 the same 14px cards, focus rings and print rules. The header uses the same drawn Punjab
 crest and gold `PILOT` chip. The AG office has approved that skin, and the two systems sit

@@ -6,7 +6,7 @@ working. Stage 4 (field extraction) is not yet wired, so ``emoluments`` and ``de
 are null here and the flag battery has no field-level assertions to run over. The checklist
 and the case type are real, computed from the 43 pages the vision model actually read.
 
-    python3 -m pipeline.report artifacts/golden portal/public/case_report.json
+    python3 -m pipeline.report artifacts/golden artifacts/golden/case_report.json
 """
 
 from __future__ import annotations
@@ -1444,7 +1444,7 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
 
 if __name__ == "__main__":
     run_dir = sys.argv[1] if len(sys.argv) > 1 else "artifacts/golden"
-    out = Path(sys.argv[2] if len(sys.argv) > 2 else "portal/public/case_report.json")
+    out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(run_dir) / "case_report.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     report = build_report(run_dir)
     atomic_write_text(out, json.dumps(report, indent=2, ensure_ascii=False))

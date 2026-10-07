@@ -28,7 +28,8 @@ from __future__ import annotations
 from typing import Iterable
 
 #: The desks, by id, with the label the portal shows and stores. Mirror of ``DESKS`` in
-#: ``portal/src/identity.ts`` -- change both together. ``rules/confirmations.py`` keeps its own
+#: the retired old portal's ``identity.ts`` (removed 7 Oct 2026) once mirrored this; the case system's
+#: screens take the desk from the account. ``rules/confirmations.py`` keeps its own
 #: two-entry map for the desks that confirm rule values; the labels there must match these.
 DESKS: dict[str, str] = {
     "AG_REVIEWER": "Auditor, Pension wing (AG / DAO)",
