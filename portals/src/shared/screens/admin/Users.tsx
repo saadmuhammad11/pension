@@ -4,7 +4,7 @@ import { createUser, disableUser, enableUser, listUsers, resetPassword, type Adm
 import { departments, type Department } from '../../api/cases'
 
 const ROLE_WORDS: Record<string, string> = {
-  DEPT_OFFICER: 'DDO', AG_REVIEWER: 'AG Reviewer', ADMIN: 'Administrator',
+  DEPT_OFFICER: 'DDO', AG_REVIEWER: 'AG Reviewer', AG_DAG: 'Deputy AG (Pension)', ADMIN: 'Administrator',
 }
 
 export function Users() {

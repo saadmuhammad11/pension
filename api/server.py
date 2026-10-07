@@ -923,9 +923,16 @@ def _production_startup_checks() -> None:
     from api import auth, db
     conn = db.connect()
     try:
+        shared = auth.shared_logins(conn)
         flagged = auth.flag_weak_passwords(conn)
     finally:
         conn.close()
+    if shared:
+        # F12 (decision C1, 7 Oct 2026): named logins for every reviewer. A shared login records
+        # nobody's decision, so production does not start with one active.
+        print(f"[v2] production refuses to start: shared login(s) still active: {', '.join(shared)}. "
+              f"Disable them and create named accounts (`python3 -m api.db add-reviewer ...`).", flush=True)
+        raise SystemExit(1)
     if flagged:
         print(f"[v2] production: {len(flagged)} account(s) on a shared or obvious password must change it at "
               f"next sign-in: {', '.join(flagged[:10])}{' …' if len(flagged) > 10 else ''}", flush=True)

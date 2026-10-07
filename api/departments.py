@@ -223,8 +223,12 @@ BY_SLUG: dict[str, Department] = {d.slug: d for d in DEPARTMENTS}
 BY_PORT: dict[int, Department] = {d.port: d for d in DEPARTMENTS}
 DEPARTMENT_NAMES: dict[str, str] = {**{d.code: d.name for d in DEPARTMENTS}, LEGACY_DEPARTMENT[0]: LEGACY_DEPARTMENT[1], **RETIRED_CODES}
 
-#: The three roles a user can hold.
-ROLES = ("DEPT_OFFICER", "AG_REVIEWER", "ADMIN")
+#: The roles a user can hold. AG_DAG (7 Oct 2026, decisions C1/G1/G6): the Deputy Accountant General
+#: (Pension) -- a reviewer with the senior officer's powers: the case override, and the DAG band in
+#: GP Fund, where only the DAG may clear a hard stop.
+ROLES = ("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG", "ADMIN")
+#: The AG's side of a case: the reviewers. The administrator manages users, not cases (G6).
+AG_ROLES = ("AG_REVIEWER", "AG_DAG")
 
 
 def portal_for(role: str, department_code: str | None) -> str | None:
@@ -233,7 +237,7 @@ def portal_for(role: str, department_code: str | None) -> str | None:
     One portal for everyone (SINGLE_PORTAL): the AG portal. A department officer still needs a
     department, or there is nothing to show them.
     """
-    if role in ("AG_REVIEWER", "ADMIN"):
+    if role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
         return AG_PORTAL_SLUG
     dept = BY_CODE.get(department_code or "")
     if dept is None:
@@ -336,4 +340,4 @@ if __name__ == "__main__":
     print(f"{'port':>5}  {'username':<22} theme          department")
     for d in sorted(DEPARTMENTS, key=lambda x: x.name.lower()):
         print(f"{d.port:>5}  {d.slug:<22} {d.theme:<14} {d.name}")
-    print(f"{AG_PORTAL_PORT:>5}  {'ag.reviewer / admin':<22} ag             AG Review and Administration")
+    print(f"{AG_PORTAL_PORT:>5}  {'reviewers / admin':<22} ag             AG Review and Administration")

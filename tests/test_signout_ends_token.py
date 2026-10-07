@@ -22,7 +22,7 @@ class SignOutEndsToken(unittest.TestCase):
     login = _v2.V2Test.login
 
     def test_the_token_is_refused_after_sign_out(self) -> None:
-        headers = self.login("ag.reviewer", "ag")
+        headers = self.login("syed.haider", "ag")
         self.assertEqual(self.client.get("/api/v2/auth/me", headers=headers).status_code, 200)
         r = self.client.post("/api/v2/auth/logout", headers=headers)
         self.assertEqual(r.status_code, 200)
@@ -31,7 +31,7 @@ class SignOutEndsToken(unittest.TestCase):
         self.assertIn("sign in again", r.json()["detail"])
 
     def test_the_frame_token_dies_with_the_session(self) -> None:
-        headers = self.login("ag.reviewer", "ag")
+        headers = self.login("syed.haider", "ag")
         r = self.client.post("/api/v2/auth/gpf-session", headers=headers)
         frame = r.cookies.get("pension_gpf")
         self.assertTrue(frame)
@@ -41,20 +41,20 @@ class SignOutEndsToken(unittest.TestCase):
         self.assertEqual(check(), 401)
 
     def test_a_fresh_sign_in_works_afterwards(self) -> None:
-        headers = self.login("ag.reviewer", "ag")
+        headers = self.login("syed.haider", "ag")
         self.client.post("/api/v2/auth/logout", headers=headers)
-        again = self.login("ag.reviewer", "ag")
+        again = self.login("syed.haider", "ag")
         self.assertEqual(self.client.get("/api/v2/auth/me", headers=again).status_code, 200)
 
     def test_sign_out_without_or_with_a_dead_token_is_still_fine(self) -> None:
         self.assertEqual(self.client.post("/api/v2/auth/logout").status_code, 200)
-        headers = self.login("ag.reviewer", "ag")
+        headers = self.login("syed.haider", "ag")
         self.client.post("/api/v2/auth/logout", headers=headers)
         self.assertEqual(self.client.post("/api/v2/auth/logout", headers=headers).status_code, 200)   # twice
         self.assertEqual(self.client.post("/api/v2/auth/logout", headers={"Authorization": "Bearer junk"}).status_code, 200)
 
     def test_sign_out_is_on_the_audit_trail(self) -> None:
-        headers = self.login("ag.reviewer", "ag")
+        headers = self.login("syed.haider", "ag")
         self.client.post("/api/v2/auth/logout", headers=headers)
         admin = self.login("admin", "ag")
         r = self.client.get("/api/v2/admin/audit-log", headers=admin)

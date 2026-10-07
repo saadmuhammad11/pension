@@ -18,6 +18,7 @@ that migration itself if it starts first. WAL mode plus a busy timeout is enough
     python3 -m api.db reset-department-password <slug>   # new generated password for one department
     python3 -m api.db reset-password <username> [<new password>]
     python3 -m api.db refresh-credentials <password>   # sheet rows for every account on this password; changes nothing
+    python3 -m api.db add-reviewer <username> "<Officer's name>" [--dag] [<password>]   # a named reviewer / the Deputy AG
     python3 -m api.db forget-credentials   # delete the plaintext sheet once passwords are handed out
 
 Production (PENSION_ENV=production, api.settings): PENSION_SEED_PASSWORD is refused, every
@@ -33,6 +34,7 @@ plaintext ONCE to ``artifacts/credentials/credentials.csv`` (owner-readable only
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import sys
 import uuid
@@ -60,9 +62,21 @@ CREDENTIALS_HTML = CREDENTIALS_DIR / "credentials.html"
 #: department's cases, role DEPT_OFFICER -- are generated from api.departments: one per
 #: department, username = the department's slug.
 AG_USERS: tuple[tuple[str, str, str], ...] = (
-    ("ag.reviewer", "Syed Haider (AG Punjab, Pension Wing)", "AG_REVIEWER"),
+    # Named logins for every reviewer (business decision C1, 7 Oct 2026): the shared "ag.reviewer"
+    # account is retired; the seed renames it in place (see seed()) so the trial's records stay
+    # attached, and further reviewers are created by the administrator or with
+    # `python3 -m api.db add-reviewer`. The Deputy AG (role AG_DAG) is created the same way.
+    ("syed.haider", "Syed Haider (AG Punjab, Pension Wing)", "AG_REVIEWER"),
     ("admin", "System Administrator", "ADMIN"),
 )
+
+#: Shared or role-named logins that production refuses to start with (C1): a decision must carry a
+#: person's name, and every one of these could be anyone at the desk.
+SHARED_LOGINS = ("ag.reviewer", "reviewer", "ag.upload", "dag", "dag.pension", "ao", "officer", "auditor")
+
+#: The shared reviewer account, renamed in place to the named login on the first seed after 7 Oct
+#: 2026: same id, same password, its sessions ended (token_version), its records untouched.
+RENAMED_LOGINS = {"ag.reviewer": "syed.haider"}
 
 #: Accounts retired on 25 Sep 2026 -- the AG Upload role, and the first two demo officers whose
 #: usernames predate the slug rule. Their records move to the department's own officer (or the
@@ -152,7 +166,14 @@ def migrate(conn: sqlite3.Connection | None = None) -> list[str]:
             # executescript issues its own COMMIT first, so it cannot sit inside transaction().
             # CREATE statements are IF NOT EXISTS; an ALTER TABLE ADD COLUMN has no such form,
             # so a column a half-applied run already added is skipped rather than fatal.
-            _apply_migration(conn, path.read_text(encoding="utf-8"))
+            # Schema changes run with foreign-key enforcement off (SQLite's own advice for a table
+            # rebuild, 0010): the pragma takes effect only outside a transaction, which is where
+            # _apply_migration leaves the connection.
+            conn.execute("PRAGMA foreign_keys=OFF")
+            try:
+                _apply_migration(conn, path.read_text(encoding="utf-8"))
+            finally:
+                conn.execute("PRAGMA foreign_keys=ON")
             # OR IGNORE: the GP Fund module records 0005 itself (gpf/store.py), and the two
             # starting together on a fresh database must not abort the migrations after it.
             conn.execute("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
@@ -203,6 +224,14 @@ def seed(conn: sqlite3.Connection | None = None, *, quiet: bool = False) -> dict
             placeholders = ",".join("?" * len(active))
             conn.execute(f"UPDATE departments SET active = 0 WHERE code NOT IN ({placeholders})", tuple(active))
 
+            for old_name, new_name in RENAMED_LOGINS.items():
+                if (conn.execute("SELECT 1 FROM users WHERE username = ?", (old_name,)).fetchone()
+                        and not conn.execute("SELECT 1 FROM users WHERE username = ?", (new_name,)).fetchone()):
+                    conn.execute("UPDATE users SET username = ?, token_version = token_version + 1, updated_at = ? "
+                                 "WHERE username = ?", (new_name, now(), old_name))
+                    if not quiet:
+                        print(f"[db] renamed the shared login {old_name!r} to {new_name!r} (C1); its sessions were ended",
+                              file=sys.stderr)
             for username, display, role, dept in seed_users():
                 if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
                     continue
@@ -477,6 +506,40 @@ def reset_password(username: str, password: str, conn: sqlite3.Connection | None
             conn.close()
 
 
+def add_reviewer(username: str, display_name: str, *, dag: bool = False, password: str | None = None,
+                 conn: sqlite3.Connection | None = None) -> str:
+    """Create a named reviewer account (AG_REVIEWER, or AG_DAG with ``dag``) and return its password.
+
+    The way the office adds its officers from the command line (the Users screen does the same).
+    A generated password unless one is given; in production it must be changed at first sign-in."""
+    from api import passwords, settings
+    from api.auth import hash_password, password_problem
+    username = (username or "").strip().lower()
+    if not re.fullmatch(r"[a-z][a-z0-9._-]{2,40}", username):
+        raise ValueError("username: lower-case letters, digits, dots, hyphens; 3 to 41 characters")
+    if username in SHARED_LOGINS or not display_name.strip():
+        raise ValueError("a reviewer's login carries the officer's own name (decision C1)")
+    pw = password or passwords.generate()
+    if password and password_problem(password, username):
+        raise ValueError(password_problem(password, username))
+    own = conn is None
+    conn = conn or connect()
+    try:
+        with transaction(conn):
+            if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+                raise ValueError(f"a user {username!r} already exists")
+            stamp = now()
+            conn.execute(
+                "INSERT INTO users(id, username, display_name, password_hash, role, department_code, active, "
+                "token_version, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, 1, 1, ?, ?, ?)",
+                (new_id(), username, display_name.strip(), hash_password(pw), "AG_DAG" if dag else "AG_REVIEWER",
+                 1 if settings.force_password_change() else 0, stamp, stamp))
+        return pw
+    finally:
+        if own:
+            conn.close()
+
+
 def forget_credentials() -> list[str]:
     """Delete the plaintext sign-in sheet (CSV and HTML). Returns what was removed."""
     removed = []
@@ -532,6 +595,17 @@ def main(argv: list[str]) -> int:
             return 1
         print("done" if ok else f"no user {argv[2]!r}")
         return 0 if ok else 1
+    if cmd == "add-reviewer" and len(argv) >= 4:
+        migrate()
+        dag = "--dag" in argv[4:]
+        given = [a for a in argv[4:] if a != "--dag"]
+        try:
+            pw = add_reviewer(argv[2], argv[3], dag=dag, password=given[0] if given else None)
+        except ValueError as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 2
+        print(f"created {argv[2]} ({'AG_DAG' if dag else 'AG_REVIEWER'}); password: {pw}")
+        return 0
     if cmd == "forget-credentials":
         removed = forget_credentials()
         print("removed " + ", ".join(removed) if removed else "no credentials sheet to remove")

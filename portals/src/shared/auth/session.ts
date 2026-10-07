@@ -21,7 +21,7 @@ export interface SessionUser {
   id: string
   username: string
   display_name: string
-  role: 'DEPT_OFFICER' | 'AG_REVIEWER' | 'ADMIN'
+  role: 'DEPT_OFFICER' | 'AG_REVIEWER' | 'AG_DAG' | 'ADMIN'
   department_code: string | null
   department_name: string | null
   active: boolean

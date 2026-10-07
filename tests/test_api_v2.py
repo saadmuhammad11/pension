@@ -130,7 +130,7 @@ class V2Test(unittest.TestCase):
         r = self.client.post("/api/v2/auth/login", json={"username": "punjab-police", "password": db.SEED_PASSWORD},
                              headers={"X-Portal": "ag"})
         self.assertEqual(r.status_code, 200)                          # one portal for everyone
-        r = self.client.post("/api/v2/auth/login", json={"username": "ag.reviewer", "password": db.SEED_PASSWORD},
+        r = self.client.post("/api/v2/auth/login", json={"username": "syed.haider", "password": db.SEED_PASSWORD},
                              headers={"X-Portal": "punjab-police"})
         self.assertEqual(r.status_code, 403)
         self.assertIn(":5184/", r.json()["detail"])
@@ -186,7 +186,7 @@ class V2Test(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/v2/cases", headers=edu).json()), 0)
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=edu).status_code, 403)
         self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/forward", headers=edu, json={}).status_code, 403)
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).status_code, 200)
 
     def test_a_department_officer_cannot_choose_another_department(self) -> None:
@@ -196,7 +196,7 @@ class V2Test(unittest.TestCase):
 
     def test_the_same_papers_from_two_departments_are_two_runs(self) -> None:
         police, edu = self.login("punjab-police", "punjab-police"), self.login("school-education", "school-education")
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         a = self.verify(reviewer, self.create(police)["case"]["id"])["run_id"]
         b = self.verify(reviewer, self.create(edu)["case"]["id"])["run_id"]
         self.assertNotEqual(a, b)
@@ -213,7 +213,7 @@ class V2Test(unittest.TestCase):
         self.assertNotIn("RUN_CHECK", case["allowed_actions"])            # the verification is the AG's
         self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/check", headers=police).status_code, 403)
 
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         counts = self.client.get("/api/v2/departments/counts", headers=reviewer).json()
         self.assertEqual(next(c for c in counts if c["code"] == "PUNJAB_POLICE")["awaiting_review"], 1)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
@@ -247,7 +247,7 @@ class V2Test(unittest.TestCase):
         self.report_to_write = FLAGGED_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
         self.assertEqual(case["status"], "RETURNED")
@@ -272,7 +272,7 @@ class V2Test(unittest.TestCase):
         self.report_to_write = FLAGS_ONLY_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         run_id = self.verify(reviewer, case_id)["run_id"]
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         self.assertEqual(case["status"], "UNDER_REVIEW")
@@ -298,7 +298,7 @@ class V2Test(unittest.TestCase):
     def test_return_by_hand_add_documents_and_resubmit(self) -> None:
         edu = self.login("school-education", "school-education")
         case_id = self.create(edu)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.report_to_write = FLAGS_ONLY_REPORT
         self.verify(reviewer, case_id)                     # every action follows the examination
         r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer, json={"remark": "Attach the LPC."})
@@ -323,7 +323,7 @@ class V2Test(unittest.TestCase):
         agri = self.login("agriculture", "agriculture")
         made = self.create(agri)
         self.assertEqual((made["case"]["department_code"], made["case"]["created_via"]), ("AGRICULTURE", "DEPARTMENT"))
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         counts = self.client.get("/api/v2/departments/counts", headers=reviewer).json()
         self.assertEqual(next(c for c in counts if c["code"] == "AGRICULTURE")["total"], 1)
         names = [c["name"] for c in counts]
@@ -346,7 +346,7 @@ class V2Test(unittest.TestCase):
         # reviewer may read, and only the administrator may act there.
         police = self.login("punjab-police", "punjab-police")
         self.assertEqual(self.client.get("/api/runs", headers=police).status_code, 403)
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.assertEqual(self.client.get("/api/runs", headers=reviewer).status_code, 200)
         self.assertEqual(self.client.post("/api/runs", headers=reviewer).status_code, 403)
         admin = self.login("admin", "ag")
@@ -370,7 +370,7 @@ class V2Test(unittest.TestCase):
         self.report_to_write = FLAGGED_REPORT
         police, edu = self.login("punjab-police", "punjab-police"), self.login("school-education", "school-education")
         made = self.create(police)
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         run_id = self.verify(reviewer, made["case"]["id"])["run_id"]
         for path in (f"/api/v2/runs/{run_id}/report", f"/api/v2/runs/{run_id}/pages/1", f"/api/v2/runs/{run_id}/events"):
             self.assertIn(self.client.get(path, headers=edu).status_code, (403, 404), path)
@@ -381,7 +381,7 @@ class V2Test(unittest.TestCase):
         self.report_to_write = FLAGS_ONLY_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         run_id = self.verify(reviewer, case_id)["run_id"]
         self.client.post(f"/api/v2/cases/{case_id}/reject", headers=reviewer, json={"remark": "Recovery stands; the case fails."})
         body = {"flag_id": "F-1", "action": "WAIVE", "ground": "Verified against the original by hand."}
@@ -390,7 +390,7 @@ class V2Test(unittest.TestCase):
     def test_adding_documents_after_a_return_opens_one_new_round_only(self) -> None:
         edu = self.login("school-education", "school-education")
         case_id = self.create(edu)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.report_to_write = FLAGS_ONLY_REPORT
         self.verify(reviewer, case_id)
         self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer, json={"remark": "Attach the LPC."})
@@ -403,7 +403,7 @@ class V2Test(unittest.TestCase):
     def test_a_refused_decision_does_not_take_the_case_up(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.report_to_write = FLAGS_ONLY_REPORT
         self.verify(reviewer, case_id)
         r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer, json={"remark": ""})
@@ -416,7 +416,7 @@ class V2Test(unittest.TestCase):
         self.fail_runs = True
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         self.assertEqual(case["status"], "AI_FAILED")
@@ -467,7 +467,7 @@ class V2Test(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/v2/cases?product=GPF", headers=police).json()), 1)
         self.assertEqual(len(self.client.get("/api/v2/cases?product=PENSION", headers=police).json()), 0)
         self.assertEqual(self.client.get("/api/v2/cases?product=JUNK", headers=police).status_code, 422)
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         counts = self.client.get("/api/v2/departments/counts?product=PENSION", headers=reviewer).json()
         self.assertEqual(next(c for c in counts if c["code"] == "PUNJAB_POLICE")["total"], 0)
         counts = self.client.get("/api/v2/departments/counts?product=GPF", headers=reviewer).json()
@@ -481,7 +481,7 @@ class V2Test(unittest.TestCase):
         self._gpf_module(self._gpf_view(hard_doc=True))
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police, product="GPF", gpf_kind="refundable")["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         r = self.verify(reviewer, case_id)
         self.assertTrue(r["run_id"].startswith(case_runs.GPF_RUN_PREFIX))
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
@@ -501,7 +501,7 @@ class V2Test(unittest.TestCase):
         self._gpf_module(self._gpf_view(conf=True))
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police, product="GPF", gpf_kind="final")["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         self.assertEqual(case["status"], "UNDER_REVIEW")               # a verification task: the officer decides
@@ -519,7 +519,7 @@ class V2Test(unittest.TestCase):
         self._gpf_module(self._gpf_view())
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police, product="GPF", gpf_kind="balance_transfer")["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()["status"], "UNDER_REVIEW")
         # A second case: the officer returns it from the module after examination.
@@ -563,7 +563,7 @@ class V2Test(unittest.TestCase):
         self.report_to_write = FLAGS_ONLY_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         for a in ("APPROVE", "REJECT", "RETURN", "REQUEST_DOCS"):
             self.assertNotIn(a, case["allowed_actions"])
@@ -598,7 +598,7 @@ class V2Test(unittest.TestCase):
         self.report_to_write = FLAGS_ONLY_REPORT                    # a finding, so the case waits for the AG
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "Verified by hand; in order."})
         self.assertEqual(r.status_code, 409)                         # no decision before the AI examination
         self.verify(reviewer, case_id)
@@ -622,7 +622,7 @@ class V2Test(unittest.TestCase):
     def test_page_and_event_routes_take_a_query_token_but_case_reads_do_not(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         run_id = self.verify(reviewer, case_id)["run_id"]
         token = reviewer["Authorization"].split(" ", 1)[1]
         r = self.client.get(f"/api/v2/cases/{case_id}/runs/{run_id}/pages/1?token={token}")
@@ -642,7 +642,7 @@ class V2Test(unittest.TestCase):
         (runs.ARTIFACTS / "uploads" / "abcdef123456-widow.pdf").write_bytes(PDF)
         self.assertEqual(legacy.import_legacy_runs(), 1)
         self.assertEqual(legacy.import_legacy_runs(), 0)                 # idempotent
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         rows = self.client.get("/api/v2/cases", headers=reviewer).json()
         leg = next(r for r in rows if r["case_no"] == "LEGACY-abcdef123456")
         self.assertEqual((leg["status"], leg["department_code"], leg["claimant_name"], leg["created_via"]),
@@ -670,7 +670,7 @@ class V2Test(unittest.TestCase):
         # The engine's verdicts and findings are AI output: never in a department's statistics.
         for key in ("verdicts", "high_flags", "deficiencies"):
             self.assertNotIn(key, st)
-        rev = self.login("ag.reviewer", "ag")
+        rev = self.login("syed.haider", "ag")
         st = self.client.get("/api/v2/stats", headers=rev).json()
         self.assertEqual(st["verdicts"]["FORWARD"], 0)                # nothing verified yet
         self.assertEqual(st["total"], 2)
@@ -729,7 +729,7 @@ class V2Test(unittest.TestCase):
         auto = self.create(police, case_type="FRESH_SELF")["case"]
         self.assertEqual(auto["variant"], "FRESH_SELF")
 
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         run_id = self.verify(reviewer, made["id"])["run_id"]
         intake = json.loads((runs.ARTIFACTS / f"run-{run_id}" / "intake.json").read_text())
         self.assertEqual(intake["declared_case_type"], "WIDOW")
@@ -757,7 +757,7 @@ class V2Test(unittest.TestCase):
     def test_the_department_changes_its_declaration_before_forwarding_and_the_ag_corrects_with_a_remark(self) -> None:
         self.report_to_write = self.TYPED_REPORT
         police = self.login("punjab-police", "punjab-police")
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         case_id = self.create(police, case_type="DEATH_IN_SERVICE")["case"]["id"]
         # Filed means forwarded: the department can no longer change it ...
         r = self.client.post(f"/api/v2/cases/{case_id}/case-type", headers=police, json={"case_type": "FRESH_SELF"})
@@ -802,7 +802,7 @@ class V2Test(unittest.TestCase):
     def test_a_case_without_a_declared_type_takes_the_detected_one(self) -> None:
         self.report_to_write = self.TYPED_REPORT
         police = self.login("punjab-police", "punjab-police")
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         case_id = self.create(police, case_type="FRESH_SELF")["case"]["id"]
         conn = db.connect()
         conn.execute("UPDATE cases SET case_type = NULL, case_type_source = NULL, variant = NULL WHERE id = ?", (case_id,))   # filed before 29 Sep
@@ -829,7 +829,7 @@ class V2Test(unittest.TestCase):
     def test_departments_carry_their_pension_section_and_the_sections_add_up(self) -> None:
         """AG Review groups departments by the Pension section that works them (29 Sep 2026)."""
         from api.departments import DEPARTMENTS, LEGACY_DEPARTMENT, PENSION_SECTION_ORDER
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         police = self.login("punjab-police", "punjab-police")
         edu = self.login("school-education", "school-education")
         self.create(police); self.create(police); self.create(edu)

@@ -27,7 +27,7 @@ class RecomputeGuard(unittest.TestCase):
     def test_an_approved_case_s_run_is_not_rebuilt(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         run_id = self.verify(reviewer, case_id)["run_id"]
         r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "In order; approved by hand."})
         self.assertEqual(r.status_code, 200, r.text)                     # no automatic approval since M1
@@ -41,7 +41,7 @@ class RecomputeGuard(unittest.TestCase):
         self.report_to_write = _v2.FLAGS_ONLY_REPORT                 # a finding: the case waits for the AG
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         run_id = self.verify(reviewer, case_id)["run_id"]
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()["status"], "UNDER_REVIEW")
         with mock.patch.object(runs, "recompute", lambda run: {"rebuilt": True}):
@@ -53,7 +53,7 @@ class RecomputeGuard(unittest.TestCase):
         self.report_to_write = _v2.FLAGS_ONLY_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         first = self.verify(reviewer, case_id)["run_id"]
         r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer,
                              json={"remark": "Pay certificate missing.", "items": []})

@@ -29,18 +29,18 @@ class FrameCookie(unittest.TestCase):
         return r.headers["set-cookie"].lower()
 
     def test_https_sets_secure(self) -> None:
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.assertIn("secure", self._cookie({**reviewer, "X-Forwarded-Proto": "https"}))
 
     def test_plain_http_in_the_trial_does_not(self) -> None:
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         cookie = self._cookie(reviewer)
         self.assertNotIn("secure", cookie)
         for part in ("httponly", "samesite=strict", "path=/gpf"):
             self.assertIn(part, cookie)
 
     def test_production_sets_secure_whatever_the_request_says(self) -> None:
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         with mock.patch.dict("os.environ", PROD):
             cookie = self._cookie(reviewer)                 # plain HTTP, no forwarded-proto header
         self.assertIn("secure", cookie)

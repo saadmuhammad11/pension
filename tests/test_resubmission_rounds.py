@@ -443,7 +443,7 @@ class RoundsOverTheApi(unittest.TestCase):
         return r.json()["run_id"]
 
     def test_a_first_submission_is_a_full_run_with_no_base(self) -> None:
-        dept, ag = self.login("school-education"), self.login("ag.reviewer")
+        dept, ag = self.login("school-education"), self.login("syed.haider")
         case_id = self.file(dept)
         self.verify(ag, case_id)
         self.assertIsNone(self.started[0].base_run_id)
@@ -451,7 +451,7 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertEqual(rounds[0]["checks"][0]["mode"], "FULL")
 
     def test_return_for_a_missing_document_resubmit_it_and_the_item_is_resolved(self) -> None:
-        dept, ag = self.login("school-education"), self.login("ag.reviewer")
+        dept, ag = self.login("school-education"), self.login("syed.haider")
         case_id = self.file(dept)
         first = self.verify(ag, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
@@ -490,7 +490,7 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertEqual(mine[1]["requested_items"], [{"id": "AG-06", "label": "NADRA FRC", "on_file": True}])
 
     def test_the_ag_names_items_on_a_return_and_a_clearance_carries_to_the_next_round(self) -> None:
-        dept, ag = self.login("school-education"), self.login("ag.reviewer")
+        dept, ag = self.login("school-education"), self.login("syed.haider")
         case_id = self.file(dept)
         second = {"id": "F-2", "severity": "MEDIUM", "class": "RELATIONSHIP-UNPROVED",
                   "title": "No Nikah Nama", "blocks_ppo": False,
@@ -554,7 +554,7 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()["status"], "APPROVED")
 
     def test_carried_clearances_that_clear_every_finding_still_wait_for_the_ag(self) -> None:
-        dept, ag = self.login("school-education"), self.login("ag.reviewer")
+        dept, ag = self.login("school-education"), self.login("syed.haider")
         case_id = self.file(dept)
         self.report = {**FRC_ON_FILE, "checklist": MISSING_FRC["checklist"],
                        "recommendation": {"verdict": "HOLD", "blocking_flags": []}}

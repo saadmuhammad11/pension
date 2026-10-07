@@ -50,8 +50,8 @@ class F1ForcedChange(_Fixture):
         conn.close()
 
     def test_an_account_that_must_change_may_do_nothing_else_until_it_has(self) -> None:
-        self._force("ag.reviewer")
-        h = self.login("ag.reviewer", "ag")
+        self._force("syed.haider")
+        h = self.login("syed.haider", "ag")
         me = self.client.get("/api/v2/auth/me", headers=h).json()
         self.assertTrue(me["user"]["must_change_password"])
         r = self.client.get("/api/v2/cases", headers=h)
@@ -250,7 +250,7 @@ class F7SheetNotServedInProduction(_Fixture):
 
 class F10GpfFrameSignIn(_Fixture):
     def test_only_the_ag_side_gets_a_frame_cookie_and_it_opens_nothing_else(self) -> None:
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         r = self.client.post("/api/v2/auth/gpf-session", headers=reviewer)
         self.assertEqual(r.status_code, 200, r.text)
         cookie = r.cookies.get("pension_gpf")

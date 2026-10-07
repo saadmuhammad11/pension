@@ -36,7 +36,7 @@ class Refusals(unittest.TestCase):
     def test_uploads_and_verifications_are_refused_when_the_disk_is_short(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         nearly_full = _Usage(total=100 * 1024 ** 3, used=98 * 1024 ** 3, free=2 * 1024 ** 3)
         with mock.patch.object(shutil, "disk_usage", lambda p: nearly_full), \
                 mock.patch.dict(os.environ, {"PENSION_MIN_FREE_GB": "5"}):

@@ -29,7 +29,7 @@ class OverrideAuditAtomic(unittest.TestCase):
     def _case_waiting_for_the_ag(self) -> tuple[str, dict]:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
         admin = self.login("admin", "ag")
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=admin).json()["status"], "UNDER_REVIEW")

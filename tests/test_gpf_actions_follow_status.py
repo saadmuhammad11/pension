@@ -46,7 +46,7 @@ class _Fixture(unittest.TestCase):
 
 class PortalRoutes(_Fixture):
     def test_actions_are_refused_unless_under_review(self) -> None:
-        ag = self.login("ag.reviewer", "ag")
+        ag = self.login("syed.haider", "ag")
         case_id = self._gpf_case("REJECTED")
         acted = []
         with mock.patch.object(gpf_bridge, "act", lambda *a, **k: acted.append(a) or {"ok": True}), \
@@ -70,7 +70,7 @@ class PortalRoutes(_Fixture):
 
 class FrameCheck(_Fixture):
     def _frame_token(self) -> str:
-        r = self.client.post("/api/v2/auth/gpf-session", headers=self.login("ag.reviewer", "ag"))
+        r = self.client.post("/api/v2/auth/gpf-session", headers=self.login("syed.haider", "ag"))
         self.assertEqual(r.status_code, 200, r.text)
         return r.cookies.get("pension_gpf")
 

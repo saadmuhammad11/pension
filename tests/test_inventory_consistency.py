@@ -25,7 +25,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
 
     def _check(self, where: str) -> None:
         from api.check_inventory import compare
-        for user, role in (("ag.reviewer", "AG_REVIEWER"), ("admin", "ADMIN"),
+        for user, role in (("syed.haider", "AG_REVIEWER"), ("admin", "ADMIN"),
                            ("school-education", "DEPT_OFFICER"), ("agriculture", "DEPT_OFFICER")):
             h = self.login(user)
 
@@ -48,7 +48,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
         ids = lambda rows: {r["id"] for r in rows}
         dept = self.login(dept_user)
         self.assertIn(case_id, ids(self.client.get(f"/api/v2/inventory?product={product}", headers=dept).json()["rows"]))
-        for user in ("ag.reviewer", "admin"):
+        for user in ("syed.haider", "admin"):
             h = self.login(user)
             for q in ("", f"&department={dept_code}", f"&pension_section={section}"):
                 self.assertIn(case_id, ids(self.client.get(f"/api/v2/inventory?product={product}{q}", headers=h).json()["rows"]), (user, q))
@@ -58,7 +58,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
 
     def test_every_view_agrees_through_every_status_change(self) -> None:
         from api import db
-        ag, admin = self.login("ag.reviewer"), self.login("admin")
+        ag, admin = self.login("syed.haider"), self.login("admin")
         self._check("start")
 
         # A new case in each of two departments, and one of a department with no section (HEALTH, a
@@ -108,7 +108,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
             self._check("a GP Fund case")
 
     def test_the_version_token_moves_on_every_change(self) -> None:
-        ag = self.login("ag.reviewer")
+        ag = self.login("syed.haider")
         v0 = self.client.get("/api/v2/inventory/version", headers=ag).json()["version"]
         a = self._file("school-education")
         v1 = self.client.get("/api/v2/inventory/version", headers=ag).json()["version"]

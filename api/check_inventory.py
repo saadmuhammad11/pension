@@ -75,8 +75,8 @@ def main(argv: list[str]) -> int:
         return lambda path: json.load(urllib.request.urlopen(urllib.request.Request(
             base + path, headers={"Authorization": f"Bearer {token}"}), timeout=60))
 
-    ag = getter(login("ag.reviewer"))
-    users = [("ag.reviewer", "AG_REVIEWER"), ("admin", "ADMIN")]
+    ag = getter(login("syed.haider"))
+    users = [("syed.haider", "AG_REVIEWER"), ("admin", "ADMIN")]
     from api.departments import DEPARTMENTS
     slug = {d.code: d.slug for d in DEPARTMENTS}
     for product in PRODUCTS:

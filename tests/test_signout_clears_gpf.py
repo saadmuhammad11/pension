@@ -21,7 +21,7 @@ class SignOut(unittest.TestCase):
     login = _v2.V2Test.login
 
     def test_sign_out_deletes_the_frame_cookie_even_without_a_session(self) -> None:
-        r = self.client.post("/api/v2/auth/gpf-session", headers=self.login("ag.reviewer", "ag"))
+        r = self.client.post("/api/v2/auth/gpf-session", headers=self.login("syed.haider", "ag"))
         self.assertTrue(r.cookies.get("pension_gpf"))
         self.assertTrue(self.client.cookies.get("pension_gpf", path="/gpf"))
         # No Authorization header: the idle timeout and a refused token sign out after the session.

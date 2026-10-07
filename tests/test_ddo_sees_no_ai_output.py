@@ -27,7 +27,7 @@ class DepartmentView(unittest.TestCase):
     def test_no_engine_verdict_or_finding_reaches_the_department(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
 
         # The AG sees the engine's summary and the statistics.

@@ -40,7 +40,7 @@ GAZETTED = ("unknown", "gazetted", "non-gazetted")
 
 #: The module's officer band an account acts as. The Accounts Officer (level 2) may pass a case
 #: for payment; the administrator acts as the DAG (Funds), who may also clear a second return.
-OFFICER_FOR_ROLE = {"AG_REVIEWER": "ao", "ADMIN": "dag", "DEPT_OFFICER": "da"}
+OFFICER_FOR_ROLE = {"AG_REVIEWER": "ao", "AG_DAG": "dag", "ADMIN": "dag", "DEPT_OFFICER": "da"}
 
 
 class GpfError(Exception):

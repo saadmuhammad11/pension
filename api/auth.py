@@ -382,6 +382,15 @@ def require_roles(*roles: str):
 
 # -- production start-up -------------------------------------------------------------------------
 
+def shared_logins(conn: sqlite3.Connection) -> list[str]:
+    """Active accounts whose login names a desk, not a person (``db.SHARED_LOGINS``). Production
+    refuses to start with one (business decision C1, 7 Oct 2026): every decision is recorded
+    under a named officer, and a shared login records nobody."""
+    from api.db import SHARED_LOGINS
+    rows = conn.execute("SELECT username FROM users WHERE active = 1").fetchall()
+    return sorted(r["username"] for r in rows if r["username"].lower() in SHARED_LOGINS)
+
+
 def flag_weak_passwords(conn: sqlite3.Connection) -> list[str]:
     """Mark every active account still on a shared or obvious password to change it at next sign-in.
 

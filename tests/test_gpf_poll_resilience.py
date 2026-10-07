@@ -51,7 +51,7 @@ class PollResilience(unittest.TestCase):
 
     def _start(self) -> str:
         case_id = self.create(self.login("punjab-police", "punjab-police"), product="GPF", gpf_kind="refundable")["case"]["id"]
-        self.verify(self.login("ag.reviewer", "ag"), case_id)
+        self.verify(self.login("syed.haider", "ag"), case_id)
         return case_id
 
     def test_a_module_that_does_not_answer_for_a_while_is_waited_for(self) -> None:

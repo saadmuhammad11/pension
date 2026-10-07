@@ -4,9 +4,9 @@
 // a moment, and writes a PNG. Password is the trial password (1234). Any other user name shows
 // the sign-in page itself.
 //
-//   node screenshot.mjs ag.reviewer / ag-home.png 1440 2400
+//   node screenshot.mjs syed.haider / ag-home.png 1440 2400
 //   node screenshot.mjs school-education /cases/<id> case.png 1440 2000
-//   node screenshot.mjs ag.reviewer / phone.png 390 2000 "All cases"     # click a button/tile first
+//   node screenshot.mjs syed.haider / phone.png 390 2000 "All cases"     # click a button/tile first
 import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 const [user, route, out, W = '1440', H = '1400', clickText = ''] = process.argv.slice(2)

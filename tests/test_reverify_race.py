@@ -46,7 +46,7 @@ class SweepInTheStartGap(unittest.TestCase):
         self.fail_runs = True
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()["status"], "AI_FAILED")
 
@@ -66,7 +66,7 @@ class SweepInTheStartGap(unittest.TestCase):
         # minutes had passed, even while a slow start (a GP Fund upload) was still in progress.
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("ag.reviewer", "ag")
+        reviewer = self.login("syed.haider", "ag")
         conn = db.connect()
         conn.execute("UPDATE cases SET updated_at = '2000-01-01T00:00:00' WHERE id = ?", (case_id,))
         conn.commit()

@@ -61,7 +61,7 @@ AG_HOLDS = frozenset({FORWARDED, AI_CHECKING, AI_FAILED, UNDER_REVIEW})
 SENT_BACK = frozenset({RETURNED, DOCS_REQUESTED})
 
 DEPARTMENT_SIDE = ("DEPT_OFFICER", "ADMIN")
-AG_SIDE = ("AG_REVIEWER", "ADMIN")
+AG_SIDE = ("AG_REVIEWER", "AG_DAG", "ADMIN")   # ADMIN leaves this tuple with decision G6
 
 #: action -> (roles, from-statuses, to-status). ``None`` as the target means "unchanged".
 TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
@@ -81,7 +81,7 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
     "OVERRIDE":     (("ADMIN",), frozenset(STATUSES), None),         # target given by the admin
     # The case type (29 Sep 2026): a department may change its declaration while the case is on
     # its side; the AG and the administrator may correct it at any point, with a remark.
-    "SET_CASE_TYPE": (("DEPT_OFFICER", "AG_REVIEWER", "ADMIN"), frozenset(STATUSES), None),
+    "SET_CASE_TYPE": (("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG", "ADMIN"), frozenset(STATUSES), None),
 }
 
 #: Where a department may still change what it declared: the same statuses it may add papers in.
@@ -140,7 +140,7 @@ def owns_side(user_role: str, user_department: str | None, case: sqlite3.Row | d
 
 def may_see(user_role: str, user_department: str | None, case: sqlite3.Row | dict) -> bool:
     """Reads: the department's side sees its own; AG Review and Admin see everything."""
-    if user_role in ("AG_REVIEWER", "ADMIN"):
+    if user_role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
         return True
     return owns_side(user_role, user_department, case)
 
