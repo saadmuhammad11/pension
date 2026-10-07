@@ -548,7 +548,8 @@ class V2Test(unittest.TestCase):
         self._gpf_module(self._gpf_view(hard_doc=True, disp="returned"))
         case = self.client.get(f"/api/v2/cases/{other}", headers=police).json()
         self.assertEqual(case["status"], "RETURNED")
-        self.assertEqual(case["events"][-1]["action"], "RETURN")
+        self.assertEqual(case["events"][-1]["action"], "GPF_RETURN")          # a system action, no pseudo-officer (G6)
+        self.assertEqual(case["events"][-1]["actor_role"], "SYSTEM")
         self.assertEqual([m["id"] for m in case["events"][-1]["payload"]["missing_checklist"]], ["A3"])
 
     def test_uploads_must_be_documents_and_names_are_bounded(self) -> None:

@@ -268,6 +268,9 @@ def issues(view: dict) -> dict:
         "unidentified_pages": 0, "has_issues": not clean,
         "gpf": {"case_id": view.get("id"), "version": view.get("version"), "position": pos,
                 "disposal": view.get("caseDisp"), "note": view.get("caseNote"),
+                # Who disposed of the case in the module (its audit names the signed-in officer, G6).
+                "disposed_by": next((a.get("by") for a in reversed(view.get("audit") or [])
+                                     if "dispos" in str(a.get("what") or "").lower() or "return" in str(a.get("what") or "").lower()), None),
                 "hard": pos.get("hard", 0), "conf": conf, "sap": sap, "adv": pos.get("adv", 0)},
         "gpf_passed": passed, "gpf_returned": returned,
     }

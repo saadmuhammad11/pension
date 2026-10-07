@@ -1345,6 +1345,15 @@ def _act(conn: sqlite3.Connection, user: User, case_id: str, action: str, body: 
             and user.id in _submitters(conn, row):
         raise HTTPException(403, "maker-checker: the user who submitted this case cannot approve it; a second "
                                  "officer decides (decision C1, 7 Oct 2026)")
+    if action == "OVERRIDE":
+        # The Deputy AG's override is the one move that skips the workflow; it is held to the same
+        # bar as approving against the findings (audit 7 Oct 2026): a written reason, and no
+        # approval of a case the AI examination has not been run on.
+        if len(remark) < workflow.MIN_OVERRIDE_REMARK:
+            raise HTTPException(422, f"an override needs a reason of at least {workflow.MIN_OVERRIDE_REMARK} characters")
+        if body.get("to_status") == workflow.APPROVED and not _verified(conn, row):
+            raise HTTPException(409, "verify the case with AI before overriding it to approved: an approval rests on a "
+                                     "completed examination of the papers")
     payload: dict = {}
     mirror: str | None = None
     if action == "OVERRIDE" and body.get("to_status") == row["status"]:

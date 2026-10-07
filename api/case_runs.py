@@ -579,24 +579,20 @@ def sync_gpf_case(conn: sqlite3.Connection, case: sqlite3.Row) -> dict | None:
     run_id = case["current_run_id"]
     try:
         if issues["gpf_returned"]:
-            remark = ("Returned by the Accountant General after the GP Fund examination"
+            who = issues["gpf"].get("disposed_by")
+            remark = ((f"Returned by {who} in the GP Fund examination" if who
+                       else "Returned in the GP Fund examination")
                       + (f": {issues['gpf']['note']}" if issues["gpf"].get("note") else "")
                       + (". Documents to attach — " + "; ".join(f"{m['id']} {m['requirement']}" for m in issues["missing_checklist"])
                          if issues["missing_checklist"] else "") + ".")
-            return workflow.transition(conn, case, "RETURN", _system_officer(), run_id=run_id,
-                                       payload={**issues, "auto": True}, remark=remark)
+            # A system action (GPF_RETURN) mirroring the officer's return in the module -- not a
+            # pseudo-officer with no account (audit 7 Oct 2026, G6). The module's own audit names
+            # the officer; the payload carries that name.
+            return workflow.transition(conn, case, "GPF_RETURN", None, run_id=run_id,
+                                       payload={**issues, "auto": True, "returned_by": who}, remark=remark)
     except (workflow.WorkflowError, sqlite3.OperationalError):
         return None
     return None
-
-
-class _SystemOfficer:
-    """The officer's disposal in the GP Fund module, recorded here by the system on their behalf."""
-    id = None; display_name = "Accountant General (GP Fund examination)"; role = "AG_REVIEWER"; department_code = None
-
-
-def _system_officer() -> _SystemOfficer:
-    return _SystemOfficer()
 
 
 def _move_case_on(conn: sqlite3.Connection, case_id: str, run_id: str | None, state: str, issues: dict,

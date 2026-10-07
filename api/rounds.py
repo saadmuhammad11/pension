@@ -28,7 +28,7 @@ from api import db
 
 log = logging.getLogger(__name__)
 
-SEND_BACK = frozenset({"RETURN", "REQUEST_DOCS", "AUTO_RETURN"})
+SEND_BACK = frozenset({"RETURN", "REQUEST_DOCS", "AUTO_RETURN", "GPF_RETURN"})
 CLOSING = SEND_BACK | {"APPROVE", "REJECT", "AUTO_APPROVE"}
 
 

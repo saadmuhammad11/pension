@@ -6,9 +6,10 @@ const ACTION_WORDS: Record<string, string> = {
   CREATE: 'Case filed', ADD_DOCS: 'Documents attached', RUN_CHECK: 'Verification started',
   CHECK_DONE: 'Verification complete: findings for the Accountant General', CHECK_FAILED: 'Verification incomplete',
   AUTO_RETURN: 'Returned by the verification: documents missing', AUTO_APPROVE: 'Approved: nothing outstanding on the verification',
+  GPF_RETURN: 'Returned after the GP Fund examination',
   FORWARD: 'Submitted to Accountant General',
   TAKE_UP: 'Taken up for review', APPROVE: 'Approved', REJECT: 'Rejected', RETURN: 'Returned to department',
-  REQUEST_DOCS: 'Additional documents requested', OVERRIDE: 'Decision overridden by the administrator',
+  REQUEST_DOCS: 'Additional documents requested', OVERRIDE: 'Decision overridden by the Deputy Accountant General',
   SET_CASE_TYPE: 'Case type changed',
   REPLACE_DOC: 'Document replaced',
 }

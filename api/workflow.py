@@ -76,6 +76,9 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
     "CHECK_DONE":   ((), frozenset({AI_CHECKING}), UNDER_REVIEW),    # by the system: findings for the AG
     "CHECK_FAILED": ((), frozenset({AI_CHECKING}), AI_FAILED),       # by the system: verify again
     "AUTO_RETURN":  ((), frozenset({AI_CHECKING}), RETURNED),        # by the system: documents missing
+    # By the system, on the officer's return in the GP Fund module's own screen (the module's audit
+    # names the officer; the payload carries the name). A system action, not a pseudo-officer (G6).
+    "GPF_RETURN":   ((), frozenset({UNDER_REVIEW}), RETURNED),
     "TAKE_UP":      (AG_SIDE, frozenset({FORWARDED}), UNDER_REVIEW),
     "APPROVE":      (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), APPROVED),
     "REJECT":       (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), REJECTED),
@@ -92,7 +95,7 @@ CASE_TYPE_EDITABLE_BY_DEPARTMENT = frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_
 
 #: What the system may do on its own: record a verification's outcome, and return a case whose
 #: documents are missing. Never approve (M1, 7 Oct 2026).
-SYSTEM_ACTIONS = frozenset({"CHECK_DONE", "CHECK_FAILED", "AUTO_RETURN"})
+SYSTEM_ACTIONS = frozenset({"CHECK_DONE", "CHECK_FAILED", "AUTO_RETURN", "GPF_RETURN"})
 
 #: Actions whose remark is required whatever the case looks like.
 REMARK_REQUIRED = frozenset({"APPROVE", "REJECT", "RETURN", "REQUEST_DOCS", "OVERRIDE"})
