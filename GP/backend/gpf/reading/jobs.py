@@ -93,8 +93,12 @@ class JobRegistry:
                     job.artefact = ev["artefact"]
 
         def work() -> None:
+            from . import timing
+            started = time.time()
             try:
-                result = runner(report)
+                with timing.bind(job.id):
+                    result = runner(report)
+                    timing.record("stage", "reading", started=started, ended=time.time(), pages=job.total or None)
             except NotImplementedError as e:
                 self._fail(job, "Reading the scans needs the vision model. Set GPF_VLLM_URLS "
                                 "to the DGX Spark's vLLM server. (" + str(e) + ")", 503)

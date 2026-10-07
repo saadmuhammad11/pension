@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -511,7 +512,16 @@ def unpack(run: Run) -> dict:
 
 
 def execute(run: Run) -> None:
-    """Run every stage, emitting an event as each completes."""
+    """Run every stage, emitting an event as each completes. Each stage and every model call is
+    timed into ``run_timings`` (pipeline.timing), durable across restarts."""
+    from pipeline import timing
+    with timing.bind(run.run_id):
+        with timing.stage("run"):
+            _execute(run)
+
+
+def _execute(run: Run) -> None:
+    from pipeline import timing
     from pipeline.extract import stage_assertions, stage_determine, stage_extract
     from pipeline.ingest import atomic_write_text, ingest
     from pipeline.report import build_report
@@ -554,7 +564,9 @@ def execute(run: Run) -> None:
                 run.emit("carryover", f"full run — {prepared.get('reason')}")
 
         run.emit("ingest", f"reading {run.pdf_path.name}")
-        manifest = ingest(run.pdf_path, run.run_dir, carried=carried_rows)
+        with timing.stage("ingest") as t_ingest:
+            manifest = ingest(run.pdf_path, run.run_dir, carried=carried_rows)
+            t_ingest["pages"] = manifest["source_pages"]
         run.emit("ingest",
                  f"{manifest['source_pages']} source pages · "
                  f"sha256 {manifest['source_sha256'][:16]}…",
@@ -563,16 +575,20 @@ def execute(run: Run) -> None:
         run.emit("identify",
                  f"classifying {manifest['source_pages']} pages on the vision model "
                  f"(this is the slow stage)")
-        stage_identify(run.run_dir, progress=lambda line: run.emit("identify", line.strip()))
+        with timing.stage("identify", pages=manifest["source_pages"]):
+            stage_identify(run.run_dir, progress=lambda line: run.emit("identify", line.strip()))
 
         run.emit("verify", "second-reading every claimed prescribed form with OCR")
-        stage_verify_forms(run.run_dir, progress=lambda line: run.emit("verify", line.strip()),
-                           skip_pages=frozenset(int(k) for k in (carry or {}).get("page_map", {})))
+        with timing.stage("verify"):
+            stage_verify_forms(run.run_dir, progress=lambda line: run.emit("verify", line.strip()),
+                               skip_pages=frozenset(int(k) for k in (carry or {}).get("page_map", {})))
 
-        docs = stage_assemble(run.run_dir)
+        with timing.stage("assemble"):
+            docs = stage_assemble(run.run_dir)
         run.emit("assemble", f"{len(docs)} documents assembled from the page identities")
 
-        ct = stage_classify(run.run_dir)
+        with timing.stage("classify"):
+            ct = stage_classify(run.run_dir)
         run.emit("classify",
                  f"case type {ct['case_type'] or 'ROUTE_MANUAL'} "
                  f"({ct['case_type_confidence']}) — {ct['case_type_evidence'][:80]}")
@@ -585,8 +601,9 @@ def execute(run: Run) -> None:
         # and the officer saw an error where a document list should have been.
         run.emit("extract", "reading determination-critical documents (each read twice)")
         try:
-            stage_extract(run.run_dir, progress=lambda line: run.emit("extract", line.strip()),
-                          carry=carry)
+            with timing.stage("extract"):
+                stage_extract(run.run_dir, progress=lambda line: run.emit("extract", line.strip()),
+                              carry=carry)
         except Exception as exc:                          # noqa: BLE001
             run.emit("extract", f"no determination inputs — {exc}", level="warn")
             _record_gap(run, "extract", str(exc))
@@ -601,9 +618,10 @@ def execute(run: Run) -> None:
         # the bundle -- so it runs even where stage 4 found nothing to read.
         run.emit("assertions", "collecting the same fact from each document that states it")
         try:
-            stage_assertions(run.run_dir,
-                             progress=lambda line: run.emit("assertions", line.strip()),
-                             carry=carry)
+            with timing.stage("assertions"):
+                stage_assertions(run.run_dir,
+                                 progress=lambda line: run.emit("assertions", line.strip()),
+                                 carry=carry)
         except Exception as exc:                          # noqa: BLE001
             run.emit("assertions", f"cross-document checks incomplete — {exc}", level="warn")
 
@@ -613,8 +631,9 @@ def execute(run: Run) -> None:
         run.emit("signatures", "reading the sanctioning authority's signature and stamp")
         try:
             from pipeline.signatory import stage_psa_signatures
-            sigs = stage_psa_signatures(run.run_dir,
-                                        progress=lambda line: run.emit("signatures", line.strip()))
+            with timing.stage("signatures"):
+                sigs = stage_psa_signatures(run.run_dir,
+                                            progress=lambda line: run.emit("signatures", line.strip()))
             for f in sigs.get("forms", []):
                 run.emit("signatures", f"{f['document']} p.{f.get('page')}: "
                          f"{f.get('designation') or 'signatory not read'} — specimen "
@@ -623,7 +642,8 @@ def execute(run: Run) -> None:
             run.emit("signatures", f"signature check incomplete — {exc}", level="warn")
 
         try:
-            det = stage_determine(run.run_dir)
+            with timing.stage("determine"):
+                det = stage_determine(run.run_dir)
             d = det["determination"]
             e = det.get("emoluments")
             # A Form D-II determination carries no emoluments block -- the base is the
@@ -648,16 +668,17 @@ def execute(run: Run) -> None:
 
         # The run's own start time, so a report rebuilt from these artefacts carries the
         # same determination timestamp it did the first time (BUILD §6.2 requirement 1).
-        report = build_report(run.run_dir, variant=run.variant,
-                              annual_pay=run.annual_pay,
-                              computed_at=datetime.fromisoformat(run.started_at),
-                              commutation_percent=run.commutation_percent,
-                              retirement_date=run.retirement_date or None,
-                              case_type=run.case_type)
-        atomic_write_text(
-            run.run_dir / "case_report.json",
-            json.dumps(report, indent=2, ensure_ascii=False),
-        )
+        with timing.stage("report"):
+            report = build_report(run.run_dir, variant=run.variant,
+                                  annual_pay=run.annual_pay,
+                                  computed_at=datetime.fromisoformat(run.started_at),
+                                  commutation_percent=run.commutation_percent,
+                                  retirement_date=run.retirement_date or None,
+                                  case_type=run.case_type)
+            atomic_write_text(
+                run.run_dir / "case_report.json",
+                json.dumps(report, indent=2, ensure_ascii=False),
+            )
         verdict = report["recommendation"]["verdict"] if report["recommendation"] else "n/a"
         run.emit("report", f"verdict {verdict}")
         run.state = "done"
@@ -744,9 +765,13 @@ _RUN_SLOTS = threading.BoundedSemaphore(_max_concurrent_runs())
 
 
 def _execute_when_free(run: Run) -> None:
+    from pipeline import timing
+    waited_from = time.time()
     if not _RUN_SLOTS.acquire(blocking=False):
         run.emit("queue", "waiting for a free verification slot")
         _RUN_SLOTS.acquire()
+        timing.record("queue", "slot", started=waited_from, ended=time.time(), name="verification slot",
+                      queue_s=time.time() - waited_from, run_id=run.run_id)
     try:
         execute(run)
     finally:

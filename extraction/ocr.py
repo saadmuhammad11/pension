@@ -110,20 +110,28 @@ def ocr_page(
         }],
     }
     req = urllib.request.Request(endpoint, json.dumps(payload).encode(), model_headers())
+    import time
+    from pipeline import timing
+    started = time.time()
     try:
         raw = urllib.request.urlopen(req, timeout=timeout_s).read()
     except urllib.error.HTTPError as exc:
+        timing.model_call("ocr", started=started, ended=time.time(), schema="ocr", page=page, status="error", detail={"http": exc.code})
         raise OcrError(
             f"page {page}: OCR returned HTTP {exc.code}: "
             f"{exc.read()[:300].decode(errors='replace')}"
         ) from exc
     except OSError as exc:
+        timing.model_call("ocr", started=started, ended=time.time(), schema="ocr", page=page, status="error", detail={"error": str(exc)[:200]})
         raise OcrError(
             f"page {page}: cannot reach the OCR service at {endpoint} ({exc}). "
             "Check: systemctl status paddleocr-vl"
         ) from exc
 
     body = json.loads(raw)
+    usage = body.get("usage") or {}
+    timing.model_call("ocr", started=started, ended=time.time(), schema="ocr", page=page,
+                      detail={"prompt_tokens": usage.get("prompt_tokens"), "completion_tokens": usage.get("completion_tokens")})
     choice = body["choices"][0]
     text = _strip_layout_tokens(choice["message"]["content"] or "")
     if not text.strip():

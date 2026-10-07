@@ -139,7 +139,9 @@ class ReadingPipeline:
             # stage 3: classify
             emit(stage="classify", done=i, page=pg.number,
                  message=f"Page {pg.number} of {total} — identifying the document")
-            cls = self.model.classify_document(pg.image_ref)
+            from . import timing
+            with timing.stage("classify", page=pg.number):
+                cls = self.model.classify_document(pg.image_ref)
             artefact = str(cls.value)
             # stage 4: extract fields for this artefact type
             try:
@@ -148,8 +150,9 @@ class ReadingPipeline:
                 art_enum = Artefact.UNKNOWN
             emit(stage="extract", done=i, page=pg.number, artefact=artefact,
                  message=f"Page {pg.number} of {total} — reading {_label(artefact)}")
-            fields = ({} if art_enum is Artefact.UNKNOWN
-                      else self.model.extract_fields(pg.image_ref, artefact))
+            with timing.stage("extract", page=pg.number):
+                fields = ({} if art_enum is Artefact.UNKNOWN
+                          else self.model.extract_fields(pg.image_ref, artefact))
             # confidence gating (§4.5): below-threshold fields go to a person
             gated = []
             for name, ef in fields.items():
@@ -158,7 +161,8 @@ class ReadingPipeline:
                     needs_human.append({"page": pg.number, "artefact": artefact, "field": name,
                                         "confidence": ef.confidence, "threshold": ef.threshold})
             # stage 5: barcodes (deterministic)
-            codes = self.barcodes.decode_page(pg.image_ref, pg.number)
+            with timing.stage("barcodes", page=pg.number):
+                codes = self.barcodes.decode_page(pg.image_ref, pg.number)
             page_results.append(PageResult(page=pg.number, artefact=artefact,
                                            classify_confidence=cls.confidence, fields=fields,
                                            codes=codes, needs_human=gated))

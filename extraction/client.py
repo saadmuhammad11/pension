@@ -251,14 +251,19 @@ def extract_page(
 
     req = urllib.request.Request(endpoint, json.dumps(payload).encode(), model_headers())
     started = time.time()
+    from pipeline import timing
     try:
         raw = urllib.request.urlopen(req, timeout=timeout_s).read()
     except urllib.error.HTTPError as exc:                       # noqa: PERF203
+        timing.model_call("vision", started=started, ended=time.time(), schema=schema_name, page=timing.page_of(img),
+                          status="error", detail={"http": exc.code})
         raise ExtractionError(
             f"{img.name}: vision service returned HTTP {exc.code}: "
             f"{exc.read()[:400].decode(errors='replace')}"
         ) from exc
     except OSError as exc:
+        timing.model_call("vision", started=started, ended=time.time(), schema=schema_name, page=timing.page_of(img),
+                          status="error", detail={"error": str(exc)[:200]})
         raise ExtractionError(
             f"{img.name}: cannot reach the vision service at {endpoint} ({exc}). "
             "Check: systemctl status vllm-qwen3-vl"
@@ -266,6 +271,10 @@ def extract_page(
     elapsed = time.time() - started
 
     body = json.loads(raw)
+    usage = (json.loads(raw).get("usage") or {}) if raw else {}
+    timing.model_call("vision", started=started, ended=time.time(), schema=schema_name, page=timing.page_of(img),
+                      detail={"prompt_tokens": usage.get("prompt_tokens"), "completion_tokens": usage.get("completion_tokens"),
+                              "max_tokens": max_tokens})
     choice = body["choices"][0]
     content = choice["message"]["content"]
     usage = body.get("usage", {})

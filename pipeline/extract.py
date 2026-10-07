@@ -1740,9 +1740,10 @@ def stage_assertions(
         seen_pages.add(page)
         jobs.append((doc, page, _SCHEMA_FOR.get(doc["type"], "GENERIC_PAGE")))
 
+    from pipeline import timing
     pool = ThreadPoolExecutor(max_workers=ASSERTION_CONCURRENCY)
     futures = [
-        pool.submit(extract_page_confirmed, image_for[pg], schema_name=sch)
+        pool.submit(timing.carry(extract_page_confirmed, stage="assertions", page=pg), image_for[pg], schema_name=sch)
         for _doc, pg, sch in jobs
     ]
     try:

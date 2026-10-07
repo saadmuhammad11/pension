@@ -186,16 +186,30 @@ class VllmModelClient:
         return inst
 
     def _chat(self, url: str, model: str, messages: list, **kw) -> dict:
-        """POST /v1/chat/completions to a specific role endpoint. urllib only."""
+        """POST /v1/chat/completions to a specific role endpoint. urllib only. Each call is timed
+        into run_timings under the reading job (reading.timing)."""
+        import time
         import urllib.request
+        from ..reading import timing
         payload = {"model": model, "messages": messages, **kw}
         req = urllib.request.Request(
             url + "/v1/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "Authorization": "Bearer " + self.api_key},
             method="POST")
-        with urllib.request.urlopen(req, timeout=self.timeout) as r:
-            return json.loads(r.read().decode("utf-8"))
+        started = time.time()
+        schema = (kw.get("response_format") or {}).get("json_schema", {}).get("name") if isinstance(kw.get("response_format"), dict) else None
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                body = json.loads(r.read().decode("utf-8"))
+        except Exception as exc:                                   # noqa: BLE001 -- recorded, then re-raised unchanged
+            timing.model_call(model, started=started, ended=time.time(), schema=schema, status="error",
+                              detail={"error": str(exc)[:200]})
+            raise
+        usage = body.get("usage") or {}
+        timing.model_call(model, started=started, ended=time.time(), schema=schema,
+                          detail={"prompt_tokens": usage.get("prompt_tokens"), "completion_tokens": usage.get("completion_tokens")})
+        return body
 
     @staticmethod
     def _image_url(image_ref: str) -> str:

@@ -82,9 +82,11 @@ def stage_identify(
     # The checkpoint still happens on this thread, after each result arrives, so an
     # interrupted run resumes exactly as before and identities.json is never written from
     # two threads at once.
+    from pipeline import timing
     with ThreadPoolExecutor(max_workers=IDENTIFY_CONCURRENCY) as pool:
         futures = {
-            pool.submit(identify_page, sp.image_path, page=sp.page): sp for sp in pending
+            pool.submit(timing.carry(identify_page, stage="identify", page=sp.page), sp.image_path, page=sp.page): sp
+            for sp in pending
         }
         for future in as_completed(futures):
             sp = futures[future]
