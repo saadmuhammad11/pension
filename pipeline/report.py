@@ -326,6 +326,9 @@ _FLAG_QUERY = {
     "EXTRACT-DISAGREE":
         "When two readings of the same page of a pension case give different figures or dates, "
         "may either reading be used, or must an officer read the original page?",
+    "RELATION-INELIGIBLE":
+        "Which relations of a deceased pensioner or Government servant are eligible for family "
+        "pension, in what order, and what must each prove -- age, marital status, income, disability?",
     "SERVICE-SHORT":
         "What is the minimum qualifying service for a monthly family pension on a death in service, "
         "and what does the family receive when the service falls short of it?",
@@ -1137,6 +1140,8 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         forwarding_department=forwarding_department,
         forwarding_department_ur=None,
         claimant_name=parties.claimant,
+        claimant_relation=claimant_relation or None,
+        frc_applicant_relation=((facts.get("frc_applicant") or {}).get("relation_with_hof") or None),
         party_roles_note=parties.unresolved_reason,
         party_roles_corrected=parties.corrected,
         processed_on=(computed_at or _DEFAULT_COMPUTED_AT).date(),

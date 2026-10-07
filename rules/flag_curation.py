@@ -32,7 +32,7 @@ MAX_WORDS = 15
 #: Mismatches in name, CNIC, dates, amounts and eligibility come first (office rule).
 _CLASS_ORDER = [
     "CONTRA-IDENTITY", "CNIC-UNCORROBORATED", "CONTRA-FAMILY", "CONTRA-DATE", "CONTRA-SERVICE-DATES", "CONTRA-MONEY",
-    "RULE-UNDECLARED", "DECLARED-TYPE-MISMATCH", "RELATIONSHIP-UNPROVED", "AUTH-DEFECT", "DOC-STALE",
+    "RULE-UNDECLARED", "DECLARED-TYPE-MISMATCH", "RELATION-INELIGIBLE", "RELATIONSHIP-UNPROVED", "AUTH-DEFECT", "DOC-STALE",
     "DOC-EXPIRED", "EXTRACT-DISAGREE", "DATE-AMBIGUOUS", "EXTRACT-LOWCONF", "ATTEST-MISSING", "RULE-CAP", "SCOPE-CONFUSION",
 ]
 _SEVERITY = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
@@ -130,7 +130,11 @@ def summary(f: Flag, merged: int = 1) -> str:
         if t.startswith("check"):
             return _clip(f"CNIC expiry date unclear; check the card — {where}")
         return _clip(f"CNIC has expired — {where}")
+    if c == "RELATION-INELIGIBLE":
+        return _clip(f"{f.title} — {where}" if where else f.title)
     if c == "RELATIONSHIP-UNPROVED":
+        if t.startswith("proof missing") or t.startswith("the claimant's relation"):
+            return _clip(f"{f.title} — {where}" if where else f.title)
         return _clip("No document proves the claimant's relationship; no Nikah Nama on file")
     if c == "CNIC-UNCORROBORATED":
         if "misread" in t:

@@ -796,29 +796,23 @@ _DAUGHTER_REGRANT = ("divorc", "widowed", "widow daughter", "widow-daughter")
 
 
 def _share_key_for(relation: str | None) -> str:
-    """Which share governs this claimant. Raises rather than defaulting to the widow's."""
-    text = (relation or "").strip().casefold()
+    """Which share governs this claimant. Raises rather than defaulting to the widow's.
+
+    Read against the fixed list of eligible relations (rules.relations, decision H6, 7 Oct
+    2026). "Wife d/o Ali Ahmad" is the wife -- the marker is her parentage -- where the old
+    token test, child markers first, paid her as a daughter without the spouse's term."""
+    from rules.relations import parse_relation
+    text = (relation or "").strip()
     if not text:
         raise InputMissing(
             "the claimant's relation to the deceased pensioner could not be read from the "
             "prescribed form, and the share depends on it. A widow, a divorced daughter and "
             "a parent are not paid alike."
         )
-    # Whole tokens, not substrings: "wife of Hassan" must not read as a son.
-    tokens = set(re.findall(r"[a-z]+(?:/[a-z]+)?", text))
-    if tokens & set(_CHILD) or any(t.startswith("daughter") for t in tokens):
-        if "disabled" in text or "disable" in text:
-            return "disabled_child_percent"
-        if any(n in text for n in _DAUGHTER_REGRANT):
-            return "regrant_daughter_percent"
-        return "unmarried_child_percent"
-    if any(n in text for n in _SPOUSE):
-        return "widow_percent"
-    if any(n in text for n in ("father", "mother", "parent")):
-        return "parent_percent"
-    if "sister" in text:
-        return "sister_percent"
-    raise CaseTypeNotImplemented(
-        f"the prescribed form states the claimant's relation as {relation!r}, which matches "
-        f"no class of claimant this build knows. It is not treated as a widow."
-    )
+    parsed = parse_relation(text)
+    if parsed.entry is None:
+        raise CaseTypeNotImplemented(
+            f"the prescribed form states the claimant's relation as {relation!r}, which is not on "
+            f"the list of eligible relations ({parsed.reason}). It is not treated as a widow."
+        )
+    return parsed.entry.share_key

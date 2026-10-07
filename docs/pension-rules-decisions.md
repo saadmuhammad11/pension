@@ -348,7 +348,23 @@ These were in the audit's High list, are technical, and are fixed in code on bra
 
 ## Appendix B: eligible family-pension relations (draft for confirmation)
 
-*Filled in with the implementation of item 8; see the table there.*
+The list the code applies since 7 Oct 2026 (`rules/relations.py`). A claim under a relation not in this table, or with a proof missing, raises a finding; no share is computed in this release. **For the pension rules owner to confirm, row by row, before it is treated as final.**
+
+| Relation | Rule | Entitlement runs | Proof needed (documents the reader names) | To confirm |
+|---|---|---|---|---|
+| Widow / widower | ENT-01 | For life; ends on remarriage (ENT-01). The spouse precedes every other class (ENT-07). | **relationship** — the marriage: Nikah Nama, or the NADRA FRC showing the spouse (`NIKAH_NAMA`, `NADRA_FRC`)<br>**marital status** — not remarried (Form C-1 / non-remarriage certificate, AG-15) (`NON_REMARRIAGE_CERTIFICATE`) | that a widower is paid on the same terms as a widow |
+| Son | ENT-02 | Until the prescribed age (draft 21; BLOCKING-08). | **relationship** — named as a son on the NADRA FRC (`NADRA_FRC`)<br>**age** — date of birth from the CNIC / B-form, the FRC or the matriculation certificate (`CNIC`, `CNIC_CLAIMANT`, `NADRA_FRC`, `MATRIC_CERTIFICATE`) | the age limit (21?) and whether it extends while in full-time education |
+| Unmarried daughter | ENT-03 | Until marriage (ENT-03). | **relationship** — named as a daughter on the NADRA FRC (`NADRA_FRC`)<br>**marital status** — recorded unmarried on the NADRA FRC (`NADRA_FRC`) | whether an unmarried daughter's entitlement is for life under the current rules |
+| Widowed daughter | ENT-03 | While widowed and dependent, without a regular income (ENT-03). | **relationship** — named as a daughter on the NADRA FRC (`NADRA_FRC`)<br>**marital status** — widowed: the FRC's status, or the husband's death certificate (`NADRA_FRC`, `NADRA_DEATH_CERTIFICATE`)<br>**income** — no regular source of income (AG-17) (`NO_REGULAR_INCOME_CERTIFICATE`) | the dependency and income conditions |
+| Divorced daughter | ENT-03 | While divorced and dependent, without a regular income (ENT-03); from the divorce. | **relationship** — named as a daughter on the NADRA FRC (`NADRA_FRC`)<br>**marital status** — the divorce deed / certificate (AG-21) (`DIVORCE_CERTIFICATE`)<br>**income** — no regular source of income (AG-17) (`NO_REGULAR_INCOME_CERTIFICATE`) | the dependency and income conditions, and the divorce-timing rule |
+| Disabled son / daughter | ENT-04 | For life, while the disability lasts (ENT-04). | **relationship** — named as a child on the NADRA FRC (`NADRA_FRC`)<br>**disability** — Medical Board certificate of permanent disability (AG-14) (`MEDICAL_BOARD_CERTIFICATE`) | which Board's certificate the office accepts |
+| Dependent father / mother | ENT-05 | While dependent, where no spouse or eligible child survives (ENT-05, ENT-07). | **relationship** — named as a parent on the NADRA FRC (`NADRA_FRC`)<br>**dependency** — dependent on the deceased; no regular income (AG-17) (`NO_REGULAR_INCOME_CERTIFICATE`) | the dependency test the office applies |
+| Unmarried / widowed / divorced sister | office column | As the office's checklist column has it; the rules cited name no sister. | **relationship** — named as a sister on the NADRA FRC (`NADRA_FRC`)<br>**marital status** — unmarried, widowed or divorced (`NADRA_FRC`, `DIVORCE_CERTIFICATE`, `NADRA_DEATH_CERTIFICATE`)<br>**income** — no regular source of income (AG-17) (`NO_REGULAR_INCOME_CERTIFICATE`) | WHETHER a sister is eligible at all, and on what conditions |
+| Child (son or daughter, sex not stated) | ENT-02 / ENT-03 | As a son or an unmarried daughter, once the form says which. | **relationship** — named as a child on the NADRA FRC (`NADRA_FRC`)<br>**age** — date of birth (`CNIC`, `CNIC_CLAIMANT`, `NADRA_FRC`, `MATRIC_CERTIFICATE`)<br>**marital status** — marital status on the NADRA FRC (`NADRA_FRC`) | (none: resolves to son or daughter on the FRC) |
+
+Not on the list, and therefore a finding: grandchildren, sons- and daughters-in-law, nephews and nieces, brothers, uncles, aunts, cousins, step-relations, and any relation the form does not state. Sons' age limit used in the draft: 21 (BLOCKING-08).
+
+**Confirmation:** ☐ confirmed as drafted ☐ confirmed with the changes noted: ____________________  *Date:* ____________
 
 ---
 

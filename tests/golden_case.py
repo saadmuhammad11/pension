@@ -63,15 +63,20 @@ EXPECTED_MEDICAL_ON_FAMILY_PENSION = 20_163
 EXPECTED_MEDICAL_ON_GROSS_PENSION = 26_884
 EXPECTED_COMMENCEMENT = date(2026, 2, 19)
 
-# -- §13.5 the seven flags -----------------------------------------------------------------
+# -- §13.5 the seven flags, plus one ----------------------------------------------------------
+# Since 7 Oct 2026 (decision H6) the claimant's relation is checked against the fixed list of
+# eligible relations. This fixture's papers state none -- the widower is not among the family
+# rows and the fixture carries no FRC applicant -- so an eighth finding, MEDIUM, says so; the two
+# LOW findings move down one id. §13.5's seven are unchanged in substance.
 EXPECTED_FLAGS = {
     "F-1": ("HIGH", "CONTRA-IDENTITY", True),
     "F-2": ("HIGH", "CONTRA-FAMILY", True),
     "F-3": ("HIGH", "RULE-UNDECLARED", True),
     "F-4": ("MEDIUM", "RULE-CAP", False),
     "F-5": ("MEDIUM", "SLA-BREACH", False),
-    "F-6": ("LOW", "ALIAS-RESOLVED", False),
-    "F-7": ("LOW", "SCOPE-CONFUSION", False),
+    "F-6": ("MEDIUM", "RELATIONSHIP-UNPROVED", False),
+    "F-7": ("LOW", "ALIAS-RESOLVED", False),
+    "F-8": ("LOW", "SCOPE-CONFUSION", False),
 }
 EXPECTED_BLOCKING_FLAGS = ["F-1", "F-2", "F-3"]
 

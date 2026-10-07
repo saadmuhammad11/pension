@@ -241,6 +241,12 @@ class CaseRecord:
     #: and this text is read by a bereaved family.
     forwarding_department_ur: str | None = None
     claimant_name: str | None = None
+    #: The claimant's relation to the deceased as the prescribed form words it, read against
+    #: the fixed list of eligible relations (rules.relations; decision H6).
+    claimant_relation: str | None = None
+    #: The relation to the head of family the NADRA FRC records for the person who requested it
+    #: (its "applicant"), where that is the claimant: Form D-I states no relation, the FRC does.
+    frc_applicant_relation: str | None = None
     claimant_contact: str | None = None
     #: Determination-critical documents no reader could get through. Surfaced as a finding,
     #: never left as an absence -- see rules.flags.check_unreadable_documents.

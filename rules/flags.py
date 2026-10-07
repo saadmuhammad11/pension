@@ -102,6 +102,8 @@ ATTEST_MISSING = "ATTEST-MISSING"
 SPECIMEN_CHECK = "SPECIMEN-CHECK"
 #: The relationship that entitles the claimant is proved by no document in the bundle.
 RELATIONSHIP_UNPROVED = "RELATIONSHIP-UNPROVED"
+#: The claimant's stated relation is not on the list of eligible relations, or fails its condition (H6).
+RELATION_INELIGIBLE = "RELATION-INELIGIBLE"
 
 #: The sanction forms the party names are read from, and the certificate that settles who
 #: died -- the pages a finding about the roles or the stated service opens.
@@ -1655,6 +1657,134 @@ def check_nikah_nama(record: CaseRecord, pack: RulePack) -> list[Flag]:
     )]
 
 
+#: Case types and columns the eligible-relations check applies to: a family pension, where the
+#: claimant is someone other than the servant.
+_FAMILY_CASE_TYPES = ("FAMILY_PENSION_DEATH_IN_SERVICE", "FAMILY_PENSION_DEATH_AFTER_RETIREMENT")
+
+
+def _claimant_row(rows, name: str | None):
+    """The claimant's own row among family members (FRC or Annex-A), by name, or None."""
+    from difflib import SequenceMatcher
+    if not name:
+        return None
+
+    def key(v: str) -> str:
+        return " ".join(sorted("".join(c for c in t.lower() if c.isalpha()) for t in (v or "").split()))
+    target = key(name)
+    for m in rows:
+        if SequenceMatcher(None, target, key(m.name)).ratio() >= 0.85:
+            return m
+    return None
+
+
+def _claimant_frc_row(record: CaseRecord):
+    """The claimant's own row on the NADRA FRC, by name, or None."""
+    return _claimant_row(record.frc_family, record.claimant_name)
+
+
+def check_claimant_relation(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """The claimant's relation against the fixed list of eligible relations, and its proof.
+    Business decision H6, 7 Oct 2026 (draft list: rules.relations; decision sheet Appendix B).
+
+    * not stated -> RELATIONSHIP-UNPROVED, MEDIUM, for the department;
+    * not on the list (a grandchild, an in-law, a nephew) -> RELATION-INELIGIBLE, HIGH;
+    * on the list but a condition fails on the papers -- an "unmarried daughter" the FRC records
+      as married, a son past the draft age limit -> RELATION-INELIGIBLE (HIGH for the status,
+      MEDIUM for the age, whose limit is BLOCKING-08 and unconfirmed);
+    * on the list with proof missing -> RELATIONSHIP-UNPROVED, MEDIUM, naming each proof and the
+      documents that would supply it.
+    This release computes no share; the finding is what the officer decides on.
+    """
+    from rules.relations import SON_AGE_LIMIT_YEARS, parse_relation
+    family = (record.case_type in _FAMILY_CASE_TYPES
+              or (record.case_variant or "") in {"WIDOW", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER",
+                                                 "DISABLED_CHILD_SIBLING", "PARENT", "SISTER", "DEATH_IN_SERVICE"})
+    if not family:
+        return []
+    form = record.document("FORM_D_II") or record.document("FORM_D_I")
+    sources = (Source(form.pages[0], form.type),) if form and form.pages else ()
+    # The relation as the prescribed form words it; Form D-I states none (the department's
+    # sanction names the servant), so the claimant's own row on the NADRA FRC, else Annex-A,
+    # speaks for the form there.
+    row = _claimant_frc_row(record)
+    stated = (record.claimant_relation or "").strip()
+    stated_by = "the prescribed form"
+    if not stated and row is not None and (row.relation or "").strip():
+        stated, stated_by = row.relation.strip(), "the NADRA FRC"
+        sources = sources + (row.source,)
+    if not stated:
+        annex = _claimant_row(record.annex_a_family, record.claimant_name)
+        if annex is not None and (annex.relation or "").strip():
+            stated, stated_by = annex.relation.strip(), "Annex-A"
+            sources = sources + (annex.source,)
+    if not stated and (record.frc_applicant_relation or "").strip():
+        stated, stated_by = record.frc_applicant_relation.strip(), "the NADRA FRC (as its applicant)"
+    parsed = parse_relation(stated)
+    if not stated:
+        return [Flag(id="", severity=MEDIUM, flag_class=RELATIONSHIP_UNPROVED,
+                     title="The claimant's relation to the deceased is not stated",
+                     finding="Neither the prescribed form, the NADRA FRC nor Annex-A states (or the reader could not read) "
+                             "the claimant's relation to the deceased, and every family-pension entitlement turns on it.",
+                     required_action="Read the relation off the papers; where the form leaves it blank, the department "
+                                     "re-issues the form with the relation stated.",
+                     owner="DEPARTMENT", asserted=sources, affects_determination=True)]
+    entry = parsed.entry
+    if entry is None:
+        return [Flag(id="", severity=HIGH, flag_class=RELATION_INELIGIBLE,
+                     title=f"Relation not eligible for family pension: {stated}",
+                     finding=(f"{parsed.reason}. The eligible relations are the widow or widower, sons to the prescribed "
+                              f"age, unmarried, widowed and divorced daughters, disabled children, dependent parents and "
+                              f"(subject to confirmation) sisters. No share is paid to any other relation."),
+                     required_action="Confirm the relation against the NADRA FRC. If it is as stated, the claim fails; "
+                                     "if the form misstates it, the department corrects the form.",
+                     owner="AG", asserted=sources, affects_determination=True)]
+    out: list[Flag] = []
+    status = (row.marital_status or "").strip().casefold() if row else ""
+    if entry.key == "unmarried_daughter" and status and status.startswith("marr"):
+        out.append(Flag(id="", severity=HIGH, flag_class=RELATION_INELIGIBLE,
+                        title="Claimed as an unmarried daughter; the NADRA FRC records her as married",
+                        finding=(f"{stated_by.capitalize()} states the claimant as '{stated}'; the FRC row for "
+                                 f"{row.name} records marital status '{row.marital_status}'. An unmarried daughter's "
+                                 f"entitlement ends on marriage (ENT-03)."),
+                        required_action="Confirm the marital status against the FRC and the CNIC; the claim stands only "
+                                        "if the FRC is wrong and NADRA corrects it.",
+                        owner="AG", asserted=sources + ((row.source,) if row else ()), affects_determination=True))
+    if entry.key == "spouse" and status and status.startswith("remarr"):
+        out.append(Flag(id="", severity=HIGH, flag_class=RELATION_INELIGIBLE,
+                        title="The NADRA FRC records the spouse as remarried",
+                        finding=f"The FRC row for {row.name} records '{row.marital_status}'; the spouse's family pension ends on remarriage (ENT-01).",
+                        required_action="Confirm against the FRC and the non-remarriage certificate.",
+                        owner="AG", asserted=sources + ((row.source,) if row else ()), affects_determination=True))
+    if entry.key in ("son", "child") and row is not None and row.birth_year:
+        when = record.entitlement_date or record.processed_on
+        if when is not None and when.year - int(row.birth_year) >= SON_AGE_LIMIT_YEARS:
+            out.append(Flag(id="", severity=MEDIUM, flag_class=RELATION_INELIGIBLE,
+                            title=f"Son past the draft age limit of {SON_AGE_LIMIT_YEARS}",
+                            finding=(f"The FRC gives {row.name}'s year of birth as {row.birth_year}; at the entitlement date "
+                                     f"({when.isoformat()}) that is {when.year - int(row.birth_year)} years. A son draws only to "
+                                     f"the prescribed age (ENT-02), which the office has not yet confirmed (BLOCKING-08; "
+                                     f"draft {SON_AGE_LIMIT_YEARS})."),
+                            required_action="Confirm the date of birth against the CNIC / B-form and apply the prescribed age limit.",
+                            owner="AG", asserted=sources + (row.source,), affects_determination=True))
+    missing = []
+    for proof in entry.proofs:
+        if proof.kind == "relationship" and row is not None:
+            continue                                   # the FRC names the claimant
+        if not record.has_document(*proof.documents):
+            missing.append(proof)
+    if missing:
+        listed = "; ".join(f"{p.kind.replace('_', ' ')} — {p.note}" for p in missing)
+        docs = sorted({d for p in missing for d in p.documents})
+        out.append(Flag(id="", severity=MEDIUM, flag_class=RELATIONSHIP_UNPROVED,
+                        title=f"Proof missing for a claim as {entry.label.lower()}: " + ", ".join(p.kind.replace("_", " ") for p in missing),
+                        finding=(f"The claimant is stated by {stated_by} as '{stated}' ({entry.label.lower()}, {entry.rule}). "
+                                 f"The papers do not prove: {listed}. Entitlement runs: {entry.limit}"),
+                        required_action="Department to attach: " + ", ".join(_doc_words(d) for d in docs)
+                                        + ". Officer to confirm each condition against the paper.",
+                        owner="DEPARTMENT", asserted=sources, affects_determination=True))
+    return out
+
+
 def check_frc_currency(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """A NADRA FRC older than six months at submission. ``DOC-STALE``, HIGH.
 
@@ -2005,6 +2135,7 @@ BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_ambiguous_dates,
     check_party_roles,
     check_frc_currency,
+    check_claimant_relation,
     check_nikah_nama,
     check_cnic_expiry,
     check_attestation,

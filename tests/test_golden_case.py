@@ -212,8 +212,8 @@ class GoldenCase(unittest.TestCase):
 
     # -- 5 ---------------------------------------------------------------------------------
     def test_05_seven_flags_with_severities(self):
-        """All seven flags, correct severities and classes."""
-        self.assertEqual(len(self.flags), 7, "exactly seven flags on this case")
+        """All seven flags, correct severities and classes -- plus the relation finding (H6, 7 Oct 2026)."""
+        self.assertEqual(len(self.flags), 8, "the seven flags of §13.5, and the relation-not-stated finding")
         actual = {f.id: (f.severity, f.flag_class, f.blocks_ppo) for f in self.flags}
         self.assertEqual(actual, g.EXPECTED_FLAGS)
 
