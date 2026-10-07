@@ -344,15 +344,23 @@ def carry_decisions(base_dir: Path, run_dir: Path, base_report: dict, report: di
     by_key = {finding_key(f, fwd): f for f in base_report.get("flags") or []}
     now_by_key = {finding_key(f): f for f in report.get("flags") or []}
     entries = []
+    from rules.flags import finding_fingerprint
     for key, flag in now_by_key.items():
         old = by_key.get(key)
         d = before.get(old["id"]) if old else None
         if not d:
             continue
+        # The exact finding, not merely one of the same class on the same pages (H8): a changed
+        # figure, date or name is a new finding for the officer to decide afresh.
+        if finding_fingerprint(old) != finding_fingerprint(flag):
+            continue
+        if d.get("fingerprint") and d["fingerprint"] != finding_fingerprint(old):
+            continue
         entries.append({**{k: d.get(k) for k in ("action", "officer", "role", "ground")},
                         "run_id": run_dir.name.removeprefix("run-"), "flag_id": flag["id"],
                         "at": db.now(), "flag_severity": flag.get("severity"), "flag_class": flag.get("class"),
-                        "flag_title": flag.get("title"), "blocks_ppo": flag.get("blocks_ppo"),
+                        "flag_title": flag.get("title"), "flag_finding": flag.get("finding"),
+                        "blocks_ppo": flag.get("blocks_ppo"), "fingerprint": finding_fingerprint(flag),
                         "carried_from": {"run_id": base_run_id, "flag_id": old["id"], "at": d.get("at")}})
         out["dispositions"].append({"flag_id": flag["id"], "from_flag_id": old["id"], "action": d.get("action"),
                                     "officer": d.get("officer")})

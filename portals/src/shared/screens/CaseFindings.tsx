@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ChecklistPanel } from '../components/ChecklistPanel'
 import { PagePreview } from '../components/PagePreview'
-import { fetchDispositions, postDisposition, signatureImageUrl, specimenImageUrl,
+import { type LapsedDisposition, fetchDispositions, postDisposition, signatureImageUrl, specimenImageUrl,
          type Disposition } from '../api'
 import {
   caseTypeLabel, confidenceWord, documentLabel, findingLabel, hasId, maskIds, titleCase, verdictLabel,
@@ -305,6 +305,8 @@ export function CaseFindings(
   // one press away -- every one still counts toward the gate.
   const [showAll, setShowAll] = useState(false)
   const [disposed, setDisposed] = useState<Record<string, Disposition>>({})
+  // Earlier decisions whose finding changed on a re-check (H8): shown so the officer decides afresh.
+  const [lapsed, setLapsed] = useState<LapsedDisposition[]>([])
   const mayDecide = canDispose
   // National ID numbers read 35201-•••••••-2 until the officer asks for them (28 Sep 2026).
   const [showIds, setShowIds] = useState(false)
@@ -314,7 +316,7 @@ export function CaseFindings(
   useEffect(() => {
     let live = true
     fetchDispositions(runId)
-      .then(d => { if (live) setDisposed(d.current) })
+      .then(d => { if (live) { setDisposed(d.current); setLapsed(d.lapsed ?? d.gate?.lapsed ?? []) } })
       .catch(() => { /* a case with no findings has nothing to fetch */ })
     return () => { live = false }
   }, [runId])
@@ -322,6 +324,7 @@ export function CaseFindings(
   async function dispose(flagId: string, action: Disposition['action'], ground: string) {
     const r = await postDisposition(runId, { flag_id: flagId, action, ground })
     setDisposed(r.current)
+    setLapsed(r.gate?.lapsed ?? [])
     if ((r as { case?: unknown }).case) onSettled?.()
   }
   const emol = report.emoluments
@@ -554,6 +557,23 @@ export function CaseFindings(
                         onChange={(r, gate) => { setLive(r); if (gate.open) onSettled?.() }} />
       )}
 
+      {tab === 'Flags' && lapsed.length > 0 && (
+        <div className="banner warn" role="status" style={{ marginBottom: 'var(--s3)' }}>
+          <span className="mark" aria-hidden="true">!</span>
+          <div>
+            <div className="title">{lapsed.length === 1 ? 'An earlier decision has lapsed' : `${lapsed.length} earlier decisions have lapsed`}</div>
+            <div style={{ marginTop: 2 }}>
+              A decision is tied to the exact finding it was made on. These findings changed or went on the
+              re-check, so the decisions no longer apply and the findings await a fresh one.
+            </div>
+            <ul style={{ margin: 'var(--s2) 0 0', paddingLeft: '1.2em', fontSize: 'var(--t-small)' }}>
+              {lapsed.map((l, i) => (
+                <li key={i}>{l.action} by {l.officer} on {l.at.replace('T', ' ')} — “{l.flag_title}”: {l.why}.</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       {tab === 'Flags' && (
         <div className="stagger">{report.flags.length === 0
           ? <div className="empty">No issues found.</div>

@@ -79,6 +79,16 @@ export type Disposition = {
   at: string
   flag_severity?: string
   flag_title?: string
+  /** The exact finding the decision is about (rule, documents, field and value). A re-check that
+   *  changes the finding lapses the decision (business decision H8, 7 Oct 2026). */
+  fingerprint?: string
+  /** The finding id this decision applies to in the report shown now. */
+  applies_to?: string
+}
+
+/** A decision whose finding changed or disappeared on a re-check: kept for the record, no longer applied. */
+export type LapsedDisposition = {
+  flag_id: string; action: string; officer: string; at: string; flag_title?: string; ground?: string; why: string
 }
 
 export type CalculationGate = {
@@ -87,6 +97,7 @@ export type CalculationGate = {
   flags_cleared: number
   open_flags: { id: string; severity: string; title: string; disposition: string | null }[]
   checklist_missing: number
+  lapsed?: LapsedDisposition[]
   reason: string | null
 }
 
@@ -94,6 +105,7 @@ export type Dispositions = {
   run_id: string
   current: Record<string, Disposition>
   history: Disposition[]
+  lapsed?: LapsedDisposition[]
   gate: CalculationGate
 }
 

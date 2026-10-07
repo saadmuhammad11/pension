@@ -1663,19 +1663,21 @@ async def case_events(case_id: str, run_id: str, request: Request, user: User = 
 @router.get("/cases/{case_id}/runs/{run_id}/dispositions")
 def case_dispositions(case_id: str, run_id: str, user: User = Depends(current_user),
                       conn: sqlite3.Connection = Depends(get_conn)) -> dict:
-    from api.dispositions import calculation_gate, current, history
+    from api.dispositions import calculation_gate, history, in_force, lapsed
     run = _run_for(conn, user, case_id, run_id)
     rep = report(run)
     rep = rep if isinstance(rep, dict) else {}
-    return {"run_id": run_id, "current": current(run.run_dir), "history": history(run.run_dir),
-            "gate": calculation_gate(rep, run.run_dir)}
+    # "current" is what applies to each finding NOW (H8): a disposition follows its finding's
+    # fingerprint, and one whose finding changed is listed as lapsed, not applied.
+    return {"run_id": run_id, "current": in_force(rep, run.run_dir), "history": history(run.run_dir),
+            "lapsed": lapsed(rep, run.run_dir), "gate": calculation_gate(rep, run.run_dir)}
 
 
 @router.post("/cases/{case_id}/runs/{run_id}/dispositions", status_code=201)
 def case_disposition(case_id: str, run_id: str, body: dict = Body(...),
                      user: User = Depends(require_roles("AG_REVIEWER", "ADMIN")),
                      conn: sqlite3.Connection = Depends(get_conn), request: Request = None) -> dict:
-    from api.dispositions import DispositionError, calculation_gate, current, record
+    from api.dispositions import DispositionError, calculation_gate, in_force, record
     run = _run_for(conn, user, case_id, run_id, acting=True)
     rep = report(run)
     if not isinstance(rep, dict):
@@ -1694,7 +1696,7 @@ def case_disposition(case_id: str, run_id: str, body: dict = Body(...),
     from api.checklist_actions import apply
     gate = calculation_gate(apply(rep, run.run_dir), run.run_dir)
     settled = _settle(conn, case_id, user, run_id, gate)
-    return {**entry, "gate": gate, "current": current(run.run_dir), **({"case": settled} if settled else {})}
+    return {**entry, "gate": gate, "current": in_force(rep, run.run_dir), **({"case": settled} if settled else {})}
 
 
 def _audit_clearance(conn: sqlite3.Connection, user: User, request: Request | None, case_id: str,

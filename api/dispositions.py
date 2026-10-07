@@ -16,6 +16,15 @@ being disposed and the checklist being complete. Three dispositions:
 
 Append-only, like ``api.decisions``: a finding waived, then upheld on second thoughts, has
 two entries and the order is the record. Nothing is rewritten.
+
+**Tied to the exact finding** (business decision H8, 7 Oct 2026). A disposition is recorded
+against the finding's fingerprint -- its rule, the documents it cites, and the title and
+finding text that carry the field and the value (``rules.flags.finding_fingerprint``) -- not
+against its running number, which a recompute or a resubmission reassigns. ``in_force`` applies
+a disposition to whichever finding now carries that fingerprint; a disposition whose finding
+has changed or disappeared is ``lapsed``: it stays on the record, and the finding (if still
+raised) is open again for a fresh decision. Dispositions written before 7 Oct 2026 carry no
+fingerprint and are honoured only while the finding under their number still has the same title.
 """
 
 from __future__ import annotations
@@ -23,6 +32,8 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+
+from rules.flags import finding_fingerprint
 
 DISPOSITIONS_LOG = "flag_dispositions.jsonl"
 
@@ -91,7 +102,13 @@ def record(
         "flag_severity": flag.get("severity"),
         "flag_class": flag.get("class"),
         "flag_title": flag.get("title"),
+        "flag_finding": flag.get("finding"),
+        "flag_documents": sorted({str(e.get("doc") or "") for side in ("asserted", "contradicted_by")
+                                  for e in (flag.get("evidence") or {}).get(side) or []}),
         "blocks_ppo": flag.get("blocks_ppo"),
+        # The exact finding this decision is about (H8). Computed here when the report predates
+        # the key, so every new disposition is tied, whatever report it was made on.
+        "fingerprint": flag.get("fingerprint") or (finding_fingerprint(flag) if flag else None),
     }
     path = Path(run_dir) / DISPOSITIONS_LOG
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,6 +141,65 @@ def current(run_dir: str | Path) -> dict[str, dict]:
     return out
 
 
+def _fingerprint_of(flag: dict) -> str:
+    return flag.get("fingerprint") or finding_fingerprint(flag)
+
+
+def in_force(report: dict, run_dir: str | Path) -> dict[str, dict]:
+    """The disposition that applies to each finding the report raises NOW, keyed by the
+    finding's current id. A disposition follows its finding's fingerprint, whatever number the
+    finding carries today; a legacy entry (no fingerprint) follows its number while the title
+    under that number is unchanged."""
+    latest_by_fp: dict[str, dict] = {}
+    legacy_by_id: dict[str, dict] = {}
+    for e in history(run_dir):
+        if not e.get("flag_id"):
+            continue
+        if e.get("fingerprint"):
+            latest_by_fp[e["fingerprint"]] = e
+        else:
+            legacy_by_id[e["flag_id"]] = e
+    out: dict[str, dict] = {}
+    for f in report.get("flags") or []:
+        fid = f.get("id")
+        hit = latest_by_fp.get(_fingerprint_of(f))
+        if hit is None:
+            old = legacy_by_id.get(fid)
+            if old is not None and (old.get("flag_title") or "") == (f.get("title") or ""):
+                hit = old
+        if hit is not None:
+            out[fid] = {**hit, "applies_to": fid}
+    return out
+
+
+def lapsed(report: dict, run_dir: str | Path) -> list[dict]:
+    """Dispositions whose finding has changed or disappeared since they were recorded: the
+    latest per original finding, each with why it no longer applies. Kept for the record;
+    the finding they were about, if still raised, is open again."""
+    flags = report.get("flags") or []
+    now_fps = {_fingerprint_of(f) for f in flags}
+    titles_by_id = {f.get("id"): f.get("title") for f in flags}
+    latest: dict[str, dict] = {}
+    for e in history(run_dir):
+        if e.get("flag_id"):
+            latest[e.get("fingerprint") or f"id:{e['flag_id']}"] = e
+    out = []
+    for key, e in latest.items():
+        if e.get("fingerprint"):
+            if e["fingerprint"] in now_fps:
+                continue
+            why = ("the finding it was given against is no longer raised"
+                   if not any((f.get("class") == e.get("flag_class")) for f in flags)
+                   else "the finding has changed since the decision (its figures, dates, names or documents differ)")
+        else:
+            if titles_by_id.get(e["flag_id"]) == (e.get("flag_title") or ""):
+                continue
+            why = "the finding under that number is not the one the decision was about"
+        out.append({"flag_id": e.get("flag_id"), "action": e.get("action"), "officer": e.get("officer"),
+                    "at": e.get("at"), "flag_title": e.get("flag_title"), "ground": e.get("ground"), "why": why})
+    return out
+
+
 def calculation_gate(report: dict, run_dir: str | Path) -> dict:
     """May the pension be calculated on this case yet, and if not, what is in the way?
 
@@ -138,9 +214,10 @@ def calculation_gate(report: dict, run_dir: str | Path) -> dict:
     Returns the gate rather than enforcing it, so the report can say plainly what is
     outstanding instead of presenting an empty Calculation tab with no reason.
     """
-    disposed = current(run_dir)
+    disposed = in_force(report, run_dir)
     flags = report.get("flags") or []
     checklist = report.get("checklist") or {}
+    gone = lapsed(report, run_dir)
 
     open_flags = [
         {"id": f["id"], "severity": f.get("severity"), "title": f.get("title"),
@@ -156,12 +233,16 @@ def calculation_gate(report: dict, run_dir: str | Path) -> dict:
         "flags_cleared": len(flags) - len(open_flags),
         "open_flags": open_flags,
         "checklist_missing": missing,
+        # Decisions that no longer apply because their finding changed or went (H8): on the
+        # record, and shown, so the officer knows a fresh decision is wanted.
+        "lapsed": gone,
         "reason": (
             None if not open_flags and not missing else
             "; ".join(filter(None, [
                 (f"{len(open_flags)} finding(s) not yet cleared: "
                  + ", ".join(f["id"] for f in open_flags)) if open_flags else None,
                 f"{missing} checklist item(s) missing" if missing else None,
+                (f"{len(gone)} earlier decision(s) lapsed because the finding changed") if gone else None,
             ]))
         ),
     }

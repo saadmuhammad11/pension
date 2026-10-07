@@ -177,7 +177,7 @@ class Flag:
         return self.severity == HIGH
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "id": self.id,
             "severity": self.severity,
             "class": self.flag_class,
@@ -196,6 +196,38 @@ class Flag:
             **({"specimen": self.specimen} if self.specimen else {}),
             **({"summary": self.summary} if self.summary else {}),
         }
+        # The exact finding, independent of its position in the list (decision H8, 7 Oct 2026):
+        # a waiver is tied to this, not to "F-2".
+        out["rule_id"] = self.flag_class
+        out["fingerprint"] = finding_fingerprint(out)
+        return out
+
+
+_PAGE_REF = re.compile(r"\bpp?\.\s*#?\d*(?:\s*[-–]\s*\d+)?", re.I)
+
+
+def _finding_text_key(text: str | None) -> str:
+    """A finding's words without page numbers or spacing differences: the same finding on a
+    renumbered page is the same finding; a changed amount, date or name is not."""
+    return " ".join(_PAGE_REF.sub(" ", str(text or "")).casefold().split())
+
+
+def finding_fingerprint(flag: dict) -> str:
+    """What a waiver is tied to: the rule (the finding's class), the documents it cites, and the
+    title and finding text, which carry the field and the value. Pages and the running number
+    are left out, so a re-check that renumbers pages keeps the waiver and one that changes a
+    figure, a date or a name lapses it (business decision H8, 7 Oct 2026)."""
+    import hashlib
+    ev = flag.get("evidence") or {}
+    docs = lambda side: sorted({str(e.get("doc") or e.get("document") or "") for e in ev.get(side) or []})
+    material = "\x1f".join([
+        str(flag.get("class") or flag.get("rule_id") or ""),
+        _finding_text_key(flag.get("title")),
+        _finding_text_key(flag.get("finding")),
+        "|".join(docs("asserted")),
+        "|".join(docs("contradicted_by")),
+    ])
+    return hashlib.sha1(material.encode("utf-8")).hexdigest()
 
 
 def _pages(sources: tuple[Source, ...]) -> str:
