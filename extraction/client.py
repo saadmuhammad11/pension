@@ -471,7 +471,11 @@ def extract_page_confirmed(
     majority-amounts-null guard and the arithmetic reconciliation instead.
 
     Returns ``(extraction, agreement)`` where the extraction is the SECOND read and agreement
-    records whether the two agreed and on what. Raises if the two reads disagree on any amount.
+    records whether the two agreed and on what. When the reads disagree on a figure or a date
+    (business decision H1, 7 Oct 2026) the page's figures and the disputed dates are BLANKED in
+    the returned read -- ``pay_components`` emptied, every ``*_rs`` field and each disputed date
+    set to None -- and ``agreement["disputed"]`` names what differed, so nothing from the page is
+    used and the report raises it for a person to read (rules.flags.check_disputed_reads).
     """
     kwargs.pop("_retry_on_suspect", None)
 
@@ -520,7 +524,8 @@ def extract_page_confirmed(
             second.data["identity_number"] = None
     a, b = _figures_that_matter(first.data), _figures_that_matter(second.data)
     printed_a, printed_b = _printed_figures(first.data), _printed_figures(second.data)
-    agree = a == b and printed_a == printed_b
+    dates_a, dates_b = _dated_fields(first.data), _dated_fields(second.data)
+    agree = a == b and printed_a == printed_b and dates_a == dates_b
 
     agreement = {
         "agree": agree,
@@ -543,15 +548,52 @@ def extract_page_confirmed(
     if not agree:
         only_a = [x for x in a if x not in b]
         only_b = [x for x in b if x not in a]
+        disputed = sorted(
+            {f"pay line '{label}'" for label, _ in (*only_a, *only_b)}
+            | {k for k in set(printed_a) | set(printed_b) if printed_a.get(k) != printed_b.get(k)}
+            | {k for k in set(dates_a) | set(dates_b) if dates_a.get(k) != dates_b.get(k)}
+        )
+        agreement["disputed"] = disputed
+        agreement["blanked"] = True
         agreement["finding"] = (
-            "READ-DISAGREEMENT: two reads of the same page returned different pay figures. "
+            "READ-DISAGREEMENT: two reads of the same page differ on "
+            + ", ".join(disputed[:6]) + (" …" if len(disputed) > 6 else "") + ". "
             f"Read A gave {len(a)} rows / {agreement['read1_amounts']} amounts; read B gave "
             f"{len(b)} rows / {agreement['read2_amounts']} amounts. "
-            f"Only in A: {only_a[:4]}. Only in B: {only_b[:4]}. "
-            "No figure from this page may be used until an officer confirms it against the "
-            "original."
+            "No figure and no disputed date from this page is used; an officer reads the page "
+            "and transcribes it (decision H1, 7 Oct 2026)."
         )
+        _blank_disputed(second.data, disputed_dates={k for k in set(dates_a) | set(dates_b)
+                                                     if dates_a.get(k) != dates_b.get(k)})
     return second, agreement
+
+
+def _dated_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """Every date the page states, as the schema names it (``date_of_birth``, ``date_of_death``,
+    ``date_first_entry`` ...). A second read that moves a date has disagreed about something a
+    determination runs from (H1, 7 Oct 2026); the self-pension refusal on a misread year is
+    the shape of the harm."""
+    out: dict[str, Any] = {}
+    for k, v in data.items():
+        if "date" not in k or isinstance(v, (list, tuple)):
+            continue
+        out[k] = v.get("value") if isinstance(v, dict) else v
+    return out
+
+
+def _blank_disputed(data: dict[str, Any], disputed_dates: set[str]) -> None:
+    """Take every figure, and each disputed date, out of a read whose twin disagreed. The page
+    still identifies itself (names, form number, identifiers both reads saw) -- those are what
+    tell the officer which page to read -- but nothing from it reaches a check or a figure."""
+    data["pay_components"] = []
+    for k, v in list(data.items()):
+        if k.endswith("_rs") and not isinstance(v, (list, dict)):
+            data[k] = None
+    for k in disputed_dates:
+        if isinstance(data.get(k), dict):
+            data[k] = {**data[k], "value": None, "unreadable_reason": "two reads disagreed"}
+        else:
+            data[k] = None
 
 
 def _identifier_digits(value: Any) -> str:

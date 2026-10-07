@@ -217,6 +217,7 @@ def stage_extract(
         form_image = upright_form_image(image_for[page], page, schema_name=form_type,
                                         progress=progress)
         ext, agreement = extract_page_confirmed(form_image, schema_name=form_type)
+        agreement.update({"document": form_type, "page": page})
         data = ext.data
         if reuse is not None:
             reuse.read("form", form_type, page)
@@ -345,6 +346,7 @@ def stage_extract(
                 progress(f"stage 4  {doc_type} p.{pg} could not be read — recorded as a gap; "
                          f"an officer must transcribe it")
             continue
+        agree.update({"document": doc_type, "page": pg})
         result[f"{doc_type.lower()}_agreement"] = agree
         comps = _pay_components(e.data, pg, e.data.get('gross_printed_rs'))
         if comps:

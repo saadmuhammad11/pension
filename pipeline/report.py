@@ -149,6 +149,37 @@ _DETERMINATION_DATE_FIELDS = frozenset({
 })
 
 
+def _fields_document(fields_path: Path) -> dict:
+    """fields.json as a dict, or {} where stage 4 has not run or wrote junk."""
+    if not fields_path.exists():
+        return {}
+    try:
+        return json.loads(fields_path.read_text()) or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def disputed_reads_from_fields(fields: dict) -> tuple[tuple[str, int | None, tuple[str, ...]], ...]:
+    """Every page whose two reads disagreed, from stage 4's record: the ``<document>_agreement``
+    entries (prescribed form, salary statement, LPC) and each pension witness's ``agreement``.
+    ``(document, page, what differed)``; the page is None on records written before the
+    reader tagged them (7 Oct 2026)."""
+    found: list[tuple[str, int | None, tuple[str, ...]]] = []
+    for key, value in fields.items():
+        if not key.endswith("_agreement") or not isinstance(value, dict) or value.get("agree", True):
+            continue
+        doc = value.get("document") or key[:-len("_agreement")].upper()
+        page = value.get("page")
+        if page is None and doc == fields.get("prescribed_form"):
+            page = fields.get("prescribed_form_page")
+        found.append((doc, page, tuple(value.get("disputed") or ("figures on the page",))))
+    for w in fields.get("pension_witnesses") or []:
+        agreement = w.get("agreement") or {}
+        if isinstance(agreement, dict) and not agreement.get("agree", True):
+            found.append((w.get("document") or "PPO", w.get("page"), tuple(agreement.get("disputed") or ("figures on the page",))))
+    return tuple(dict.fromkeys(found))
+
+
 def two_digit_year_dates(run: Path, facts: dict) -> tuple[tuple[str | None, int | None, str, str], ...]:
     """Every date on the case written with a two-digit year: ``(document, page, as written, field)``.
 
@@ -262,6 +293,9 @@ _FLAG_QUERY = {
         "pay slip and the sanction form?",
     "CONTRA-DATE":
         "How are inconsistent dates of entry, retirement or death across documents resolved?",
+    "EXTRACT-DISAGREE":
+        "When two readings of the same page of a pension case give different figures or dates, "
+        "may either reading be used, or must an officer read the original page?",
     "DATE-AMBIGUOUS":
         "When a date on a prescribed form or supporting paper is written with a two-digit year, "
         "how is the date of death, birth or entry established before it is used in the pension?",
@@ -1042,6 +1076,7 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
             (u["page"], u["document"], u["reason"]) for u in facts.get("unreadable", [])
         ),
         ambiguous_dates=two_digit_year_dates(run, facts),
+        disputed_reads=disputed_reads_from_fields(_fields_document(fields_path)),
         # These four were literals of the golden case -- diary 41759, the School Education
         # Department, and "Waqar Abdul Basit" -- sitting in the middle of the production
         # path. On any other bundle the shortcoming letters would have gone out carrying

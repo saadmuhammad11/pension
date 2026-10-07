@@ -86,6 +86,8 @@ SLA_BREACH = "SLA-BREACH"
 ALIAS_RESOLVED = "ALIAS-RESOLVED"
 SCOPE_CONFUSION = "SCOPE-CONFUSION"
 EXTRACT_LOWCONF = "EXTRACT-LOWCONF"
+#: Two reads of one page disagreed; nothing from it was used (decision H1, 7 Oct 2026).
+EXTRACT_DISAGREE = "EXTRACT-DISAGREE"
 EXTRACT_ROLE_SWAP = "EXTRACT-ROLE-SWAP"
 CNIC_UNCORROBORATED = "CNIC-UNCORROBORATED"
 DOC_STALE = "DOC-STALE"
@@ -1190,6 +1192,48 @@ def check_unreadable_documents(record: CaseRecord, pack: RulePack) -> list[Flag]
     ]
 
 
+def check_disputed_reads(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """Two reads of a page disagreed on a figure or a date. ``EXTRACT-DISAGREE``, HIGH.
+
+    Every determination-critical page is read twice (extraction.client.extract_page_confirmed).
+    Until 7 Oct 2026 a disagreement was recorded in fields.json and the second read's figures
+    were used anyway; nothing read that record. Business decision H1: stop and raise. The
+    reader now blanks the page's figures and the disputed dates, and this finding names the
+    page and what differed, so the officer reads the original and transcribes it. HIGH, as an
+    unreadable page is: a check that silently did not run is worse than a missing field.
+    """
+    if not record.disputed_reads:
+        return []
+    items = record.disputed_reads
+
+    def _where(doc: str, page: int | None) -> str:
+        return f"p.{page} ({_doc_words(doc)})" if page is not None else _doc_words(doc)
+
+    listed = "; ".join(f"{_where(doc, page)} on {', '.join(fields[:5])}{' …' if len(fields) > 5 else ''}"
+                       for doc, page, fields in items)
+    return [
+        Flag(
+            id="",
+            severity=HIGH,
+            flag_class=EXTRACT_DISAGREE,
+            title=(f"Two reads of a page disagree: {_where(*items[0][:2])}" if len(items) == 1
+                   else f"Two reads disagree on {len(items)} pages"),
+            finding=(
+                f"The page was read twice and the reads differ: {listed}. No figure and no "
+                f"disputed date from {'this page' if len(items) == 1 else 'these pages'} was "
+                f"used, so the checks that need them did not run."
+            ),
+            asserted=tuple(Source(page, doc) for doc, page, _ in items if page is not None),
+            affects_determination=True,
+            required_action=(
+                "Read the original page and transcribe the disputed figures and dates yourself; "
+                "key at intake what the case needs, then verify the case again."
+            ),
+            owner="AG",
+        )
+    ]
+
+
 def check_ambiguous_dates(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """A date written with a two-digit year was refused, not completed. ``DATE-AMBIGUOUS``.
 
@@ -1833,6 +1877,7 @@ BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_aliases,
     check_scope_confusion,
     check_unreadable_documents,
+    check_disputed_reads,
     check_ambiguous_dates,
     check_party_roles,
     check_frc_currency,

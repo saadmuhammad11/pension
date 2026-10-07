@@ -84,6 +84,7 @@ const FINDINGS: Record<string, string> = {
   'SCOPE-CONFUSION': 'Document applied outside its scope',
   'EXTRACT-LOWCONF': 'A page could not be read',
   'DATE-AMBIGUOUS': 'A date written with a two-digit year',
+  'EXTRACT-DISAGREE': 'Two reads of a page disagree',
   'EXTRACT-ROLE-SWAP': 'Deceased and claimant roles',
 }
 

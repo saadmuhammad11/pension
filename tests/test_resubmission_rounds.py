@@ -231,7 +231,7 @@ class Stage4Reuse(_StageDir):
         self.assertEqual(result["fields"][0]["value"], "01-01-1960")
         self.assertEqual(result["printed_totals"]["form_total_pay"], 50000)
         self.assertEqual(result["printed_totals"]["lpc_gross"], 50000)
-        self.assertEqual(result["salary_statement_agreement"], {"agreed": True})
+        self.assertEqual(result["salary_statement_agreement"]["agreed"], True)   # tagged with document/page since H1
         self.assertEqual(result["carryover"]["run"], 1)
         self.assertEqual(result["carryover"]["reused"], 2)
 

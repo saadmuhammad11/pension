@@ -222,6 +222,10 @@ class CaseRecord:
     #: Determination-critical documents no reader could get through. Surfaced as a finding,
     #: never left as an absence -- see rules.flags.check_unreadable_documents.
     unreadable: tuple[tuple[int, str, str], ...] = ()
+    #: Pages whose two reads disagreed, ``(document, page, what differed)``. Nothing from such a
+    #: page was used (extraction.client.extract_page_confirmed blanks it); the finding puts the
+    #: page in front of the officer -- see rules.flags.check_disputed_reads (decision H1).
+    disputed_reads: tuple[tuple[str, int | None, tuple[str, ...]], ...] = ()
     #: Dates on the case written with a two-digit year, ``(document, page, as written, field)``.
     #: The readers refuse them rather than complete the century (audit L1, 7 Oct 2026); a
     #: finding asks a person to -- see rules.flags.check_ambiguous_dates.
