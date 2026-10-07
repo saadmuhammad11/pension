@@ -83,6 +83,49 @@ def _val(node: Any, name: str, page: int, doc: str) -> ExtractedField:
     )
 
 
+#: The one document a pay base may be read from, in order of authority (decision H2, 7 Oct
+#: 2026): the LPC first; then the prescribed form the sanctioning authority signed; the AG's own
+#: salary statement last. Lines are never merged across documents.
+PAY_SOURCE_AUTHORITY = ("LPC", "FORM_D_I", "FORM_B_I", "SALARY_STATEMENT")
+
+
+def pay_line_document(line: dict, extracted: dict) -> str:
+    """Which document a stage-4 pay line came from. Tagged since 7 Oct 2026; older records are
+    read by page: the prescribed form's page is the form, the rest the salary statement where
+    one was read."""
+    if line.get("document"):
+        return str(line["document"])
+    page = line.get("page")
+    if page is not None and page == extracted.get("prescribed_form_page"):
+        return str(extracted.get("prescribed_form") or "FORM_D_I")
+    # Older still: no form page recorded, but every form field carries its page and document.
+    for f in extracted.get("fields") or []:
+        if page is not None and f.get("page") == page and f.get("document") in ("FORM_D_I", "FORM_B_I"):
+            return str(f["document"])
+    totals = extracted.get("printed_totals") or {}
+    return "SALARY_STATEMENT" if "salary_statement_gross" in totals else "PAY_RECORD"
+
+
+def single_source_pay_lines(extracted: dict) -> tuple[list[PayComponent], str | None]:
+    """The pay lines of the most authoritative document that printed any, and which it was.
+
+    Within that one document a line restated (the same component at the same amount) is one
+    fact; across documents nothing is pooled. ``([], None)`` where no pay line was read."""
+    by_doc: dict[str, list[PayComponent]] = {}
+    for c in extracted.get("pay_components") or []:
+        by_doc.setdefault(pay_line_document(c, extracted), []).append(PayComponent(
+            printed_label=c["printed_label"], component=c["component"],
+            amount=int(c["amount"]), page=c.get("page")))
+    order = [*PAY_SOURCE_AUTHORITY, *sorted(d for d in by_doc if d not in PAY_SOURCE_AUTHORITY)]
+    for doc in order:
+        if by_doc.get(doc):
+            seen: dict[tuple[str, int], PayComponent] = {}
+            for c in by_doc[doc]:
+                seen.setdefault((c.component, int(c.amount)), c)
+            return list(seen.values()), doc
+    return [], None
+
+
 def _pay_components(data: dict, page: int, printed_total: int | None = None) -> list[PayComponent]:
     """Turn the model's printed labels into classified components. Never trusts its judgement.
 
@@ -235,7 +278,7 @@ def stage_extract(
             result["fields"].append(_val(data.get(name), name, page, "FORM_D_I").__dict__)
         result["printed_totals"]["form_total_pay"] = data.get("total_pay_printed_rs")
         form_total = data.get("total_pay_printed_rs")
-        result["pay_components"] += [c.__dict__ | {"amount": int(c.amount)}
+        result["pay_components"] += [c.__dict__ | {"amount": int(c.amount), "document": "FORM_D_I"}
                                      for c in _pay_components(data, page, form_total)]
     else:
         # D-II carries no pay table at all. It states the pension the deceased was already
@@ -350,7 +393,7 @@ def stage_extract(
         result[f"{doc_type.lower()}_agreement"] = agree
         comps = _pay_components(e.data, pg, e.data.get('gross_printed_rs'))
         if comps:
-            result["pay_components"] += [c.__dict__ | {"amount": int(c.amount)} for c in comps]
+            result["pay_components"] += [c.__dict__ | {"amount": int(c.amount), "document": doc_type} for c in comps]
             result["printed_totals"][f"{doc_type.lower()}_gross"] = e.data.get("gross_printed_rs")
 
     if reuse is not None:
@@ -1184,31 +1227,22 @@ def stage_determine(run_dir: str | Path, *, computed_at: datetime | None = None)
     form_page = _pick(fields, "date_of_birth").page
     bps = pay_scale_from_ocr(run, form_page)
 
-    components = [
-        PayComponent(
-            printed_label=c["printed_label"], component=c["component"],
-            amount=int(c["amount"]), page=c.get("page"),
-        )
-        for c in extracted["pay_components"]
-    ]
-    # De-duplicate on (component, amount): the same fact restated by the form, the LPC and
-    # the salary statement is one fact. Keying on component ALONE was wrong -- every
-    # allowance carries the same component name, `non_reckonable_allowance`, so all but the
-    # first were silently dropped and the excluded total came out as 13,284 instead of
-    # 161,765. The pension was unaffected (only the reckonable side feeds CALC-01), which is
-    # precisely why it was easy to miss: the number an officer reads to see what was left out
-    # was wrong while the number that pays the pension was right.
-    seen: dict[tuple[str, int], PayComponent] = {}
-    for c in components:
-        seen.setdefault((c.component, int(c.amount)), c)
-    unique = list(seen.values())
+    # One document's lines, never a merge (business decision H2, 7 Oct 2026): the LPC where it
+    # was read, else the prescribed form, else the salary statement. Until then the lines of
+    # every pay document were pooled and de-duplicated on (component, amount), so a component
+    # two documents printed at different amounts was SUMMED. A difference between documents is
+    # now a finding (rules.flags.check_pay_lines_against_lpc), and the base is one document's.
+    unique, source_document = single_source_pay_lines(extracted)
 
     # BLOCKING-21: the rules in force when the entitlement AROSE, not when the case was
     # processed. A death in 2021 is not governed by an amendment made in 2024 unless the
     # office rules otherwise. Was a hardcoded 2026-02-18, which silently applied whichever
     # pack happened to be current.
     pack = select_pack(effective_date=death)
-    printed_total = extracted["printed_totals"].get("form_total_pay")
+    # Reconcile against the same document's own printed total only: the form's "Total Pay" says
+    # what the form's lines add up to, nothing about the LPC's.
+    printed_total = (extracted["printed_totals"].get("form_total_pay")
+                     if source_document in ("FORM_D_I", "FORM_B_I") else None)
     emol = reckon(unique, pack, printed_total=printed_total)
     # Only an UNSUMMABLE line stops the determination here: an unknown or disputed component
     # is a base nobody can state. A base that sums but disagrees with the form's printed
@@ -1237,6 +1271,7 @@ def stage_determine(run_dir: str | Path, *, computed_at: datetime | None = None)
     payload = {
         "determination": det.to_dict(),
         "emoluments": {
+            "source_document": source_document,
             "reckonable_total": int(emol.reckonable_total),
             "excluded_total": int(emol.excluded_total),
             "printed_total": int(emol.printed_total) if emol.printed_total is not None else None,

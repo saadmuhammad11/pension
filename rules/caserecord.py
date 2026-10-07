@@ -71,6 +71,23 @@ class FamilyMember:
 
 
 @dataclass(frozen=True)
+class PayLine:
+    """One pay line as one document prints it: which document, which page, the component the
+    label was classified as, the label as printed and the amount as printed. The LPC's lines are
+    the source of truth for pay components (business decision H2, 7 Oct 2026); another
+    document's differing amount for the same component is a finding, never a sum."""
+
+    document: str
+    page: int | None
+    component: str
+    printed_label: str
+    amount: Decimal
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "amount", money(self.amount))
+
+
+@dataclass(frozen=True)
 class Recovery:
     """A recoverable amount found in the record.
 
@@ -182,6 +199,8 @@ class CaseRecord:
     annex_a_family: tuple[FamilyMember, ...] = ()
     frc_family: tuple[FamilyMember, ...] = ()
     recoveries: tuple[Recovery, ...] = ()
+    #: Every pay line stage 4 read, by document -- see rules.flags.check_pay_lines_against_lpc.
+    pay_lines: tuple[PayLine, ...] = ()
     timeline: tuple[TimelineEvent, ...] = ()
     aliases: tuple[Alias, ...] = ()
     emoluments: Emoluments | None = None

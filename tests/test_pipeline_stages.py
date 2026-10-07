@@ -116,7 +116,11 @@ class StageDetermineTest(PipelineStageTest):
         self.assertEqual(emol["reckonable_total"], 192_030)
         self.assertEqual(emol["printed_total"], 192_030)
         self.assertTrue(emol["reconciled"])
-        self.assertEqual(emol["excluded_total"], 161_765)
+        # The base is one document's lines (decision H2, 7 Oct 2026): the form's. Its two lines
+        # are both reckonable, so nothing is excluded; the salary statement's allowances are no
+        # longer pooled in (they were 161,765), they are compared, not summed.
+        self.assertEqual(emol["source_document"], "FORM_D_I")
+        self.assertEqual(emol["excluded_total"], 0)
 
     def test_rule_pack_is_selected_by_the_date_of_death(self):
         """BLOCKING-21: the rules in force when the entitlement AROSE.

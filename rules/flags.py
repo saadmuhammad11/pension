@@ -1379,6 +1379,74 @@ def check_scope_confusion(record: CaseRecord, pack: RulePack) -> list[Flag]:
 #: Run order. Within a severity band, flags keep this order, which is what makes the assigned
 #: ids stable for the same input -- a determination that renumbered its flags between runs
 #: would break every reference in a shortcoming letter already sent.
+#: Pay components whose amount one document may not restate differently from the LPC.
+_PAY_LINE_DOCS_AUTHORITY = ("LPC",)
+
+
+def check_pay_lines_against_lpc(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """The LPC is the source of truth for pay components; another document's differing amount
+    for the same component is a finding. ``CONTRA-MONEY``, HIGH. Business decision H2, 7 Oct 2026.
+
+    Until then the lines of the form, the LPC and the salary statement were pooled, so a
+    component printed at two amounts was summed into the base. Nothing is summed across
+    documents now (pipeline.extract.single_source_pay_lines); this check says where the
+    documents disagree, line by line, with the LPC's figure first. Where no LPC pay line was
+    read and another document carries pay lines, that absence is itself a finding (MEDIUM):
+    there is no source of truth to check the lines against.
+    """
+    lines = record.pay_lines
+    if not lines:
+        return []
+    lpc = {}
+    for ln in lines:
+        if ln.document in _PAY_LINE_DOCS_AUTHORITY and ln.component != "unknown":
+            lpc.setdefault(ln.component, ln)
+    others = [ln for ln in lines if ln.document not in _PAY_LINE_DOCS_AUTHORITY]
+    if not lpc:
+        if not others:
+            return []
+        docs = sorted({ln.document for ln in others})
+        return [Flag(
+            id="", severity=MEDIUM, flag_class=CONTRA_MONEY,
+            title="No LPC pay lines read; the pay components cannot be checked against the LPC",
+            finding=(f"Pay lines were read from {', '.join(_doc_words(d) for d in docs)} but no pay line "
+                     f"could be read from an LPC, which is the source of truth for pay components. "
+                     f"The lines were not checked against it and nothing was summed across documents."),
+            required_action="Confirm the pay components against the original LPC; if the bundle has none, "
+                            "ask the department for it.",
+            owner="AG",
+            asserted=tuple(sorted({Source(ln.page, ln.document) for ln in others if ln.page is not None},
+                                  key=lambda s: s.page)),
+            affects_determination=True,
+        )]
+    differences = []
+    for ln in others:
+        truth = lpc.get(ln.component)
+        if truth is not None and int(truth.amount) != int(ln.amount):
+            differences.append((ln, truth))
+    if not differences:
+        return []
+    listed = "; ".join(
+        f"{ln.component.replace('_', ' ')}: LPC prints {fmt(truth.amount)}"
+        f"{f' (p.{truth.page})' if truth.page is not None else ''}, "
+        f"{_doc_words(ln.document)} prints {fmt(ln.amount)}{f' (p.{ln.page})' if ln.page is not None else ''}"
+        for ln, truth in differences)
+    return [Flag(
+        id="", severity=HIGH, flag_class=CONTRA_MONEY,
+        title=(f"A pay component differs from the LPC: {differences[0][0].component.replace('_', ' ')}"
+               if len(differences) == 1 else f"{len(differences)} pay components differ from the LPC"),
+        finding=(f"The LPC is the source of truth for pay components, and another document prints a "
+                 f"different amount for the same component: {listed}. The amounts were not summed; the "
+                 f"LPC's figure stands and the difference is for the department to explain."),
+        required_action=("Department to correct the document that disagrees with the LPC, or produce the "
+                         "pay order that changed the component. Officer to confirm against the original LPC."),
+        owner="DEPARTMENT",
+        asserted=tuple(sorted({Source(t.page, t.document) for _, t in differences if t.page is not None}, key=lambda s: s.page)),
+        contradicted_by=tuple(sorted({Source(ln.page, ln.document) for ln, _ in differences if ln.page is not None}, key=lambda s: s.page)),
+        affects_determination=True,
+    )]
+
+
 def check_emoluments_reconciliation(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """The reckonable pay lines against the total the sanction form prints. ``CONTRA-MONEY``.
 
@@ -1866,6 +1934,7 @@ def check_declared_case_type(record: CaseRecord, pack: RulePack) -> list[Flag]:
 BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_prescribed_form_is_complete,
     check_more_than_one_widow,
+    check_pay_lines_against_lpc,
     check_emoluments_reconciliation,
     check_identity_consistency,
     check_family_consistency,

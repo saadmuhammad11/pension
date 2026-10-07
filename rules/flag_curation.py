@@ -106,6 +106,10 @@ def summary(f: Flag, merged: int = 1) -> str:
         n = f" ({merged} members)" if merged > 1 else ""
         return _clip(f"Family details on Annex-A differ from NADRA family certificate{n} — {where}")
     if c == "CONTRA-MONEY":
+        if "lpc" in t and "differs" in t or "differ from the lpc" in t:
+            return _clip(f"Pay component differs from the LPC — {' and '.join(b[:2]) or where}")
+        if t.startswith("no lpc"):
+            return _clip("No LPC pay lines read; check pay components against the LPC")
         return _clip(f"Pay figures do not add up on {' and '.join(both[:2]) or 'the form'}")
     if c == "RULE-UNDECLARED":
         amount = re.search(r"rs\.?\s*[\d,]+", t)

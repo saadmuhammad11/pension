@@ -28,6 +28,9 @@ _STEP_COMPUTED = ("amount", "computation_shown", "unit")
 _EMOLUMENTS_COMPUTED = ("reckonable_total", "excluded_total", "reconciled")
 #: The pension-rule classification of a pay line (reckonable for pension or not).
 _COMPONENT_COMPUTED = ("reckonable",)
+#: Determination inputs that are themselves sums the engine made (the rest are dates, grades and
+#: figures read off the documents or keyed by the officer).
+_INPUTS_COMPUTED = ("reckonable_emoluments", "excluded_allowances")
 
 
 def scrub_determination(det: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -43,6 +46,7 @@ def scrub_determination(det: dict[str, Any] | None) -> dict[str, Any] | None:
                       for r in a.get("readings", [])]}
         for a in det.get("ambiguities", [])
     ]
+    out["inputs"] = {k: v for k, v in (det.get("inputs") or {}).items() if k not in _INPUTS_COMPUTED}
     out["calculations"] = "not in this release"
     return out
 
@@ -88,6 +92,9 @@ def has_computed_amount(report: dict[str, Any] | None) -> list[str]:
             for k in ("amount", "computation_shown"):
                 if k in r:
                     found.append(f"determination.ambiguities[{i}].readings[{j}].{k}")
+    for k in _INPUTS_COMPUTED:
+        if k in (det.get("inputs") or {}):
+            found.append(f"determination.inputs.{k}")
     emol = (report or {}).get("emoluments") or {}
     for k in _EMOLUMENTS_COMPUTED:
         if k in emol:

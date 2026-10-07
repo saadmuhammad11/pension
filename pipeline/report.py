@@ -159,6 +159,21 @@ def _fields_document(fields_path: Path) -> dict:
         return {}
 
 
+def pay_lines_from_fields(fields: dict) -> tuple:
+    """Every pay line stage 4 read, with the document it came from (decision H2)."""
+    from pipeline.extract import pay_line_document
+    from rules.caserecord import PayLine
+    out = []
+    for c in fields.get("pay_components") or []:
+        try:
+            out.append(PayLine(document=pay_line_document(c, fields), page=c.get("page"),
+                               component=str(c.get("component") or "unknown"),
+                               printed_label=str(c.get("printed_label") or ""), amount=int(c["amount"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return tuple(out)
+
+
 def disputed_reads_from_fields(fields: dict) -> tuple[tuple[str, int | None, tuple[str, ...]], ...]:
     """Every page whose two reads disagreed, from stage 4's record: the ``<document>_agreement``
     entries (prescribed form, salary statement, LPC) and each pension witness's ``agreement``.
@@ -1067,6 +1082,7 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         annex_a_family=annex_family,
         frc_family=frc_family,
         recoveries=recoveries,
+        pay_lines=pay_lines_from_fields(_fields_document(fields_path)),
         timeline=tuple(timeline),
         aliases=aliases,
         stated_qualifying_service_years=stated_years,

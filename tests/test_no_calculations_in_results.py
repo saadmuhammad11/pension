@@ -34,7 +34,7 @@ DET = {
     "ambiguities": [{"rule_id": "FAM-IS-05", "blocking_id": "BLOCKING-06", "question": "Gratuity reading?", "difference": "Rs 4,955,525 apart",
                      "resolve_with": "AG Punjab", "readings": [{"label": "literal", "amount": 33605, "computation_shown": "25% x 134,421", "basis": "the words"},
                                                                {"label": "capitalised", "amount": 4989130, "computation_shown": "x table", "basis": "the table"}]}],
-    "caveats": ["AI extracted the inputs."], "inputs": {"date_of_birth": "1966-06-30", "bps": 19},
+    "caveats": ["AI extracted the inputs."], "inputs": {"date_of_birth": "1966-06-30", "bps": 19, "reckonable_emoluments": 192030, "excluded_allowances": 0},
 }
 EMOL = {"reckonable_total": 192030, "excluded_total": 161765, "printed_total": 192030, "reconciled": True,
         "components": [{"printed_label": "Basic Pay", "component": "basic_pay", "amount": 178440, "reckonable": True, "page": 41},
@@ -53,7 +53,7 @@ class Scrubbing(unittest.TestCase):
         self.assertEqual(d["steps"][2]["note"], "agrees")
         self.assertEqual(d["unverified_rules_engaged"], ["BLOCKING-07"])
         self.assertTrue(d["provisional"])
-        self.assertEqual(d["inputs"]["date_of_birth"], "1966-06-30")
+        self.assertEqual(d["inputs"], {"date_of_birth": "1966-06-30", "bps": 19})   # the two sums are gone
         self.assertEqual(d["calculations"], "not in this release")
 
     def test_ambiguities_keep_the_question_and_lose_the_readings_figures(self):
@@ -85,6 +85,7 @@ class Scrubbing(unittest.TestCase):
             "determination.ambiguities[0].difference",
             "determination.ambiguities[0].readings[0].amount", "determination.ambiguities[0].readings[0].computation_shown",
             "determination.ambiguities[0].readings[1].amount", "determination.ambiguities[0].readings[1].computation_shown",
+            "determination.inputs.reckonable_emoluments", "determination.inputs.excluded_allowances",
             "emoluments.reckonable_total", "emoluments.excluded_total", "emoluments.reconciled",
             "emoluments.components[0].reckonable", "emoluments.components[1].reckonable"])
         self.assertEqual(has_computed_amount(once), [])
