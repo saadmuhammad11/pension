@@ -79,6 +79,8 @@ CONTRA_FAMILY = "CONTRA-FAMILY"
 CONTRA_MONEY = "CONTRA-MONEY"
 CONTRA_DATE = "CONTRA-DATE"
 CONTRA_SERVICE = "CONTRA-SERVICE"
+#: Service at death under the minimum the rules set for a monthly pension (decision H3, 7 Oct 2026).
+SERVICE_SHORT = "SERVICE-SHORT"
 RULE_CAP = "RULE-CAP"
 RULE_UNDECLARED = "RULE-UNDECLARED"
 AUTH_DEFECT = "AUTH-DEFECT"
@@ -1192,6 +1194,58 @@ def check_unreadable_documents(record: CaseRecord, pack: RulePack) -> list[Flag]
     ]
 
 
+def check_form_d_i_dates(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """Form D-I's dates against each other, and the service they imply. Business decision H3.
+
+    Impossible dates -- death before birth, entry after the death, entry before the birth (or
+    before age 15), a death-in-service after the notional superannuation -- are a hard stop:
+    ``CONTRA-DATE``, HIGH, for the department to correct, and the engine refuses to compute on
+    them (rules.engine.ImpossibleDates). Where the dates can all be true but the service from
+    first entry to the death is under the pack's minimum for a monthly pension (10 years),
+    ``SERVICE-SHORT``, MEDIUM, for the reviewer: this release computes no entitlement, so the
+    finding says what the dates imply and leaves the rule to the officer.
+    """
+    from rules.engine import death_in_service_date_defects
+    from rules.service import span
+
+    dates = {field: (when, page, doc) for field, when, page, doc in record.form_dates if doc == "FORM_D_I"}
+    if not dates:
+        return []
+    dob = dates.get("date_of_birth", (None,))[0]
+    entry = dates.get("date_first_entry", (None,))[0]
+    death = dates.get("date_of_death", (None,))[0]
+    sources = tuple(sorted({Source(page, doc) for _, page, doc in dates.values() if page is not None}, key=lambda s: s.page))
+    defects = death_in_service_date_defects(dob, entry, death, pack)
+    if defects:
+        return [Flag(
+            id="", severity=HIGH, flag_class=CONTRA_DATE,
+            title="The dates on Form D-I cannot all be true",
+            finding="Form D-I states dates that contradict each other: " + "; ".join(defects)
+                    + ". Nothing was computed on them (hard stop, decision H3).",
+            required_action=("Department to correct Form D-I against the service book and the death certificate "
+                             "and re-issue it. Officer to confirm the corrected dates against the originals."),
+            owner="DEPARTMENT", asserted=sources, affects_determination=True,
+        )]
+    if entry and death:
+        years = span(entry, death).years
+        try:
+            minimum = int(pack.ref("qualifying_service", "min_years_for_monthly_pension"))
+        except Exception:                                    # noqa: BLE001
+            minimum = 10
+        if years < minimum:
+            return [Flag(
+                id="", severity=MEDIUM, flag_class=SERVICE_SHORT,
+                title=f"Service at death under {minimum} years ({years} years)",
+                finding=(f"From first entry on {entry.isoformat()} to the death on {death.isoformat()} is "
+                         f"{span(entry, death).human}, under the {minimum} years the rules set for a monthly pension "
+                         f"(QS-02). No entitlement is computed in this release; the rule is for the reviewer to apply."),
+                required_action=("Check the service against the service book (and any earlier service that counts), "
+                                 "and decide the entitlement under QS-02 and the gratuity rules."),
+                owner="AG", asserted=sources, affects_determination=True,
+            )]
+    return []
+
+
 def check_disputed_reads(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """Two reads of a page disagreed on a figure or a date. ``EXTRACT-DISAGREE``, HIGH.
 
@@ -1946,6 +2000,7 @@ BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_aliases,
     check_scope_confusion,
     check_unreadable_documents,
+    check_form_d_i_dates,
     check_disputed_reads,
     check_ambiguous_dates,
     check_party_roles,

@@ -31,7 +31,7 @@ MAX_WORDS = 15
 
 #: Mismatches in name, CNIC, dates, amounts and eligibility come first (office rule).
 _CLASS_ORDER = [
-    "CONTRA-IDENTITY", "CNIC-UNCORROBORATED", "CONTRA-FAMILY", "CONTRA-SERVICE-DATES", "CONTRA-MONEY",
+    "CONTRA-IDENTITY", "CNIC-UNCORROBORATED", "CONTRA-FAMILY", "CONTRA-DATE", "CONTRA-SERVICE-DATES", "CONTRA-MONEY",
     "RULE-UNDECLARED", "DECLARED-TYPE-MISMATCH", "RELATIONSHIP-UNPROVED", "AUTH-DEFECT", "DOC-STALE",
     "DOC-EXPIRED", "EXTRACT-DISAGREE", "DATE-AMBIGUOUS", "EXTRACT-LOWCONF", "ATTEST-MISSING", "RULE-CAP", "SCOPE-CONFUSION",
 ]
@@ -114,6 +114,10 @@ def summary(f: Flag, merged: int = 1) -> str:
     if c == "RULE-UNDECLARED":
         amount = re.search(r"rs\.?\s*[\d,]+", t)
         return _clip(f"Recovery {amount.group(0).replace('rs', 'Rs') if amount else ''} on LPC not declared on sanction form".replace("  ", " "))
+    if c == "CONTRA-DATE":
+        return _clip(f"Dates on Form D-I cannot all be true — {where}")
+    if c == "SERVICE-SHORT":
+        return _clip(f"{f.title}; reviewer to apply QS-02 — {where}" if where else f.title)
     if c == "CONTRA-SERVICE-DATES":
         return _clip(f"Service dates differ between {' and '.join(both[:2]) or 'documents'}")
     if c == "DECLARED-TYPE-MISMATCH":

@@ -159,6 +159,21 @@ def _fields_document(fields_path: Path) -> dict:
         return {}
 
 
+_FORM_DATE_FIELDS = ("date_of_birth", "date_first_entry", "date_of_death", "date_of_retirement")
+
+
+def form_dates_from_fields(fields: dict) -> tuple:
+    """The dates the prescribed form states, as stage 4 read them: ``(field, date, page, document)``.
+    Two-digit years and unreadable values yield nothing here (they are findings of their own)."""
+    out = []
+    for f in fields.get("fields") or []:
+        if f.get("name") in _FORM_DATE_FIELDS and f.get("value") and str(f.get("document", "")).startswith("FORM_"):
+            when = _as_date(str(f["value"]))
+            if when is not None:
+                out.append((f["name"], when, f.get("page"), f["document"]))
+    return tuple(out)
+
+
 def pay_lines_from_fields(fields: dict) -> tuple:
     """Every pay line stage 4 read, with the document it came from (decision H2)."""
     from pipeline.extract import pay_line_document
@@ -311,6 +326,9 @@ _FLAG_QUERY = {
     "EXTRACT-DISAGREE":
         "When two readings of the same page of a pension case give different figures or dates, "
         "may either reading be used, or must an officer read the original page?",
+    "SERVICE-SHORT":
+        "What is the minimum qualifying service for a monthly family pension on a death in service, "
+        "and what does the family receive when the service falls short of it?",
     "DATE-AMBIGUOUS":
         "When a date on a prescribed form or supporting paper is written with a two-digit year, "
         "how is the date of death, birth or entry established before it is used in the pension?",
@@ -1083,6 +1101,7 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         frc_family=frc_family,
         recoveries=recoveries,
         pay_lines=pay_lines_from_fields(_fields_document(fields_path)),
+        form_dates=form_dates_from_fields(_fields_document(fields_path)),
         timeline=tuple(timeline),
         aliases=aliases,
         stated_qualifying_service_years=stated_years,

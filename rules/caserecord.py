@@ -201,6 +201,10 @@ class CaseRecord:
     recoveries: tuple[Recovery, ...] = ()
     #: Every pay line stage 4 read, by document -- see rules.flags.check_pay_lines_against_lpc.
     pay_lines: tuple[PayLine, ...] = ()
+    #: The dates the prescribed form states, ``(field, date, page, document)``: date_of_birth,
+    #: date_first_entry, date_of_death on Form D-I. Checked against each other by
+    #: rules.flags.check_form_d_i_dates (decision H3): an impossible set is a hard stop.
+    form_dates: tuple[tuple[str, date, int | None, str], ...] = ()
     timeline: tuple[TimelineEvent, ...] = ()
     aliases: tuple[Alias, ...] = ()
     emoluments: Emoluments | None = None

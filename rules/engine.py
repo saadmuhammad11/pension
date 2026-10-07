@@ -23,6 +23,7 @@ from .emoluments import Emoluments
 from .loader import RulePack, UnknownReferenceValue
 from .money import exact, money, rupees
 from .service import (
+    _add_years,
     ServiceLength,
     qualifies_for_monthly_pension,
     reckoned_years,
@@ -145,6 +146,46 @@ def spouse_term(pack: RulePack, commencement: date) -> tuple[Step | None, str]:
     return step, caveat
 
 
+class ImpossibleDates(ValueError):
+    """The dates a Form D-I states cannot all be true: a hard stop (business decision H3,
+    7 Oct 2026). Nothing is computed on them; the contradiction is named for the department."""
+
+
+#: The youngest age at which a person can have entered Government service; an entry before it
+#: is a misread date, not a fact about the servant.
+MIN_ENTRY_AGE_YEARS = 15
+
+
+def death_in_service_date_defects(date_of_birth: date | None, date_of_first_entry: date | None,
+                                  date_of_death: date | None, pack: RulePack) -> list[str]:
+    """The ways a Form D-I's three dates contradict each other, in plain words; empty when
+    they can all be true. Death before birth, entry after the death, entry before the birth
+    (or before the servant was {MIN_ENTRY_AGE_YEARS}), and a death-in-service after the
+    notional superannuation date -- by then the servant was no longer in service -- are each
+    a hard stop (H3). A missing date is not a defect here: the readers report that separately.
+    """
+    out: list[str] = []
+    if date_of_birth and date_of_death and date_of_death <= date_of_birth:
+        out.append(f"the date of death ({date_of_death.isoformat()}) is not after the date of birth ({date_of_birth.isoformat()})")
+    if date_of_first_entry and date_of_death and date_of_first_entry >= date_of_death:
+        out.append(f"the date of first entry ({date_of_first_entry.isoformat()}) is not before the date of death ({date_of_death.isoformat()})")
+    if date_of_birth and date_of_first_entry:
+        if date_of_first_entry <= date_of_birth:
+            out.append(f"the date of first entry ({date_of_first_entry.isoformat()}) is not after the date of birth ({date_of_birth.isoformat()})")
+        elif date_of_first_entry < _add_years(date_of_birth, MIN_ENTRY_AGE_YEARS):
+            out.append(f"the servant would have entered service before the age of {MIN_ENTRY_AGE_YEARS} "
+                       f"(born {date_of_birth.isoformat()}, entered {date_of_first_entry.isoformat()})")
+    if date_of_birth and date_of_death:
+        try:
+            notional = superannuation_date(date_of_birth, pack)
+        except Exception:                                    # noqa: BLE001 -- a pack without the age says nothing here
+            notional = None
+        if notional is not None and date_of_death > notional:
+            out.append(f"the death ({date_of_death.isoformat()}) falls after the notional superannuation date "
+                       f"({notional.isoformat()}): a servant retired by then did not die in service")
+    return out
+
+
 def determine_family_pension_death_in_service(
     case: DeathInServiceCase,
     pack: RulePack,
@@ -156,7 +197,14 @@ def determine_family_pension_death_in_service(
     superannuation date, and the family pension commences the day after. Qualifying service
     therefore runs to that notional date, not to the date of death -- which on the golden
     case is the difference between ~28 years and the 30-year cap.
+
+    Refuses outright (``ImpossibleDates``) where the form's dates contradict each other
+    (business decision H3, 7 Oct 2026): nothing is computed on a date that cannot be true.
     """
+    defects = death_in_service_date_defects(case.date_of_birth, case.date_of_first_entry, case.date_of_death, pack)
+    if defects:
+        raise ImpossibleDates("the dates on Form D-I cannot all be true: " + "; ".join(defects)
+                              + ". Nothing was computed; the department corrects the form (H3).")
     steps: list[Step] = []
     ambiguities: list[Ambiguity] = []
     engaged: list[str] = []
