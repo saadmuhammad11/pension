@@ -35,14 +35,18 @@ commits behind the branch head.
 account was disabled on the trial box through the administrator's API (audit row `USER_DISABLE`).
 
 **Business decisions, 7 Oct 2026 (afternoon).** Every pension-rules item is decided (`docs/pension-rules-decisions.md`).
-Scope: this release does no pension calculations, so M3, H4, H5, H7 and N10 are **closed as out of scope**. The
-remaining decided items (scope, M1, H1, H2, H3, H6, H8, C1, G1, G6) are being implemented one commit each, suites
-green after each; their rows read DECIDED — IN PROGRESS until the commit lands.
+Scope: this release does no pension calculations, so M3, H4, H5, H7 and N10 are **closed as out of scope**. The decided
+items were implemented one commit each, the three suites green on a bare snapshot of every commit: scope `1630ccf`,
+M1 `17f14fb`, H1 `4af79ea`, H2 `b0843a6`, H3 `d74e583`, H6 `a1cb731`, H8 `e74d21c`, C1 `73e003d`, G6 `4406422`,
+G1 `ebc4c12`. One item carries a condition: H6's list of eligible relations is a **draft for the rules owner to confirm**
+(decision sheet, Appendix B). GP Fund computes no payable amount (its calculated figures are advance limits, outstanding
+advances, challan variances and a death-claim expectation, all shown as checks); they were left unchanged pending the
+user's word.
 
-**Totals.** Earlier audit (57 items): 42 fixed, 1 partly fixed, 4 closed out of scope, 9 decided and in progress,
-1 deploy step. New items (18): 12 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 2 not fixed,
-2 deploy steps. **Still left: 16 rows** — 9 decided and in progress, 1 operations decision, 2 not fixed (N6, N11),
-1 partly fixed (M7), 3 deploy steps (N1, D2, N19).
+**Totals.** Earlier audit (57 items): 51 fixed, 1 partly fixed, 4 closed out of scope, 1 deploy step. New items (18):
+12 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 2 not fixed, 2 deploy steps.
+**Still left: 7 rows** — 1 operations decision (N14), 2 not fixed (N6, N11), 1 partly fixed (M7), 3 deploy steps
+(N1, D2, N19); plus the H6 draft list to confirm.
 
 ## Real claimant data (M8 / N2 / N4 / N6)
 
@@ -71,7 +75,7 @@ green after each; their rows read DECIDED — IN PROGRESS until the commit lands
 
 | # | Sev | Item | Status | Evidence / what remains |
 |---|---|---|---|---|
-| M1 | Critical | Auto-approval ignores the engine's verdict | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (sheet item 1, C): no automatic approval at all; every case needs a human decision. Automatic return of a case with missing documents stays |
+| M1 | Critical | Auto-approval ignores the engine's verdict | **FIXED** (7 Oct 2026, decision C) | `17f14fb`. No case is approved by the system: a clean verification, the officer's last clearance (also carried clearances on a resubmission) and a passed GP Fund examination all leave the case UNDER_REVIEW; the AG approves by hand with a remark. Automatic return for missing documents stays. `tests/test_no_automatic_approval.py` |
 | M2 | Critical | `CHANGE_ME`/short JWT secret accepted | **FIXED** | `2280c44`. `tests/test_production_hardening.py` F11 (4 tests, including the real process exiting with code 1) |
 | M3 | Critical | Qualifying service loses a year at 6 months | **CLOSED — out of scope** (7 Oct 2026) | No pension or qualifying service is computed or shown in this release (scope decision). Decision sheet item 2 stays for the calculation release |
 | M4 | Critical | Every GP Fund scan read crashed (NameError) | **FIXED** | `b519e24`. `GP/backend/tests/test_scan_read_e2e.py` (failed before, passes after). Live since the 6 Oct 16:28 restart (the fix predates it) |
@@ -79,14 +83,14 @@ green after each; their rows read DECIDED — IN PROGRESS until the commit lands
 | M6 | Critical | LibreOffice fetches addresses / reads local files | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` (live listener receives no requests). Content checks; no sandbox is possible on this box |
 | M7 | Critical | Model servers open to the network, no key, run from another developer's folder | **PARTLY FIXED** (stop-gap live) | Files fixed in `957fcfb`; tests `tests/test_model_endpoints.py` and `GP/backend/tests/test_model_key.py`. **Live, re-checked 7 Oct from Spark-1:** 8011/8012/8093 time out, 5184 answers, so the nftables rule from `deploy/lock-model-ports.sh` is in force. `pension-model-ports.service` is enabled but shows `inactive`: the rule was applied by hand, the unit never started; it re-applies at boot. The three vLLM processes still run from `~/Desktop/Pension-AG/infra`, on `0.0.0.0`, with no key; `/etc/pension/models.env` does not exist yet. The lasting fix (`--host 127.0.0.1` plus the key in `infra/*.service`) is a deploy step (checklist §8.1). (Later report item 4.) |
 | M8 | Critical | Real CNICs and names in code and history | **FIXED** (6 Oct 2026) | Code: `f329438`, plus `deploy/check-release-pii.py` (passes on every commit and on every blob in the local object store). History rewritten; GitHub recreated clean, `63185d3` no longer served (N2). Local copies shredded (N4). Remaining copies: the demos (N6) and the session transcripts (N11) |
-| H1 | High | Two reads of a page disagree, figures used anyway | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 3, A): no figure from a page whose two reads disagree; a finding for human review |
-| H2 | High | Pay lines from several documents summed; §8.4 check never called | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 4, B): the LPC is the source of truth for pay components; a differing amount elsewhere is a finding; never summed |
-| H3 | High | Form D-I dates not cross-checked; no 10-year minimum | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 5, B): impossible dates are a hard stop; service under 10 years is a finding for the reviewer |
+| H1 | High | Two reads of a page disagree, figures used anyway | **FIXED** (7 Oct 2026, decision A) | `4af79ea`. A disagreeing double read (figures or dates) empties the page's figures and blanks the disputed dates; the report raises `EXTRACT-DISAGREE` (HIGH) naming the page and what differed. `tests/test_disagreeing_reads_stop.py` |
+| H2 | High | Pay lines from several documents summed; §8.4 check never called | **FIXED** (7 Oct 2026, decision B) | `b0843a6`. One document's lines only (LPC, else the prescribed form, else the salary statement), never merged; a component another document prints differently from the LPC is a `CONTRA-MONEY` finding (HIGH), no LPC pay line read is MEDIUM. `tests/test_lpc_is_the_source_of_truth.py` |
+| H3 | High | Form D-I dates not cross-checked; no 10-year minimum | **FIXED** (7 Oct 2026, decision B) | `d74e583`. Impossible dates refuse the engine (`ImpossibleDates`) and raise `CONTRA-DATE` (HIGH); service from entry to death under the pack's 10 years raises `SERVICE-SHORT` (MEDIUM) for the reviewer. `tests/test_form_d_i_dates_hard_stop.py` |
 | H4 | High | Voluntary retirement at 59 paid as superannuation | **CLOSED — out of scope** (7 Oct 2026) | No pension computed in this release. Sheet item 6 |
 | H5 | High | Re-grant may apply 75% twice | **CLOSED — out of scope** (7 Oct 2026) | No re-grant amount computed in this release. Sheet item 7 |
-| H6 | High | Family relations misread; no eligibility checks | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 8, B): fixed list of eligible relations with the proof each needs (draft in the sheet, Appendix B, for the rules owner to confirm); "Wife d/o" misread fixed |
+| H6 | High | Family relations misread; no eligibility checks | **FIXED** (7 Oct 2026, decision B; **draft list awaiting the rules owner**) | `a1cb731`. `rules/relations.py`: the fixed list with the proof each relation needs; "Wife d/o" is the wife; `RELATION-INELIGIBLE` (HIGH) off the list or a condition the FRC contradicts, `RELATIONSHIP-UNPROVED` (MEDIUM) for missing proof. The draft table is Appendix B of the decision sheet, to be confirmed row by row. `tests/test_eligible_relations.py` |
 | H7 | High | Zero pay base gives a Rs 0 pension | **CLOSED — out of scope** (7 Oct 2026) | No pay base or pension computed in this release. Sheet item 9 |
-| H8 | High | Waivers tied to finding numbers that change | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct (item 10, C): a waiver is tied to rule id + document + field + value and lapses when that finding changes or disappears |
+| H8 | High | Waivers tied to finding numbers that change | **FIXED** (7 Oct 2026, decision C) | `e74d21c`. Every finding carries a fingerprint (rule, documents, title and finding text); a disposition follows it, lapses when the finding changes or disappears (listed in the gate and on screen), and a resubmission carries only the identical finding's waiver. `tests/test_waivers_follow_the_finding.py` |
 | H9 | High | Re-verify race (old run's result applied) | **FIXED** | `ef18463`. `tests/test_reverify_race.py` (fails without the fix) |
 | H10 | High | Waivers and approvals not on the audit trail | **FIXED** | `fab85f4`. `tests/test_clearance_audit.py`. Waivers carried into a resubmission are a policy question (item 11) |
 | H11 | High | GP Fund actions on rejected or returned cases | **FIXED** | `a861ade`. `tests/test_gpf_actions_follow_status.py` |
@@ -108,15 +112,15 @@ green after each; their rows read DECIDED — IN PROGRESS until the commit lands
 | R6 | Medium | Failed migration doesn't stop the server | **FIXED** | `2c1f512`. `tests/test_startup_failure.py` |
 | R7 | Medium | No limit on runs reaching the GPU | **FIXED** (6 Oct 2026) | Cap in `6d6679a` (`tests/test_run_concurrency.py`). Remainder in `631e29f`: a run past `PENSION_RUN_DEADLINE_MIN` (90) is reported failed by the reconciler and stops itself at its next stage boundary; finished runs leave the in-memory registry after `PENSION_RUN_REGISTRY_KEEP_MIN` (60) minutes and are rebuilt from disk on demand. `tests/test_run_deadline_and_registry.py` |
 | R8 | Medium | No disk quota or cleanup of old runs | **FIXED** (6 Oct 2026) | `fc4e96c`. Uploads and verifications refused (507) below `PENSION_MIN_FREE_GB` (5) free, before the case is moved; the reconciler sweeps run folders with no report and no case after `PENSION_RUN_ORPHAN_DAYS` (7), with their uploads, and stale upload staging files. A run a case refers to is never touched. `tests/test_disk_quota_and_cleanup.py` |
-| C1 | Medium | No maker-checker; shared `ag.reviewer` account | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct: named logins for every reviewer, `ag.reviewer` retired; the user who submits a case cannot approve it, administrators included |
+| C1 | Medium | No maker-checker; shared `ag.reviewer` account | **FIXED** (7 Oct 2026) | `73e003d`. Named logins: the shared account is renamed in place to `syed.haider`, further reviewers and the Deputy AG (new role `AG_DAG`, migration 0010) are created by name (`python3 -m api.db add-reviewer`), production refuses to start with a shared login active (F12). Maker-checker: the account that created or submitted a case cannot approve it, by decision or override. `tests/test_named_logins_and_maker_checker.py`. **Trial box:** the live `ag.reviewer` is renamed by the next seed (deploy) |
 | C2 | Medium | Admin override's audit row written outside its transaction | **FIXED** (6 Oct 2026) | `c5e88b9`. `transition()` takes a callback run inside its transaction; the override's audit row is written there, so the move and the row happen together or not at all. `tests/test_override_audit_atomic.py` |
 | C3 | Medium | Old `/api` recompute can change the report behind an approved case | **FIXED** (6 Oct 2026) | `a878c73`. Refused (409) when the run's case is approved or rejected, or when the case has moved on to a newer run; runs with no case unaffected. `tests/test_old_recompute_guard.py` |
-| G1 | Medium | Accounts Officer clears a hard stop with "correct" | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct: in GP Fund only the DAG clears a hard stop, and written grounds are mandatory |
+| G1 | Medium | Accounts Officer clears a hard stop with "correct" | **FIXED** (7 Oct 2026) | `ebc4c12`. Clearing a hard stop (waive or correct) needs the DAG; every disposition needs written grounds of 15+ characters, a waiver its authority; both screens ask. `GP/backend/tests/test_service.py`, `tests/test_gpf_hard_stop_is_the_dags.py` |
 | G2 | Medium | GP Fund waivers stay attached after the amount changes | **FIXED** (6 Oct 2026) | `2e6ab7c`. A disposition records what it was given against; a re-run that changes the observation marks it stale, keeps it for the record, and the item counts as open until an officer disposes of the new finding. Old dispositions (no fingerprint) are not disturbed. `GP/backend/tests/test_waiver_goes_stale_on_change.py` |
 | G3 | Medium | SAP trailing minus read as positive | **FIXED** (6 Oct 2026) | `7e3ec96`. `num("1,234.00-")` is −1,234; `"1,234/-"` stays positive. `GP/backend/tests/test_format_num.py` |
 | G4 | Medium | Unread advance balance means "no advance outstanding" | **FIXED** (6 Oct 2026) | `4d8e721`. An unread balance is a verification task with the SAP cure; zero still passes. `GP/gpfund/tests/test_unread_advance_balance.py` |
 | G5 | Medium | Signature-authority register lost on restart | **FIXED** (6 Oct 2026) | `69eeefb`. Every change written to `GPF_DATA_DIR/doa.json` (whole file, renamed into place) and loaded at start. `GP/backend/tests/test_doa_register_persists.py` |
-| G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **DECIDED — IN PROGRESS** (7 Oct 2026) | Decided 7 Oct: the IT administrator manages users only, no case action in pension or GP Fund; every action logged under the real user's name |
+| G6 | Medium | One made-up officer per role; IT admin gets DAG powers | **FIXED** (7 Oct 2026) | `4406422`. The administrator holds no case capability or route in pension or GP Fund (403 everywhere), manages users and reads; the override and the DAG band are the Deputy AG's. The signed-in officer's name travels into the GP Fund module (`X-GPF-User`), whose audit, history and dispositions now carry the person. `tests/test_admin_manages_users_only.py` |
 | G7 | Medium | No locking on GP Fund case state | **FIXED** (6 Oct 2026) | `6ecb0b3`. One re-entrant lock per case around every mutating service method; other cases not held up. `GP/backend/tests/test_case_lock.py` |
 | D1 | Medium | Release files owned by uid 1000 | **FIXED** (6 Oct 2026) | `4054f55`. `tar --owner=0 --group=0 --numeric-owner`; the test packs a stand-in stage with the script's own flags and reads the entries back. `tests/test_release_archive_ownership.py` |
 | D2 | Medium | PyJWT 2.13 advisories | **DEPLOY STEP** (done on the trial box) | Pinned to 2.15.0 in `8011f41`; verified 7 Oct: `/home/tmc/vllm_env` has 2.15.0 and the services were restarted on it 6 Oct 16:28. The production server gets it from the checklist (§8.1; its stale "still has 2.13.0" note corrected in `8363a51`). (Later report item 7.) |
@@ -149,8 +153,7 @@ green after each; their rows read DECIDED — IN PROGRESS until the commit lands
 
 ## Action items
 
-1. **Pension-rules owner:** settle the decision sheet (`docs/pension-rules-decisions.md`, items 1–11): M1, M3, H1–H8, C1, G1, G6, N10. M1 and M3 are critical and block go-live.
-2. **Claude:** implement the decisions once taken, full suites after each commit.
-3. **Deploy (user):** push and merge the branch, rebuild the portal bundle, build the release (N1); on the production server install the model units with `--host 127.0.0.1` and the key in `/etc/pension/models.env` (M7), PyJWT 2.15.0 (D2), a fresh database or reset passwords with the trial and test accounts removed and no `credentials.csv` (N19). Restart only with no run in progress.
-4. **Operations (user):** stop the HESK containers or bind 3306/3307/5672/15672 to 127.0.0.1 (N14); stop the model servers run from `~/Desktop/Pension-AG` once the keyed units are in; delete `tests/fixtures/*.png` (N12 note).
-5. After go-live: purge the session transcripts (N11); delete or keep the demos team-only (N6).
+1. **Pension-rules owner:** confirm the draft list of eligible family-pension relations and their proofs (decision sheet, Appendix B); until then the code applies the draft.
+2. **Deploy (user):** push and merge the branch, rebuild the portal bundle, build the release (N1); on the production server install the model units with `--host 127.0.0.1` and the key in `/etc/pension/models.env` (M7), PyJWT 2.15.0 (D2), run the migrations and seed (renames the shared reviewer login; create the Deputy AG with `python3 -m api.db add-reviewer <username> "<name>" --dag`), a fresh database or reset passwords with the trial and test accounts removed and no `credentials.csv` (N19). Restart only with no run in progress.
+3. **Operations (user):** stop the HESK containers or bind 3306/3307/5672/15672 to 127.0.0.1 (N14); stop the model servers run from `~/Desktop/Pension-AG` once the keyed units are in; delete `tests/fixtures/*.png` (N12 note).
+4. After go-live: purge the session transcripts (N11); delete or keep the demos team-only (N6).
