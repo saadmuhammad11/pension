@@ -39,9 +39,10 @@ Scope: this release does no pension calculations, so M3, H4, H5, H7 and N10 are 
 items were implemented one commit each, the three suites green on a bare snapshot of every commit: scope `1630ccf`,
 M1 `17f14fb`, H1 `4af79ea`, H2 `b0843a6`, H3 `d74e583`, H6 `a1cb731`, H8 `e74d21c`, C1 `73e003d`, G6 `4406422`,
 G1 `ebc4c12`. One item carries a condition: H6's list of eligible relations is a **draft for the rules owner to confirm**
-(decision sheet, Appendix B). GP Fund computes no payable amount (its calculated figures are advance limits, outstanding
-advances, challan variances and a death-claim expectation, all shown as checks); they were left unchanged pending the
-user's word.
+(decision sheet, Appendix B). **Evening decisions (E1–E3, recorded on the sheet):** automatic return for missing
+documents stays; GP Fund's check figures (advance limits, outstanding advances, challan variances, the death-claim
+expectation) stay unchanged, as the module computes no payable amount; the H6 list goes live as advisory only
+(`9f941ce`), pending the owner's confirmation of Appendix B and its numbered assumptions (`64419e4`).
 
 **Totals.** Earlier audit (57 items): 51 fixed, 1 partly fixed, 4 closed out of scope, 1 deploy step. New items (18):
 12 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 1 awaiting the rules owner (N20), 2 not fixed, 2 deploy steps.

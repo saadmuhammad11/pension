@@ -346,6 +346,16 @@ These were in the audit's High list, are technical, and are fixed in code on bra
 
 **Related, also policy — decided 7 Oct 2026.** Named logins for every reviewer; the shared `ag.reviewer` account is retired. Maker-checker: the user who submits a case cannot approve it, administrators included. The IT administrator manages users only and takes no case action in pension or GP Fund; every action is logged under the real user's name, never a role placeholder. In GP Fund only the DAG may clear a hard stop, and written grounds are mandatory.
 
+## Decisions of 7 October 2026 (evening), recorded
+
+Three further decisions by the rules owner, taken after the day's implementation:
+
+| # | Decision | Effect in the code |
+|---|---|---|
+| E1 | **Automatic return stays.** A case whose required documents are missing or defective is still returned to the department automatically with the list; only automatic *approval* was removed (item 1). | `api/case_runs.py outcome()`: `AUTO_RETURN` kept, `AUTO_APPROVE` gone (`17f14fb`). |
+| E2 | **GP Fund's check figures stay.** The module computes no payable amount; the figures it does compute (advance limit and excess, outstanding earlier advance, challan variance, balance-transfer sum, death-claim expected amount) are check results and remain as they are. | No change to `GP/`; the scope decision applies to pension amounts. |
+| E3 | **H6 relations list goes live as advisory only.** The draft list is applied, its two findings are MEDIUM checks for the reviewer and never block a case, until the owner confirms Appendix B and its assumptions. | `9f941ce`; Appendix B below. |
+
 ## Appendix B: eligible family-pension relations — **Draft, pending rules-owner confirmation**
 
 **Status: DRAFT, pending rules-owner confirmation.** The list the code applies since 7 Oct 2026 (`rules/relations.py`),
