@@ -152,15 +152,36 @@ def gpf_session(request: Request, user: User = Depends(require_roles("AG_REVIEWE
 
 
 @router.post("/auth/logout")
-def logout() -> Any:
-    """Sign-out's server half: clear the GP Fund frame cookie in this browser.
+def logout(request: Request, authorization: str | None = Header(default=None),
+           conn: sqlite3.Connection = Depends(get_conn)) -> Any:
+    """Sign-out's server half: end the session token, and clear the GP Fund frame cookie.
 
-    The portal's own session is a token in the tab and ends when the tab drops it, but the frame
-    cookie is HttpOnly, path /gpf and lives two hours: on a shared office PC the next person could
-    open /gpf/ as the officer who had just signed out or been timed out (audit 6 Oct 2026). Needs
-    no session, because the idle timeout and a refused token call it after the session is gone.
+    The token lives in the tab, but dropping it there did not end it: a copy taken from the tab
+    (or the frame cookie's token) stayed valid until its 12-hour expiry (audit 6 Oct 2026, later
+    report 6b). Signing out now bumps the officer's ``token_version``, which every request checks,
+    so the token -- and the frame token, which carries the same version -- is refused from here on.
+    That ends this officer's session on every device, as a password reset does; an officer signs
+    in on one PC at a time, so that is the right scope.
+
+    The frame cookie is HttpOnly, path /gpf and lives two hours: on a shared office PC the next
+    person could open /gpf/ as the officer who had just signed out or been timed out. Needs no
+    session, because the idle timeout and a refused token call it after the session is gone; an
+    absent, expired or already-ended token is not an error here.
     """
     from fastapi.responses import JSONResponse
+    from api.auth import _bearer, user_for_token
+    token = _bearer(authorization)
+    if token:
+        try:
+            user = user_for_token(token, conn)
+        except AuthError:
+            user = None                      # nothing left to end
+        if user is not None:
+            with db.transaction(conn):
+                conn.execute("UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?",
+                             (db.now(), user.id))
+                workflow.audit(conn, actor=user, action="SIGN_OUT", entity_type="user", entity_id=user.id,
+                               before=None, after=None, ip=_client_address(request))
     response = JSONResponse({"ok": True})
     response.delete_cookie(GPF_COOKIE, path="/gpf", httponly=True, samesite="strict")
     return response

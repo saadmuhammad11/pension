@@ -51,9 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Whatever ended the session, the next sign-in opens the main page (29 Sep 2026); the
     // address is forgotten so the next person at this screen does not land on a case.
     void comeBack; takeNext()
-    // The GP Fund frame's cookie is HttpOnly, so only the server can clear it; without this the
-    // next person at a shared PC could open /gpf/ as this officer for two hours. Best effort.
-    void fetch('/api/v2/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined)
+    // The server ends the token (a copy would otherwise stay valid for 12 hours) and clears the GP
+    // Fund frame's cookie, which is HttpOnly; without this the next person at a shared PC could open
+    // /gpf/ as this officer for two hours. The token goes along so the server knows whose session
+    // to end; read before it is dropped below. Best effort.
+    const ending = getToken()
+    void fetch('/api/v2/auth/logout', { method: 'POST', credentials: 'same-origin',
+                                        headers: ending ? { Authorization: `Bearer ${ending}` } : {} }).catch(() => undefined)
     setToken(null); setUser(null); setCan(null); setWarning(null)
     stopInventoryPolling()                      // no more 3-second asks, and this officer's rows are forgotten
 
