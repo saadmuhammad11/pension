@@ -1205,12 +1205,15 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
                                    printed_average=printed_average,
                                    printed_base_note=printed_base_note)
         except Exception as exc:                         # noqa: BLE001
-            self_pension_error = str(exc)
+            # Without the engine's figures (scope decision of 7 Oct 2026): a refusal quotes what it
+            # summed, and the text reaches the screen and the department's letter as a finding.
+            from rules.scope import strip_money
+            self_pension_error = strip_money(str(exc))
             # A refusal that says the papers contradict each other is a defect in the
             # department's paperwork, and belongs in the shortcoming letter -- not only in
             # the determination panel. The engine names the contradiction; this carries it
             # to the officer as a finding with the same weight as any other HIGH.
-            self_pension_defect = str(exc)
+            self_pension_defect = self_pension_error
 
     # What the pipeline said when it declined to determine, quoted rather than re-derived.
     # BRAIN §15.2: "Say so, precisely, and route to a human... prefer the visible gap every

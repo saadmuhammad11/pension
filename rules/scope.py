@@ -16,21 +16,39 @@ calculations, and stay.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 #: The release scope. Flipping this does nothing by itself; it names the decision in one place
 #: and lets a later release that computes find every site that honours it.
 CALCULATIONS_IN_SCOPE = False
 
-#: Determination step fields that are a computed figure or its working.
-_STEP_COMPUTED = ("amount", "computation_shown", "unit")
+#: Determination step fields that are a computed figure or its working. ``exact_before_rounding``
+#: is the figure to the paisa (audit of 7 Oct 2026: it survived the first scrub).
+_STEP_COMPUTED = ("amount", "computation_shown", "unit", "exact_before_rounding", "rounding")
 #: Emoluments fields the engine computes (the components themselves are read off documents).
 _EMOLUMENTS_COMPUTED = ("reckonable_total", "excluded_total", "reconciled")
 #: The pension-rule classification of a pay line (reckonable for pension or not).
 _COMPONENT_COMPUTED = ("reckonable",)
 #: Determination inputs that are themselves sums the engine made (the rest are dates, grades and
 #: figures read off the documents or keyed by the officer).
-_INPUTS_COMPUTED = ("reckonable_emoluments", "excluded_allowances")
+_INPUTS_COMPUTED = ("reckonable_emoluments", "excluded_allowances", "pension_base")
+
+#: Money in prose: "Rs. 192,030", "Rs 750", a comma-grouped figure, or a bare run of five digits or
+#: more (a year is four). Engine notes and refusal texts carry sums in words; this takes them out
+#: where the text itself must be kept (which rule ran, why it refused).
+_MONEY = re.compile(r"Rs\.?\s*[\d,]+(?:\.\d+)?"                                  # Rs. 90,280 / Rs 750.50
+                    r"|(?<![\d.])\d{1,3}(?:,\d{3})+(?:\.\d+)?(?!\d)(?!\.\d)"       # 161,765 / 1,234.50
+                    r"|(?<![\d.\-/])\d{5,}(?:\.\d+)?(?![\d\-/])(?!\.\d)")          # 161765 (a bare run; a year is four digits)
+WITHHELD = "[amount withheld]"
+
+
+def strip_money(text: str | None) -> str | None:
+    """The text with every rupee figure replaced by ``[amount withheld]``. Dates, rule ids and
+    page numbers survive; a figure the engine summed does not."""
+    if not text:
+        return text
+    return _MONEY.sub(WITHHELD, str(text))
 
 
 def scrub_determination(det: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -39,7 +57,9 @@ def scrub_determination(det: dict[str, Any] | None) -> dict[str, Any] | None:
     if not det:
         return det
     out = dict(det)
-    out["steps"] = [{k: v for k, v in s.items() if k not in _STEP_COMPUTED} for s in det.get("steps", [])]
+    out["steps"] = [{**{k: v for k, v in s.items() if k not in _STEP_COMPUTED},
+                     **({"note": strip_money(s["note"])} if s.get("note") else {})}
+                    for s in det.get("steps", [])]
     out["ambiguities"] = [
         {**{k: v for k, v in a.items() if k not in ("difference",)},
          "readings": [{k: v for k, v in r.items() if k not in ("amount", "computation_shown")}
@@ -47,6 +67,7 @@ def scrub_determination(det: dict[str, Any] | None) -> dict[str, Any] | None:
         for a in det.get("ambiguities", [])
     ]
     out["inputs"] = {k: v for k, v in (det.get("inputs") or {}).items() if k not in _INPUTS_COMPUTED}
+    out["caveats"] = [strip_money(c) for c in det.get("caveats", [])]
     out["calculations"] = "not in this release"
     return out
 
@@ -72,6 +93,12 @@ def scrub_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
         out["determination"] = scrub_determination(out.get("determination"))
     if "emoluments" in out:
         out["emoluments"] = scrub_emoluments(out.get("emoluments"))
+    # The engine's refusal and the stage's gap quote its arithmetic ("components sum to Rs ...").
+    for key in ("self_pension_error",):
+        if out.get(key):
+            out[key] = strip_money(out[key])
+    if isinstance(out.get("determination_gap"), dict):
+        out["determination_gap"] = {k: strip_money(v) if isinstance(v, str) else v for k, v in out["determination_gap"].items()}
     out["calculations_in_scope"] = CALCULATIONS_IN_SCOPE
     return out
 
@@ -95,6 +122,14 @@ def has_computed_amount(report: dict[str, Any] | None) -> list[str]:
     for k in _INPUTS_COMPUTED:
         if k in (det.get("inputs") or {}):
             found.append(f"determination.inputs.{k}")
+    for i, s in enumerate(det.get("steps", [])):
+        if s.get("note") and _MONEY.search(str(s["note"])):
+            found.append(f"determination.steps[{i}].note(money)")
+    for i, c in enumerate(det.get("caveats", [])):
+        if _MONEY.search(str(c)):
+            found.append(f"determination.caveats[{i}](money)")
+    if (report or {}).get("self_pension_error") and _MONEY.search(str(report["self_pension_error"])):
+        found.append("self_pension_error(money)")
     emol = (report or {}).get("emoluments") or {}
     for k in _EMOLUMENTS_COMPUTED:
         if k in emol:

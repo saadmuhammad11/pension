@@ -29,12 +29,15 @@ DET = {
     "steps": [
         {"rule_id": "EMOL-BASE", "description": "Reckonable emoluments", "computation_shown": "178,440 + 13,590", "amount": 192030, "unit": "Rs./month", "note": None},
         {"rule_id": "CALC-01", "description": "Gross pension", "computation_shown": "192,030 x 70%", "amount": 134421, "unit": "Rs./month", "note": None},
+        {"rule_id": "FAM-IS-03", "description": "Family pension", "computation_shown": "134,421 x 75%", "amount": 100816, "unit": "Rs./month",
+         "exact_before_rounding": "100815.75", "rounding": "FMT-01 half-up", "note": "Reconciled. Excluded (non-reckonable) allowances: 161765."},
         {"rule_id": "QS-10", "description": "Retirement against birth", "computation_shown": "60th birthday 2026-06-30", "amount": None, "unit": "date", "note": "agrees"},
     ],
     "ambiguities": [{"rule_id": "FAM-IS-05", "blocking_id": "BLOCKING-06", "question": "Gratuity reading?", "difference": "Rs 4,955,525 apart",
                      "resolve_with": "AG Punjab", "readings": [{"label": "literal", "amount": 33605, "computation_shown": "25% x 134,421", "basis": "the words"},
                                                                {"label": "capitalised", "amount": 4989130, "computation_shown": "x table", "basis": "the table"}]}],
-    "caveats": ["AI extracted the inputs."], "inputs": {"date_of_birth": "1966-06-30", "bps": 19, "reckonable_emoluments": 192030, "excluded_allowances": 0},
+    "caveats": ["AI extracted the inputs.", "Reckonable components sum to Rs. 90,280 but the form prints Rs. 89,530 (p.41)."],
+    "inputs": {"date_of_birth": "1966-06-30", "bps": 19, "reckonable_emoluments": 192030, "excluded_allowances": 0, "pension_base": 192030},
 }
 EMOL = {"reckonable_total": 192030, "excluded_total": 161765, "printed_total": 192030, "reconciled": True,
         "components": [{"printed_label": "Basic Pay", "component": "basic_pay", "amount": 178440, "reckonable": True, "page": 41},
@@ -47,13 +50,16 @@ class Scrubbing(unittest.TestCase):
 
     def test_steps_keep_the_check_and_lose_the_figure(self):
         d = scrub_determination(DET)
-        self.assertEqual([s["rule_id"] for s in d["steps"]], ["EMOL-BASE", "CALC-01", "QS-10"])
+        self.assertEqual([s["rule_id"] for s in d["steps"]], ["EMOL-BASE", "CALC-01", "FAM-IS-03", "QS-10"])
         for s in d["steps"]:
-            self.assertNotIn("amount", s); self.assertNotIn("computation_shown", s); self.assertNotIn("unit", s)
-        self.assertEqual(d["steps"][2]["note"], "agrees")
+            for k in ("amount", "computation_shown", "unit", "exact_before_rounding", "rounding"):
+                self.assertNotIn(k, s, (s["rule_id"], k))
+        self.assertEqual(d["steps"][3]["note"], "agrees")
+        self.assertEqual(d["steps"][2]["note"], "Reconciled. Excluded (non-reckonable) allowances: [amount withheld].")
+        self.assertEqual(d["caveats"][1], "Reckonable components sum to [amount withheld] but the form prints [amount withheld] (p.41).")
         self.assertEqual(d["unverified_rules_engaged"], ["BLOCKING-07"])
         self.assertTrue(d["provisional"])
-        self.assertEqual(d["inputs"], {"date_of_birth": "1966-06-30", "bps": 19})   # the two sums are gone
+        self.assertEqual(d["inputs"], {"date_of_birth": "1966-06-30", "bps": 19})   # the sums and the base are gone
         self.assertEqual(d["calculations"], "not in this release")
 
     def test_ambiguities_keep_the_question_and_lose_the_readings_figures(self):
@@ -82,10 +88,13 @@ class Scrubbing(unittest.TestCase):
             "determination.steps[0].amount", "determination.steps[0].computation_shown", "determination.steps[0].unit",
             "determination.steps[1].amount", "determination.steps[1].computation_shown", "determination.steps[1].unit",
             "determination.steps[2].amount", "determination.steps[2].computation_shown", "determination.steps[2].unit",
+            "determination.steps[2].exact_before_rounding", "determination.steps[2].rounding",
+            "determination.steps[3].amount", "determination.steps[3].computation_shown", "determination.steps[3].unit",
             "determination.ambiguities[0].difference",
             "determination.ambiguities[0].readings[0].amount", "determination.ambiguities[0].readings[0].computation_shown",
             "determination.ambiguities[0].readings[1].amount", "determination.ambiguities[0].readings[1].computation_shown",
-            "determination.inputs.reckonable_emoluments", "determination.inputs.excluded_allowances",
+            "determination.inputs.reckonable_emoluments", "determination.inputs.excluded_allowances", "determination.inputs.pension_base",
+            "determination.steps[2].note(money)", "determination.caveats[1](money)",
             "emoluments.reckonable_total", "emoluments.excluded_total", "emoluments.reconciled",
             "emoluments.components[0].reckonable", "emoluments.components[1].reckonable"])
         self.assertEqual(has_computed_amount(once), [])
@@ -105,6 +114,22 @@ class WhereItIsApplied(unittest.TestCase):
         self.assertEqual(has_computed_amount(served), [])
         self.assertFalse(served["calculations_in_scope"])
         self.assertEqual(served["determination"]["steps"][1]["rule_id"], "CALC-01")
+
+    def test_money_is_stripped_from_prose_but_dates_and_ids_survive(self):
+        from rules.scope import strip_money
+        self.assertEqual(strip_money("Reckonable components sum to Rs. 90,280 but the form prints Rs 89,530; 161765 excluded; 2026-02-18; QS-07; p.41; BS-19"),
+                         "Reckonable components sum to [amount withheld] but the form prints [amount withheld]; [amount withheld] excluded; 2026-02-18; QS-07; p.41; BS-19")
+        self.assertIsNone(strip_money(None))
+        rep = scrub_report({"self_pension_error": "refusing: components sum to Rs. 90,280", "determination_gap": {"determine": "no inputs for 192030"}})
+        self.assertEqual(rep["self_pension_error"], "refusing: components sum to [amount withheld]")
+        self.assertEqual(rep["determination_gap"]["determine"], "no inputs for [amount withheld]")
+
+    def test_the_reconciliation_finding_quotes_printed_figures_only(self):
+        src = (ROOT / "rules/flags.py").read_text()
+        self.assertNotIn("fmt(emol.reckonable_total)", src)
+        self.assertNotIn("fmt(abs(diff))", src)
+        runs = (ROOT / "api/runs.py").read_text()
+        self.assertIn('_record_gap(run, "determine", strip_money(str(exc)))', runs)
 
     def test_the_report_builder_and_every_serving_route_scrub(self):
         report_src = (ROOT / "pipeline/report.py").read_text()

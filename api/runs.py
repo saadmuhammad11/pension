@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from rules.scope import strip_money
+
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = ROOT / "artifacts"
 UPLOADS = ARTIFACTS / "uploads"
@@ -641,8 +643,8 @@ def execute(run: Run) -> None:
         except Exception as exc:                          # noqa: BLE001
             # A determination gap is a routing outcome, not a crash. BRAIN §15.2: the
             # degradation path is always flag, cite, escalate -- never guess.
-            run.emit("determine", f"routed to human — {exc}", level="warn")
-            _record_gap(run, "determine", str(exc))
+            run.emit("determine", f"routed to human — {strip_money(str(exc))}", level="warn")
+            _record_gap(run, "determine", strip_money(str(exc)))
 
         # The run's own start time, so a report rebuilt from these artefacts carries the
         # same determination timestamp it did the first time (BUILD §6.2 requirement 1).
@@ -698,7 +700,7 @@ def recompute(run: Run) -> dict:
                  f"{'PROVISIONAL' if d['provisional'] else 'checks complete'}")
     except Exception as exc:                              # noqa: BLE001
         run.emit("determine", f"routed to human — {exc}", level="warn")
-        _record_gap(run, "determine", str(exc))
+        _record_gap(run, "determine", strip_money(str(exc)))
     report = build_report(run.run_dir, variant=run.variant, annual_pay=run.annual_pay,
                           computed_at=computed_at,
                           commutation_percent=run.commutation_percent,

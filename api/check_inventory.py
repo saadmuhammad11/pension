@@ -66,8 +66,15 @@ def compare(get: Callable[[str], object], role: str) -> list[str]:
 def main(argv: list[str]) -> int:
     base = argv[argv.index("--base") + 1] if "--base" in argv else "http://127.0.0.1:5184"
 
+    # The accounts and password the check signs in with. The trial's "1234" is the default; in
+    # production (where it is refused) set PENSION_CHECK_PASSWORD, and PENSION_CHECK_USERS as
+    # "username:ROLE,username:ROLE" for a reviewer and the administrator (go-live runbook, step 17).
+    import os
+    password = os.environ.get("PENSION_CHECK_PASSWORD") or "1234"
+    users_spec = os.environ.get("PENSION_CHECK_USERS") or "syed.haider:AG_REVIEWER,admin:ADMIN"
+
     def login(user: str) -> str:
-        req = urllib.request.Request(f"{base}/api/v2/auth/login", data=json.dumps({"username": user, "password": "1234"}).encode(),
+        req = urllib.request.Request(f"{base}/api/v2/auth/login", data=json.dumps({"username": user, "password": password}).encode(),
                                      headers={"Content-Type": "application/json"})
         return json.load(urllib.request.urlopen(req, timeout=30))["token"]
 
@@ -75,8 +82,9 @@ def main(argv: list[str]) -> int:
         return lambda path: json.load(urllib.request.urlopen(urllib.request.Request(
             base + path, headers={"Authorization": f"Bearer {token}"}), timeout=60))
 
-    ag = getter(login("syed.haider"))
-    users = [("syed.haider", "AG_REVIEWER"), ("admin", "ADMIN")]
+    users = [tuple(part.split(":", 1)) for part in users_spec.split(",") if ":" in part]
+    reviewer = next((u for u, r in users if r in ("AG_REVIEWER", "AG_DAG")), users[0][0])
+    ag = getter(login(reviewer))
     from api.departments import DEPARTMENTS
     slug = {d.code: d.slug for d in DEPARTMENTS}
     for product in PRODUCTS:

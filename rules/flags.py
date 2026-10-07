@@ -1568,25 +1568,26 @@ def check_emoluments_reconciliation(record: CaseRecord, pack: RulePack) -> list[
     form = record.document("FORM_D_I") or record.document("FORM_B_I")
     contradicted = (Source(form.pages[0], form.type),) if form and form.pages else ()
 
-    summed = " + ".join(f"{c.printed_label} {fmt(c.amount)}" for c in emol.reckonable)
+    # Printed figures only (scope decision of 7 Oct 2026): the lines as printed and the form's own
+    # Total Pay. The engine's sum and the difference are never quoted; where the difference equals
+    # one printed line, that line is named.
+    printed = ", ".join(f"'{c.printed_label}' {fmt(c.amount)}" for c in emol.reckonable)
     finding = (
-        f"Reckonable pay lines sum to {fmt(emol.reckonable_total)} ({summed}) but the "
-        f"prescribed form prints Total Pay {fmt(emol.printed_total)}, a difference of "
-        f"{fmt(abs(diff))}."
+        f"The pay lines the pay record prints ({printed}) do not add up to the Total Pay the "
+        f"prescribed form prints ({fmt(emol.printed_total)})."
     )
     culprit = next((c for c in lines if c.amount == abs(diff)), None)
     if culprit is not None and diff > 0:
         finding += (
-            f" The difference equals the '{culprit.printed_label}' line"
-            f"{f' (p.{culprit.page})' if culprit.page else ''}, which the pay record prints "
-            f"and the form's total omits; {culprit.component.replace('_', ' ')} is "
-            f"reckonable under Note 2 of the form."
+            f" The form's total omits the '{culprit.printed_label}' line"
+            f"{f' (p.{culprit.page})' if culprit.page else ''} of {fmt(culprit.amount)}, which the pay "
+            f"record prints; {culprit.component.replace('_', ' ')} is reckonable under Note 2 of the form."
         )
     elif culprit is not None:
         finding += (
-            f" The difference equals the '{culprit.printed_label}' line"
-            f"{f' (p.{culprit.page})' if culprit.page else ''}, so the form's total appears "
-            f"to include a line the pay records do not carry."
+            f" The form's total appears to include the '{culprit.printed_label}' line"
+            f"{f' (p.{culprit.page})' if culprit.page else ''} of {fmt(culprit.amount)}, which the pay "
+            f"records do not carry."
         )
     else:
         finding += (
