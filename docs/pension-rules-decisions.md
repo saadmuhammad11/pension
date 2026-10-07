@@ -346,9 +346,13 @@ These were in the audit's High list, are technical, and are fixed in code on bra
 
 **Related, also policy — decided 7 Oct 2026.** Named logins for every reviewer; the shared `ag.reviewer` account is retired. Maker-checker: the user who submits a case cannot approve it, administrators included. The IT administrator manages users only and takes no case action in pension or GP Fund; every action is logged under the real user's name, never a role placeholder. In GP Fund only the DAG may clear a hard stop, and written grounds are mandatory.
 
-## Appendix B: eligible family-pension relations (draft for confirmation)
+## Appendix B: eligible family-pension relations — **Draft, pending rules-owner confirmation**
 
-The list the code applies since 7 Oct 2026 (`rules/relations.py`). A claim under a relation not in this table, or with a proof missing, raises a finding; no share is computed in this release. **For the pension rules owner to confirm, row by row, before it is treated as final.**
+**Status: DRAFT, pending rules-owner confirmation.** The list the code applies since 7 Oct 2026 (`rules/relations.py`),
+**as advisory only** (owner's decision of 7 Oct 2026): a claim under a relation not in this table, or with a proof
+missing, raises a MEDIUM check for the reviewer ("Verify relation eligibility …", "Proof of … not found") and never
+blocks a case; no share is computed in this release. **For the pension rules owner to confirm, row by row, before it
+is treated as final.**
 
 | Relation | Rule | Entitlement runs | Proof needed (documents the reader names) | To confirm |
 |---|---|---|---|---|

@@ -44,9 +44,9 @@ advances, challan variances and a death-claim expectation, all shown as checks);
 user's word.
 
 **Totals.** Earlier audit (57 items): 51 fixed, 1 partly fixed, 4 closed out of scope, 1 deploy step. New items (18):
-12 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 2 not fixed, 2 deploy steps.
-**Still left: 7 rows** — 1 operations decision (N14), 2 not fixed (N6, N11), 1 partly fixed (M7), 3 deploy steps
-(N1, D2, N19); plus the H6 draft list to confirm.
+12 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 1 awaiting the rules owner (N20), 2 not fixed, 2 deploy steps.
+**Still left: 8 rows** — 1 operations decision (N14), 1 rules-owner confirmation (N20, the H6 draft list),
+2 not fixed (N6, N11), 1 partly fixed (M7), 3 deploy steps (N1, D2, N19).
 
 ## Real claimant data (M8 / N2 / N4 / N6)
 
@@ -99,6 +99,7 @@ user's word.
 | N3 | High | **New:** HTML renamed `.doc`/`.rtf` and `.docx` linked images also made LibreOffice fetch | **FIXED** | `5dcd43b`. `tests/test_office_conversion.py` |
 | N13 | High | **New (later report 2):** in production, the first person to type `1234` takes the account | **FIXED** (6 Oct 2026) | `2cc3476`. In production a weak password signs nobody in (403 "trial password is no longer accepted"); the administrator's reset hands out a password the officer replaces at first sign-in. `tests/test_trial_password_refused_in_production.py` |
 | N19 | Medium | **New (7 Oct):** the live database is still the trial's accounts | **DEPLOY STEP** | 88 of 93 accounts verify against `1234` (86 DDOs, `ag.reviewer`, `admin`): by design for the trial, and N13 refuses them in production, but the checklist (§8.1) requires no `1234` and no trial accounts on the production server. Leftover test accounts: `audit.tmp2` **disabled 7 Oct** through the administrator's API (reason recorded); `audit.tmp1`, `sectest.audit`, `legacy.import`, `ahmed` were already disabled. `artifacts/credentials/credentials.csv` (owner-only) must not go to the server (`forget-credentials`, F7) |
+| N20 | Medium | **New (7 Oct):** H6 relations list awaiting confirmation; advisory until confirmed | **NEEDS BUSINESS DECISION** (rules owner) | The list in `rules/relations.py` (decision sheet, Appendix B, "Draft, pending rules-owner confirmation") is applied as advisory only: `RELATION-INELIGIBLE` and `RELATIONSHIP-UNPROVED` are MEDIUM checks for the reviewer and never block a case (`9f941ce`). The owner confirms the rows and the assumptions behind them; the findings may then be given their final weight |
 | S1 | Medium | Session tokens written to nginx's access log | **FIXED** (6 Oct 2026) | `72a5666`. `log_format pension` with the request line rewritten to `token=[redacted]`, used by both server blocks. The API runs without an access log and the portal server logs at warning level, so nginx was the only copy. `tests/test_nginx_access_log_redacts_token.py`. (Later report item 6; the bearer token outliving sign-out is N15.) |
 | S2 | Medium | Uploaded HTML/SVG opens on the portal's address | **FIXED** | `ae9ce8b`. `tests/test_documents_cannot_run.py` |
 | S3 | Medium | GP Fund uploads served inline (`.html`/`.js`) | **FIXED** | `0afba15`. `GP/backend/tests/test_scan_types.py` |
