@@ -123,6 +123,40 @@ ELIGIBLE_RELATIONS: tuple[EligibleRelation, ...] = (
 )
 BY_KEY = {r.key: r for r in ELIGIBLE_RELATIONS}
 
+#: Every assumption the list rests on, numbered, with the rule or document it was drawn from, so the
+#: rules owner can confirm them one by one (owner's request of 7 Oct 2026). Change a row here and the
+#: decision sheet's Appendix B follows (``appendix_markdown``).
+ASSUMPTIONS: tuple[tuple[int, str, str], ...] = (
+    (1, "The spouse (widow or widower) precedes every other class; the entitlement is for life and ends on remarriage.",
+     "ENT-01, ENT-07 (domain brief)"),
+    (2, "A widower is paid on the same terms as a widow.", "ENT-01 (to confirm: the rule text says widow)"),
+    (3, f"A son draws until the age of {SON_AGE_LIMIT_YEARS}; whether it extends while in full-time education is not settled.",
+     "ENT-02; BLOCKING-08 (prescribed age unconfirmed)"),
+    (4, "An unmarried daughter draws until marriage; whether it is for life under the current rules is not settled.",
+     "ENT-03"),
+    (5, "A widowed or divorced daughter draws while dependent and without a regular income; the divorce is proved by the deed, "
+        "the widowhood by the FRC or the husband's death certificate, the income by the no-regular-income certificate.",
+     "ENT-03; office checklist AG-17, AG-21; family_pension_dii.yaml eligibility.daughter_requires_no_source_of_income (UNSET)"),
+    (6, "A disabled son or daughter draws for life while the disability lasts, on a Medical Board certificate.",
+     "ENT-04; office checklist AG-14"),
+    (7, "A dependent father or mother draws only where no spouse or eligible child survives, and while dependent "
+        "(no regular income).", "ENT-05, ENT-07; office checklist AG-17"),
+    (8, "An unmarried, widowed or divorced sister is eligible at all, on the same dependency and income conditions.",
+     "office checklist column SISTER only; no ENT rule names a sister"),
+    (9, "The relationship is proved by the NADRA FRC naming the claimant, else (for the spouse) by the Nikah Nama.",
+     "ENT-06 (Form C / C-1); office checklist item 22"),
+    (10, "The claimant's marital status is taken from the NADRA FRC, falling back to Annex-A.",
+     "domain brief §8.3 (NADRA above the department's declaration)"),
+    (11, "The claimant's age is taken from the FRC's year of birth, else the CNIC / B-form or the matriculation certificate.",
+     "CNIC / FRC as the age documents; no rule text names the proof"),
+    (12, "The spouse's not having remarried is proved by the non-remarriage certificate (Form C-1).",
+     "ENT-06; office checklist AG-15"),
+    (13, "Grandchildren, sons- and daughters-in-law, nephews and nieces, brothers, uncles, aunts, cousins and step-relations "
+         "are not eligible.", "not named in ENT-01 to ENT-07"),
+    (14, "A relation the papers do not state (form, FRC applicant, FRC row, Annex-A) is a check for the reviewer, not a bar.",
+     "owner's decision of 7 Oct 2026 (advisory list)"),
+)
+
 #: Words that name a relation the rules do not pay, whatever else the text says.
 NOT_ELIGIBLE_WORDS = frozenset({"grandson", "granddaughter", "grand", "grandfather", "grandmother", "nephew", "niece",
                                 "brother", "brothers", "uncle", "aunt", "cousin", "law", "step"})
@@ -204,7 +238,14 @@ def appendix_markdown() -> str:
         proofs = "<br>".join(f"**{p.kind.replace('_', ' ')}** — {p.note} (`{'`, `'.join(p.documents)}`)" for p in r.proofs)
         lines.append(f"| {r.label} | {r.rule} | {r.limit} | {proofs} | {r.confirm} |")
     lines.append("")
-    lines.append(f"Not on the list, and therefore a finding: grandchildren, sons- and daughters-in-law, nephews and nieces, "
-                 f"brothers, uncles, aunts, cousins, step-relations, and any relation the form does not state. "
+    lines.append(f"Not on the list, and therefore a check for the reviewer: grandchildren, sons- and daughters-in-law, nephews "
+                 f"and nieces, brothers, uncles, aunts, cousins, step-relations, and any relation the papers do not state. "
                  f"Sons' age limit used in the draft: {SON_AGE_LIMIT_YEARS} (BLOCKING-08).")
+    lines.append("")
+    lines.append("### Assumptions behind the list, to confirm one by one")
+    lines.append("")
+    lines.append("| # | Assumption | Drawn from | Confirmed |")
+    lines.append("|---|---|---|---|")
+    for n, text, source in ASSUMPTIONS:
+        lines.append(f"| {n} | {text} | {source} | ☐ |")
     return "\n".join(lines)

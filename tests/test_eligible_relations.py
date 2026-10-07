@@ -156,6 +156,11 @@ class TheFindings(unittest.TestCase):
         for r in ELIGIBLE_RELATIONS:
             self.assertIn(f"| {r.label} |", sheet, r.key)
         self.assertIn(appendix_markdown().splitlines()[2], sheet)
+        self.assertIn("Draft, pending rules-owner confirmation", sheet)
+        from rules.relations import ASSUMPTIONS
+        self.assertEqual([n for n, _, _ in ASSUMPTIONS], list(range(1, len(ASSUMPTIONS) + 1)))
+        for n, text, source in ASSUMPTIONS:
+            self.assertIn(f"| {n} | {text} | {source} |", sheet, n)        # every assumption, numbered, with its source
         self.assertIn("'RELATION-INELIGIBLE'", (ROOT / "portals/src/shared/labels.ts").read_text())
         from pipeline.report import _FLAG_QUERY
         self.assertIn(RELATION_INELIGIBLE, _FLAG_QUERY)
