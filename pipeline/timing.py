@@ -141,14 +141,10 @@ def model_call(role: str, *, started: float, ended: float, schema: str | None = 
 
 
 def page_of(image: str | Path) -> int | None:
-    """The page number a rendered page image is named with (pages/p041.png -> 41)."""
-    stem = Path(image).stem
-    digits = "".join(ch for ch in stem[-4:] if ch.isdigit()) if stem.startswith("p") else ""
-    if not digits:
-        import re
-        m = re.search(r"p(\d{2,4})(?!.*\d)", stem)
-        digits = m.group(1) if m else ""
-    return int(digits) if digits else None
+    """The page number a rendered page image is named with: pages/p004-04.png -> 4, p041.png -> 41."""
+    import re
+    m = re.match(r"p(\d{1,4})(?!\d)", Path(image).stem)
+    return int(m.group(1)) if m else None
 
 
 def summary(run_id: str, conn: sqlite3.Connection | None = None) -> dict:

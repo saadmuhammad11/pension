@@ -92,6 +92,7 @@ class RunTimings(unittest.TestCase):
 
     def test_page_numbers_come_from_the_image_name(self) -> None:
         self.assertEqual(timing.page_of("artifacts/run-x/pages/p041.png"), 41)
+        self.assertEqual(timing.page_of("artifacts/run-x/pages/p004-04.png"), 4)      # the pipeline's own naming
         self.assertEqual(timing.page_of("/tmp/p9.png"), 9)
         self.assertIsNone(timing.page_of("signature.jpg"))
 
