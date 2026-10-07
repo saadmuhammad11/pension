@@ -74,7 +74,7 @@ const FINDINGS: Record<string, string> = {
   'CONTRA-MONEY': 'Amounts do not agree',
   'CONTRA-DATE': 'Dates cannot all be true',
   'SERVICE-SHORT': 'Service under the minimum for a monthly pension',
-  'RELATION-INELIGIBLE': 'Relation not eligible for family pension',
+  'RELATION-INELIGIBLE': 'Verify relation eligibility (draft list)',
   'CONTRA-SERVICE': 'Service record does not agree',
   'RULE-CAP': 'Exceeds a statutory limit',
   'RULE-UNDECLARED': 'Recovery not declared on the sanction',

@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 
 from rules.caserecord import CaseRecord, Document, FamilyMember, Source
-from rules.flags import HIGH, MEDIUM, RELATION_INELIGIBLE, RELATIONSHIP_UNPROVED, check_claimant_relation, run_battery
+from rules.flags import MEDIUM, RELATION_INELIGIBLE, RELATIONSHIP_UNPROVED, check_claimant_relation, run_battery
 from rules.loader import load_pack
 from rules.relations import ELIGIBLE_RELATIONS, SON_AGE_LIMIT_YEARS, appendix_markdown, parse_relation
 
@@ -84,19 +84,22 @@ def _record(relation, docs=(), frc=(), claimant="Mst. Rubina", case_type="FAMILY
 
 
 class TheFindings(unittest.TestCase):
-    def test_a_relation_off_the_list_is_high(self):
+    def test_a_relation_off_the_list_is_a_medium_check_for_the_reviewer(self):
+        """Advisory only (owner's decision of 7 Oct 2026): the list is a draft, so it never blocks."""
         flags = check_claimant_relation(_record("grand daughter", docs=("NADRA_FRC",)), PACK)
         self.assertEqual(len(flags), 1)
         f = flags[0]
-        self.assertEqual((f.severity, f.flag_class, f.owner), (HIGH, RELATION_INELIGIBLE, "AG"))
-        self.assertIn("grand daughter", f.title)
-        self.assertIn("No share is paid", f.finding)
+        self.assertEqual((f.severity, f.flag_class, f.owner), (MEDIUM, RELATION_INELIGIBLE, "AG"))
+        self.assertFalse(f.blocks_ppo); self.assertFalse(f.affects_determination)
+        self.assertEqual(f.title, "Verify relation eligibility: grand daughter is not on the draft list")
+        self.assertIn("pending the rules owner", f.finding)
         self.assertEqual([(s.page, s.document) for s in f.asserted], [(4, "FORM_D_II")])
         self.assertIn(RELATION_INELIGIBLE, [x.flag_class for x in run_battery(_record("nephew"), PACK)])
 
     def test_a_relation_not_stated_is_medium_for_the_department(self):
         flags = check_claimant_relation(_record(""), PACK)
         self.assertEqual((flags[0].severity, flags[0].flag_class, flags[0].owner), (MEDIUM, RELATIONSHIP_UNPROVED, "DEPARTMENT"))
+        self.assertTrue(flags[0].title.startswith("Verify relation eligibility"))
 
     def test_missing_proof_is_named_with_the_documents_that_supply_it(self):
         flags = check_claimant_relation(_record("divorce daughter", docs=("NADRA_FRC",),
@@ -104,8 +107,9 @@ class TheFindings(unittest.TestCase):
         self.assertEqual(len(flags), 1)
         f = flags[0]
         self.assertEqual((f.severity, f.flag_class, f.owner), (MEDIUM, RELATIONSHIP_UNPROVED, "DEPARTMENT"))
-        self.assertIn("marital status", f.title); self.assertIn("income", f.title)
+        self.assertEqual(f.title, "Proof of marital status / income not found (claim as divorced daughter)")
         self.assertNotIn("relationship", f.title)                                  # the FRC names her
+        self.assertFalse(f.blocks_ppo); self.assertFalse(f.affects_determination)
         self.assertIn("DIVORCE_CERTIFICATE".replace("_", " ").lower()[:7], f.required_action.lower())
         self.assertIn("ENT-03", f.finding)
 
@@ -116,11 +120,22 @@ class TheFindings(unittest.TestCase):
         flags = check_claimant_relation(_record("widow", docs=("NIKAH_NAMA", "NON_REMARRIAGE_CERTIFICATE")), PACK)
         self.assertEqual(flags, [])
 
-    def test_an_unmarried_daughter_the_frc_records_as_married_is_high(self):
+    def test_an_unmarried_daughter_the_frc_records_as_married_is_a_medium_check(self):
         flags = check_claimant_relation(_record("unmarried daughter", docs=("NADRA_FRC",),
                                                 frc=(FamilyMember("Mst. Rubina", "DAUGHTER", "Married", Source(9, "NADRA_FRC")),)), PACK)
-        self.assertEqual([(f.severity, f.flag_class) for f in flags], [(HIGH, RELATION_INELIGIBLE)])
+        self.assertEqual([(f.severity, f.flag_class) for f in flags], [(MEDIUM, RELATION_INELIGIBLE)])
+        self.assertTrue(flags[0].title.startswith("Verify relation eligibility"))
         self.assertIn("married", flags[0].title)
+
+    def test_nothing_here_is_ever_high(self):
+        for rec in (_record("nephew"), _record(""), _record("unmarried daughter", docs=("NADRA_FRC",),
+                    frc=(FamilyMember("Mst. Rubina", "DAUGHTER", "Married", Source(9, "NADRA_FRC")),)),
+                    _record("son", docs=("NADRA_FRC",), claimant="Ahmad",
+                            frc=(FamilyMember("Ahmad", "SON", "Unmarried", Source(9, "NADRA_FRC"), birth_year=1990),))):
+            for f in check_claimant_relation(rec, PACK):
+                self.assertEqual(f.severity, MEDIUM, f.title)
+                self.assertFalse(f.blocks_ppo, f.title)
+                self.assertFalse(f.affects_determination, f.title)
 
     def test_a_son_past_the_draft_age_limit_is_medium_and_says_the_limit_is_unconfirmed(self):
         flags = check_claimant_relation(_record("son", docs=("NADRA_FRC", "CNIC"), claimant="Ahmad",

@@ -133,7 +133,7 @@ def summary(f: Flag, merged: int = 1) -> str:
     if c == "RELATION-INELIGIBLE":
         return _clip(f"{f.title} — {where}" if where else f.title)
     if c == "RELATIONSHIP-UNPROVED":
-        if t.startswith("proof missing") or t.startswith("the claimant's relation"):
+        if t.startswith("proof of") or t.startswith("verify relation"):
             return _clip(f"{f.title} — {where}" if where else f.title)
         return _clip("No document proves the claimant's relationship; no Nikah Nama on file")
     if c == "CNIC-UNCORROBORATED":
