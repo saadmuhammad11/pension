@@ -44,10 +44,19 @@ documents stays; GP Fund's check figures (advance limits, outstanding advances, 
 expectation) stay unchanged, as the module computes no payable amount; the H6 list goes live as advisory only
 (`9f941ce`), pending the owner's confirmation of Appendix B and its numbered assumptions (`64419e4`).
 
-**Totals.** Earlier audit (57 items): 51 fixed, 1 partly fixed, 4 closed out of scope, 1 deploy step. New items (18):
-12 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 1 awaiting the rules owner (N20), 2 not fixed, 2 deploy steps.
-**Still left: 8 rows** — 1 operations decision (N14), 1 rules-owner confirmation (N20, the H6 draft list),
-2 not fixed (N6, N11), 1 partly fixed (M7), 3 deploy steps (N1, D2, N19).
+**Pre-go-live audit, 7 Oct 2026 (evening).** Two independent reviews of HEAD: every recorded decision is enforced in
+code and pinned by a test (table in the reviewers' report, summarised in the rows); the tracked files, the full git
+history and the built release tarball (`dist-release/pension-1.0.0-rc2.tgz`) carry no CNIC and no claimant name
+(the only CNIC-shaped strings in any historical blob are the all-zero placeholders). New findings: N21 (High, fixed),
+N22 (Medium, fixed), N23 (Medium, open: the old register's writes), N24–N30 (Low, open). `docs/GO-LIVE-RUNBOOK.md`
+holds the ordered deployment steps and the rollback plan.
+
+**Totals.** Earlier audit (57 items): 51 fixed, 1 partly fixed, 4 closed out of scope, 1 deploy step. New items (30):
+14 fixed, 1 closed out of scope, 1 awaiting an operations decision (N14), 1 awaiting the rules owner (N20),
+10 not fixed (N6, N11, N23–N30), 2 deploy steps.
+**Still left: 16 rows** — 1 operations decision (N14), 1 rules-owner confirmation (N20), 1 partly fixed (M7),
+3 deploy steps (N1, D2, N19), 10 not fixed: N6, N11 (deliberate), N23 (medium, needs a decision on the old
+register), N24–N30 (low).
 
 ## Real claimant data (M8 / N2 / N4 / N6)
 
@@ -101,6 +110,16 @@ expectation) stay unchanged, as the module computes no payable amount; the H6 li
 | N13 | High | **New (later report 2):** in production, the first person to type `1234` takes the account | **FIXED** (6 Oct 2026) | `2cc3476`. In production a weak password signs nobody in (403 "trial password is no longer accepted"); the administrator's reset hands out a password the officer replaces at first sign-in. `tests/test_trial_password_refused_in_production.py` |
 | N19 | Medium | **New (7 Oct):** the live database is still the trial's accounts | **DEPLOY STEP** | 88 of 93 accounts verify against `1234` (86 DDOs, `ag.reviewer`, `admin`): by design for the trial, and N13 refuses them in production, but the checklist (§8.1) requires no `1234` and no trial accounts on the production server. Leftover test accounts: `audit.tmp2` **disabled 7 Oct** through the administrator's API (reason recorded); `audit.tmp1`, `sectest.audit`, `legacy.import`, `ahmed` were already disabled. `artifacts/credentials/credentials.csv` (owner-only) must not go to the server (`forget-credentials`, F7) |
 | N20 | Medium | **New (7 Oct):** H6 relations list awaiting confirmation; advisory until confirmed | **NEEDS BUSINESS DECISION** (rules owner) | The list in `rules/relations.py` (decision sheet, Appendix B, "Draft, pending rules-owner confirmation") is applied as advisory only: `RELATION-INELIGIBLE` and `RELATIONSHIP-UNPROVED` are MEDIUM checks for the reviewer and never block a case (`9f941ce`). The owner confirms the rows and the assumptions behind them; the findings may then be given their final weight |
+| N21 | High | **Audit 7 Oct (eve):** computed amounts still left the server in five places (a step's exact_before_rounding, inputs.pension_base, the EMOL-BASE note's totals, the reconciliation finding's sum and difference, the engine's refusal text in the gap record and run log) | **FIXED** (7 Oct 2026) | `52c14ea`. Scrub widened; money stripped from engine prose; the CONTRA-MONEY reconciliation finding quotes printed figures only. `tests/test_no_calculations_in_results.py` |
+| N22 | Medium | **Audit 7 Oct (eve):** the GP Fund return was mirrored by a pseudo-officer (no account, placeholder name) that bypassed the system-action guard; the Deputy AG's override needed no verification and a one-character reason | **FIXED** (7 Oct 2026) | `6d2ccb4`. `GPF_RETURN` system action carrying the module's officer name; override needs 15+ characters and, to approve, a completed examination. `tests/test_override_guard.py` |
+| N23 | Medium | **Audit 7 Oct (eve):** the old register (`POST /api/runs`, `/api/runs/{id}/decision`) lets one Deputy AG upload a file and record a FORWARD on it outside any case, department or second officer | **NOT FIXED** | `api/server.py:334, 453`. Decide whether the old register's writes are needed at all in production; if not, refuse them (or runs with no v2 case) when `PENSION_ENV=production` |
+| N24 | Low | **Audit 7 Oct (eve):** case document downloads accept the session token on the URL (`current_user_q`), so a PDF link carries a 12-hour token into browser history and proxy logs | **NOT FIXED** | `api/v2.py` download_document. Fetch via the Authorization header and a blob, or a 60 s single-purpose scoped token |
+| N25 | Low | **Audit 7 Oct (eve):** an administrator's password reset is the one remaining way to act as any officer (reset the Deputy AG, sign in); `reason` is optional | **NOT FIXED** | `api/v2.py` reset_user_password. Require a reason; mark the next LOGIN audit row as following an admin reset; consider a second administrator for AG_DAG resets |
+| N26 | Low | **Audit 7 Oct (eve):** `gpf-cure` reads a whole upload into memory (`file.file.read(MAX_UPLOAD + 1)`) where the document routes stream | **NOT FIXED** | `api/v2.py` case_gpf_cure. Stage through `_read_uploads` |
+| N27 | Low | **Audit 7 Oct (eve):** a failed login stores the typed username verbatim in the audit log (a password typed into the wrong box becomes a plaintext row) | **NOT FIXED** | `api/v2.py` LOGIN_FAILED. Store the name only when it matches an existing account, else a hash or `(unknown)` |
+| N28 | Low | **Audit 7 Oct (eve):** an override to RETURNED / DOCS_REQUESTED opens no round request, so the department's round view shows nothing asked | **NOT FIXED** | `api/rounds.py` SEND_BACK / CLOSING exclude OVERRIDE. Treat OVERRIDE by its target status |
+| N29 | Low | **Audit 7 Oct (eve):** a DDO sees `case_type_source = DETECTED` on an undeclared case and can infer the engine's reading | **NOT FIXED** | `api/v2.py` `_redact`: map DETECTED to None for DEPT_OFFICER |
+| N30 | Low | **Audit 7 Oct (eve):** a non-ASCII officer name reaches the GP Fund module as `???` in the `X-GPF-User` header | **NOT FIXED** | `api/gpf_bridge.py`, `api/portal_server.py`: percent- or base64-encode the header; decode in `GP/backend/gpf/api.py` |
 | S1 | Medium | Session tokens written to nginx's access log | **FIXED** (6 Oct 2026) | `72a5666`. `log_format pension` with the request line rewritten to `token=[redacted]`, used by both server blocks. The API runs without an access log and the portal server logs at warning level, so nginx was the only copy. `tests/test_nginx_access_log_redacts_token.py`. (Later report item 6; the bearer token outliving sign-out is N15.) |
 | S2 | Medium | Uploaded HTML/SVG opens on the portal's address | **FIXED** | `ae9ce8b`. `tests/test_documents_cannot_run.py` |
 | S3 | Medium | GP Fund uploads served inline (`.html`/`.js`) | **FIXED** | `0afba15`. `GP/backend/tests/test_scan_types.py` |
