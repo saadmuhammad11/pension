@@ -54,12 +54,22 @@ class RetirementDate(unittest.TestCase):
 
 
 class DeathDate(unittest.TestCase):
-    def test_expired_on_with_two_and_four_digit_years(self):
+    def test_expired_on_with_a_four_digit_year(self):
         from rules import death_date_from_form, entitlement_date_from_form
-        self.assertEqual(death_date_from_form("... expired on 28-2-21 (death certificate"), date(2021, 2, 28))
         self.assertEqual(death_date_from_form("expired on 8-04-2015."), date(2015, 4, 8))
         self.assertEqual(entitlement_date_from_form("the pensioner expired on 8-04-2015."), date(2015, 4, 8))
         self.assertIsNone(death_date_from_form("no such clause"))
+
+    def test_a_two_digit_year_is_reported_not_completed(self):
+        """Audit L1 (7 Oct 2026): "28-2-21" used to become 2021. The century is the officer's to
+        confirm, so the reader returns no date and says what the form wrote."""
+        from rules import ambiguous_death_date_from_form, death_date_from_form, entitlement_date_from_form
+        text = "... expired on 28-2-21 (death certificate"
+        self.assertIsNone(death_date_from_form(text))
+        self.assertEqual(ambiguous_death_date_from_form(text), "28-2-21")
+        self.assertIsNone(entitlement_date_from_form("the pensioner expired on 28-2-21."))   # falls safe: lateness stands
+        self.assertIsNone(ambiguous_death_date_from_form("expired on 8-04-2015."))
+        self.assertIsNone(ambiguous_death_date_from_form("no such clause"))
 
 
 class PrintedFigures(unittest.TestCase):

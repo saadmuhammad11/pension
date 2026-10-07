@@ -64,7 +64,11 @@ def _val(block: dict, name: str) -> str | None:
 
 
 def _date(text: str | None) -> date | None:
-    """"2025-10-02", "02/10/2025", "2-10-2025", "02.10.25" -> a date; day before month, as Pakistan writes."""
+    """"2025-10-02", "02/10/2025", "2-10-2025" -> a date; day before month, as Pakistan writes.
+
+    "02.10.25" -> None: a two-digit year is not completed to 20xx (audit L1, 7 Oct 2026). The
+    specimen lookup then compares the signature with the specimens in force today and the
+    block carries ``date_signed_note`` so the officer sees why."""
     if not text:
         return None
     t = text.strip()
@@ -72,11 +76,10 @@ def _date(text: str | None) -> date | None:
         return date.fromisoformat(t)
     except ValueError:
         pass
-    m = re.match(r"^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$", t)
+    m = re.match(r"^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$", t)
     if not m:
         return None
     d, mo, y = (int(g) for g in m.groups())
-    y = y + 2000 if y < 100 else y
     try:
         return date(y, mo, d)
     except ValueError:
@@ -152,6 +155,12 @@ def check_form(run: Path, page_images: dict[int, Path], doc: dict, *,
     # The department: what the block itself says, else the stamp, else the forwarding letter.
     signed_on = _date(entry["date_signed"])
     entry["date_signed_iso"] = signed_on.isoformat() if signed_on else None
+    from rules.case_type import two_digit_year
+    written = two_digit_year(entry["date_signed"]) if signed_on is None else None
+    entry["date_signed_note"] = (
+        f"The signature is dated '{written}', a year written with two digits; the date was not "
+        f"used and the specimens in force today were compared. Confirm the date on the page."
+    ) if written else None
     ocr = entry.get("stamp_ocr")
     post = " / ".join(t for t in (entry["designation"], entry["stamp_text"], ocr) if t)
     dept = " / ".join(t for t in (entry["department"], entry["stamp_text"], ocr) if t)

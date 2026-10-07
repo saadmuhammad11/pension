@@ -124,18 +124,56 @@ def _document(d: dict) -> Document:
 #: "2026-03-18", "4th March, 2026", "6/3/26". Anything not listed here is refused rather than
 #: coerced -- a misparsed date does not produce a missing SLA flag, it produces a WRONG one,
 #: and an SLA breach is an accusation about an institution's timeliness.
+#:
+#: Two-digit years ("6/3/26") are refused too, since 7 Oct 2026 (audit L1): strptime's "%y"
+#: completes 26 to 2026 and 66 to 2066, and a date of birth of 2066 is as wrong as one of 1926.
+#: Such dates are collected by ``two_digit_year_dates`` and raised as a finding for a person
+#: to settle (rules.flags.check_ambiguous_dates).
 _DATE_FORMATS = (
     "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y",
-    "%d-%m-%y", "%d/%m/%y",
     "%d %B %Y", "%d %B, %Y", "%d %b %Y", "%d %b, %Y",
 )
 
 #: Ordinal suffixes on a printed day: "4th March, 2026".
 _ORDINAL = re.compile(r"\b(\d{1,2})(st|nd|rd|th)\b", re.I)
 
-#: Plausible range for anything on a live pension case. A two-digit year is ambiguous by
-#: nature; bounding the result is what stops "6/3/26" quietly becoming 1926.
+#: Plausible range for anything on a live pension case.
 _EARLIEST, _LATEST = date(1940, 1, 1), date(2100, 1, 1)
+
+#: The dated fields of the prescribed forms, as fields.json names them: the ones a
+#: determination runs from, so a two-digit year in any of them affects the determination.
+_DETERMINATION_DATE_FIELDS = frozenset({
+    "date_of_birth", "date_first_entry", "date_of_retirement", "date_of_death",
+    "date_of_death_of_pensioner", "date_of_death_of_prior_pensioner", "date_of_divorce",
+})
+
+
+def two_digit_year_dates(run: Path, facts: dict) -> tuple[tuple[str | None, int | None, str, str], ...]:
+    """Every date on the case written with a two-digit year: ``(document, page, as written, field)``.
+
+    Looked for where ``_as_date`` is applied -- the dated fields of the prescribed form, each
+    document's own date, the CNIC cards' expiry -- so what the parser refused is reported, not
+    silently absent. The orientation scorer still accepts such a value as "looks like a date";
+    that is a sanity score, never a figure.
+    """
+    from rules.case_type import two_digit_year
+    found: list[tuple[str | None, int | None, str, str]] = []
+    fields_path = run / "fields.json"
+    if fields_path.exists():
+        try:
+            for f in json.loads(fields_path.read_text()).get("fields", []):
+                if f.get("name") in _DETERMINATION_DATE_FIELDS and two_digit_year(f.get("value")):
+                    found.append((f.get("document") or "FORM", f.get("page"), str(f["value"]).strip(), f["name"]))
+        except (OSError, ValueError):
+            pass
+    for d in facts.get("document_dates", []):
+        if two_digit_year(d.get("value")):
+            found.append((d.get("document"), d.get("page"), str(d["value"]).strip(), "document_date"))
+    for card in facts.get("cnic_cards", []):
+        raw = (card.get("date_of_expiry") or "").strip()
+        if two_digit_year(raw):
+            found.append(("CNIC", card.get("page"), raw, "date_of_expiry"))
+    return tuple(dict.fromkeys(found))
 
 
 def _as_date(text: str) -> date | None:
@@ -223,6 +261,9 @@ _FLAG_QUERY = {
         "pay slip and the sanction form?",
     "CONTRA-DATE":
         "How are inconsistent dates of entry, retirement or death across documents resolved?",
+    "DATE-AMBIGUOUS":
+        "When a date on a prescribed form or supporting paper is written with a two-digit year, "
+        "how is the date of death, birth or entry established before it is used in the pension?",
     "CONTRA-SERVICE":
         "What if the qualifying service stated on the form disagrees with the service record?",
     "RULE-UNDECLARED":
@@ -999,6 +1040,7 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         unreadable=tuple(
             (u["page"], u["document"], u["reason"]) for u in facts.get("unreadable", [])
         ),
+        ambiguous_dates=two_digit_year_dates(run, facts),
         # These four were literals of the golden case -- diary 41759, the School Education
         # Department, and "Waqar Abdul Basit" -- sitting in the middle of the production
         # path. On any other bundle the shortcoming letters would have gone out carrying

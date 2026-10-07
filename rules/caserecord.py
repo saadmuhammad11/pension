@@ -222,6 +222,10 @@ class CaseRecord:
     #: Determination-critical documents no reader could get through. Surfaced as a finding,
     #: never left as an absence -- see rules.flags.check_unreadable_documents.
     unreadable: tuple[tuple[int, str, str], ...] = ()
+    #: Dates on the case written with a two-digit year, ``(document, page, as written, field)``.
+    #: The readers refuse them rather than complete the century (audit L1, 7 Oct 2026); a
+    #: finding asks a person to -- see rules.flags.check_ambiguous_dates.
+    ambiguous_dates: tuple[tuple[str | None, int | None, str, str], ...] = ()
     #: Fields of the prescribed form the sanctioning authority left empty, named as the form
     #: names them. A blank that stops a determination is a defect in the department's
     #: paperwork and belongs in the shortcoming letter, not only in the determination panel.

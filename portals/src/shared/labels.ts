@@ -83,6 +83,7 @@ const FINDINGS: Record<string, string> = {
   'ALIAS-RESOLVED': 'Name spelt differently across documents',
   'SCOPE-CONFUSION': 'Document applied outside its scope',
   'EXTRACT-LOWCONF': 'A page could not be read',
+  'DATE-AMBIGUOUS': 'A date written with a two-digit year',
   'EXTRACT-ROLE-SWAP': 'Deceased and claimant roles',
 }
 

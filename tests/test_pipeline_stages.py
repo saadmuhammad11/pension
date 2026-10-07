@@ -256,7 +256,7 @@ class DateParsingTest(unittest.TestCase):
             "18/03/2026": date(2026, 3, 18),
             "2026-03-18": date(2026, 3, 18),
             "4th March, 2026": date(2026, 3, 4),
-            "6/3/26": date(2026, 3, 6),
+            "6/3/26": None,                       # two-digit year: refused since 7 Oct 2026 (L1)
         }
         for text, want in cases.items():
             with self.subTest(text=text):
@@ -267,9 +267,12 @@ class DateParsingTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIsNone(self._parse(text))
 
-    def test_two_digit_years_are_bounded_not_silently_1926(self):
-        """The reason _EARLIEST/_LATEST exist."""
-        self.assertEqual(self._parse("6/3/26"), date(2026, 3, 6))
+    def test_two_digit_years_are_refused_not_guessed(self):
+        """Audit L1: "%y" made 26 into 2026 and would make 66 into 2066. Neither is read; the
+        report raises DATE-AMBIGUOUS for the officer instead (test_two_digit_years_flagged)."""
+        for text in ("6/3/26", "28-2-24", "6/3/66", "02.10.25"):
+            with self.subTest(text=text):
+                self.assertIsNone(self._parse(text))
 
 
 # ==============================================================================================

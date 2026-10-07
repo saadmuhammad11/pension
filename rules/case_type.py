@@ -948,26 +948,55 @@ _FORM_FACTS = {
 }
 
 #: Form D-I / D-II: "expired on 28-2-21", "expired on 8-04-2015". Two-digit years occur on the
-#: handwritten forms and are read as 20xx: no pensioner in these files died before 2000 and a
-#: 19xx death would predate every rule pack anyway.
+#: handwritten forms. They used to be read as 20xx; since 7 Oct 2026 (audit L1) a two-digit
+#: year yields NO date -- the century is the reader's guess, not the form's statement -- and
+#: the clause is reported through ``ambiguous_death_date_from_form`` so an officer confirms the
+#: date against the death certificate and keys it at intake.
 _DEATH_DATE = re.compile(
     r"expired\s+on\W{0,4}(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})", re.I)
 
+#: A day-first date whose year has two digits, anywhere in a short value: "28-2-21", "6/3/26",
+#: "02.10.25". Four-digit years do not match (the year group is bounded on both sides).
+_TWO_DIGIT_YEAR = re.compile(r"(?<!\d)(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2})(?!\d)")
+
+
+def two_digit_year(text: str | None) -> str | None:
+    """The ``dd-mm-yy`` written in ``text``, or None where its year has four digits or there is
+    no date. Readers call this to say WHY they returned nothing, so the century is confirmed by
+    a person rather than guessed by the code."""
+    m = _TWO_DIGIT_YEAR.search(str(text or ""))
+    return m.group(0) if m else None
+
 
 def death_date_from_form(form_text: str) -> date | None:
-    """The date the servant or pensioner died, from the form's own "expired on" clause."""
+    """The date the servant or pensioner died, from the form's own "expired on" clause.
+
+    None where the clause is absent, is not a calendar date, or writes the year with two
+    digits (see ``ambiguous_death_date_from_form``)."""
     m = _DEATH_DATE.search(re.sub(r"\s+", " ", form_text or ""))
     if not m:
         return None
+    if len(m.group(3)) < 4:
+        return None
     day, month, year = (int(g) for g in m.groups())
-    if year < 100:
-        year += 2000
     if not (1 <= day <= 31 and 1 <= month <= 12 and 1940 <= year <= 2100):
         return None
     try:
         return date(year, month, day)
     except ValueError:
         return None
+
+
+def ambiguous_death_date_from_form(form_text: str) -> str | None:
+    """The "expired on" date as written, where its year has only two digits ("28-2-21").
+
+    The pipeline puts this in front of the officer instead of a date: "21" is 2021 to anyone
+    who knows the case and 1921 to the code, and the commencement of a family pension and the
+    lateness of the submission both run from it."""
+    m = _DEATH_DATE.search(re.sub(r"\s+", " ", form_text or ""))
+    if not m or len(m.group(3)) >= 4:
+        return None
+    return "-".join(m.groups())
 
 
 #: Money the prescribed forms print beside a fixed label. OCR text, not a model's field:

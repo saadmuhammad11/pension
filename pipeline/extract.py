@@ -35,7 +35,7 @@ from extraction.client import ExtractionError, extract_page_confirmed
 from rules import PayComponent, reckon, select_pack
 from rules.engine import DeathInServiceCase, determine_family_pension_death_in_service
 from rules.money import fmt
-from rules.case_type import death_date_from_form, printed_form_figures
+from rules.case_type import ambiguous_death_date_from_form, death_date_from_form, printed_form_figures
 from rules.dii import (InputMissing, DEATH_AFTER_RETIREMENT, REGRANT_AFTER_WIDOW_DEATH, UNKNOWN,
                        CaseClass, CaseTypeNotDetermined, DIIRules,
                        DeathAfterRetirementCase, Provenance, classify_case,
@@ -965,6 +965,16 @@ def _determine_death_after_retirement(
                 f"OCR text ('expired on'); the field read gave no usable date. Confirm it "
                 f"against the death certificate."
             )
+        else:
+            # A two-digit year is not read as 20xx (audit L1, 7 Oct 2026): the century is the
+            # form's to state and the officer's to confirm. The intake entry below is the way in.
+            written = ambiguous_death_date_from_form(form_text)
+            if written:
+                ocr_caveats.append(
+                    f"The prescribed form gives the date of death as '{written}', a year written "
+                    f"with two digits. It was not used: confirm the date against the death "
+                    f"certificate and key it at intake so the determination can run from it."
+                )
     # A pension in payment BELOW the net pension printed on the same form is a misread, not
     # a reading: the net pension is what is left after commutation, so it cannot exceed the
     # pension being drawn. On the Disabled Son form the OCR reads "drawing pension/family

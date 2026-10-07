@@ -90,6 +90,8 @@ EXTRACT_ROLE_SWAP = "EXTRACT-ROLE-SWAP"
 CNIC_UNCORROBORATED = "CNIC-UNCORROBORATED"
 DOC_STALE = "DOC-STALE"
 DOC_EXPIRED = "DOC-EXPIRED"
+#: A date whose year is written with two digits; the century is for a person to confirm (L1).
+DATE_AMBIGUOUS = "DATE-AMBIGUOUS"
 SELF_PENSION_REFUSED = "CONTRA-SERVICE-DATES"
 ATTEST_MISSING = "ATTEST-MISSING"
 #: A sanction signature an officer is asked to compare with the department's specimen by eye.
@@ -1188,6 +1190,54 @@ def check_unreadable_documents(record: CaseRecord, pack: RulePack) -> list[Flag]
     ]
 
 
+def check_ambiguous_dates(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """A date written with a two-digit year was refused, not completed. ``DATE-AMBIGUOUS``.
+
+    Until 7 Oct 2026 the readers completed "28-2-21" to 2021 and strptime completed "6/3/66"
+    to 2066 (audit L1). Either is a guess about a figure the determination runs from -- the
+    date of death starts the family pension and the lateness clock, the date of birth decides
+    the retirement age -- so the readers now return nothing for such a date and this finding
+    asks the officer to read the page and settle the century. MEDIUM: the case cannot be
+    auto-approved with a date unsettled, and nothing is wrong with the papers themselves.
+    Where the engine needs the date, the officer keys it at intake.
+    """
+    if not record.ambiguous_dates:
+        return []
+    items = record.ambiguous_dates
+    affects = any(field != "document_date" for _, _, _, field in items)
+
+    def _where(doc: str | None, page: int | None) -> str:
+        where = f"p.{page}" if page is not None else "a page"
+        return f"{where} ({_doc_words(doc)})" if doc else where
+
+    listed = "; ".join(
+        f"'{written}' for {field.replace('_', ' ')} on {_where(doc, page)}" if field != "document_date"
+        else f"'{written}' dating {_where(doc, page)}"
+        for doc, page, written, field in items)
+    return [
+        Flag(
+            id="",
+            severity=MEDIUM,
+            flag_class=DATE_AMBIGUOUS,
+            title=(f"A date is written with a two-digit year: {items[0][2]}" if len(items) == 1
+                   else f"{len(items)} dates are written with two-digit years"),
+            finding=(
+                f"The year has two digits and could belong to either century, so the date was "
+                f"not used: {listed}. Nothing was computed or measured from "
+                f"{'it' if len(items) == 1 else 'them'}."
+            ),
+            asserted=tuple(Source(page, doc or "FORM") for doc, page, _, _ in items if page is not None),
+            affects_determination=affects,
+            required_action=(
+                "Read each date on the page and confirm the century against the supporting "
+                "paper (death certificate, CNIC, service book). Where the determination needs "
+                "the date, key it at intake and re-run the verification."
+            ),
+            owner="AG",
+        )
+    ]
+
+
 def check_party_roles(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """Whether the deceased/claimant roles were confirmed. ``EXTRACT-ROLE-SWAP``.
 
@@ -1785,6 +1835,7 @@ BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_aliases,
     check_scope_confusion,
     check_unreadable_documents,
+    check_ambiguous_dates,
     check_party_roles,
     check_frc_currency,
     check_nikah_nama,

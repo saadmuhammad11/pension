@@ -192,8 +192,9 @@ class OneDeathDatePerCase(unittest.TestCase):
             got = json.loads((run / "determination.json").read_text())
             resolved = _as_date(str(got["determination"]["inputs"]["date_of_death_of_pensioner"]))
         self.assertEqual(resolved, date(2021, 2, 28))
-        # the field read on the same bundle, which must not win
-        self.assertEqual(_as_date("28-2-24"), date(2024, 2, 28))
+        # the field read on the same bundle, which must not win -- and since 7 Oct 2026 (L1)
+        # cannot: a two-digit year is refused by the parser and raised for the officer instead
+        self.assertIsNone(_as_date("28-2-24"))
 
 
 if __name__ == "__main__":

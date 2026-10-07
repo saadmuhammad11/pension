@@ -33,7 +33,7 @@ MAX_WORDS = 15
 _CLASS_ORDER = [
     "CONTRA-IDENTITY", "CNIC-UNCORROBORATED", "CONTRA-FAMILY", "CONTRA-SERVICE-DATES", "CONTRA-MONEY",
     "RULE-UNDECLARED", "DECLARED-TYPE-MISMATCH", "RELATIONSHIP-UNPROVED", "AUTH-DEFECT", "DOC-STALE",
-    "DOC-EXPIRED", "EXTRACT-LOWCONF", "ATTEST-MISSING", "RULE-CAP", "SCOPE-CONFUSION",
+    "DOC-EXPIRED", "DATE-AMBIGUOUS", "EXTRACT-LOWCONF", "ATTEST-MISSING", "RULE-CAP", "SCOPE-CONFUSION",
 ]
 _SEVERITY = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
 
@@ -130,6 +130,8 @@ def summary(f: Flag, merged: int = 1) -> str:
         return _clip(f"CNIC copy not matched to anyone in the case — {where}")
     if c == "EXTRACT-LOWCONF":
         return _clip(f"Page could not be read; read it yourself — {where}")
+    if c == "DATE-AMBIGUOUS":
+        return _clip(f"Date written with a two-digit year; confirm the century — {where}")
     if c == "ATTEST-MISSING":
         return _clip(f"Copies not attested by DDO — {where}")
     if c == "RULE-CAP":
