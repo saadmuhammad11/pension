@@ -150,7 +150,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const hasIssues = run ? (run.verdict !== 'FORWARD' || (run.high_flags ?? 0) > 0 || (run.blocking_flags ?? []).length > 0) : true
   const deptSide = deptView                       // the administrator acts on no side (G6)
   const canReview = !!can?.dispose && (m.side === 'ag' || !!can?.override)
-  // The documents an automatic return (or the AG's own return) asked for, for this round.
+  // The documents the AG's return asked for, for this round (AUTO_RETURN / GPF_RETURN: rows from before 9 Oct 2026,
+  // when the system still returned cases by itself).
   const sentBack = m.side === 'department' ? [...c.events].reverse().find(e => ['AUTO_RETURN', 'GPF_RETURN', 'RETURN', 'REQUEST_DOCS'].includes(e.action)) : undefined
   const missingDocs = (sentBack?.payload as { missing_checklist?: { id: string; requirement: string; status?: string }[] } | undefined)?.missing_checklist ?? []
   const agRemarks = c.events.filter(e => (e.actor_role === 'AG_REVIEWER' || e.actor_role === 'AG_DAG' || e.actor_role === 'ADMIN') && e.remark && e.action !== 'CREATE' && e.action !== 'FORWARD')
