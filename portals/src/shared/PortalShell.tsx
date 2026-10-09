@@ -30,6 +30,7 @@ import { ProductChooser } from './screens/ProductChooser'
 import { AdminHome } from './screens/admin/AdminHome'
 import { Users } from './screens/admin/Users'
 import { AuditLog } from './screens/admin/AuditLog'
+import { Signatories } from './screens/admin/Signatories'
 import { PRODUCT_OF_SLUG, PRODUCT_SLUG, PRODUCT_WORDS, caseHref, type CaseStatus, type Product } from './api/cases'
 import type { SessionUser } from './auth/session'
 import { portal, type PortalConfig } from './portal'
@@ -101,10 +102,10 @@ function Shell({ config }: { config: PortalConfig }) {
     // The Accountant General's desk and the administrator open on the pension register (29 Sep
     // 2026): the product chooser is a department's screen. GP Fund stays one press away in the header.
     if ((cleanPath === '/' || cleanPath === '') && homeFor(user) !== 'register') { navigate('/pension', { replace: true }); return }
-    const known = cleanPath === '/' || !!pr || cleanPath === '/users' || cleanPath === '/audit'
+    const known = cleanPath === '/' || !!pr || cleanPath === '/users' || cleanPath === '/audit' || cleanPath === '/signatories'
       || !!match('/cases/:id', cleanPath) || !!match('/cases/:id/analysis', cleanPath)
     const allowed = (pr?.view !== 'new' || can.create_case) && (cleanPath !== '/users' || can.manage_users)
-      && (cleanPath !== '/audit' || can.audit_log)
+      && (cleanPath !== '/audit' || can.audit_log) && (cleanPath !== '/signatories' || can.manage_users)
     if (!known || !allowed) navigate('/', { replace: true })
   }, [cleanPath, user, can, pr])
 
@@ -156,6 +157,7 @@ function Shell({ config }: { config: PortalConfig }) {
         <span className="nav-sep" aria-hidden="true" />
         <a href="#/users" className={cleanPath === '/users' ? 'is-active' : ''}>Users</a>
         <a href="#/audit" className={cleanPath === '/audit' ? 'is-active' : ''}>Audit log</a>
+        <a href="#/signatories" className={cleanPath === '/signatories' ? 'is-active' : ''}>Signing authorities</a>
       </>}
     </nav>
   )
@@ -199,6 +201,8 @@ function Shell({ config }: { config: PortalConfig }) {
     body = <Users />
   } else if (cleanPath === '/audit' && can.audit_log) {
     body = <AuditLog />
+  } else if (cleanPath === '/signatories' && can.manage_users) {
+    body = <Signatories />
   } else if (pr && home === 'admin') {
     body = pr.view === 'cases'
       ? <RegisterHome key={pr.product} product={pr.product} title={`All ${PRODUCT_WORDS[pr.product].cases.toLowerCase()}`} lead="Every case filed by every department." waitingOn={AG_WAITING} showDepartment charts={null} view="cases" />

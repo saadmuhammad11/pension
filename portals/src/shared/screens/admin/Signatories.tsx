@@ -28,6 +28,8 @@ export function Signatories() {
   const [postQ, setPostQ] = useState('')
   const [showClosed, setShowClosed] = useState(false)
   const [adding, setAdding] = useState(false)
+  // Marking the GP Fund register final is confirmed in the page, never by a browser dialog (audit L9).
+  const [confirmFinal, setConfirmFinal] = useState(false)
   const [form, setForm] = useState<AuthorityInput>(EMPTY)
   const [aliasText, setAliasText] = useState({ department: '', post: '' })
   const [editing, setEditing] = useState<Authority | null>(null)
@@ -90,13 +92,23 @@ export function Signatories() {
         </div>
         <div className="row" style={{ gap: 8 }}>
           {provisional > 0 && (
-            <button type="button" disabled={busy} onClick={() => { if (window.confirm(`Mark the GP Fund register final? ${provisional} provisional entries become the office's list; the module stops calling them provisional.`)) run(finalizeGpfRegister) }}>
+            <button type="button" disabled={busy || confirmFinal} onClick={() => setConfirmFinal(true)}>
               Mark GP Fund register final ({provisional} provisional)
             </button>
           )}
           <button type="button" className="header-cta" onClick={() => setAdding(a => !a)}>{adding ? 'Cancel' : 'Add authority'}</button>
         </div>
       </div>
+      {confirmFinal && (
+        <div className="card" role="alertdialog" aria-label="Mark the GP Fund register final" style={{ marginTop: 'var(--s3)' }}>
+          <h3 style={{ margin: '0 0 6px' }}>Mark the GP Fund register final?</h3>
+          <p className="help" style={{ margin: '0 0 8px' }}>{provisional} provisional {provisional === 1 ? 'entry becomes' : 'entries become'} the office&apos;s list; the module stops calling them provisional. This is audited.</p>
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="primary" disabled={busy} onClick={() => { setConfirmFinal(false); run(finalizeGpfRegister) }}>Confirm: mark final</button>
+            <button type="button" disabled={busy} onClick={() => setConfirmFinal(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
       {error && <div className="banner bad" role="alert"><span className="mark">!</span><div className="sub">{error} <button type="button" style={{ marginLeft: 8 }} onClick={() => setAttempt(a => a + 1)}>Retry</button></div></div>}
 
       {adding && (

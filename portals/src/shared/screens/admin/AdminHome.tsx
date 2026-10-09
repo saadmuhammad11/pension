@@ -28,6 +28,7 @@ export function AdminHome({ product }: { product: Product }) {
             <a className="btn" href={`#/${PRODUCT_SLUG[product]}/cases`} style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>All {PRODUCT_WORDS[product].cases.toLowerCase()}</a>
             <a className="btn" href="#/users" style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>Users</a>
             <a className="btn" href="#/audit" style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>Audit log</a>
+            <a className="btn" href="#/signatories" style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>Signing authorities</a>
           </div>
         </>
       )}
