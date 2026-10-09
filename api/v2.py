@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
-from api import case_runs, db, gpf_bridge, settings, workflow
+from api import case_runs, db, gpf_bridge, inventory, settings, workflow
 from api.db import SHARED_LOGINS
 from api.artefacts import bundle as run_bundle
 from api.artefacts import event_stream, get_run, page_image, report, signature_image, status
@@ -297,10 +297,10 @@ def capabilities(user: User) -> dict:
 
 @router.get("/departments")
 def departments(user: User = Depends(current_user), conn: db.Connection = Depends(get_conn)) -> list[dict]:
-    """The departments a case can be filed for: the active ones, without the legacy bucket."""
-    rows = conn.execute("SELECT code, name, digital, slug, port, pension_section FROM departments WHERE active = 1 AND code != ? ORDER BY name",
-                        (LEGACY_DEPARTMENT[0],)).fetchall()
-    return [dict(r) for r in rows]
+    """The departments a case can be filed for: the active ones, without the legacy bucket. A
+    wing officer is given their own wing's departments only."""
+    rows = inventory.visible_departments(conn, user, "code, name, digital, slug, port, pension_section, active")
+    return [{k: v for k, v in dict(r).items() if k != "active"} for r in rows if r["active"] and r["code"] != LEGACY_DEPARTMENT[0]]
 
 
 @router.get("/portals")
@@ -339,7 +339,7 @@ def department_counts(product: str | None = None, user: User = Depends(require_r
     from api import inventory
     case_runs.sync_run_states(conn)
     rows = _inventory_rows(conn, user, product=product)
-    depts = conn.execute("SELECT code, name, digital, active FROM departments").fetchall()
+    depts = inventory.visible_departments(conn, user)       # a wing officer's own departments only
     return [{k: v for k, v in d.items() if k != "active"} for d in inventory.counts_of(rows, depts)["by_department"]]
 
 
@@ -719,7 +719,7 @@ def case_inventory(product: str | None = None, department: str | None = None, pe
                 and (codes is None or r["department_code"] in codes)]
     else:
         rows = everything
-    depts = conn.execute("SELECT code, name, digital, active FROM departments").fetchall()
+    depts = inventory.visible_departments(conn, user)       # a wing officer's own departments only
     out = {"version": ver, "product": product, "rows": rows, "counts": inventory.counts_of(rows, [])}
     if user.role in workflow.AG_READERS:
         side = inventory.counts_of(everything, depts)

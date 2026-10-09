@@ -38,6 +38,19 @@ def section_of(code: str | None) -> str:
     return PENSION_SECTION_OF.get(code or "") or LEGACY
 
 
+def visible_departments(conn: db.Connection, user: Any, columns: str = "code, name, digital, active") -> list[db.Row]:
+    """The department rows this user's screens may list: a pension-wing officer sees only their wing's
+    departments (9 Oct 2026: a wing's officers see their departments and nothing of the other
+    wings); everyone else the whole table."""
+    rows = conn.execute(f"SELECT {columns} FROM departments ORDER BY name").fetchall()
+    role = getattr(user, "role", "")
+    if role in workflow.TIER_ROLES:
+        wing = getattr(user, "pension_wing", None)
+        codes = set(section_codes(conn, wing)) if wing else set()
+        rows = [r for r in rows if r["code"] in codes]
+    return rows
+
+
 def section_codes(conn: db.Connection, section: str) -> list[str]:
     """Every department code in one Pension section, LEGACY included, from the same rule."""
     if section != LEGACY and section not in PENSION_SECTION_ORDER:

@@ -159,6 +159,26 @@ class Tiers(unittest.TestCase):
         for h in (self.login("fatima.hameed", "ag"), self.login("admin", "ag")):
             self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=h).status_code, 200)
 
+    def test_a_wing_officer_is_shown_only_their_wing_s_departments(self) -> None:
+        """The lists behind the sidebar, the filters and the counts name the officer's own
+        departments only; the AG's desk and the administrator see all 86 (9 Oct 2026)."""
+        from api.departments import DEPARTMENTS, PENSION_SECTION_OF
+        self._case("agriculture")                                                 # Pension-I
+        self._case("punjab-police")                                               # Pension-V
+        sa1 = self.sa("agriculture")
+        mine = {d.code for d in DEPARTMENTS if PENSION_SECTION_OF.get(d.code) == "Pension-I"}
+        listed = self.client.get("/api/v2/departments", headers=sa1).json()
+        self.assertEqual({d["code"] for d in listed}, mine)
+        counts = self.client.get("/api/v2/departments/counts?product=PENSION", headers=sa1).json()
+        self.assertEqual({d["code"] for d in counts}, mine)
+        self.assertEqual(sum(d["total"] for d in counts), 1)
+        side = self.client.get("/api/v2/inventory?product=PENSION", headers=sa1).json()["sidebar"]
+        self.assertEqual({d["code"] for d in side["by_department"]}, mine)
+        self.assertEqual(side["by_section"], {"Pension-I": 1})
+        for h in (self.login("ag.reviewer", "ag"), self.login("admin", "ag")):
+            self.assertEqual(len(self.client.get("/api/v2/departments", headers=h).json()), len(DEPARTMENTS))
+            self.assertEqual(self.client.get("/api/v2/inventory?product=PENSION", headers=h).json()["sidebar"]["by_section"], {"Pension-I": 1, "Pension-V": 1})
+
     # -- internal remarks -------------------------------------------------------------------------
     def test_internal_remarks_never_reach_the_ddo(self) -> None:
         case_id, ddo = self._case()
