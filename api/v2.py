@@ -1987,6 +1987,8 @@ def audit_log(since: str | None = None, actor: str | None = None, limit: int = 2
     out = []
     for r in conn.execute(sql, args):
         d = dict(r)
+        # Stored to the microsecond so the order holds (workflow.audit); shown to the second, as always.
+        d["at"] = (d["at"] or "")[:19]
         d["before"] = json.loads(d.pop("before_json") or "null")
         d["after"] = json.loads(d.pop("after_json") or "null")
         out.append(d)
