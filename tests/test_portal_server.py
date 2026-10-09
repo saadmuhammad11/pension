@@ -72,11 +72,15 @@ class PortalServer(unittest.TestCase):
         from unittest import mock
         from api import db
         sheet = Path(self._tmp.name) / "credentials.html"
-        sheet.write_text("<html>Pension portals — sign-in credentials</html>")
+        sheet.write_text("<html>Pension portals — sign-in credentials<script>var q=1;</script></html>")
         with mock.patch.object(db, "CREDENTIALS_HTML", sheet):
             r = self.client.get("/start.html", headers={"X-Portal-Port": str(AG_PORTAL_PORT)})
             self.assertEqual(r.status_code, 200)
             self.assertIn("sign-in credentials", r.text)
+            # The sheet's search box is an inline script: it runs only with this server's CSP nonce.
+            from api.portal_server import NONCE
+            self.assertIn(f'<script nonce="{NONCE}">', r.text)
+            self.assertIn(f"'nonce-{NONCE}'", r.headers["content-security-policy"])
             self.assertEqual(self.client.get("/start.html", headers={"X-Portal-Port": "5182"}).status_code, 404)
 
     def test_portals_listing_and_unknown_port(self) -> None:

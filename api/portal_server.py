@@ -235,7 +235,10 @@ class PortalApp:
         if not path.exists():
             return Response("The credentials sheet has not been generated yet (python3 -m api.db credentials).",
                             status_code=404)
-        return HTMLResponse(path.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+        # The sheet's own inline script (its search box) must carry this server's nonce, or the
+        # Content-Security-Policy stops it and the search box does nothing (9 Oct 2026).
+        html = path.read_text(encoding="utf-8").replace("<script>", f'<script nonce="{NONCE}">')
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     async def page(self, request: Request) -> Response:
         path = request.path_params.get("path", "")
