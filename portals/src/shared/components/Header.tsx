@@ -33,7 +33,7 @@ export const Crest = ({ size = 48 }: { size?: number }) => (
 )
 
 const ROLE_WORDS: Record<string, string> = {
-  DEPT_OFFICER: 'DDO (Drawing & Disbursing Officer)', AG_REVIEWER: "Accountant General's desk · all wings", AG_DAG: 'Deputy Accountant General (Pension)', ADMIN: 'System Administrator',
+  DEPT_OFFICER: 'DDO (Drawing & Disbursing Officer)', AG_REVIEWER: 'AG / Additional AG and senior officers · all wings', AG_DAG: 'Deputy Accountant General (Pension)', ADMIN: 'System Administrator',
   AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant Accounts Officer', AG_AO: 'Accounts Officer',
 }
 

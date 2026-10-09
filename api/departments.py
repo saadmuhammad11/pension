@@ -238,7 +238,7 @@ CREATABLE_ROLES = ROLES
 AG_ROLES = TIER_ROLES + ("AG_DAG", "AG_REVIEWER")
 ROLE_LABELS = {"DEPT_OFFICER": "DDO", "AG_SENIOR_AUDITOR": "Senior Auditor", "AG_ASSISTANT_AO": "Assistant Accounts Officer",
                "AG_AO": "Accounts Officer", "AG_DAG": "Deputy Accountant General (Pension)", "ADMIN": "Administrator",
-               "AG_REVIEWER": "Accountant General's desk (all wings, every tier)"}
+               "AG_REVIEWER": "AG / Additional AG and senior officers (all wings, every tier)"}
 
 
 def portal_for(role: str, department_code: str | None) -> str | None:

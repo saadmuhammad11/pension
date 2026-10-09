@@ -1152,7 +1152,7 @@ def _allowed_actions(conn: db.Connection, user: User, row: db.Row) -> list[str]:
 
 #: What the old register (api.cases) records as the deciding desk for each portal role.
 MIRROR_ROLE_LABELS = {"AG_SENIOR_AUDITOR": "Senior Auditor, Pension wing (AG)", "AG_ASSISTANT_AO": "Assistant Accounts Officer, Pension wing (AG)",
-                      "AG_AO": "Accounts Officer, Pension wing (AG)", "AG_REVIEWER": "Accountant General's desk (all wings)",
+                      "AG_AO": "Accounts Officer, Pension wing (AG)", "AG_REVIEWER": "AG / Additional AG and senior officers (all wings)",
                       "AG_DAG": "Deputy Accountant General (Pension)"}
 
 #: Acting on a case (29 Sep 2026) needs a completed AI examination of the papers as they stand:

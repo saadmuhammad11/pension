@@ -34,7 +34,7 @@ const newId = () => (Date.now().toString(16) + (ids++).toString(16).padStart(4, 
 function makeUsers(): User[] {
   const u: User[] = [
     { id: 'u-admin', username: 'admin', display_name: 'System Administrator', role: 'ADMIN', department_code: null, department_name: null, active: true, portal: 'ag' },
-    { id: 'u-rev', username: 'ag.reviewer', display_name: "Accountant General's desk (all wings)", role: 'AG_REVIEWER', department_code: null, department_name: null, active: true, portal: 'ag' },
+    { id: 'u-rev', username: 'ag.reviewer', display_name: 'AG / Additional AG and senior officers (all wings)', role: 'AG_REVIEWER', department_code: null, department_name: null, active: true, portal: 'ag' },
   ]
   for (const d of DEPTS) u.push({ id: 'u-' + d.slug, username: d.slug, display_name: `${d.name} — DDO`, role: 'DEPT_OFFICER', department_code: d.code, department_name: d.name, active: true, portal: 'ag' })
   return u

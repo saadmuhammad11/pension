@@ -99,12 +99,12 @@ CREDENTIALS_HTML = CREDENTIALS_DIR / "credentials.html"
 #: department, username = the department's slug.
 AG_USERS: tuple[tuple[str, str, str], ...] = (
     # The Accountant General's own desk (decision of 9 Oct 2026, afternoon): one login, ag.reviewer,
-    # for the office's senior officers, acting at every tier in every wing and overriding like the
+    # for the AG, the Additional AG and the other senior officers, acting at every tier in every wing and overriding like the
     # Deputy AG. It is the one shared login the office keeps (the C1 rule of 7 Oct 2026 stands for
     # every other account); the named trial login syed.haider of 7 Oct is renamed back to it by the
     # seed (see seed()) so the trial's records stay attached. Tier officers are created by the
     # administrator, with `python3 -m api.db add-reviewer`, or for the trial `seed-wing-tiers`.
-    ("ag.reviewer", "Accountant General's desk (all wings)", "AG_REVIEWER"),
+    ("ag.reviewer", "AG / Additional AG and senior officers (all wings)", "AG_REVIEWER"),
     ("admin", "System Administrator", "ADMIN"),
 )
 
@@ -472,6 +472,12 @@ def seed(conn: Connection | None = None, *, quiet: bool = False) -> dict:
             conn.close()
 
 
+def _role_words(role: str) -> str:
+    """The office's name for a role on the sign-in sheet ("Senior Auditor", not "Ag Senior Auditor")."""
+    from api.departments import ROLE_LABELS
+    return ROLE_LABELS.get(role) or role.replace("_", " ").title()
+
+
 def _dept_name(conn: Connection, code: str | None) -> str:
     if not code:
         return "Accountant General Punjab"
@@ -583,7 +589,7 @@ def render_credentials_html() -> Path:
         f"<tr><td>{html.escape(r['department'])}</td><td><code>{html.escape(r['username'])}</code></td>"
         f"<td><code>{html.escape(r['password'])}</code></td><td>{html.escape(r['port'])}</td>"
         f"<td><a href=\"{html.escape(r['url'])}\">{html.escape(r['url'])}</a></td>"
-        f"<td>{html.escape(r['role'].replace('_', ' ').title())}</td></tr>"
+        f"<td>{html.escape(_role_words(r['role']))}</td></tr>"
         for r in rows)
     doc = f"""<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pension portals — sign-in credentials (confidential)</title>
@@ -687,7 +693,10 @@ def refresh_credentials(password: str, conn: Connection | None = None) -> list[s
         matched = [u for u in users if verify_password(password, u["password_hash"])]
         if matched:
             _record_credentials([{"portal": portal_for(u["role"], u["department_code"]) or "",
-                                  "department": _dept_name(conn, u["department_code"]), "username": u["username"],
+                                  # A wing officer's "department" cell names the wing (9 Oct 2026).
+                                  "department": _dept_name(conn, u["department_code"]) + (
+                                      f" · {u['pension_wing']}" if "pension_wing" in u.keys() and u["pension_wing"] else ""),
+                                  "username": u["username"],
                                   "password": password, "role": u["role"], "department_code": u["department_code"] or ""}
                                  for u in matched])
         return [u["username"] for u in matched]

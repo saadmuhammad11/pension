@@ -11,7 +11,7 @@ import { PasswordField } from '../../components/PasswordField'
  *  office's senior officers. */
 export const ROLE_WORDS: Record<string, string> = {
   AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant Accounts Officer', AG_AO: 'Accounts Officer',
-  AG_DAG: 'Deputy AG (Pension)', AG_REVIEWER: "AG's desk (all wings, every tier)", DEPT_OFFICER: 'DDO', ADMIN: 'Administrator',
+  AG_DAG: 'Deputy AG (Pension)', AG_REVIEWER: 'AG / Additional AG and senior officers (all wings, every tier)', DEPT_OFFICER: 'DDO', ADMIN: 'Administrator',
 }
 export const CREATABLE_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_REVIEWER', 'DEPT_OFFICER', 'ADMIN']
 export const TIER_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO']
