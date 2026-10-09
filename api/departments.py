@@ -226,9 +226,18 @@ DEPARTMENT_NAMES: dict[str, str] = {**{d.code: d.name for d in DEPARTMENTS}, LEG
 #: The roles a user can hold. AG_DAG (7 Oct 2026, decisions C1/G1/G6): the Deputy Accountant General
 #: (Pension) -- a reviewer with the senior officer's powers: the case override, and the DAG band in
 #: GP Fund, where only the DAG may clear a hard stop.
-ROLES = ("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG", "ADMIN")
-#: The AG's side of a case: the reviewers. The administrator manages users, not cases (G6).
-AG_ROLES = ("AG_REVIEWER", "AG_DAG")
+#: The three tiers of a pension wing (scope change C3, 9 Oct 2026) replaced the single reviewer;
+#: AG_REVIEWER stays only for the accounts that already hold it, reading every case and acting on
+#: none, until the administrator gives them a tier and a wing.
+TIER_ROLES = ("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_AO")
+ROLES = ("DEPT_OFFICER",) + TIER_ROLES + ("AG_DAG", "ADMIN", "AG_REVIEWER")
+#: The roles the administrator may create: everything but the legacy reviewer.
+CREATABLE_ROLES = ("DEPT_OFFICER",) + TIER_ROLES + ("AG_DAG", "ADMIN")
+#: The AG's side of a case: the tiers and the Deputy AG. The administrator manages users, not cases (G6).
+AG_ROLES = TIER_ROLES + ("AG_DAG",)
+ROLE_LABELS = {"DEPT_OFFICER": "DDO", "AG_SENIOR_AUDITOR": "Senior Auditor", "AG_ASSISTANT_AO": "Assistant Accounts Officer",
+               "AG_AO": "Accounts Officer", "AG_DAG": "Deputy Accountant General (Pension)", "ADMIN": "Administrator",
+               "AG_REVIEWER": "AG Reviewer (legacy, read-only)"}
 
 
 def portal_for(role: str, department_code: str | None) -> str | None:
@@ -237,7 +246,7 @@ def portal_for(role: str, department_code: str | None) -> str | None:
     One portal for everyone (SINGLE_PORTAL): the AG portal. A department officer still needs a
     department, or there is nothing to show them.
     """
-    if role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
+    if role in AG_ROLES or role in ("AG_REVIEWER", "ADMIN"):
         return AG_PORTAL_SLUG
     dept = BY_CODE.get(department_code or "")
     if dept is None:

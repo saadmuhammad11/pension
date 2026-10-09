@@ -41,7 +41,10 @@ GAZETTED = ("unknown", "gazetted", "non-gazetted")
 #: The module's officer band an account acts as. The Accounts Officer (level 2) may pass a case
 #: for payment; the administrator acts as the DAG (Funds), who may also clear a second return.
 #: The administrator has no band: it takes no action in GP Fund (G6).
-OFFICER_FOR_ROLE = {"AG_REVIEWER": "ao", "AG_DAG": "dag", "DEPT_OFFICER": "da"}
+#: The module's officer band for each portal role (Q3 of 9 Oct 2026: Senior Auditor -> da,
+#: Assistant AO and AO -> ao, Deputy AG -> dag; the legacy reviewer keeps ao).
+OFFICER_FOR_ROLE = {"AG_SENIOR_AUDITOR": "da", "AG_ASSISTANT_AO": "ao", "AG_AO": "ao", "AG_REVIEWER": "ao",
+                    "AG_DAG": "dag", "DEPT_OFFICER": "da"}
 
 
 class GpfError(Exception):

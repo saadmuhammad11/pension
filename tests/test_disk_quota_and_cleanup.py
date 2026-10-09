@@ -31,12 +31,14 @@ class Refusals(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
 
     def test_uploads_and_verifications_are_refused_when_the_disk_is_short(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         nearly_full = _Usage(total=100 * 1024 ** 3, used=98 * 1024 ** 3, free=2 * 1024 ** 3)
         with mock.patch.object(shutil, "disk_usage", lambda p: nearly_full), \
                 mock.patch.dict(os.environ, {"PENSION_MIN_FREE_GB": "5"}):

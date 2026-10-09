@@ -29,7 +29,8 @@ from api.auth import (MEDIA_SCOPE, MEDIA_TOKEN_TTL, AuthError, User, authenticat
                       issue_scoped_token,
                       hash_password, issue_token, password_problem, require_roles)
 from api.departments import (AG_PORTAL_PORT, AG_PORTAL_SLUG, DEPARTMENTS, DEPARTMENT_NAMES,
-                             PENSION_SECTION_ORDER, LEGACY_DEPARTMENT, ROLES, SINGLE_PORTAL, portal_for)
+                             PENSION_SECTION_ORDER, LEGACY_DEPARTMENT, ROLES, CREATABLE_ROLES, TIER_ROLES,
+                             SINGLE_PORTAL, portal_for)
 from api.themes import theme_for
 from rules.case_type import (OFFICE_CASE_TYPES, canonical_office_type, case_type_label, load_case_types,
                              variants_for_case_type)
@@ -170,7 +171,7 @@ GPF_COOKIE = "pension_gpf"
 
 
 @router.post("/auth/gpf-session")
-def gpf_session(request: Request, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG"))):
+def gpf_session(request: Request, user: User = Depends(require_roles(*workflow.AG_SIDE))):
     """Sign the GP Fund frame in. The AG's case screen shows the module's own page in a frame,
     and a frame cannot carry the Authorization header; this sets a cookie the portal server
     checks on every /gpf/ request (docs/DEPLOYMENT.md F10). AG and administrator only: the
@@ -245,7 +246,7 @@ def _gpf_frame_user(token: str | None, conn: db.Connection) -> User:
         user = user_for_token(token, conn, scope=GPF_SCOPE)
     except AuthError as exc:
         _raise(exc)
-    if user.role not in ("AG_REVIEWER", "AG_DAG") or user.must_change_password:
+    if user.role not in workflow.AG_SIDE or user.must_change_password:
         raise HTTPException(403, "this account may not open the GP Fund module")
     return user
 
@@ -269,18 +270,24 @@ def gpf_act_check(x_gpf_session: str | None = Header(default=None),
 def capabilities(user: User) -> dict:
     """What the screens may offer this user. The server re-checks every one of them."""
     # The administrator manages users and reads; it takes no case action (business decision G6,
-    # 7 Oct 2026). The override is the Deputy AG's.
+    # 7 Oct 2026). The override is the Deputy AG's. The tiers (C3, 9 Oct 2026): the Senior Auditor
+    # verifies and talks to the department; the Accounts Officer decides; the legacy reviewer reads.
     dept_side = user.role == "DEPT_OFFICER"
-    ag_side = user.role in ("AG_REVIEWER", "AG_DAG")
+    ag_side = user.role in workflow.AG_SIDE
+    reads_ag = user.role in workflow.AG_READERS
+    tier = workflow.tier_of(user.role)
     return {
-        "create_case": dept_side, "add_documents": dept_side, "run_check": ag_side,
+        "create_case": dept_side, "add_documents": dept_side,
+        "run_check": user.role in ("AG_SENIOR_AUDITOR", "AG_DAG"),
         "forward": dept_side, "pick_department": False,
         "intake_choices": ag_side,
         # The declared case type (29 Sep 2026): the AG may correct it, with a remark.
         "correct_case_type": ag_side,
-        "review": ag_side, "dispose": ag_side, "override": user.role == "AG_DAG",
+        "review": reads_ag and user.role != "ADMIN", "dispose": ag_side, "override": user.role == "AG_DAG",
+        "decide": user.role in ("AG_AO", "AG_DAG"), "return_to_department": user.role in ("AG_SENIOR_AUDITOR", "AG_DAG"),
+        "tier": tier, "tier_label": workflow.TIER_LABELS.get(tier or "", None), "pension_wing": user.pension_wing,
         "manage_users": user.role == "ADMIN", "audit_log": user.role == "ADMIN",
-        "all_departments": ag_side or user.role == "ADMIN",
+        "all_departments": user.role in ("AG_DAG", "ADMIN", "AG_REVIEWER"),
     }
 
 
@@ -320,7 +327,7 @@ def _product_or_422(product: str | None) -> str | None:
 
 
 @router.get("/departments/counts")
-def department_counts(product: str | None = None, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+def department_counts(product: str | None = None, user: User = Depends(require_roles(*workflow.AG_READERS)),
                       conn: db.Connection = Depends(get_conn)) -> list[dict]:
     """Every department with its case counts by status -- the AG Review sidebar.
 
@@ -421,7 +428,7 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
     product = _product_or_422(product)
     if pension_section:
         _section_codes_or_422(pension_section)
-    agd = user.role in ("AG_REVIEWER", "AG_DAG", "ADMIN")
+    agd = user.role in workflow.AG_READERS
     # The same scope as the register and the sidebar (api.inventory).
     where, args = inventory.scope(conn, user, product=product, department=department if agd else None,
                                   section=pension_section if agd else None)
@@ -545,7 +552,7 @@ def _case_or_404(conn: db.Connection, case_id: str, user: User) -> db.Row:
     row = conn.execute("SELECT * FROM cases WHERE id = ? OR case_no = ?", (case_id, case_id)).fetchone()
     if row is None:
         raise HTTPException(404, f"no case {case_id}")
-    if not workflow.may_see(user.role, user.department_code, row):
+    if not workflow.may_see_user(user, row):
         raise HTTPException(403, "this case belongs to another department")
     return row
 
@@ -595,6 +602,15 @@ def _redact(d: dict, user: User) -> dict:
         d["latest_run"] = {k: d["latest_run"].get(k) for k in _RUN_PUBLIC}
     if "runs" in d:
         d["runs"] = [{k: r.get(k) for k in _RUN_PUBLIC} for r in d["runs"]]
+    # The moves between tiers are the AG's own business (C3): a DDO's history has no such rows,
+    # and its "last event" is the last row the DDO may see.
+    if "events" in d:
+        d["events"] = [e for e in d["events"] if e.get("action") not in workflow.INTERNAL_ACTIONS]
+    if d.get("last_event") and d["last_event"].get("action") in workflow.INTERNAL_ACTIONS:
+        visible = d.get("events") or []
+        d["last_event"] = visible[-1] if visible else None
+    d["holder_tier"] = None                               # the DDO sees "with the Accountant General", not which desk
+    d["holder_label"] = "With the Accountant General" if d.get("status") in workflow.AG_HOLDS else None
     for e in d.get("events") or []:
         _redact_event(e)
     if d.get("last_event"):
@@ -609,6 +625,10 @@ def _case_dict(conn: db.Connection, row: db.Row, *, full: bool = False) -> dict:
     sec = section_of(row["department_code"])
     d["pension_section"] = None if sec == LEGACY else sec     # the register shows "Legacy" for None
     d["status_label"] = workflow.STATUS_LABELS.get(row["status"], row["status"])
+    # Who holds the case inside the AG (C3): the tier, and the wing the department belongs to.
+    d["pension_wing"] = workflow.wing_of_case(row)
+    d["holder_tier"] = row["holder_tier"] if "holder_tier" in row.keys() else None
+    d["holder_label"] = workflow.holder_label(row)
     d["intake"] = json.loads(row["intake_json"] or "{}")
     del d["intake_json"]
     latest = conn.execute("SELECT * FROM case_runs WHERE case_id = ? ORDER BY started_at DESC LIMIT 1",
@@ -699,7 +719,7 @@ def case_inventory(product: str | None = None, department: str | None = None, pe
         rows = everything
     depts = conn.execute("SELECT code, name, digital, active FROM departments").fetchall()
     out = {"version": ver, "product": product, "rows": rows, "counts": inventory.counts_of(rows, [])}
-    if user.role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
+    if user.role in workflow.AG_READERS:
         side = inventory.counts_of(everything, depts)
         out["sidebar"] = {"total": side["total"], "by_department": side["by_department"], "by_section": side["by_section"]}
     return out
@@ -1026,7 +1046,7 @@ def _create_case(conn, user, uploads, department_code, claimant_name, variant, a
         choices = _intake_choices(None if user.role == "DEPT_OFFICER" else variant,
                                   annual_pay, commutation_percent, retirement_date,
                                   pension_in_payment, date_of_death,
-                                  "AG_REVIEWER" if capabilities(user)["intake_choices"] else "AD_SUBMITTER")
+                                  "AG_REVIEWER" if capabilities(user)["intake_choices"] else "AD_SUBMITTER")   # the desk name api.desks knows
         choices["variant"] = variant or None
     now = db.now()
     case = {"id": db.new_id(), "case_no": "", "department_code": department_code,
@@ -1099,22 +1119,45 @@ def get_case(case_id: str, user: User = Depends(current_user),
     if row["product"] == "GPF" and case_runs.sync_gpf_case(conn, row):
         row = _case_or_404(conn, case_id, user)
     d = _redact(_case_dict(conn, row, full=True), user)
-    d["allowed_actions"] = [a for a in workflow.allowed_actions(user.role, row["status"])
-                            if a != "OVERRIDE" and (a in ("TAKE_UP", "RUN_CHECK", "APPROVE", "REJECT", "RETURN", "REQUEST_DOCS")
-                                                    or workflow.owns_side(user.role, user.department_code, row))
-                            and (a not in DECISIONS_NEED_VERIFICATION or _verified(conn, row))]
-    if user.role == "AG_DAG":
-        d["allowed_actions"].append("OVERRIDE")               # the Deputy AG's, not the administrator's (G6)
-    if "APPROVE" in d["allowed_actions"] and user.id in _submitters(conn, row):
-        d["allowed_actions"].remove("APPROVE")           # maker-checker (C1): the submitter does not approve
+    d["allowed_actions"] = _allowed_actions(conn, user, row)
     return d
 
+
+def _allowed_actions(conn: db.Connection, user: User, row: db.Row) -> list[str]:
+    """The moves this user may make on this case now: by role and status (workflow.TRANSITIONS),
+    by side, by wing and holder tier (C3), by verification, and by maker-checker."""
+    out = []
+    for a in workflow.allowed_actions(user.role, row["status"]):
+        if a == "OVERRIDE":
+            continue
+        if a in ("ADD_DOCS", "REPLACE_DOC", "FORWARD") and not workflow.owns_side(user.role, user.department_code, row):
+            continue
+        if a in DECISIONS_NEED_VERIFICATION and not _verified(conn, row):
+            continue
+        try:
+            workflow.check_holder(user, row, a)
+            if a in workflow.INTERNAL_ACTIONS:
+                workflow.next_holder(a, row, row["status"])       # a last tier cannot forward, a first cannot return down
+        except workflow.WorkflowError:
+            continue
+        out.append(a)
+    if user.role == "AG_DAG":
+        out.append("OVERRIDE")                                # the Deputy AG's, not the administrator's (G6)
+    if "APPROVE" in out and user.id in _submitters(conn, row):
+        out.remove("APPROVE")                                 # maker-checker (C1): the submitter does not approve
+    return out
+
+
+#: What the old register (api.cases) records as the deciding desk for each portal role.
+MIRROR_ROLE_LABELS = {"AG_SENIOR_AUDITOR": "Senior Auditor, Pension wing (AG)", "AG_ASSISTANT_AO": "Assistant Accounts Officer, Pension wing (AG)",
+                      "AG_AO": "Accounts Officer, Pension wing (AG)", "AG_REVIEWER": "Auditor, Pension wing (AG / DAO)",
+                      "AG_DAG": "Deputy Accountant General (Pension)"}
 
 #: Acting on a case (29 Sep 2026) needs a completed AI examination of the papers as they stand:
 #: the AG approves, rejects, returns or asks for documents on what the machine has read, never
 #: on a file nobody has opened. Only the examination itself, and the administrator's audited
 #: override, come before it.
-DECISIONS_NEED_VERIFICATION = frozenset({"APPROVE", "REJECT", "RETURN", "REQUEST_DOCS"})
+DECISIONS_NEED_VERIFICATION = frozenset({"APPROVE", "REJECT", "RETURN", "REQUEST_DOCS", "FORWARD_TIER"})
 
 
 def _verified(conn: db.Connection, row: db.Row) -> bool:
@@ -1163,7 +1206,7 @@ def case_types(user: User = Depends(current_user)) -> dict:
 
 @router.post("/cases/{case_id}/case-type")
 def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
-                  user: User = Depends(require_roles("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG")),
+                  user: User = Depends(require_roles("DEPT_OFFICER", *workflow.AG_SIDE)),
                   conn: db.Connection = Depends(get_conn)) -> dict:
     """Change the case type. A department may change its declaration while the case is on its
     side (not yet forwarded, or sent back); the Accountant General and the administrator may
@@ -1390,7 +1433,7 @@ def download_document(case_id: str, doc_id: str, user: User = Depends(current_us
 
 
 @router.post("/cases/{case_id}/check", status_code=202)
-def run_check(case_id: str, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+def run_check(case_id: str, user: User = Depends(require_roles("AG_SENIOR_AUDITOR", "AG_DAG")),
               conn: db.Connection = Depends(get_conn)) -> dict:
     """"Verify case with AI": the Accountant General's button. The outcome moves the case by
     itself (api.case_runs): returned with the missing documents, approved, or under review."""
@@ -1456,6 +1499,10 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
                 raise HTTPException(422, f"approving against the AI findings needs a remark of at least "
                                          f"{workflow.MIN_OVERRIDE_REMARK} characters")
             mirror = "FORWARD"
+        elif action == "FORWARD_TIER" and workflow.tier_of(user.role) == workflow.SENIOR_AUDITOR:
+            # The Senior Auditor forwards nothing with a paper still missing or defective: the
+            # line must have been named on its pages or waived with grounds (C3).
+            _forward_gate_or_422(conn, row)
         elif action in ("RETURN", "REQUEST_DOCS"):
             mirror = "RETURN_FOR_CORRECTION"
             # What exactly the department is asked for (30 Sep 2026): checklist items by id, or a
@@ -1472,7 +1519,11 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
         if action in workflow.REMARK_REQUIRED and not remark:
             raise workflow.WorkflowError(422, f"{action.replace('_', ' ').title()} needs a remark")
         if action in ("APPROVE", "REJECT", "RETURN", "REQUEST_DOCS") and row["status"] == workflow.FORWARDED:
-            workflow.transition(conn, row, "TAKE_UP", user, remark="", run_id=run_id)
+            workflow.check_holder(user, row, action)
+            take_up_by = user if workflow.tier_of(user.role) == workflow.SENIOR_AUDITOR or user.role == "AG_DAG" else None
+            if take_up_by is None:
+                raise workflow.WorkflowError(409, "a newly submitted case is with the Senior Auditor")
+            workflow.transition(conn, row, "TAKE_UP", take_up_by, remark="", run_id=run_id)
             row = conn.execute("SELECT * FROM cases WHERE id = ?", (row["id"],)).fetchone()
         within = None
         if action == "OVERRIDE":
@@ -1489,10 +1540,50 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
     if mirror and run_id:
         # Keep the old register (api.cases) in agreement with what the AG decided here.
         case_runs.mirror_decision(run_id, mirror, user.display_name,
-                                  {"AG_REVIEWER": "Auditor, Pension wing (AG / DAO)", "AG_DAG": "Deputy Accountant General (Pension)"}.get(user.role, "System administrator"),
+                                  MIRROR_ROLE_LABELS.get(user.role, "System administrator"),
                                   remark)
     fresh = conn.execute("SELECT * FROM cases WHERE id = ?", (row["id"],)).fetchone()
     return {"event": entry, "case": _redact(_case_dict(conn, fresh, full=True), user)}
+
+
+def _forward_gate_or_422(conn: db.Connection, row: db.Row) -> None:
+    """Refuse the Senior Auditor's forward while the current run's checklist has a line MISSING or
+    DEFECTIVE that the officer has neither named on its pages nor waived (api.checklist_actions)."""
+    from api.artefacts import report_dict
+    from api.checklist_actions import current
+    from api.runs import ARTIFACTS
+    if not row["current_run_id"] or row["current_run_id"].startswith(case_runs.GPF_RUN_PREFIX):
+        return                                            # a GP Fund examination has no pension checklist
+    run_dir = ARTIFACTS / f"run-{row['current_run_id']}"
+    rep = report_dict(run_dir)
+    if rep is None:
+        return
+    items = ((rep.get("checklist") or {}).get("items")) or []
+    # The officer's actions in force on the run: a WAIVE or an IDENTIFY on the line, or a document
+    # named on its pages for it (the same reading api.checklist_actions.apply lays over the report).
+    actions = current(run_dir)
+    settled = {k for k, a in actions.items() if a.get("action") in ("WAIVE", "IDENTIFY")}
+    settled |= {a.get("item_id") for k, a in actions.items() if k.startswith("name:") and a.get("item_id")}
+    open_lines = [i["id"] for i in items if i.get("status") in ("MISSING", "DEFECTIVE") and i["id"] not in settled]
+    if open_lines:
+        raise HTTPException(422, "the checklist still has a document missing or defective: " + ", ".join(open_lines)
+                            + ". Return the case to the department, name the document on its pages, or waive the line with grounds")
+
+
+@router.post("/cases/{case_id}/forward-tier")
+def forward_tier(case_id: str, body: dict = Body(default={}),
+                 user: User = Depends(require_roles("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_DAG")),
+                 conn: db.Connection = Depends(get_conn)) -> dict:
+    """Up one tier: Senior Auditor -> Assistant AO -> Accounts Officer (C3). Internal to the AG."""
+    return _act(conn, user, case_id, "FORWARD_TIER", body)
+
+
+@router.post("/cases/{case_id}/return-tier")
+def return_tier(case_id: str, body: dict = Body(default={}),
+                user: User = Depends(require_roles("AG_ASSISTANT_AO", "AG_AO", "AG_DAG")),
+                conn: db.Connection = Depends(get_conn)) -> dict:
+    """Down one tier, with a remark: AO -> Assistant AO -> Senior Auditor (C3). Internal to the AG."""
+    return _act(conn, user, case_id, "RETURN_TIER", body)
 
 
 @router.post("/cases/{case_id}/forward")
@@ -1504,35 +1595,35 @@ def forward(case_id: str, body: dict = Body(default={}),
 
 @router.post("/cases/{case_id}/take-up")
 def take_up(case_id: str, body: dict = Body(default={}),
-            user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+            user: User = Depends(require_roles(*workflow.AG_SIDE)),
             conn: db.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "TAKE_UP", body)
 
 
 @router.post("/cases/{case_id}/approve")
 def approve(case_id: str, body: dict = Body(default={}),
-            user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+            user: User = Depends(require_roles(*workflow.AG_SIDE)),
             conn: db.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "APPROVE", body)
 
 
 @router.post("/cases/{case_id}/reject")
 def reject(case_id: str, body: dict = Body(default={}),
-           user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+           user: User = Depends(require_roles(*workflow.AG_SIDE)),
            conn: db.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "REJECT", body)
 
 
 @router.post("/cases/{case_id}/return")
 def return_case(case_id: str, body: dict = Body(default={}),
-                user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                user: User = Depends(require_roles(*workflow.AG_SIDE)),
                 conn: db.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "RETURN", body)
 
 
 @router.post("/cases/{case_id}/request-docs")
 def request_docs(case_id: str, body: dict = Body(default={}),
-                 user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                 user: User = Depends(require_roles(*workflow.AG_SIDE)),
                  conn: db.Connection = Depends(get_conn)) -> dict:
     return _act(conn, user, case_id, "REQUEST_DOCS", body)
 
@@ -1587,7 +1678,7 @@ def _gpf_after(conn: db.Connection, row: db.Row, user: User, what: str, detail: 
 
 @router.post("/cases/{case_id}/gpf/{action}")
 def case_gpf_action(case_id: str, action: str, body: dict = Body(default={}),
-                    user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                    user: User = Depends(require_roles(*workflow.AG_SIDE)),
                     conn: db.Connection = Depends(get_conn)) -> dict:
     """An officer's action on the GP Fund examination, drawn by the portal (30 Sep 2026):
     verify (a verification task), dispositions (uphold / waive / correct / refer an observation),
@@ -1611,7 +1702,7 @@ def case_gpf_action(case_id: str, action: str, body: dict = Body(default={}),
 @router.post("/cases/{case_id}/gpf-cure")
 def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = Form("{}"),
                         file: UploadFile | None = File(default=None),
-                        user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                        user: User = Depends(require_roles(*workflow.AG_SIDE)),
                         conn: db.Connection = Depends(get_conn)) -> dict:
     """Cure an examination item by a document or by values, through the module."""
     row = _gpf_case_or_404(conn, case_id, user, acting=True)
@@ -1636,7 +1727,7 @@ def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = Form("{
 
 
 @router.get("/cases/{case_id}/gpf-issue-pack")
-def case_gpf_issue_pack(case_id: str, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+def case_gpf_issue_pack(case_id: str, user: User = Depends(require_roles(*workflow.AG_READERS)),
                         conn: db.Connection = Depends(get_conn)) -> dict:
     row = _gpf_case_or_404(conn, case_id, user)
     try:
@@ -1646,7 +1737,7 @@ def case_gpf_issue_pack(case_id: str, user: User = Depends(require_roles("AG_REV
 
 
 @router.get("/cases/{case_id}/gpf-sap-template")
-def case_gpf_sap_template(case_id: str, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+def case_gpf_sap_template(case_id: str, user: User = Depends(require_roles(*workflow.AG_READERS)),
                           conn: db.Connection = Depends(get_conn)) -> dict:
     row = _gpf_case_or_404(conn, case_id, user)
     try:
@@ -1662,7 +1753,7 @@ def case_gpf_page(case_id: str, page: int, user: User = Depends(current_user_q),
     the scanning view (30 Sep 2026). AG only, like the examination itself."""
     import json as _json
     from fastapi.responses import FileResponse
-    if user.role not in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
+    if user.role not in workflow.AG_READERS:
         raise HTTPException(403, "the GP Fund examination is the Accountant General's")
     row = _case_or_404(conn, case_id, user)
     work = gpf_bridge.scratch_dir(row["id"], row["submission_no"])
@@ -1683,7 +1774,7 @@ def case_gpf_page(case_id: str, page: int, user: User = Depends(current_user_q),
 
 
 @router.get("/cases/{case_id}/gpf")
-def case_gpf(case_id: str, user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG", "ADMIN")),
+def case_gpf(case_id: str, user: User = Depends(require_roles(*workflow.AG_READERS)),
              conn: db.Connection = Depends(get_conn)) -> dict:
     """What the GP Fund module holds for this case: the reading job while it reads, its case
     afterwards, and the address of its screens for the portal's frame. AG only: the module's
@@ -1784,7 +1875,7 @@ def case_dispositions(case_id: str, run_id: str, user: User = Depends(current_us
 
 @router.post("/cases/{case_id}/runs/{run_id}/dispositions", status_code=201)
 def case_disposition(case_id: str, run_id: str, body: dict = Body(...),
-                     user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                     user: User = Depends(require_roles(*workflow.AG_SIDE)),
                      conn: db.Connection = Depends(get_conn), request: Request = None) -> dict:
     from api.dispositions import DispositionError, calculation_gate, in_force, record
     run = _run_for(conn, user, case_id, run_id, acting=True)
@@ -1845,7 +1936,7 @@ def case_checklist_actions(case_id: str, run_id: str, user: User = Depends(curre
 
 @router.post("/cases/{case_id}/runs/{run_id}/checklist-actions", status_code=201)
 def case_checklist_action(case_id: str, run_id: str, body: dict = Body(...),
-                          user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                          user: User = Depends(require_roles(*workflow.AG_SIDE)),
                           conn: db.Connection = Depends(get_conn), request: Request = None) -> dict:
     from api import checklist_actions
     from api.artefacts import report_dict
@@ -1920,7 +2011,7 @@ def run_dispositions_by_id(run_id: str, user: User = Depends(current_user), conn
 
 @router.post("/runs/{run_id}/dispositions", status_code=201)
 def run_disposition_by_id(run_id: str, request: Request, body: dict = Body(...),
-                          user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                          user: User = Depends(require_roles(*workflow.AG_SIDE)),
                           conn: db.Connection = Depends(get_conn)) -> dict:
     link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
     if link is None:
@@ -1938,7 +2029,7 @@ def run_checklist_by_id(run_id: str, user: User = Depends(current_user), conn: d
 
 @router.post("/runs/{run_id}/checklist-actions", status_code=201)
 def run_checklist_action_by_id(run_id: str, request: Request, body: dict = Body(...),
-                               user: User = Depends(require_roles("AG_REVIEWER", "AG_DAG")),
+                               user: User = Depends(require_roles(*workflow.AG_SIDE)),
                                conn: db.Connection = Depends(get_conn)) -> dict:
     link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
     if link is None:
@@ -1966,6 +2057,31 @@ def _public_user(row: db.Row) -> dict:
 def list_users(user: User = Depends(require_roles("ADMIN")),
                conn: db.Connection = Depends(get_conn)) -> list[dict]:
     return [_public_user(r) for r in conn.execute("SELECT * FROM users ORDER BY role, username")]
+
+
+def _wing_or_422(role: str, wing: str | None, dept: str | None, conn: db.Connection) -> tuple[str | None, str | None]:
+    """The (department, wing) pair an account of this role may carry (C4, defaults Q4/Q5): a tier
+    officer has a wing and no department; a DDO a department and no wing; the Deputy AG, the
+    administrator and the legacy reviewer neither. A wing is not a department."""
+    wing = (wing or "").strip() or None
+    dept = (dept or "").strip() or None
+    if role in TIER_ROLES:
+        if wing not in PENSION_SECTION_ORDER:
+            raise HTTPException(422, f"a {workflow.TIER_LABELS[workflow.tier_of(role)]} belongs to a pension wing: one of {', '.join(PENSION_SECTION_ORDER)}")
+        if dept:
+            raise HTTPException(422, "a wing officer has no department; the wing covers its departments")
+        return None, wing
+    if role == "DEPT_OFFICER":
+        if wing:
+            raise HTTPException(422, "a DDO belongs to a department, not to a pension wing")
+        if not dept or not conn.execute("SELECT 1 FROM departments WHERE code = ? AND active = 1 AND code != ?",
+                                        (dept, LEGACY_DEPARTMENT[0])).fetchone():
+            raise HTTPException(422, "a DDO account needs an active department")
+        return dept, None
+    if wing or dept:
+        raise HTTPException(422, f"a {workflow.TIER_LABELS.get(role, role.replace('_', ' ').lower())} takes neither a department nor a wing"
+                            if role in workflow.TIER_LABELS else "this role takes neither a department nor a wing")
+    return None, None
 
 
 @router.post("/admin/users", status_code=201)
@@ -2002,6 +2118,34 @@ def create_user(request: Request, body: dict = Body(...), user: User = Depends(r
         workflow.audit(conn, actor=user, action="USER_CREATE", entity_type="user", entity_id=uid, ip=_client_address(request),
                        before=None, after={"username": username, "role": role, "department_code": dept})
     return _public_user(_user_row(conn, uid))
+
+
+@router.post("/admin/users/{user_id}/role")
+def set_user_role(request: Request, user_id: str, body: dict = Body(...), user: User = Depends(require_roles("ADMIN")),
+                  conn: db.Connection = Depends(get_conn)) -> dict:
+    """Give an AG account its tier and wing (C4): the way a legacy AG_REVIEWER becomes a Senior
+    Auditor, Assistant AO or AO of a wing, or an officer moves between wings. A DDO stays a DDO
+    (a department's account is not turned into an AG one). Every session of the account ends.
+    Audited with before and after and a reason."""
+    row = _user_row(conn, user_id)
+    role = str(body.get("role", ""))
+    if row["role"] == "DEPT_OFFICER" or role == "DEPT_OFFICER":
+        raise HTTPException(422, "a DDO account is a department's; create the officer an AG account instead")
+    if role not in CREATABLE_ROLES or role == "ADMIN":
+        raise HTTPException(422, "role must be a tier (AG_SENIOR_AUDITOR, AG_ASSISTANT_AO, AG_AO) or AG_DAG")
+    if row["id"] == user.id:
+        raise HTTPException(409, "you cannot change your own role")
+    reason = " ".join(str(body.get("reason") or "").split())
+    if len(reason) < MIN_RESET_REASON:
+        raise HTTPException(422, f"a role change needs a reason of at least {MIN_RESET_REASON} characters")
+    _, wing = _wing_or_422(role, body.get("pension_wing"), None, conn)
+    with db.transaction(conn):
+        conn.execute("UPDATE users SET role = ?, pension_wing = ?, department_code = NULL, token_version = token_version + 1, "
+                     "updated_at = ? WHERE id = ?", (role, wing, db.now(), row["id"]))
+        workflow.audit(conn, actor=user, action="USER_ROLE_CHANGE", entity_type="user", entity_id=row["id"], ip=_client_address(request),
+                       before={"role": row["role"], "pension_wing": row["pension_wing"] if "pension_wing" in row.keys() else None},
+                       after={"role": role, "pension_wing": wing}, reason=reason)
+    return _public_user(_user_row(conn, row["id"]))
 
 
 @router.post("/admin/users/{user_id}/disable")

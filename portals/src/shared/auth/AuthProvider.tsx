@@ -43,6 +43,7 @@ const EMPTY: Capabilities = {
   create_case: false, add_documents: false, run_check: false, forward: false, pick_department: false,
   intake_choices: false, correct_case_type: false, review: false, dispose: false, override: false, manage_users: false,
   audit_log: false, all_departments: false,
+  decide: false, return_to_department: false, tier: null, tier_label: null, pension_wing: null,
 }
 
 const Ctx = createContext<Session>({ user: null, can: null, loading: true, login: async () => {}, logout: () => {},

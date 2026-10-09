@@ -51,8 +51,13 @@ def scope(conn: db.Connection, user: Any, *, product: str | None = None, departm
           section: str | None = None, alias: str = "c") -> tuple[str, list]:
     """The SQL restriction for "the cases this user may see, narrowed by these filters"."""
     where, args = ["1 = 1"], []
-    if getattr(user, "role", "") == "DEPT_OFFICER":
+    role = getattr(user, "role", "")
+    if role == "DEPT_OFFICER":
         where.append(f"{alias}.department_code = ?"); args.append(user.department_code)
+    elif role in workflow.TIER_ROLES:
+        # A tier officer's view is their own pension wing (C3, 9 Oct 2026); no wing, no cases.
+        codes = section_codes(conn, getattr(user, "pension_wing", None) or "") if getattr(user, "pension_wing", None) else []
+        where.append(f"{alias}.department_code IN ({','.join('?' * len(codes)) or 'NULL'})"); args.extend(codes)
     if product:
         where.append(f"{alias}.product = ?"); args.append(product)
     if department:

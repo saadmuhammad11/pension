@@ -24,6 +24,8 @@ class Backend(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
@@ -51,7 +53,7 @@ class Backend(unittest.TestCase):
     def test_repeated_document_uploads_with_one_key_add_the_papers_once(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         self.verify(reviewer, case_id)
         self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer, json={"remark": "FRC missing; attach it."})
         key = str(uuid.uuid4())
@@ -66,7 +68,7 @@ class Backend(unittest.TestCase):
     def test_a_media_token_opens_images_only(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         run_id = self.verify(reviewer, case_id)["run_id"]
         r = self.client.get("/api/v2/auth/media-token", headers=reviewer)
         self.assertEqual(r.status_code, 200, r.text)
@@ -89,7 +91,7 @@ class Backend(unittest.TestCase):
 
     # -- F14 -------------------------------------------------------------------------------------
     def test_the_password_rule_comes_from_the_server(self) -> None:
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         me = self.client.get("/api/v2/auth/me", headers=reviewer).json()
         self.assertEqual(me["password_min_length"], settings.min_password_length())
         r = self.client.post("/api/v2/auth/login", json={"username": "syed.haider", "password": "Pension@2026"}, headers={"X-Portal": "ag"})

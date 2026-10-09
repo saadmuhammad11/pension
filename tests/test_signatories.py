@@ -23,6 +23,8 @@ class Signatories(unittest.TestCase):
     report_to_write = _v2.CLEAN_REPORT
     fail_runs = False
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
 
     def setUp(self) -> None:
         _v2.V2Test.setUp(self)

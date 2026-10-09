@@ -342,7 +342,8 @@ export function CaseRegister(
                     {r.department_name}
                     <div className="row-hint">{r.pension_section ?? 'Legacy'}</div>
                   </td>}
-                  <td data-col="Status"><span className={`pill ${m.pill}`} title={`${m.label}. ${isDept ? m.dept : m.ag}`}>{SHORT[r.status]}</span></td>
+                  <td data-col="Status"><span className={`pill ${m.pill}`} title={`${m.label}. ${isDept ? m.dept : m.ag}`}>{SHORT[r.status]}</span>
+                    {!isDept && r.holder_label && <div className="row-hint">{r.holder_label}</div>}</td>
                   {showTimeline && <td data-col="Progress"><RowTimeline row={r} /></td>}
                   {showAi && <td data-col="AI result"><span className={`pill ${ai.pill}`} title={ai.title}>{ai.text}</span></td>}
                   <td data-col="Updated" className="num muted" style={{ fontSize: 'var(--t-small)', whiteSpace: 'nowrap' }} title={r.updated_at}>{ago(r.updated_at)}</td>

@@ -24,6 +24,8 @@ class NamedLogins(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
 
     def test_the_seed_creates_the_named_reviewer_and_no_shared_login(self) -> None:
         conn = db.connect()
@@ -33,7 +35,7 @@ class NamedLogins(unittest.TestCase):
             conn.close()
         self.assertIn("syed.haider", names)
         self.assertNotIn("ag.reviewer", names)
-        self.assertEqual(self.login("syed.haider", "ag")["Authorization"][:7], "Bearer ")
+        self.assertEqual(self.sa()["Authorization"][:7], "Bearer ")
 
     def test_an_old_database_s_shared_login_is_renamed_in_place(self) -> None:
         conn = db.connect()
@@ -74,15 +76,15 @@ class NamedLogins(unittest.TestCase):
     def test_a_reviewer_and_the_deputy_ag_are_created_by_name(self) -> None:
         conn = db.connect()
         try:
-            pw = db.add_reviewer("ayesha.khan", "Ayesha Khan (Auditor, Pension Wing)", conn=conn)
+            pw = db.add_reviewer("ayesha.khan", "Ayesha Khan (Senior Auditor, Pension-II)", tier="senior-auditor", wing="Pension-II", conn=conn)
             pw_dag = db.add_reviewer("fatima.ali", "Fatima Ali (DAG Pension)", dag=True, conn=conn)
             with self.assertRaises(ValueError):
                 db.add_reviewer("dag", "Desk", dag=True, conn=conn)          # a desk, not a name
             with self.assertRaises(ValueError):
-                db.add_reviewer("ayesha.khan", "Again", conn=conn)
+                db.add_reviewer("ayesha.khan", "Again", tier="ao", wing="Pension-II", conn=conn)
         finally:
             conn.close()
-        for username, password, role in (("ayesha.khan", pw, "AG_REVIEWER"), ("fatima.ali", pw_dag, "AG_DAG")):
+        for username, password, role in (("ayesha.khan", pw, "AG_SENIOR_AUDITOR"), ("fatima.ali", pw_dag, "AG_DAG")):
             r = self.client.post("/api/v2/auth/login", json={"username": username, "password": password}, headers={"X-Portal": "ag"})
             self.assertEqual(r.status_code, 200, r.text)
             self.assertEqual(r.json()["user"]["role"], role)
@@ -97,33 +99,36 @@ class MakerChecker(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
     def test_the_submitter_cannot_approve_but_a_second_officer_can(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         self.verify(reviewer, case_id)
-        # Make the reviewer the maker: the case's creator and submitter (as one person at a desk
-        # with both roles would be). The rule is about the person, not the role.
+        ao = self.escalate(case_id)                                   # the decision is the AO's (C3)
+        # Make the AO the maker: the case's creator and submitter (as one person at a desk with
+        # both roles would be). The rule is about the person, not the role.
         conn = db.connect()
         try:
-            me = conn.execute("SELECT id FROM users WHERE username = 'syed.haider'").fetchone()["id"]
+            me = conn.execute("SELECT id FROM users WHERE username = ?", (_v2.tier_username("AG_AO", "punjab-police"),)).fetchone()["id"]
             conn.execute("UPDATE cases SET created_by = ? WHERE id = ?", (me, case_id))   # case_events is append-only
             conn.commit()
         finally:
             conn.close()
-        case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
+        case = self.client.get(f"/api/v2/cases/{case_id}", headers=ao).json()
         self.assertNotIn("APPROVE", case["allowed_actions"])
-        self.assertIn("RETURN", case["allowed_actions"])
-        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "Complete and in order; approved."})
+        self.assertIn("RETURN_TIER", case["allowed_actions"])
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=ao, json={"remark": "Complete and in order; approved."})
         self.assertEqual(r.status_code, 403, r.text)
         self.assertIn("maker-checker", r.json()["detail"])
-        # A second, named officer approves.
+        # A second, named officer of the same tier and wing approves.
         conn = db.connect()
         try:
-            pw = db.add_reviewer("ayesha.khan", "Ayesha Khan (Auditor)", conn=conn)
+            pw = db.add_reviewer("ayesha.khan", "Ayesha Khan (Accounts Officer)", tier="ao", wing="Pension-V", conn=conn)
         finally:
             conn.close()
         other = {"Authorization": "Bearer " + self.client.post("/api/v2/auth/login", json={"username": "ayesha.khan", "password": pw},
@@ -137,7 +142,7 @@ class MakerChecker(unittest.TestCase):
     def test_the_deputy_ag_cannot_override_to_approved_a_case_she_submitted(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer, dag = self.login("syed.haider", "ag"), self.login("fatima.hameed", "ag")
+        reviewer, dag = self.sa(), self.login("fatima.hameed", "ag")
         self.verify(reviewer, case_id)
         conn = db.connect()
         try:

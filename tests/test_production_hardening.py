@@ -26,6 +26,8 @@ class _Fixture(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
 
 
 class F1PasswordRules(unittest.TestCase):
@@ -50,8 +52,9 @@ class F1ForcedChange(_Fixture):
         conn.close()
 
     def test_an_account_that_must_change_may_do_nothing_else_until_it_has(self) -> None:
-        self._force("syed.haider")
-        h = self.login("syed.haider", "ag")
+        from tests.test_api_v2 import tier_username
+        self._force(tier_username("AG_SENIOR_AUDITOR", "punjab-police"))
+        h = self.sa()
         me = self.client.get("/api/v2/auth/me", headers=h).json()
         self.assertTrue(me["user"]["must_change_password"])
         r = self.client.get("/api/v2/cases", headers=h)
@@ -72,11 +75,11 @@ class F1ForcedChange(_Fixture):
         admin = self.login("admin", "ag")
         with mock.patch.dict(os.environ, PROD):
             r = self.client.post("/api/v2/admin/users", headers=admin, json={
-                "username": "dag.pension", "role": "AG_REVIEWER", "password": "Copper-Harbour-Falcon-47"})
+                "username": "nadia.rauf", "role": "AG_DAG", "password": "Copper-Harbour-Falcon-47"})
             self.assertEqual(r.status_code, 201, r.text)
             self.assertTrue(r.json()["must_change_password"])
             weak = self.client.post("/api/v2/admin/users", headers=admin, json={
-                "username": "dag.two", "role": "AG_REVIEWER", "password": "12345678"})
+                "username": "hina.saeed", "role": "AG_DAG", "password": "12345678"})
             self.assertEqual(weak.status_code, 422)
 
     def test_production_seed_ignores_the_shared_password_and_flags_every_account(self) -> None:
@@ -252,7 +255,7 @@ class F7SheetNotServedInProduction(_Fixture):
 
 class F10GpfFrameSignIn(_Fixture):
     def test_only_the_ag_side_gets_a_frame_cookie_and_it_opens_nothing_else(self) -> None:
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         r = self.client.post("/api/v2/auth/gpf-session", headers=reviewer)
         self.assertEqual(r.status_code, 200, r.text)
         cookie = r.cookies.get("pension_gpf")
@@ -263,7 +266,7 @@ class F10GpfFrameSignIn(_Fixture):
         check = self.client.get("/api/v2/auth/gpf-check", headers={"X-GPF-Session": cookie})
         self.assertEqual(check.status_code, 200)
         from api.gpf_bridge import OFFICER_FOR_ROLE
-        self.assertEqual(check.json()["officer"], OFFICER_FOR_ROLE["AG_REVIEWER"])
+        self.assertEqual(check.json()["officer"], OFFICER_FOR_ROLE["AG_SENIOR_AUDITOR"])
         # The frame's token is not a session: it opens no other route.
         self.assertEqual(self.client.get("/api/v2/cases", headers={"Authorization": f"Bearer {cookie}"}).status_code, 401)
         self.assertEqual(self.client.get("/api/runs", headers={"Authorization": f"Bearer {cookie}"}).status_code, 401)

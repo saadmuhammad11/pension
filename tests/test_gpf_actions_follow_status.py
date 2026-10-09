@@ -24,6 +24,8 @@ class _Fixture(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
 
     def _gpf_case(self, status: str) -> str:
@@ -46,7 +48,7 @@ class _Fixture(unittest.TestCase):
 
 class PortalRoutes(_Fixture):
     def test_actions_are_refused_unless_under_review(self) -> None:
-        ag = self.login("syed.haider", "ag")
+        ag = self.sa()
         case_id = self._gpf_case("REJECTED")
         acted = []
         with mock.patch.object(gpf_bridge, "act", lambda *a, **k: acted.append(a) or {"ok": True}), \
@@ -70,7 +72,7 @@ class PortalRoutes(_Fixture):
 
 class FrameCheck(_Fixture):
     def _frame_token(self) -> str:
-        r = self.client.post("/api/v2/auth/gpf-session", headers=self.login("syed.haider", "ag"))
+        r = self.client.post("/api/v2/auth/gpf-session", headers=self.sa())
         self.assertEqual(r.status_code, 200, r.text)
         return r.cookies.get("pension_gpf")
 

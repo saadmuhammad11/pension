@@ -23,13 +23,15 @@ class OverrideAuditAtomic(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
     def _case_waiting_for_the_ag(self) -> tuple[str, dict]:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         self.verify(reviewer, case_id)
         admin = self.login("fatima.hameed", "ag")   # the override is the Deputy AG's (G6)
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=admin).json()["status"], "UNDER_REVIEW")

@@ -12,6 +12,7 @@ import { CaseTypePanel } from '../components/CaseTypePanel'
 import { CASE_TYPE_SOURCE_WORDS, caseTypeSourceShort } from '../caseTypes'
 import { useSession } from '../auth/AuthProvider'
 import { ActionPanel } from '../components/ActionPanel'
+import { isAgReader } from '../auth/session'
 import { CaseProgress } from '../components/CaseProgress'
 import { DocumentList } from '../components/DocumentList'
 import { HistoryTimeline } from '../components/HistoryTimeline'
@@ -184,7 +185,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   // when the system still returned cases by itself).
   const sentBack = m.side === 'department' ? [...c.events].reverse().find(e => ['AUTO_RETURN', 'GPF_RETURN', 'RETURN', 'REQUEST_DOCS'].includes(e.action)) : undefined
   const missingDocs = (sentBack?.payload as { missing_checklist?: { id: string; requirement: string; status?: string }[] } | undefined)?.missing_checklist ?? []
-  const agRemarks = c.events.filter(e => (e.actor_role === 'AG_REVIEWER' || e.actor_role === 'AG_DAG' || e.actor_role === 'ADMIN') && e.remark && e.action !== 'CREATE' && e.action !== 'FORWARD')
+  const agRemarks = c.events.filter(e => (isAgReader(e.actor_role ?? '') || e.actor_role === 'ADMIN') && e.remark && e.action !== 'CREATE' && e.action !== 'FORWARD')
   const lastAg = agRemarks[agRemarks.length - 1]
   // The tab's count is the number of findings listed under it, the same as the Flags tab inside.
   const findings = report?.flags.length ?? 0
@@ -224,6 +225,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
         {c.product === 'GPF' && c.intake?.gpf_kind ? ` · ${gpfKindLabel(String(c.intake.gpf_kind))}` : ''}
         {c.product !== 'GPF' && c.case_type && <> · <span title={CASE_TYPE_SOURCE_WORDS[c.case_type_source ?? ''] ?? ''}>{caseTypeLabel(c.case_type)}{c.case_type_source === 'DETECTED' ? ' (detected)' : ''}</span></>}
         {' · '}{c.department_name}
+        {c.holder_label && <> · <span className="muted" title="Who holds the case now">{c.holder_label}</span></>}
       </p>
 
       <CaseProgress status={c.status} />
@@ -368,7 +370,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
         </div>
 
         <aside className="stack">
-          <ActionPanel actions={c.allowed_actions} hasIssues={hasIssues} busy={busy} onAct={doAct} status={c.status}
+          <ActionPanel actions={c.allowed_actions} hasIssues={hasIssues} busy={busy} onAct={doAct} status={c.status} holderTier={c.holder_tier}
                        checklist={(report?.checklist?.items ?? []).map(i => ({ id: i.id, requirement: i.requirement, status: i.status }))}
                        open={pendingAction} onOpenChange={setPendingAction} />
           {canReview && m.side === 'ag' && !c.allowed_actions.some(a => PANEL_ACTIONS.includes(a)) && (

@@ -88,6 +88,11 @@ PERMISSIONS: dict[str, dict[str, object]] = {
 #: administrator runs the deployment and maintains the reference data; a DDO submits.
 ACCOUNT_DESKS: dict[str, tuple[str, ...]] = {
     "AG_REVIEWER": ("AG_REVIEWER", "AG_DETERMINING", "DAG_PENSION"),
+    # The three tiers of a pension wing (C3, 9 Oct 2026) act at the Auditor's and the Determining
+    # Officer's desks of the SOP; the Deputy AG keeps the DAG desk.
+    "AG_SENIOR_AUDITOR": ("AG_REVIEWER", "AG_DETERMINING"),
+    "AG_ASSISTANT_AO": ("AG_REVIEWER", "AG_DETERMINING"),
+    "AG_AO": ("AG_REVIEWER", "AG_DETERMINING", "DAG_PENSION"),
     # The Deputy AG (role AG_DAG, 7 Oct 2026) holds the DAG desk and may act at the desks below it.
     "AG_DAG": ("DAG_PENSION", "AG_DETERMINING", "AG_REVIEWER", "REFERENCE_ADMIN"),
     "ADMIN": ("SYSTEM_ADMIN", "REFERENCE_ADMIN"),

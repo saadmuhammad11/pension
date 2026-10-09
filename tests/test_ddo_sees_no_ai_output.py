@@ -21,13 +21,15 @@ class DepartmentView(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
     def test_no_engine_verdict_or_finding_reaches_the_department(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         self.verify(reviewer, case_id)
 
         # The AG sees the engine's summary and the statistics.

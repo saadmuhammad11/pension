@@ -416,6 +416,8 @@ class RoundsOverTheApi(unittest.TestCase):
         db.seed(quiet=True)
         from tests.test_api_v2 import ensure_deputy_ag
         ensure_deputy_ag()
+        from tests.test_api_v2 import ensure_tiers
+        ensure_tiers()
         from api.server import app
         self.client = TestClient(app, client=("127.0.0.1", 50000))
         self.db = db
@@ -428,11 +430,31 @@ class RoundsOverTheApi(unittest.TestCase):
             p.stop()
         self._tmp.cleanup()
 
-    def login(self, username: str) -> dict:
+    def login(self, username: str, portal: str = "ag") -> dict:
         r = self.client.post("/api/v2/auth/login", json={"username": username, "password": self.db.SEED_PASSWORD},
                              headers={"X-Portal": "ag"})
         self.assertEqual(r.status_code, 200, r.text)
         return {"Authorization": f"Bearer {r.json()['token']}"}
+
+    # The tiers (C3): the fixture accounts of the wing a department belongs to.
+    def sa(self, dept_slug: str = "school-education") -> dict:
+        from tests.test_api_v2 import tier_username
+        return self.login(tier_username("AG_SENIOR_AUDITOR", dept_slug))
+
+    def aao(self, dept_slug: str = "school-education") -> dict:
+        from tests.test_api_v2 import tier_username
+        return self.login(tier_username("AG_ASSISTANT_AO", dept_slug))
+
+    def ao(self, dept_slug: str = "school-education") -> dict:
+        from tests.test_api_v2 import tier_username
+        return self.login(tier_username("AG_AO", dept_slug))
+
+    def escalate(self, case_id: str, dept_slug: str = "school-education") -> dict:
+        r = self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=self.sa(dept_slug), json={})
+        self.assertEqual(r.status_code, 200, r.text)
+        r = self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=self.aao(dept_slug), json={})
+        self.assertEqual(r.status_code, 200, r.text)
+        return self.ao(dept_slug)
 
     def file(self, h: dict) -> str:
         r = self.client.post("/api/v2/cases", headers=h, data={"case_type": "DEATH_IN_SERVICE"},
@@ -446,7 +468,7 @@ class RoundsOverTheApi(unittest.TestCase):
         return r.json()["run_id"]
 
     def test_a_first_submission_is_a_full_run_with_no_base(self) -> None:
-        dept, ag = self.login("school-education"), self.login("syed.haider")
+        dept, ag = self.login("school-education"), self.sa("school-education")
         case_id = self.file(dept)
         self.verify(ag, case_id)
         self.assertIsNone(self.started[0].base_run_id)
@@ -454,7 +476,7 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertEqual(rounds[0]["checks"][0]["mode"], "FULL")
 
     def test_return_for_a_missing_document_resubmit_it_and_the_item_is_resolved(self) -> None:
-        dept, ag = self.login("school-education"), self.login("syed.haider")
+        dept, ag = self.login("school-education"), self.sa("school-education")
         case_id = self.file(dept)
         first = self.verify(ag, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
@@ -496,7 +518,7 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertEqual(mine[1]["requested_items"], [{"id": "AG-06", "label": "NADRA FRC", "on_file": True}])
 
     def test_the_ag_names_items_on_a_return_and_a_clearance_carries_to_the_next_round(self) -> None:
-        dept, ag = self.login("school-education"), self.login("syed.haider")
+        dept, ag = self.login("school-education"), self.sa("school-education")
         case_id = self.file(dept)
         second = {"id": "F-2", "severity": "MEDIUM", "class": "RELATIONSHIP-UNPROVED",
                   "title": "No Nikah Nama", "blocks_ppo": False,
@@ -543,7 +565,7 @@ class RoundsOverTheApi(unittest.TestCase):
         check = rounds[1]["checks"][0]
         self.assertEqual([d["status"] for d in check["documents"]], ["SUPERSEDED", "REPLACEMENT"])
         self.assertEqual(check["carried"]["dispositions"],
-                         [{"flag_id": "F-1", "from_flag_id": "F-1", "action": "WAIVE", "officer": "Syed Haider (AG Punjab, Pension Wing)"}])
+                         [{"flag_id": "F-1", "from_flag_id": "F-1", "action": "WAIVE", "officer": "Senior Auditor 3 (Pension-III)"}])   # school-education is Pension-III: its fixture Senior Auditor
         # F-2 was never cleared, so the case waits for the AG.
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
         self.assertEqual(case["status"], "UNDER_REVIEW")
@@ -555,12 +577,12 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertTrue(r.json()["gate"]["open"])
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
         self.assertEqual(case["status"], "UNDER_REVIEW")
-        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=ag, json={"remark": "Both findings cleared; approved."})
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=self.escalate(case_id), json={"remark": "Both findings cleared; approved."})
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()["status"], "APPROVED")
 
     def test_carried_clearances_that_clear_every_finding_still_wait_for_the_ag(self) -> None:
-        dept, ag = self.login("school-education"), self.login("syed.haider")
+        dept, ag = self.login("school-education"), self.sa("school-education")
         case_id = self.file(dept)
         self.report = {**FRC_ON_FILE, "checklist": MISSING_FRC["checklist"],
                        "recommendation": {"verdict": "HOLD", "blocking_flags": []}}
@@ -584,7 +606,7 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertEqual(rounds[1]["requests"][0]["action"], "REQUEST_DOCS")
         self.assertEqual(rounds[1]["checks"][0]["resolution"][0]["resolution"], "RESOLVED")
         self.assertIsNone(rounds[1]["closed_action"])
-        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=ag, json={"remark": "Resubmission complete; approved."})
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=self.escalate(case_id), json={"remark": "Resubmission complete; approved."})
         self.assertEqual(r.status_code, 200, r.text)
         rounds = self.client.get(f"/api/v2/cases/{case_id}/rounds", headers=ag).json()["rounds"]
         self.assertEqual(rounds[1]["closed_action"], "APPROVE")

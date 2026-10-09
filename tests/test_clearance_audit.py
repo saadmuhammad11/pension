@@ -34,12 +34,14 @@ class _Fixture(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
     def _under_review(self):
         made = self.create(self.login("punjab-police", "punjab-police"))
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         run_id = self.verify(reviewer, made["case"]["id"])["run_id"]
         case = self.client.get(f"/api/v2/cases/{made['case']['id']}", headers=reviewer).json()
         self.assertEqual(case["status"], "UNDER_REVIEW", case["events"][-1])
@@ -60,8 +62,9 @@ class _Fixture(unittest.TestCase):
         self.assertEqual(case["events"][-1]["action"], "CHECK_DONE")
         rows = self._audit(case["id"])
         acts = [(r["action"], r["username"]) for r in rows]
-        self.assertIn((action, "syed.haider"), acts)
-        self.assertIn(("CLEARANCE_COMPLETE", "syed.haider"), acts)
+        me = _v2.tier_username("AG_SENIOR_AUDITOR", "punjab-police")
+        self.assertIn((action, me), acts)
+        self.assertIn(("CLEARANCE_COMPLETE", me), acts)
         self.assertNotIn("CASE_APPROVED_ON_CLEARANCE", [a for a, _ in acts])
         act = next(r for r in rows if r["action"] == action)
         self.assertTrue(act["ip"], "the address is recorded")

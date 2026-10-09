@@ -20,6 +20,15 @@ of missing documents an automatic return carries; the admin's overrides are in i
 additionally in ``audit_log`` with the before/after of the case row. AI_CHECKED remains a status
 name for the histories written before 28 Sep 2026; nothing moves into it now.
 
+Three tiers inside the AG (scope change C3, 9 Oct 2026): a department's case lands with the
+**Senior Auditor** of its pension wing, who runs the verification and either returns the case to
+the department or forwards it to the **Assistant Accounts Officer**, who forwards it to the
+**Accounts Officer**, who approves or rejects (default Q1: the AO is final). Returns go one tier
+down at a time. Who holds the case is the ``holder_tier`` column (SENIOR_AUDITOR | ASSISTANT_AO |
+AO), not a new status, so every status keeps its meaning; a tier officer sees and acts on their
+own wing's cases only (``PENSION_SECTION_OF``). The Deputy AG overrides from anywhere and is not
+part of the chain (Q2); the old AG_REVIEWER role reads every case and acts on none (Q5).
+
 Standard library only, in the manner of ``api.desks``: the HTTP layer turns
 :class:`WorkflowError` into 403 (not this user's to do) or 409 (not from this status).
 """
@@ -59,11 +68,27 @@ AG_HOLDS = frozenset({FORWARDED, AI_CHECKING, AI_FAILED, UNDER_REVIEW})
 #: Statuses after which adding documents opens a new round of papers.
 SENT_BACK = frozenset({RETURNED, DOCS_REQUESTED})
 
+#: The tiers inside the AG's pension wing (C3), in the order a case climbs them.
+SENIOR_AUDITOR = "SENIOR_AUDITOR"
+ASSISTANT_AO = "ASSISTANT_AO"
+AO = "AO"
+TIERS = (SENIOR_AUDITOR, ASSISTANT_AO, AO)
+TIER_LABELS = {SENIOR_AUDITOR: "Senior Auditor", ASSISTANT_AO: "Assistant Accounts Officer", AO: "Accounts Officer"}
+TIER_OF_ROLE = {"AG_SENIOR_AUDITOR": SENIOR_AUDITOR, "AG_ASSISTANT_AO": ASSISTANT_AO, "AG_AO": AO}
+ROLE_OF_TIER = {t: r for r, t in TIER_OF_ROLE.items()}
+TIER_ROLES = tuple(TIER_OF_ROLE)
+NEXT_TIER = {SENIOR_AUDITOR: ASSISTANT_AO, ASSISTANT_AO: AO}
+PREVIOUS_TIER = {AO: ASSISTANT_AO, ASSISTANT_AO: SENIOR_AUDITOR}
+
 #: Who acts on each side of a case. The administrator is on neither (business decision G6, 7 Oct
 #: 2026): the IT administrator manages users and reads the audit log, and takes no case action in
-#: pension or GP Fund. The override belongs to the Deputy AG.
+#: pension or GP Fund. The override belongs to the Deputy AG. AG_REVIEWER (the role before the
+#: tiers) reads and acts on nothing (Q5); the administrator reassigns such accounts to a tier.
 DEPARTMENT_SIDE = ("DEPT_OFFICER",)
-AG_SIDE = ("AG_REVIEWER", "AG_DAG")
+AG_SIDE = TIER_ROLES + ("AG_DAG",)
+LEGACY_AG_ROLES = ("AG_REVIEWER",)
+#: Every role that reads AG-side material: the acting roles, the legacy reviewer, the administrator.
+AG_READERS = AG_SIDE + LEGACY_AG_ROLES + ("ADMIN",)
 
 #: action -> (roles, from-statuses, to-status). ``None`` as the target means "unchanged".
 TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
@@ -71,23 +96,37 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
     # A paper put in place of one already filed (30 Sep 2026); the old one stays on file, superseded.
     "REPLACE_DOC":  (DEPARTMENT_SIDE, frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_REQUESTED}), None),
     "FORWARD":      (DEPARTMENT_SIDE, frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_REQUESTED}), FORWARDED),
-    "RUN_CHECK":    (AG_SIDE, frozenset({FORWARDED, AI_FAILED, UNDER_REVIEW}), AI_CHECKING),
+    # The verification is the Senior Auditor's alone (C3); the Deputy AG may run it too.
+    "RUN_CHECK":    (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({FORWARDED, AI_FAILED, UNDER_REVIEW}), AI_CHECKING),
     "CHECK_DONE":   ((), frozenset({AI_CHECKING}), UNDER_REVIEW),    # by the system: findings for the AG
     "CHECK_FAILED": ((), frozenset({AI_CHECKING}), AI_FAILED),       # by the system: verify again
     # Retired 9 Oct 2026 (no automatic return in pension or GP Fund): neither the system nor any
     # role may perform these now; the rows stay so history written before that day still resolves.
     "AUTO_RETURN":  ((), frozenset(), RETURNED),                      # was: by the system, documents missing
     "GPF_RETURN":   ((), frozenset(), RETURNED),                      # was: on the officer's return in the GP Fund module
-    "TAKE_UP":      (AG_SIDE, frozenset({FORWARDED}), UNDER_REVIEW),
-    "APPROVE":      (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), APPROVED),
-    "REJECT":       (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), REJECTED),
-    "RETURN":       (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), RETURNED),
-    "REQUEST_DOCS": (AG_SIDE, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), DOCS_REQUESTED),
+    "TAKE_UP":      (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({FORWARDED}), UNDER_REVIEW),
+    # Up the chain: Senior Auditor -> Assistant AO -> AO; and one tier back down, with a remark.
+    # The status stays UNDER_REVIEW; the holder (holder_tier) moves. Internal to the AG: a DDO
+    # never sees these rows.
+    "FORWARD_TIER": (("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_DAG"), frozenset({UNDER_REVIEW}), None),
+    "RETURN_TIER":  (("AG_ASSISTANT_AO", "AG_AO", "AG_DAG"), frozenset({UNDER_REVIEW}), None),
+    # The decision is the Accounts Officer's (Q1); the return to the department is the Senior
+    # Auditor's, who is the tier that talks to the department.
+    "APPROVE":      (("AG_AO", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), APPROVED),
+    "REJECT":       (("AG_AO", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), REJECTED),
+    "RETURN":       (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), RETURNED),
+    "REQUEST_DOCS": (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), DOCS_REQUESTED),
     "OVERRIDE":     (("AG_DAG",), frozenset(STATUSES), None),        # target given by the Deputy AG (G6)
     # The case type (29 Sep 2026): a department may change its declaration while the case is on
     # its side; the AG and the administrator may correct it at any point, with a remark.
-    "SET_CASE_TYPE": (("DEPT_OFFICER", "AG_REVIEWER", "AG_DAG"), frozenset(STATUSES), None),
+    "SET_CASE_TYPE": (DEPARTMENT_SIDE + AG_SIDE, frozenset(STATUSES), None),
 }
+
+#: The moves between tiers: never shown to the department (C3).
+INTERNAL_ACTIONS = frozenset({"FORWARD_TIER", "RETURN_TIER"})
+#: Actions a tier may take only while it holds the case.
+HOLDER_ACTIONS = frozenset({"RUN_CHECK", "TAKE_UP", "FORWARD_TIER", "RETURN_TIER", "APPROVE", "REJECT",
+                            "RETURN", "REQUEST_DOCS"})
 
 #: Where a department may still change what it declared: the same statuses it may add papers in.
 CASE_TYPE_EDITABLE_BY_DEPARTMENT = frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_REQUESTED})
@@ -97,7 +136,7 @@ CASE_TYPE_EDITABLE_BY_DEPARTMENT = frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_
 SYSTEM_ACTIONS = frozenset({"CHECK_DONE", "CHECK_FAILED"})
 
 #: Actions whose remark is required whatever the case looks like.
-REMARK_REQUIRED = frozenset({"APPROVE", "REJECT", "RETURN", "REQUEST_DOCS", "OVERRIDE"})
+REMARK_REQUIRED = frozenset({"APPROVE", "REJECT", "RETURN", "REQUEST_DOCS", "OVERRIDE", "RETURN_TIER"})
 
 #: An approval against the engine's own reading needs a written reason of at least this
 #: length -- the same bar ``api.decisions`` sets for the old portal (MIN_JUSTIFICATION).
@@ -142,11 +181,98 @@ def owns_side(user_role: str, user_department: str | None, case: db.Row | dict) 
     return False
 
 
-def may_see(user_role: str, user_department: str | None, case: db.Row | dict) -> bool:
-    """Reads: the department's side sees its own; AG Review and Admin see everything."""
+def wing_of_case(case: db.Row | dict) -> str | None:
+    """The pension wing a case belongs to: its department's section (None for the legacy bucket)."""
+    from api.departments import PENSION_SECTION_OF
+    return PENSION_SECTION_OF.get(case["department_code"])
+
+
+def tier_of(role: str | None) -> str | None:
+    return TIER_OF_ROLE.get(role or "")
+
+
+def holder_label(case: db.Row | dict) -> str | None:
+    """"With Senior Auditor, Pension-III" while the AG holds the case; None otherwise."""
+    if case["status"] not in AG_HOLDS:
+        return None
+    tier = (case["holder_tier"] if "holder_tier" in case.keys() else None) or SENIOR_AUDITOR
+    wing = wing_of_case(case)
+    return f"With {TIER_LABELS[tier]}" + (f", {wing}" if wing else "")
+
+
+def may_see(user_role: str, user_department: str | None, case: db.Row | dict, user_wing: str | None = None) -> bool:
+    """Reads: the department's side sees its own; a tier officer their own wing's cases; the
+    Deputy AG, the legacy reviewer and the administrator everything."""
     if user_role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
         return True
+    if user_role in TIER_ROLES:
+        wing = wing_of_case(case)
+        return wing is not None and wing == user_wing
     return owns_side(user_role, user_department, case)
+
+
+def may_see_user(user: Any, case: db.Row | dict) -> bool:
+    return may_see(getattr(user, "role", ""), getattr(user, "department_code", None), case,
+                   getattr(user, "pension_wing", None))
+
+
+def check_holder(actor: Any, case: db.Row | dict, action: str) -> None:
+    """A tier officer acts only on their own wing's case, and only while their tier holds it.
+
+    The Deputy AG is bound by neither (Q2). A case the AG holds with no holder recorded (filed
+    before 0014 and not migrated, which the migration prevents) counts as the Senior Auditor's."""
+    role = getattr(actor, "role", "")
+    tier = tier_of(role)
+    if tier is None:
+        return
+    if wing_of_case(case) != getattr(actor, "pension_wing", None):
+        raise WorkflowError(403, "this case belongs to another pension wing")
+    if action in HOLDER_ACTIONS and case["status"] in AG_HOLDS:
+        holder = (case["holder_tier"] if "holder_tier" in case.keys() else None) or SENIOR_AUDITOR
+        if holder != tier:
+            raise WorkflowError(409, f"the case is with the {TIER_LABELS[holder]}; it is not yours to move")
+
+
+def check_one_tier_per_case(conn: db.Connection, actor: Any, case: db.Row | dict) -> None:
+    """Maker-checker across tiers (C3): an account that acted on this case at one tier may not act
+    at another, whatever its role is now."""
+    role = getattr(actor, "role", "")
+    tier = tier_of(role)
+    actor_id = getattr(actor, "id", None)
+    if tier is None or not actor_id:
+        return
+    for r in conn.execute("SELECT DISTINCT actor_role FROM case_events WHERE case_id = ? AND actor_id = ?",
+                          (case["id"], actor_id)):
+        other = tier_of(r["actor_role"])
+        if other and other != tier:
+            raise WorkflowError(403, f"you acted on this case as {TIER_LABELS[other]}; one account acts at one tier on a case")
+
+
+def next_holder(action: str, case: db.Row | dict, new_status: str, to_tier: str | None = None) -> str | None | object:
+    """Who holds the case after ``action``; ``KEEP`` when the move does not touch it."""
+    current = (case["holder_tier"] if "holder_tier" in case.keys() else None) or SENIOR_AUDITOR
+    if action == "FORWARD":
+        return SENIOR_AUDITOR                                   # the department's filing lands with the Senior Auditor
+    if action == "FORWARD_TIER":
+        if current not in NEXT_TIER:
+            raise WorkflowError(409, f"the {TIER_LABELS[current]} is the last tier; approve or reject the case")
+        return NEXT_TIER[current]
+    if action == "RETURN_TIER":
+        if current not in PREVIOUS_TIER:
+            raise WorkflowError(409, "the Senior Auditor returns a case to the department (Return), not to a lower tier")
+        return PREVIOUS_TIER[current]
+    if action in ("APPROVE", "REJECT", "RETURN", "REQUEST_DOCS"):
+        return None
+    if action == "OVERRIDE":
+        if new_status in AG_HOLDS:
+            return to_tier if to_tier in TIERS else SENIOR_AUDITOR
+        return None
+    if action in ("RUN_CHECK", "TAKE_UP") and case["status"] in AG_HOLDS:
+        return current
+    return KEEP
+
+
+KEEP = object()
 
 
 def record_event(conn: db.Connection, case_id: str, *, action: str, from_status: str | None,
@@ -192,6 +318,9 @@ def transition(conn: db.Connection, case: db.Row, action: str, actor: Any, *,
     role = getattr(actor, "role", "")
     if actor is not None:
         check(role, case["status"], action)
+        check_holder(actor, case, action)
+        if action != "SET_CASE_TYPE":
+            check_one_tier_per_case(conn, actor, case)
     elif action not in SYSTEM_ACTIONS:
         raise WorkflowError(403, "the system may only record the outcome of a verification")
     roles, froms, target = TRANSITIONS[action]
@@ -207,6 +336,11 @@ def transition(conn: db.Connection, case: db.Row, action: str, actor: Any, *,
                                      "set it to DRAFT and run the verification")
         target = to_status
     new_status = target or case["status"]
+    to_tier = (payload or {}).get("holder_tier") if action == "OVERRIDE" else None
+    holder = next_holder(action, case, new_status, to_tier)
+    if action in INTERNAL_ACTIONS:
+        current = (case["holder_tier"] if "holder_tier" in case.keys() else None) or SENIOR_AUDITOR
+        payload = {**(payload or {}), "from_tier": current, "to_tier": holder}
     with db.transaction(conn):
         # Conditional on the status this decision was taken against: two officers deciding at
         # once, or the reconciler racing an override, cannot both win.
@@ -215,8 +349,10 @@ def transition(conn: db.Connection, case: db.Row, action: str, actor: Any, *,
         # run's outcome to it before the new run was recorded, and the new run's result was then
         # never applied: the case stayed where the old one put it (audit 6 Oct 2026).
         forget_run = ", current_run_id = NULL" if action == "RUN_CHECK" else ""
-        cur = conn.execute(f"UPDATE cases SET status = ?, updated_at = ?{forget_run} WHERE id = ? AND status = ?",
-                           (new_status, db.now(), case["id"], case["status"]))
+        set_holder = "" if holder is KEEP else ", holder_tier = ?"
+        holder_args: tuple = () if holder is KEEP else (holder,)
+        cur = conn.execute(f"UPDATE cases SET status = ?, updated_at = ?{forget_run}{set_holder} WHERE id = ? AND status = ?",
+                           (new_status, db.now(), *holder_args, case["id"], case["status"]))
         if cur.rowcount != 1:
             raise WorkflowError(409, "the case changed while you were working on it; reload and try again")
         entry = record_event(conn, case["id"], action=action, from_status=case["status"],

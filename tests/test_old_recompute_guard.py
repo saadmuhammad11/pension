@@ -21,15 +21,17 @@ class RecomputeGuard(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
     def test_an_approved_case_s_run_is_not_rebuilt(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         run_id = self.verify(reviewer, case_id)["run_id"]
-        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=reviewer, json={"remark": "In order; approved by hand."})
+        r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=self.escalate(case_id), json={"remark": "In order; approved by hand."})
         self.assertEqual(r.status_code, 200, r.text)                     # no automatic approval since M1
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()["status"], "APPROVED")
         with mock.patch.object(runs, "recompute", lambda run: {"rebuilt": True}) as _:
@@ -41,7 +43,7 @@ class RecomputeGuard(unittest.TestCase):
         self.report_to_write = _v2.FLAGS_ONLY_REPORT                 # a finding: the case waits for the AG
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         run_id = self.verify(reviewer, case_id)["run_id"]
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()["status"], "UNDER_REVIEW")
         with mock.patch.object(runs, "recompute", lambda run: {"rebuilt": True}):
@@ -53,7 +55,7 @@ class RecomputeGuard(unittest.TestCase):
         self.report_to_write = _v2.FLAGS_ONLY_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         first = self.verify(reviewer, case_id)["run_id"]
         r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer,
                              json={"remark": "Pay certificate missing.", "items": []})

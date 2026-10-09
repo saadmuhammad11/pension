@@ -28,7 +28,8 @@ when the process ends -- so the suites run unchanged on either engine (``tools/r
     python3 -m api.db reset-department-password <slug>   # new generated password for one department
     python3 -m api.db reset-password <username> [<new password>]
     python3 -m api.db refresh-credentials <password>   # sheet rows for every account on this password; changes nothing
-    python3 -m api.db add-reviewer <username> "<Officer's name>" [--dag] [<password>]   # a named reviewer / the Deputy AG
+    python3 -m api.db add-reviewer <username> "<Officer's name>" --tier senior-auditor|assistant-ao|ao --wing Pension-III [<password>]
+    python3 -m api.db add-reviewer <username> "<Officer's name>" --dag [<password>]   # the Deputy AG
     python3 -m api.db forget-credentials   # delete the plaintext sheet once passwords are handed out
     python3 -m api.db drop-test-schemas    # remove schemas a killed test run left in the test database
 
@@ -708,12 +709,27 @@ def reset_password(username: str, password: str, conn: Connection | None = None)
             conn.close()
 
 
+#: The tier names the command line takes, and the roles they are (C3, 9 Oct 2026).
+TIER_ARGS = {"senior-auditor": "AG_SENIOR_AUDITOR", "assistant-ao": "AG_ASSISTANT_AO", "ao": "AG_AO"}
+
+
 def add_reviewer(username: str, display_name: str, *, dag: bool = False, password: str | None = None,
-                 conn: Connection | None = None) -> str:
-    """Create a named reviewer account (AG_REVIEWER, or AG_DAG with ``dag``) and return its password.
+                 tier: str | None = None, wing: str | None = None, conn: Connection | None = None) -> str:
+    """Create a named AG account and return its password: a tier officer (``tier`` one of
+    senior-auditor / assistant-ao / ao, with the pension ``wing`` Pension-I .. Pension-V), or the
+    Deputy AG with ``dag``. The legacy AG_REVIEWER role is not created any more (Q5).
 
     The way the office adds its officers from the command line (the Users screen does the same).
     A generated password unless one is given; in production it must be changed at first sign-in."""
+    from api.departments import PENSION_SECTION_ORDER
+    if dag and tier:
+        raise ValueError("an account is the Deputy AG or a tier officer, not both")
+    if not dag:
+        if tier not in TIER_ARGS:
+            raise ValueError("name the tier: --tier senior-auditor | assistant-ao | ao (or --dag for the Deputy AG)")
+        if wing not in PENSION_SECTION_ORDER:
+            raise ValueError(f"a tier officer needs a pension wing: --wing one of {', '.join(PENSION_SECTION_ORDER)}")
+    role = "AG_DAG" if dag else TIER_ARGS[tier]
     from api import passwords, settings
     from api.auth import hash_password, password_problem
     username = (username or "").strip().lower()
@@ -732,9 +748,9 @@ def add_reviewer(username: str, display_name: str, *, dag: bool = False, passwor
                 raise ValueError(f"a user {username!r} already exists")
             stamp = now()
             conn.execute(
-                "INSERT INTO users(id, username, display_name, password_hash, role, department_code, active, "
-                "token_version, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, 1, 1, ?, ?, ?)",
-                (new_id(), username, display_name.strip(), hash_password(pw), "AG_DAG" if dag else "AG_REVIEWER",
+                "INSERT INTO users(id, username, display_name, password_hash, role, department_code, pension_wing, active, "
+                "token_version, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, ?, 1, 1, ?, ?, ?)",
+                (new_id(), username, display_name.strip(), hash_password(pw), role, None if dag else wing,
                  1 if settings.force_password_change() else 0, stamp, stamp))
         return pw
     finally:
@@ -834,14 +850,27 @@ def main(argv: list[str]) -> int:
         return 0 if ok else 1
     if cmd == "add-reviewer" and len(argv) >= 4:
         migrate()
-        dag = "--dag" in argv[4:]
-        given = [a for a in argv[4:] if a != "--dag"]
+        rest = argv[4:]
+        dag = "--dag" in rest
+        tier = wing = None
+        given: list[str] = []
+        i = 0
+        while i < len(rest):
+            if rest[i] == "--dag":
+                pass
+            elif rest[i] == "--tier" and i + 1 < len(rest):
+                tier = rest[i + 1]; i += 1
+            elif rest[i] == "--wing" and i + 1 < len(rest):
+                wing = rest[i + 1]; i += 1
+            else:
+                given.append(rest[i])
+            i += 1
         try:
-            pw = add_reviewer(argv[2], argv[3], dag=dag, password=given[0] if given else None)
+            pw = add_reviewer(argv[2], argv[3], dag=dag, tier=tier, wing=wing, password=given[0] if given else None)
         except ValueError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
-        print(f"created {argv[2]} ({'AG_DAG' if dag else 'AG_REVIEWER'}); password: {pw}")
+        print(f"created {argv[2]} ({'AG_DAG' if dag else TIER_ARGS[tier] + ', ' + wing}); password: {pw}")
         return 0
     if cmd == "forget-credentials":
         removed = forget_credentials()

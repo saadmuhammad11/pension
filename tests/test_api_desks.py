@@ -123,13 +123,13 @@ class TheTableThePortalReads(unittest.TestCase):
         from api.auth import User
         from api.v2 import capabilities
         keys = set()
-        for role in ("DEPT_OFFICER", "AG_REVIEWER", "ADMIN"):
+        for role in ("DEPT_OFFICER", "AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_AO", "AG_DAG", "AG_REVIEWER", "ADMIN"):
             keys |= set(capabilities(User("u", "u", "U", role, "PUNJAB_POLICE" if role == "DEPT_OFFICER" else None, True, 1)))
         mirror_file = ROOT / "portals" / "src" / "shared" / "auth" / "session.ts"
         self.assertTrue(mirror_file.exists(), f"{mirror_file.relative_to(ROOT)} is absent: the portal has no capabilities mirror")
         block = re.search(r"export interface Capabilities \{(.*?)\}", mirror_file.read_text(encoding="utf-8"), re.S)
         self.assertIsNotNone(block, "Capabilities interface not found in session.ts")
-        mirrored = set(re.findall(r"^\s*([a-z_]+):\s*boolean", block.group(1), re.M))
+        mirrored = set(re.findall(r"^\s*([a-z_]+):\s*", block.group(1), re.M))   # every key, whatever its type (tier, wing: strings)
         self.assertEqual(mirrored, keys, "the frontend's Capabilities differ from the server's capabilities()")
 
 if __name__ == "__main__":

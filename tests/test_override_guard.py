@@ -21,6 +21,8 @@ class OverrideGuard(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
@@ -42,7 +44,7 @@ class OverrideGuard(unittest.TestCase):
     def test_a_verified_case_can_be_overridden_to_approved_with_a_reason(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer, dag = self.login("syed.haider", "ag"), self.login("fatima.hameed", "ag")
+        reviewer, dag = self.sa(), self.login("fatima.hameed", "ag")
         self.verify(reviewer, case_id)
         r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag,
                              json={"to_status": "APPROVED", "reason": "Approved on the AG's direction of today."})

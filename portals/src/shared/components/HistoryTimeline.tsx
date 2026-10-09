@@ -13,16 +13,19 @@ const ACTION_WORDS: Record<string, string> = {
   REQUEST_DOCS: 'Additional documents requested', OVERRIDE: 'Decision overridden by the Deputy Accountant General',
   SET_CASE_TYPE: 'Case type changed',
   REPLACE_DOC: 'Document replaced',
+  FORWARD_TIER: 'Forwarded within the Pension Wing', RETURN_TIER: 'Returned within the Pension Wing',
 }
 
 const ROLE_WORDS: Record<string, string> = {
   DEPT_OFFICER: 'DDO', AG_REVIEWER: 'Pension Wing, AG Punjab', AG_DAG: 'Deputy AG (Pension)',
+  AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant AO', AG_AO: 'Accounts Officer',
   ADMIN: 'Administrator', SYSTEM: 'System',
 }
+const AG_ACTOR = ['AG_REVIEWER', 'AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG']
 
 const tone = (a: string) =>
   ['APPROVE', 'AUTO_APPROVE'].includes(a) ? 'var(--ok)' : ['REJECT', 'RETURN', 'AUTO_RETURN', 'REQUEST_DOCS', 'CHECK_FAILED', 'OVERRIDE'].includes(a) ? 'var(--red)'
-  : ['FORWARD', 'TAKE_UP'].includes(a) ? 'var(--amber)' : 'var(--green3)'
+  : ['FORWARD', 'TAKE_UP', 'FORWARD_TIER'].includes(a) ? 'var(--amber)' : a === 'RETURN_TIER' ? 'var(--red)' : 'var(--green3)'
 
 export function HistoryTimeline({ events, highlightAg = false }: { events: CaseEvent[]; highlightAg?: boolean }) {
   if (!events.length) return <div className="empty">No history yet.</div>
@@ -30,7 +33,7 @@ export function HistoryTimeline({ events, highlightAg = false }: { events: CaseE
   return (
     <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
       {shown.map(e => {
-        const ag = e.actor_role === 'AG_REVIEWER' || e.action === 'OVERRIDE'
+        const ag = AG_ACTOR.includes(e.actor_role ?? '') || e.action === 'OVERRIDE'
         const docs = (e.payload as { documents?: string[] | number }).documents
         const missing = (e.payload as { missing_checklist?: { id: string; requirement: string; status?: string }[] }).missing_checklist
         return (

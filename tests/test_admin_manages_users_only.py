@@ -25,6 +25,8 @@ class TheAdministrator(unittest.TestCase):
     setUp = _v2.V2Test.setUp
     tearDown = _v2.V2Test.tearDown
     login = _v2.V2Test.login
+    # The tiers (C3, 9 Oct 2026): the wing's Senior Auditor, Assistant AO and AO, and the climb to the AO.
+    sa, aao, ao, escalate, decide = _v2.V2Test.sa, _v2.V2Test.aao, _v2.V2Test.ao, _v2.V2Test.escalate, _v2.V2Test.decide
     create = _v2.V2Test.create
     verify = _v2.V2Test.verify
 
@@ -40,7 +42,7 @@ class TheAdministrator(unittest.TestCase):
     def test_no_case_action_is_open_to_the_administrator(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer, admin = self.login("syed.haider", "ag"), self.login("admin", "ag")
+        reviewer, admin = self.sa(), self.login("admin", "ag")
         run_id = self.verify(reviewer, case_id)["run_id"]
         refused = {
             "file a case": self.client.post("/api/v2/cases", headers=admin, data={"department_code": "PUNJAB_POLICE"}).status_code,
@@ -67,7 +69,7 @@ class TheAdministrator(unittest.TestCase):
     def test_the_deputy_ag_holds_the_override_and_the_dag_band(self) -> None:
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
-        reviewer, dag = self.login("syed.haider", "ag"), self.login("fatima.hameed", "ag")
+        reviewer, dag = self.sa(), self.login("fatima.hameed", "ag")
         self.verify(reviewer, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=dag).json()
         self.assertIn("OVERRIDE", case["allowed_actions"])
@@ -76,12 +78,13 @@ class TheAdministrator(unittest.TestCase):
         self.assertNotIn("ADMIN", gpf_bridge.OFFICER_FOR_ROLE)
 
     def test_the_frame_check_names_the_officer(self) -> None:
-        reviewer = self.login("syed.haider", "ag")
+        reviewer = self.sa()
         r = self.client.post("/api/v2/auth/gpf-session", headers=reviewer)
         frame = r.cookies.get("pension_gpf")
         answer = self.client.get("/api/v2/auth/gpf-check", headers={"X-Gpf-Session": frame}).json()
-        self.assertEqual((answer["officer"], answer["user"]), ("ao", "syed.haider"))
-        self.assertEqual(answer["name"], "Syed Haider (AG Punjab, Pension Wing)")
+        from tests.test_api_v2 import tier_username
+        self.assertEqual((answer["officer"], answer["user"]), ("da", tier_username("AG_SENIOR_AUDITOR", "punjab-police")))   # Q3: Senior Auditor -> da
+        self.assertTrue(answer["name"].startswith("Senior Auditor"))
 
 
 class TheNameTravels(unittest.TestCase):

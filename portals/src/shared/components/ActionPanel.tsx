@@ -4,17 +4,19 @@
  *  do. Remarks are required by the rules in ACTION_META and again by the server. The parent can
  *  open an action from its own big button (`open`). */
 import { useEffect, useState } from 'react'
-import { ACTION_META, STATUS_META, type CaseAction, type CaseStatus, type RequestItem } from '../api/cases'
+import { ACTION_META, STATUS_META, actionLabel, type CaseAction, type CaseStatus, type HolderTier, type RequestItem } from '../api/cases'
 
 const STATUSES: CaseStatus[] = ['DRAFT', 'AI_CHECKED', 'FORWARDED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'RETURNED', 'DOCS_REQUESTED']
-const ORDER: CaseAction[] = ['FORWARD', 'APPROVE', 'REQUEST_DOCS', 'RETURN', 'REJECT', 'OVERRIDE']
+const ORDER: CaseAction[] = ['FORWARD', 'FORWARD_TIER', 'APPROVE', 'REQUEST_DOCS', 'RETURN', 'RETURN_TIER', 'REJECT', 'OVERRIDE']
 
 export function ActionPanel(
-  { actions, hasIssues, busy, onAct, open: openProp, onOpenChange, checklist = [], status }:
+  { actions, hasIssues, busy, onAct, open: openProp, onOpenChange, checklist = [], status, holderTier }:
   { actions: CaseAction[]
     hasIssues: boolean
     /** The case's present status, so the override says what it changes from (F14). */
     status?: CaseStatus
+    /** The tier holding the case, so a forward or return names the tier it goes to (C3). */
+    holderTier?: HolderTier | null
     busy: boolean
     onAct: (action: CaseAction, remark: string, toStatus?: CaseStatus, items?: RequestItem[]) => Promise<void>
     open?: CaseAction | null
@@ -77,13 +79,13 @@ export function ActionPanel(
                     style={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left',
                              ...(ACTION_META[a].tone === 'danger' ? { color: 'var(--red)', borderColor: 'var(--red)' } : {}) }}
                     onClick={() => setOpen(a)}>
-              {ACTION_META[a].label}
+              {actionLabel(a, holderTier)}
             </button>
           ))}
         </div>
       ) : (
         <div>
-          <h3 style={{ margin: '0 0 6px' }}>{meta!.label}</h3>
+          <h3 style={{ margin: '0 0 6px' }}>{actionLabel(open!, holderTier)}</h3>
           {meta!.prompt && <p className="help" style={{ margin: '0 0 8px' }}>{meta!.prompt}</p>}
           {open === 'OVERRIDE' && (
             <div className="field" style={{ marginBottom: 8 }}>
@@ -123,7 +125,7 @@ export function ActionPanel(
           {error && <div className="banner bad" style={{ marginTop: 8 }}><span className="mark">!</span><div className="sub">{error}</div></div>}
           <div className="row" style={{ gap: 8, marginTop: 10 }}>
             <button className={cls(meta!.tone) || 'primary'} disabled={busy || !ready} onClick={go}>
-              {busy ? 'Saving…' : `Confirm: ${meta!.label.toLowerCase()}`}
+              {busy ? 'Saving…' : `Confirm: ${actionLabel(open!, holderTier).toLowerCase()}`}
             </button>
             <button onClick={() => setOpen(null)} disabled={busy}>Cancel</button>
           </div>

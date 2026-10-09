@@ -33,7 +33,8 @@ export const Crest = ({ size = 48 }: { size?: number }) => (
 )
 
 const ROLE_WORDS: Record<string, string> = {
-  DEPT_OFFICER: 'DDO (Drawing & Disbursing Officer)', AG_REVIEWER: 'Pension Wing, AG Punjab', AG_DAG: 'Deputy Accountant General (Pension)', ADMIN: 'System Administrator',
+  DEPT_OFFICER: 'DDO (Drawing & Disbursing Officer)', AG_REVIEWER: 'Pension Wing, AG Punjab (read-only)', AG_DAG: 'Deputy Accountant General (Pension)', ADMIN: 'System Administrator',
+  AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant Accounts Officer', AG_AO: 'Accounts Officer',
 }
 
 export function Header(
@@ -41,7 +42,8 @@ export function Header(
   { theme: Theme; user: SessionUser | null; onLogout?: () => void; nav?: ReactNode; actions?: ReactNode },
 ) {
   const initials = user ? user.display_name.split(/[\s(—-]+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() : ''
-  const roleLine = user ? [ROLE_WORDS[user.role] ?? user.role, user.role === 'DEPT_OFFICER' ? user.department_name : null].filter(Boolean).join(' · ') : ''
+  const roleLine = user ? [ROLE_WORDS[user.role] ?? user.role, user.role === 'DEPT_OFFICER' ? user.department_name : null,
+                           user.pension_wing ? `AG ${user.pension_wing}` : null].filter(Boolean).join(' · ') : ''
   return (
     <header className="site-header">
       <div className="container site-header-row">

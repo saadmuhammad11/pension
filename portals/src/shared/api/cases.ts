@@ -7,7 +7,22 @@ export type CaseStatus =
 
 export type CaseAction =
   | 'ADD_DOCS' | 'RUN_CHECK' | 'FORWARD' | 'TAKE_UP' | 'APPROVE' | 'REJECT' | 'RETURN'
-  | 'REQUEST_DOCS' | 'OVERRIDE'
+  | 'REQUEST_DOCS' | 'OVERRIDE' | 'FORWARD_TIER' | 'RETURN_TIER'
+
+/** Who holds a case inside the AG (C3, 9 Oct 2026): the tier, not a status. */
+export type HolderTier = 'SENIOR_AUDITOR' | 'ASSISTANT_AO' | 'AO'
+export const TIER_LABELS: Record<HolderTier, string> = { SENIOR_AUDITOR: 'Senior Auditor', ASSISTANT_AO: 'Assistant AO', AO: 'AO' }
+const NEXT_TIER: Record<string, HolderTier | undefined> = { SENIOR_AUDITOR: 'ASSISTANT_AO', ASSISTANT_AO: 'AO' }
+const PREVIOUS_TIER: Record<string, HolderTier | undefined> = { AO: 'ASSISTANT_AO', ASSISTANT_AO: 'SENIOR_AUDITOR' }
+
+/** The button text for a move between tiers names the tier it goes to: "Forward to Assistant AO",
+ *  "Return to Senior Auditor". Other actions keep their ACTION_META label. */
+export function actionLabel(action: CaseAction, holderTier: HolderTier | null | undefined): string {
+  const from = holderTier ?? 'SENIOR_AUDITOR'
+  if (action === 'FORWARD_TIER') { const to = NEXT_TIER[from]; return to ? `Forward to ${TIER_LABELS[to]}` : 'Forward' }
+  if (action === 'RETURN_TIER') { const to = PREVIOUS_TIER[from]; return to ? `Return to ${TIER_LABELS[to]}` : 'Return to the previous tier' }
+  return ACTION_META[action].label
+}
 
 export interface CaseRun {
   id: string
@@ -92,6 +107,10 @@ interface CaseBase {
   department_code: string
   department_name: string
   pension_section: string | null
+  /** The tier that holds the case and the wing it belongs to (C3); the DDO sees only "With the Accountant General". */
+  holder_tier?: HolderTier | null
+  holder_label?: string | null
+  pension_wing?: string | null
   created_via: 'DEPARTMENT'
   product: Product
   /** The GP Fund module's own case, once its examination has read the papers. */
@@ -237,7 +256,7 @@ export const runCheck = (caseId: string) =>
 
 const PATH: Record<Exclude<CaseAction, 'ADD_DOCS' | 'RUN_CHECK'>, string> = {
   FORWARD: 'forward', TAKE_UP: 'take-up', APPROVE: 'approve', REJECT: 'reject', RETURN: 'return',
-  REQUEST_DOCS: 'request-docs', OVERRIDE: 'override',
+  REQUEST_DOCS: 'request-docs', OVERRIDE: 'override', FORWARD_TIER: 'forward-tier', RETURN_TIER: 'return-tier',
 }
 
 /** One thing the AG asks the department for: a checklist item, or a document and pages in words. */
@@ -361,13 +380,24 @@ export const ACTION_META: Record<CaseAction, { label: string; tone: 'primary' | 
                   prompt: 'Name the documents required. The department will attach them and resubmit the case.', done: 'Request for documents recorded and communicated.' },
   OVERRIDE: { label: 'Override decision', tone: 'danger', needsRemark: 'always',
               prompt: "The Deputy Accountant General's override. The reason is entered in the audit log.", done: 'Decision overridden and entered in the audit log.' },
+  // The moves inside the AG (C3, 9 Oct 2026). Internal: the department never sees these rows.
+  FORWARD_TIER: { label: 'Forward to the next tier', tone: 'gold', needsRemark: 'never',
+                  prompt: 'Your note travels with the case inside the Pension Wing; the department does not see it.',
+                  done: 'Case forwarded within the Pension Wing.' },
+  RETURN_TIER: { label: 'Return to the previous tier', tone: 'danger', needsRemark: 'always',
+                 prompt: 'Say what the previous tier must look at again. The department does not see this remark.',
+                 done: 'Case returned within the Pension Wing.' },
 }
 
 /** The one thing to do next on a case, for the big button. */
 export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] }, role: string): { action: CaseAction | null; title: string; text: string } {
   // The register has no allowed_actions per row; there, assume the role's usual powers.
-  const a = new Set<CaseAction>(c.allowed_actions.length ? c.allowed_actions
-    : (role === 'AG_REVIEWER' || role === 'AG_DAG' ? ['RUN_CHECK', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'] : role === 'ADMIN' ? [] : ['ADD_DOCS', 'FORWARD']))
+  const usual: Record<string, CaseAction[]> = {
+    AG_SENIOR_AUDITOR: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN', 'REQUEST_DOCS'], AG_ASSISTANT_AO: ['FORWARD_TIER', 'RETURN_TIER'],
+    AG_AO: ['APPROVE', 'REJECT', 'RETURN_TIER'], AG_DAG: ['RUN_CHECK', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'],
+    AG_REVIEWER: [], ADMIN: [], DEPT_OFFICER: ['ADD_DOCS', 'FORWARD'],
+  }
+  const a = new Set<CaseAction>(c.allowed_actions.length ? c.allowed_actions : (usual[role] ?? []))
   const m = STATUS_META[c.status]
   const dept = role === 'DEPT_OFFICER'
   if (dept) {
@@ -378,6 +408,7 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
   if (c.status === 'FORWARDED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: 'Received: verify the case with AI', text: 'The verification reads every document. Its findings, and any missing documents, come to you for a decision; nothing is approved or returned automatically.' }
   if (c.status === 'AI_FAILED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: m.label, text: m.ag }
   if (c.status === 'UNDER_REVIEW' && a.has('APPROVE')) return { action: null, title: 'Findings await your decision', text: m.ag }
+  if (c.status === 'UNDER_REVIEW' && a.has('FORWARD_TIER')) return { action: null, title: 'Review the findings, then forward or return', text: 'Clear each finding and check the documents. Forward the case to the next tier when every required document is present, or return it with the list of what is missing.' }
   return { action: null, title: m.label, text: m.ag }
 }
 

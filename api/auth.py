@@ -152,6 +152,8 @@ class User:
     active: bool
     token_version: int
     must_change_password: bool = False
+    #: The pension wing (Pension-I .. V) a tier officer belongs to (C3, 9 Oct 2026); None otherwise.
+    pension_wing: str | None = None
 
     @property
     def portal(self) -> str | None:
@@ -161,15 +163,18 @@ class User:
         return {"id": self.id, "username": self.username, "display_name": self.display_name,
                 "role": self.role, "department_code": self.department_code,
                 "department_name": DEPARTMENT_NAMES.get(self.department_code or "", self.department_code),
+                "pension_wing": self.pension_wing,
                 "active": self.active, "portal": self.portal,
                 "must_change_password": self.must_change_password}
 
 
 def user_from_row(row: db.Row) -> User:
+    keys = row.keys()
     return User(id=row["id"], username=row["username"], display_name=row["display_name"],
                 role=row["role"], department_code=row["department_code"],
                 active=bool(row["active"]), token_version=int(row["token_version"]),
-                must_change_password=bool(row["must_change_password"]) if "must_change_password" in row.keys() else False)
+                must_change_password=bool(row["must_change_password"]) if "must_change_password" in keys else False,
+                pension_wing=row["pension_wing"] if "pension_wing" in keys else None)
 
 
 def issue_token(user: User) -> str:

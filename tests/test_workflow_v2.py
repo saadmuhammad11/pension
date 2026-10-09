@@ -15,8 +15,9 @@ from api.auth import hash_password, verify_password
 
 
 class Actor:
-    def __init__(self, role: str, dept: str | None = None) -> None:
+    def __init__(self, role: str, dept: str | None = None, wing: str | None = "Pension-V") -> None:
         self.id, self.display_name, self.role, self.department_code = f"u-{role}", role.title(), role, dept
+        self.pension_wing = wing if role in workflow.TIER_ROLES else None        # the fixture's cases are Punjab Police's (Pension-V)
 
 
 class TransitionTable(unittest.TestCase):
@@ -40,7 +41,11 @@ class TransitionTable(unittest.TestCase):
         with self.assertRaises(workflow.WorkflowError) as cm:
             workflow.check("DEPT_OFFICER", workflow.FORWARDED, "RUN_CHECK")
         self.assertEqual(cm.exception.status, 403)                       # the verification is the AG's
-        workflow.check("AG_REVIEWER", workflow.FORWARDED, "RUN_CHECK")   # no raise
+        workflow.check("AG_SENIOR_AUDITOR", workflow.FORWARDED, "RUN_CHECK")   # no raise: the verification is the Senior Auditor's (C3)
+        with self.assertRaises(workflow.WorkflowError):
+            workflow.check("AG_REVIEWER", workflow.FORWARDED, "RUN_CHECK")    # the legacy reviewer acts on nothing (Q5)
+        with self.assertRaises(workflow.WorkflowError):
+            workflow.check("AG_ASSISTANT_AO", workflow.FORWARDED, "RUN_CHECK")
         with self.assertRaises(workflow.WorkflowError) as cm:
             workflow.check("DEPT_OFFICER", workflow.FORWARDED, "ADD_DOCS")
         self.assertEqual(cm.exception.status, 409)                       # the AG holds it now
@@ -64,6 +69,9 @@ class TransitionTable(unittest.TestCase):
         self.assertTrue(workflow.may_see("DEPT_OFFICER", "PUNJAB_POLICE", police_case))
         self.assertFalse(workflow.may_see("DEPT_OFFICER", "SCHOOL_EDUCATION", police_case))
         self.assertTrue(workflow.may_see("AG_REVIEWER", None, police_case))
+        self.assertTrue(workflow.may_see("AG_SENIOR_AUDITOR", None, police_case, "Pension-V"))    # its own wing (C3)
+        self.assertFalse(workflow.may_see("AG_SENIOR_AUDITOR", None, police_case, "Pension-II"))
+        self.assertFalse(workflow.may_see("AG_AO", None, police_case, None))
         self.assertFalse(workflow.owns_side("ADMIN", None, other_case))   # the administrator acts on no side (G6)
         self.assertTrue(workflow.may_see("ADMIN", None, other_case))        # but reads everything
         self.assertFalse(workflow.owns_side("AG_REVIEWER", None, other_case))
@@ -126,7 +134,7 @@ class Database(unittest.TestCase):
     def test_ag_decisions_need_a_remark(self) -> None:
         case = self._case(workflow.UNDER_REVIEW)
         with self.assertRaises(workflow.WorkflowError) as cm:
-            workflow.transition(self.conn, case, "RETURN", Actor("AG_REVIEWER"), remark="  ")
+            workflow.transition(self.conn, case, "RETURN", Actor("AG_SENIOR_AUDITOR"), remark="  ")
         self.assertEqual(cm.exception.status, 422)
         self.assertEqual(self.conn.execute("SELECT status FROM cases WHERE id='c1'").fetchone()[0],
                          workflow.UNDER_REVIEW)

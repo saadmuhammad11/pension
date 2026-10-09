@@ -6,7 +6,7 @@ import report from './data/report.json'
 import pagesData from './data/pages.json'
 import { buildEvents, type DemoEvent } from './events'
 
-type Role = 'DEPT_OFFICER' | 'AG_REVIEWER' | 'AG_DAG' | 'ADMIN'
+type Role = 'DEPT_OFFICER' | 'AG_REVIEWER' | 'AG_DAG' | 'ADMIN' | 'AG_SENIOR_AUDITOR' | 'AG_ASSISTANT_AO' | 'AG_AO'
 interface User { id: string; username: string; display_name: string; role: Role; department_code: string | null; department_name: string | null; active: boolean; portal: string | null }
 interface Ev { id: string; seq: number; action: string; from_status: string | null; to_status: string; actor_id: string | null; actor_name: string | null; actor_role: string | null; actor_department: string | null; remark: string; payload: Record<string, unknown>; run_id: string | null; at: string }
 interface Run { id: string; case_id: string; run_id: string; submission_no: number; started_by: string; started_at: string; finished_at: string | null; state: 'queued' | 'running' | 'done' | 'failed'; verdict: string | null; high_flags: number | null; blocking_flags: string[]; checklist_result: string | null; error: string | null; auto_forward: number }
@@ -41,9 +41,11 @@ function makeUsers(): User[] {
 }
 
 const capabilities = (u: User) => {
+  // The demo's reviewer stands in for every AG tier at once: it runs the check and decides.
   const dept = u.role === 'DEPT_OFFICER', ag = u.role === 'AG_REVIEWER' || u.role === 'AG_DAG'
   return { create_case: dept, add_documents: dept, run_check: ag, forward: dept, pick_department: false, intake_choices: ag, correct_case_type: ag,
-           review: ag, dispose: ag, override: u.role === 'AG_DAG', manage_users: u.role === 'ADMIN', audit_log: u.role === 'ADMIN', all_departments: ag || u.role === 'ADMIN' }
+           review: ag, dispose: ag, override: u.role === 'AG_DAG', manage_users: u.role === 'ADMIN', audit_log: u.role === 'ADMIN', all_departments: ag || u.role === 'ADMIN',
+           decide: ag, return_to_department: ag, tier: null, tier_label: null, pension_wing: null }
 }
 
 /** The register before the demo starts: a handful of cases across departments, some decided. */

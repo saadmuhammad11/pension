@@ -32,7 +32,7 @@ import { Users } from './screens/admin/Users'
 import { AuditLog } from './screens/admin/AuditLog'
 import { Signatories } from './screens/admin/Signatories'
 import { PRODUCT_OF_SLUG, PRODUCT_SLUG, PRODUCT_WORDS, caseHref, type CaseStatus, type Product } from './api/cases'
-import type { SessionUser } from './auth/session'
+import { isAgReader, type SessionUser } from './auth/session'
 import { portal, type PortalConfig } from './portal'
 import { checkApiOnline } from './apiOnline'
 
@@ -42,7 +42,7 @@ const AG_WAITING: CaseStatus[] = ['FORWARDED', 'AI_FAILED', 'UNDER_REVIEW']
 type Home = 'register' | 'review' | 'admin'
 
 function homeFor(user: SessionUser): Home {
-  if (user.role === 'AG_REVIEWER' || user.role === 'AG_DAG') return 'review'
+  if (isAgReader(user.role)) return 'review'
   if (user.role === 'ADMIN') return 'admin'
   return 'register'
 }

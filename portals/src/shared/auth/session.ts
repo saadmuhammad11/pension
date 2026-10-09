@@ -18,13 +18,22 @@ const nextKey = () => `pension.${PORTAL_SLUG()}.next`
 export const IDLE_MINUTES = 30
 export const IDLE_WARNING_MINUTES = 2
 
+/** The roles the server knows. The three tiers of a pension wing arrived on 9 Oct 2026 (C3);
+ *  AG_REVIEWER is the role before them, kept for the accounts that still hold it (read-only). */
+export type Role = 'DEPT_OFFICER' | 'AG_SENIOR_AUDITOR' | 'AG_ASSISTANT_AO' | 'AG_AO' | 'AG_DAG' | 'ADMIN' | 'AG_REVIEWER'
+export const AG_ROLES: Role[] = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG']
+export const AG_READERS: Role[] = [...AG_ROLES, 'AG_REVIEWER']
+export const isAgReader = (role: string) => (AG_READERS as string[]).includes(role)
+
 export interface SessionUser {
   id: string
   username: string
   display_name: string
-  role: 'DEPT_OFFICER' | 'AG_REVIEWER' | 'AG_DAG' | 'ADMIN'
+  role: Role
   department_code: string | null
   department_name: string | null
+  /** The pension wing (Pension-I … V) a tier officer belongs to (C3, 9 Oct 2026). */
+  pension_wing?: string | null
   active: boolean
   portal: string | null
   /** The password was set by someone else and must be replaced before anything else (5 Oct 2026). */
@@ -46,6 +55,12 @@ export interface Capabilities {
   manage_users: boolean
   audit_log: boolean
   all_departments: boolean
+  /** The tiers (C3): who decides, who talks to the department, and this officer's own tier and wing. */
+  decide: boolean
+  return_to_department: boolean
+  tier: 'SENIOR_AUDITOR' | 'ASSISTANT_AO' | 'AO' | null
+  tier_label: string | null
+  pension_wing: string | null
 }
 
 export function getToken(): string | null {

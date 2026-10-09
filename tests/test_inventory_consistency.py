@@ -58,7 +58,8 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
 
     def test_every_view_agrees_through_every_status_change(self) -> None:
         from api import db
-        ag, admin = self.login("syed.haider"), self.login("fatima.hameed")   # the Deputy AG overrides (G6)
+        ag, admin = self.sa("school-education"), self.login("fatima.hameed")   # the Deputy AG overrides (G6)
+        ag_b = self.sa("agriculture")                                          # Pension-I: the other case's wing (C3)
         self._check("start")
 
         # A new case in each of two departments, and one of a department with no section (HEALTH, a
@@ -68,8 +69,9 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
         conn = db.connect()
         conn.execute("UPDATE cases SET department_code = 'HEALTH' WHERE id = ?", (b,)); conn.close()
         self._check("a case of a department with no Pension section")
-        ids = {r["id"] for r in self.client.get("/api/v2/cases?product=PENSION&pension_section=LEGACY", headers=ag).json()}
-        self.assertIn(b, ids)                                       # the Legacy section holds it
+        ids = {r["id"] for r in self.client.get("/api/v2/cases?product=PENSION&pension_section=LEGACY", headers=admin).json()}
+        self.assertIn(b, ids)                                       # the Legacy section holds it (no wing: the Deputy AG sees it, a tier officer does not)
+        self.assertEqual(self.client.get(f"/api/v2/cases/{b}", headers=ag).status_code, 403)
         conn = db.connect()
         conn.execute("UPDATE cases SET department_code = 'AGRICULTURE' WHERE id = ?", (b,)); conn.close()
         self._check("new cases")
@@ -88,17 +90,17 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
         self.report = {**FRC_ON_FILE, "flags": [{"id": "F-1", "severity": "HIGH", "class": "RULE-UNDECLARED",
                                                  "title": "Unrecorded recovery", "blocks_ppo": True}],
                        "recommendation": {"verdict": "HOLD", "blocking_flags": ["F-1"]}}
-        self.verify(ag, b); self._check("under review")
-        r = self.client.post(f"/api/v2/cases/{b}/request-docs", headers=ag, json={"remark": "Send the LPC."})
+        self.verify(ag_b, b); self._check("under review")
+        r = self.client.post(f"/api/v2/cases/{b}/request-docs", headers=ag_b, json={"remark": "Send the LPC."})
         self.assertEqual(r.status_code, 200, r.text); self._check("documents requested")
         self.client.post(f"/api/v2/cases/{b}/forward", headers=self.login("agriculture"), json={"remark": "again"})
-        self.verify(ag, b)
-        r = self.client.post(f"/api/v2/cases/{b}/reject", headers=ag, json={"remark": "Not entitled on these papers."})
+        self.verify(ag_b, b)
+        r = self.client.post(f"/api/v2/cases/{b}/reject", headers=self.escalate(b, "agriculture"), json={"remark": "Not entitled on these papers."})
         self.assertEqual(r.status_code, 200, r.text); self._check("rejected")
         r = self.client.post(f"/api/v2/cases/{b}/override", headers=admin,
                              json={"to_status": "UNDER_REVIEW", "reason": "Reopened on the department's appeal."})
         self.assertEqual(r.status_code, 200, r.text); self._check("admin override")
-        r = self.client.post(f"/api/v2/cases/{b}/return", headers=ag, json={"remark": "Correct Annex-A."})
+        r = self.client.post(f"/api/v2/cases/{b}/return", headers=ag_b, json={"remark": "Correct Annex-A."})
         self.assertEqual(r.status_code, 200, r.text); self._check("returned by hand")
 
         # GP Fund: its own inventory, as consistent, never mixed with pension.
@@ -108,7 +110,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
             self._check("a GP Fund case")
 
     def test_the_version_token_moves_on_every_change(self) -> None:
-        ag = self.login("syed.haider")
+        ag = self.sa("school-education")
         v0 = self.client.get("/api/v2/inventory/version", headers=ag).json()["version"]
         a = self._file("school-education")
         v1 = self.client.get("/api/v2/inventory/version", headers=ag).json()["version"]
