@@ -89,6 +89,24 @@ class Backend(unittest.TestCase):
         session = reviewer["Authorization"].split()[1]
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}/documents/{docs[0]['id']}?token={session}").status_code, 200)
 
+    def test_the_gp_fund_page_image_is_never_cached(self) -> None:
+        """The GP Fund page route takes the token on the URL (the scan viewer's <img> cannot send a
+        header); a cached copy of the answer is a token on disk, so it is served no-store (F10)."""
+        import json, tempfile
+        from pathlib import Path
+        police = self.login("punjab-police", "punjab-police")
+        case_id = self.create(police, product="GPF", gpf_kind="final")["case"]["id"]
+        with tempfile.TemporaryDirectory(prefix="agpb-gpf-pages-") as tmp:
+            png = Path(tmp) / "p001.png"
+            png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\0" * 16)
+            (Path(tmp) / "pages.json").write_text(json.dumps([str(png)]))
+            with mock.patch.object(gpf_bridge, "scratch_dir", lambda case_id, submission_no: Path(tmp)):
+                token = self.sa()["Authorization"].split(" ", 1)[1]
+                r = self.client.get(f"/api/v2/cases/{case_id}/gpf/pages/1?token={token}")
+                self.assertEqual(r.status_code, 200, r.text)
+                self.assertEqual(r.headers.get("Cache-Control"), "no-store")
+                self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}/gpf/pages/1", headers=police).status_code, 403)
+
     # -- F14 -------------------------------------------------------------------------------------
     def test_the_password_rule_comes_from_the_server(self) -> None:
         reviewer = self.sa()

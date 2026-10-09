@@ -1771,7 +1771,8 @@ def case_gpf_page(case_id: str, page: int, user: User = Depends(current_user_q),
     pages = _json.loads(listing.read_text())
     if page < 1 or page > len(pages) or not Path(pages[page - 1]).is_file():
         raise HTTPException(404, f"no page {page}")
-    return FileResponse(pages[page - 1], headers={"Cache-Control": "private, max-age=3600"})
+    # The address carries a token (current_user_q): a cached copy would be a token on disk (F10).
+    return FileResponse(pages[page - 1], headers={"Cache-Control": "no-store"})
 
 
 @router.get("/cases/{case_id}/gpf")

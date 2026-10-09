@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import {
   escapeHtml, encodeId, noteFromPrompt, formatRupees, formatNumber, throttle, pollBudget, sequence,
-  disposalConfirmText,
+  disposalConfirmText, itemHeading,
 } from '../../web/js/pure.js';
 
 test('F1: Cancel on a prompt aborts; text is trimmed', () => {
@@ -73,4 +73,12 @@ test('F2: the disposal confirmation names the outcome and the case', () => {
   const text = disposalConfirmText('Pass for payment', { label: 'Final payment — Ahmed', personnelNo: '90000227' });
   assert.match(text, /^Pass for payment — Final payment — Ahmed, personnel no\. 90000227\./);
   assert.match(disposalConfirmText('Return to the department', null), /this case/);
+});
+
+test('F17: a result row names its document and signatory under the check title', () => {
+  assert.deepEqual(itemHeading({ title: 'Signatories and delegation of authority', doc: 'Sanctioning authority, Form A (page 3)' }),
+                   { title: 'Signatories and delegation of authority', sub: 'Sanctioning authority, Form A (page 3)' });
+  assert.deepEqual(itemHeading({ doc: 'Form A (page 1)', id: 'X' }), { title: 'Form A (page 1)', sub: '' });
+  assert.deepEqual(itemHeading({ title: 'Same', doc: 'Same' }), { title: 'Same', sub: '' });
+  assert.deepEqual(itemHeading({ id: 'R1' }), { title: 'R1', sub: '' });
 });

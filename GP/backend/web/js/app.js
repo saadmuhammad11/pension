@@ -1,6 +1,6 @@
 // GP Fund Pre-Audit — SPA controller. Buildless ES module.
 import { api, BASE, tellPortal } from './api.js';
-import { $, $$, esc, h, badge, toast, openModal, closeModal, trapModalFocus, confirmDialog, busy, fmt, rupees, evidenceUrl, pageUrl } from './ui.js';
+import { $, $$, esc, h, badge, toast, openModal, closeModal, trapModalFocus, confirmDialog, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
 import { noteFromPrompt, throttle, sequence, disposalConfirmText } from './pure.js';
 
 // Embedded in the AG Punjab portal (28 Sep 2026): `?embed=1&officer=ao` in the address hides the
@@ -448,10 +448,11 @@ function itemHtml(c, r, collapsed) {
   const specs = Array.isArray(r.specimens) ? r.specimens.filter(sp => sp && sp.url) : [];
   const specHtml = specs.length ? `<div class="small muted" style="margin-top:8px">Specimen on file${r.specimen_authority ? ` · ${esc(r.specimen_authority.officer || r.specimen_authority.post)}, ${esc(r.specimen_authority.department)}${r.specimen_authority.provisional ? ' (provisional register)' : ''}` : ''}</div>
     <div class="evgrid">${specs.map(sp => { const u = `${BASE}/${sp.url}`; return `<figure><img loading="lazy" src="${esc(u)}" data-zoom="${esc(u)}" alt="Specimen signature"><figcaption>Specimen</figcaption></figure>`; }).join('')}</div>` : '';
+  const heading = itemHeading(r);
   return `<div class="item ${collapsed ? '' : ''}" data-id="${esc(r.id)}">
     <div class="item-head">
       ${badge(r.status)}
-      <span class="item-title">${esc(r.title || r.doc || r.id)}</span>
+      <span class="item-title">${esc(heading.title)}${heading.sub ? `<span class="item-doc">${esc(heading.sub)}</span>` : ''}</span>
       ${r.code ? `<span class="pill">${esc(r.code)}</span>` : ''}
       <span class="item-id">${esc(r.id)}</span>
       ${disp ? `<span class="disp-tag">${esc(disp.action)}${disp.cured ? ' · cured' : ''}</span>` : ''}

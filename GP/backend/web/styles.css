@@ -311,6 +311,8 @@ textarea { min-height: 90px; resize: vertical; font-family: var(--font-mono); fo
 .item.open .item-head { background: var(--sage); }
 .item-id { font-family: var(--font-mono); font-size: var(--t-small); color: var(--muted); }
 .item-title { font-weight: 600; flex: 1; }
+/* The document and signatory a row is about, under the check's title (F17). */
+.item-doc { display: block; font-weight: 400; font-size: var(--t-small); color: var(--muted); }
 .item-body { padding: 0 var(--s4) var(--s4); border-top: 1px solid var(--line); display: none; }
 .item.open .item-body { display: block; }
 .item-body .finding { margin: var(--s3) 0; }

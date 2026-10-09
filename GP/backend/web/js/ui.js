@@ -1,7 +1,8 @@
 // Small DOM + formatting helpers shared by the views. The pure parts live in pure.js so they
 // can be tested without a browser (GP/backend/tests/js).
 import { BASE } from './api.js';
-import { escapeHtml, encodeId, formatNumber, formatRupees } from './pure.js';
+import { escapeHtml, encodeId, formatNumber, formatRupees, itemHeading } from './pure.js';
+export { itemHeading };
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
