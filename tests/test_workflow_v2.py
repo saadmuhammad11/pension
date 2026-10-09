@@ -42,8 +42,7 @@ class TransitionTable(unittest.TestCase):
             workflow.check("DEPT_OFFICER", workflow.FORWARDED, "RUN_CHECK")
         self.assertEqual(cm.exception.status, 403)                       # the verification is the AG's
         workflow.check("AG_SENIOR_AUDITOR", workflow.FORWARDED, "RUN_CHECK")   # no raise: the verification is the Senior Auditor's (C3)
-        with self.assertRaises(workflow.WorkflowError):
-            workflow.check("AG_REVIEWER", workflow.FORWARDED, "RUN_CHECK")    # the legacy reviewer acts on nothing (Q5)
+        workflow.check("AG_REVIEWER", workflow.FORWARDED, "RUN_CHECK")        # the AG's desk acts at every tier (9 Oct 2026)
         with self.assertRaises(workflow.WorkflowError):
             workflow.check("AG_ASSISTANT_AO", workflow.FORWARDED, "RUN_CHECK")
         with self.assertRaises(workflow.WorkflowError) as cm:
@@ -54,10 +53,11 @@ class TransitionTable(unittest.TestCase):
         self.assertNotIn("AUTO_APPROVE", workflow.SYSTEM_ACTIONS)
         self.assertTrue(all(workflow.TRANSITIONS[a][2] != workflow.APPROVED for a in workflow.SYSTEM_ACTIONS))
 
-    def test_the_deputy_ag_may_override_from_anywhere_and_nobody_else(self) -> None:
+    def test_the_deputy_ag_and_the_ag_desk_may_override_from_anywhere_and_nobody_else(self) -> None:
         for s in workflow.STATUSES:
             workflow.check("AG_DAG", s, "OVERRIDE")
-        for role in ("AG_REVIEWER", "ADMIN", "DEPT_OFFICER"):          # the administrator takes no case action (G6)
+            workflow.check("AG_REVIEWER", s, "OVERRIDE")                 # the AG's own desk (9 Oct 2026)
+        for role in ("AG_SENIOR_AUDITOR", "AG_AO", "ADMIN", "DEPT_OFFICER"):   # the administrator takes no case action (G6)
             with self.assertRaises(workflow.WorkflowError):
                 workflow.check(role, workflow.APPROVED, "OVERRIDE")
         for action in ("FORWARD", "ADD_DOCS", "RUN_CHECK", "APPROVE", "REJECT", "RETURN", "REQUEST_DOCS", "TAKE_UP"):

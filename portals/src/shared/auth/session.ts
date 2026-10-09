@@ -19,10 +19,10 @@ export const IDLE_MINUTES = 30
 export const IDLE_WARNING_MINUTES = 2
 
 /** The roles the server knows. The three tiers of a pension wing arrived on 9 Oct 2026 (C3);
- *  AG_REVIEWER is the role before them, kept for the accounts that still hold it (read-only). */
-export type Role = 'DEPT_OFFICER' | 'AG_SENIOR_AUDITOR' | 'AG_ASSISTANT_AO' | 'AG_AO' | 'AG_DAG' | 'ADMIN' | 'AG_REVIEWER'
-export const AG_ROLES: Role[] = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG']
-export const AG_READERS: Role[] = [...AG_ROLES, 'AG_REVIEWER']
+ *  AG_REVIEWER is the Accountant General's own desk, acting at every tier in every wing. */
+export type Role = 'DEPT_OFFICER' | 'AG_SENIOR_AUDITOR' | 'AG_ASSISTANT_AO' | 'AG_AO' | 'AG_DAG' | 'AG_REVIEWER' | 'ADMIN'
+export const AG_ROLES: Role[] = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_REVIEWER']
+export const AG_READERS: Role[] = AG_ROLES
 export const isAgReader = (role: string) => (AG_READERS as string[]).includes(role)
 
 export interface SessionUser {

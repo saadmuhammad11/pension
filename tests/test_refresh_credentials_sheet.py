@@ -35,16 +35,16 @@ class RefreshSheet(unittest.TestCase):
         conn = db.connect()
         try:
             from api.auth import hash_password
-            conn.execute("UPDATE users SET password_hash = ? WHERE username IN ('agriculture', 'syed.haider')",
+            conn.execute("UPDATE users SET password_hash = ? WHERE username IN ('agriculture', 'ag.reviewer')",
                          (hash_password("Trial-1234"),))
             conn.commit()
             before = {u["username"]: (u["password_hash"], u["token_version"]) for u in conn.execute("SELECT * FROM users")}
         finally:
             conn.close()
         names = db.refresh_credentials("Trial-1234")
-        self.assertEqual(sorted(names), ["agriculture", "syed.haider"])
+        self.assertEqual(sorted(names), ["ag.reviewer", "agriculture"])
         rows = self._rows()
-        self.assertEqual((rows["agriculture"], rows["syed.haider"]), ("Trial-1234", "Trial-1234"))
+        self.assertEqual((rows["agriculture"], rows["ag.reviewer"]), ("Trial-1234", "Trial-1234"))
         self.assertEqual(rows["admin"], db.SEED_PASSWORD)              # untouched accounts keep their row
         self.assertIn("Trial-1234", db.CREDENTIALS_HTML.read_text())
         conn = db.connect()

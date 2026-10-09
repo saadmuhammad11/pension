@@ -58,9 +58,10 @@ class WingUsers(unittest.TestCase):
         self.assertEqual(r.status_code, 422, r.text)
         r = self._create(admin, username="dag.wing", role="AG_DAG", pension_wing="Pension-I")
         self.assertEqual(r.status_code, 422, r.text)
-        r = self._create(admin, username="old.reviewer", role="AG_REVIEWER")
-        self.assertEqual(r.status_code, 422, r.text)
-        self.assertIn("legacy", r.json()["detail"])
+        r = self._create(admin, username="desk.two", role="AG_REVIEWER")                 # the AG's desk: no wing, no department
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertEqual((r.json()["pension_wing"], r.json()["department_code"]), (None, None))
+        self.assertEqual(self._create(admin, username="desk.three", role="AG_REVIEWER", pension_wing="Pension-I").status_code, 422)
         r = self._create(admin, username="dag.two", role="AG_DAG")
         self.assertEqual(r.status_code, 201, r.text)
 
@@ -82,9 +83,9 @@ class WingUsers(unittest.TestCase):
         # Not the DDO's or a tier officer's business.
         self.assertEqual(self.client.get("/api/v2/admin/wing-coverage", headers=self.login("punjab-police", "punjab-police")).status_code, 403)
 
-    def test_a_legacy_reviewer_is_given_a_tier_and_a_wing_with_a_reason(self) -> None:
+    def test_an_ag_desk_account_is_given_a_tier_and_a_wing_with_a_reason(self) -> None:
         admin = self.login("admin", "ag")
-        legacy = next(u for u in self.client.get("/api/v2/admin/users", headers=admin).json() if u["username"] == "syed.haider")
+        legacy = next(u for u in self.client.get("/api/v2/admin/users", headers=admin).json() if u["username"] == "ag.reviewer")
         self.assertEqual(legacy["role"], "AG_REVIEWER")
         r = self.client.post(f"/api/v2/admin/users/{legacy['id']}/role", headers=admin, json={"role": "AG_AO", "pension_wing": "Pension-III", "reason": "short"})
         self.assertEqual(r.status_code, 422, r.text)
@@ -93,7 +94,7 @@ class WingUsers(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual((r.json()["role"], r.json()["pension_wing"]), ("AG_AO", "Pension-III"))
         # The old session is over; the new one carries the tier.
-        r = self.client.post("/api/v2/auth/login", json={"username": "syed.haider", "password": db.SEED_PASSWORD}, headers={"X-Portal": "ag"})
+        r = self.client.post("/api/v2/auth/login", json={"username": "ag.reviewer", "password": db.SEED_PASSWORD}, headers={"X-Portal": "ag"})
         self.assertEqual(r.json()["capabilities"]["tier"], "AO")
         log = self.client.get("/api/v2/admin/audit-log?limit=20", headers=admin).json()
         row = next(e for e in log if e["action"] == "USER_ROLE_CHANGE")

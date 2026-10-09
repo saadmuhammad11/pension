@@ -33,21 +33,21 @@ class NamedLogins(unittest.TestCase):
             names = {r["username"] for r in conn.execute("SELECT username FROM users WHERE role != 'DEPT_OFFICER'")}
         finally:
             conn.close()
-        self.assertIn("syed.haider", names)
-        self.assertNotIn("ag.reviewer", names)
+        self.assertIn("ag.reviewer", names)                              # the AG's own desk (9 Oct 2026)
+        self.assertNotIn("syed.haider", names)                           # the 7 Oct trial name, renamed back
         self.assertEqual(self.sa()["Authorization"][:7], "Bearer ")
 
     def test_an_old_database_s_shared_login_is_renamed_in_place(self) -> None:
         conn = db.connect()
         try:
-            row = conn.execute("SELECT id, password_hash FROM users WHERE username = 'syed.haider'").fetchone()
-            conn.execute("UPDATE users SET username = 'ag.reviewer', token_version = 3 WHERE id = ?", (row["id"],))
+            row = conn.execute("SELECT id, password_hash FROM users WHERE username = 'ag.reviewer'").fetchone()
+            conn.execute("UPDATE users SET username = 'syed.haider', token_version = 3 WHERE id = ?", (row["id"],))
             conn.commit()
             db.seed(conn, quiet=True)
             after = conn.execute("SELECT username, token_version, password_hash FROM users WHERE id = ?", (row["id"],)).fetchone()
         finally:
             conn.close()
-        self.assertEqual(after["username"], "syed.haider")             # same account: same id, same password
+        self.assertEqual(after["username"], "ag.reviewer")             # same account: same id, same password
         self.assertEqual(after["password_hash"], row["password_hash"])
         self.assertEqual(after["token_version"], 4)                     # its sessions ended
 
@@ -57,9 +57,9 @@ class NamedLogins(unittest.TestCase):
         try:
             conn.execute("INSERT INTO users(id, username, display_name, password_hash, role, department_code, active, "
                          "token_version, must_change_password, created_at, updated_at) VALUES "
-                         "('x1', 'ag.reviewer', 'Desk', 'scrypt$x$y', 'AG_REVIEWER', NULL, 1, 1, 0, '2026', '2026')")
+                         "('x1', 'reviewer', 'Desk', 'scrypt$x$y', 'AG_REVIEWER', NULL, 1, 1, 0, '2026', '2026')")
             conn.commit()
-            self.assertEqual(auth.shared_logins(conn), ["ag.reviewer"])
+            self.assertEqual(auth.shared_logins(conn), ["reviewer"])         # ag.reviewer itself is the AG's desk, allowed (9 Oct)
         finally:
             conn.close()
         with self.assertRaises(SystemExit) as cm:
@@ -67,7 +67,7 @@ class NamedLogins(unittest.TestCase):
         self.assertEqual(cm.exception.code, 1)
         conn = db.connect()
         try:
-            conn.execute("UPDATE users SET active = 0 WHERE username = 'ag.reviewer'"); conn.commit()
+            conn.execute("UPDATE users SET active = 0 WHERE username = 'reviewer'"); conn.commit()
             self.assertEqual(auth.shared_logins(conn), [])
         finally:
             conn.close()

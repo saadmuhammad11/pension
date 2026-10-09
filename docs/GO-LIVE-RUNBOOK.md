@@ -214,13 +214,13 @@ sudo systemctl enable --now pension-api
 sudo journalctl -u pension-api -n 40 --no-pager
 ```
 On start the API applies migrations 0001–0010 (0010 adds the Deputy AG role) and seeds: the
-departments' DDO accounts, the named reviewer `syed.haider` and `admin`, each with a **generated**
+departments' DDO accounts, the Accountant General's desk `ag.reviewer` and `admin`, each with a **generated**
 password, written once to `/var/lib/pension/artifacts/credentials/credentials.csv` (service account
-only). On a carried-over database the shared `ag.reviewer` login is renamed in place to `syed.haider`
+only). On a carried-over database the trial name `syed.haider` is renamed in place back to `ag.reviewer` (decision S10, 9 Oct 2026)
 (same password; its sessions end).
 
 Production refuses to start, with the reason in the journal, if: the JWT secret is missing, short
-or the placeholder; a shared login (`ag.reviewer`, `dag`, `ao`, `reviewer`, `officer` ...) is
+or the placeholder; a shared login (`dag`, `ao`, `reviewer`, `officer` ...; `ag.reviewer` itself is the AG's desk and allowed) is
 still **active**; a migration failed. Fix the cause and start again — do not work around it.
 
 ### 15. Start GP Fund and the portal **[sudo]**
@@ -249,7 +249,7 @@ alias pdb='sudo -u pension env $(sudo grep -v "^#" /etc/pension/pension.env | xa
    accounts (`audit.tmp1`, `audit.tmp2`, `sectest.audit`, `legacy.import`, `ahmed`) and any department
    account not on the list from the admin's Users screen (Disable, with a reason).
 2. **Named reviewers:** `pdb add-reviewer <username> "<Officer's name, designation>"` for each Auditor /
-   Determining Officer of the Pension Wing. The username must be a person's (`ag.reviewer`, `dag`, `ao`
+   Determining Officer of the Pension Wing. The username must be a person's (`dag`, `ao`
    are refused).
 3. **Deputy AG:** `pdb add-reviewer <username> "<Name>, Deputy Accountant General (Pension)" --dag`
    (role `AG_DAG`: the override, writes on the old register, the DAG band in GP Fund).
@@ -258,7 +258,7 @@ alias pdb='sudo -u pension env $(sudo grep -v "^#" /etc/pension/pension.env | xa
 5. Verify, then destroy the sheet:
    ```bash
    psql "$PENSION_DATABASE_URL" -Atc \
-     "SELECT username, role FROM users WHERE active = 1 AND username IN ('ag.reviewer','dag','ao','reviewer','officer','auditor','ag.upload')"   # must be empty
+     "SELECT username, role FROM users WHERE active = 1 AND username IN ('dag','ao','reviewer','officer','auditor','ag.upload')"   # must be empty
    sudo -u pension env PENSION_DATABASE_URL="$PENSION_DATABASE_URL" /opt/pension/venv/bin/python3 - <<'EOF'
    import sys; sys.path.insert(0, "/opt/pension/current")
    from api import db

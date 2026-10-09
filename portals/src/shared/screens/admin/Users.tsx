@@ -6,13 +6,14 @@ import { departments, type Department } from '../../api/cases'
 import { useSession } from '../../auth/AuthProvider'
 import { PasswordField } from '../../components/PasswordField'
 
-/** The roles in the order the office speaks of them. AG_REVIEWER is the role before the tiers:
- *  read-only, and not offered for new accounts -- the administrator gives such an account a tier. */
+/** The roles in the order the office speaks of them. AG_REVIEWER is the Accountant General's own
+ *  desk (9 Oct 2026): no wing, no tier, acts wherever a case is; its one login is shared by the
+ *  office's senior officers. */
 export const ROLE_WORDS: Record<string, string> = {
   AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant Accounts Officer', AG_AO: 'Accounts Officer',
-  AG_DAG: 'Deputy AG (Pension)', DEPT_OFFICER: 'DDO', ADMIN: 'Administrator', AG_REVIEWER: 'AG Reviewer (legacy, read-only)',
+  AG_DAG: 'Deputy AG (Pension)', AG_REVIEWER: "AG's desk (all wings, every tier)", DEPT_OFFICER: 'DDO', ADMIN: 'Administrator',
 }
-export const CREATABLE_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'DEPT_OFFICER', 'ADMIN']
+export const CREATABLE_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_REVIEWER', 'DEPT_OFFICER', 'ADMIN']
 export const TIER_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO']
 export const WINGS = ['Pension-I', 'Pension-II', 'Pension-III', 'Pension-IV', 'Pension-V']
 /** A wing officer has a wing and no department; a DDO a department and no wing; the rest neither. */
@@ -158,7 +159,7 @@ export function Users() {
           {ask.kind === 'role' && (<>
             <div className="field"><label className="label" htmlFor="ask-role">Role</label>
               <select id="ask-role" value={newRole.role} onChange={e => setNewRole({ ...newRole, role: e.target.value })}>
-                {['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG'].map(k => <option key={k} value={k}>{ROLE_WORDS[k]}</option>)}
+                {['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_REVIEWER'].map(k => <option key={k} value={k}>{ROLE_WORDS[k]}</option>)}
               </select></div>
             {needsWing(newRole.role) && (
               <div className="field"><label className="label" htmlFor="ask-wing">Pension wing</label>
@@ -205,7 +206,7 @@ export function Users() {
                     {u.role !== 'DEPT_OFFICER' && u.role !== 'ADMIN' && <>
                       {' '}
                       <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
-                              onClick={() => { setAsk({ kind: 'role', user: u }); setReason(''); setNewRole({ role: TIER_ROLES.includes(u.role) || u.role === 'AG_DAG' ? u.role : 'AG_SENIOR_AUDITOR', pension_wing: u.pension_wing ?? 'Pension-I' }) }}>
+                              onClick={() => { setAsk({ kind: 'role', user: u }); setReason(''); setNewRole({ role: TIER_ROLES.includes(u.role) || u.role === 'AG_DAG' || u.role === 'AG_REVIEWER' ? u.role : 'AG_SENIOR_AUDITOR', pension_wing: u.pension_wing ?? 'Pension-I' }) }}>
                         Tier / wing</button>
                     </>}
                   </td>

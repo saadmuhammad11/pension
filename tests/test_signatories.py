@@ -125,7 +125,7 @@ class Signatories(unittest.TestCase):
         police = _v2.V2Test.login(self, "punjab-police", "punjab-police")
         self.assertEqual(self.client.get(url, headers=police).status_code, 403)
         self.assertEqual(self.client.get("/api/v2/signatories", headers=police).status_code, 403)
-        reviewer = _v2.V2Test.login(self, "syed.haider", "ag")
+        reviewer = _v2.V2Test.login(self, "ag.reviewer", "ag")
         r = self.client.get(url, headers=reviewer)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.headers["cache-control"], "no-store")

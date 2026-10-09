@@ -27,7 +27,9 @@ the department or forwards it to the **Assistant Accounts Officer**, who forward
 down at a time. Who holds the case is the ``holder_tier`` column (SENIOR_AUDITOR | ASSISTANT_AO |
 AO), not a new status, so every status keeps its meaning; a tier officer sees and acts on their
 own wing's cases only (``PENSION_SECTION_OF``). The Deputy AG overrides from anywhere and is not
-part of the chain (Q2); the old AG_REVIEWER role reads every case and acts on none (Q5).
+part of the chain (Q2). AG_REVIEWER is the Accountant General's own desk (decision of 9 Oct 2026,
+afternoon, replacing the Q5 default): it acts at every tier in every wing and overrides like the
+Deputy AG; the senior officers of the office share that one login.
 
 Standard library only, in the manner of ``api.desks``: the HTTP layer turns
 :class:`WorkflowError` into 403 (not this user's to do) or 409 (not from this status).
@@ -82,13 +84,14 @@ PREVIOUS_TIER = {AO: ASSISTANT_AO, ASSISTANT_AO: SENIOR_AUDITOR}
 
 #: Who acts on each side of a case. The administrator is on neither (business decision G6, 7 Oct
 #: 2026): the IT administrator manages users and reads the audit log, and takes no case action in
-#: pension or GP Fund. The override belongs to the Deputy AG. AG_REVIEWER (the role before the
-#: tiers) reads and acts on nothing (Q5); the administrator reassigns such accounts to a tier.
+#: pension or GP Fund. The override belongs to the Deputy AG and to the AG's desk (AG_REVIEWER),
+#: which may act at any tier in any wing (9 Oct 2026).
 DEPARTMENT_SIDE = ("DEPT_OFFICER",)
-AG_SIDE = TIER_ROLES + ("AG_DAG",)
-LEGACY_AG_ROLES = ("AG_REVIEWER",)
-#: Every role that reads AG-side material: the acting roles, the legacy reviewer, the administrator.
-AG_READERS = AG_SIDE + LEGACY_AG_ROLES + ("ADMIN",)
+#: The roles bound to no wing and no tier: they act wherever the case is.
+ANY_TIER = ("AG_DAG", "AG_REVIEWER")
+AG_SIDE = TIER_ROLES + ANY_TIER
+#: Every role that reads AG-side material: the acting roles and the administrator.
+AG_READERS = AG_SIDE + ("ADMIN",)
 
 #: action -> (roles, from-statuses, to-status). ``None`` as the target means "unchanged".
 TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
@@ -96,27 +99,27 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
     # A paper put in place of one already filed (30 Sep 2026); the old one stays on file, superseded.
     "REPLACE_DOC":  (DEPARTMENT_SIDE, frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_REQUESTED}), None),
     "FORWARD":      (DEPARTMENT_SIDE, frozenset({DRAFT, AI_CHECKED, RETURNED, DOCS_REQUESTED}), FORWARDED),
-    # The verification is the Senior Auditor's alone (C3); the Deputy AG may run it too.
-    "RUN_CHECK":    (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({FORWARDED, AI_FAILED, UNDER_REVIEW}), AI_CHECKING),
+    # The verification is the Senior Auditor's (C3); the Deputy AG and the AG's desk may run it too.
+    "RUN_CHECK":    (("AG_SENIOR_AUDITOR",) + ANY_TIER, frozenset({FORWARDED, AI_FAILED, UNDER_REVIEW}), AI_CHECKING),
     "CHECK_DONE":   ((), frozenset({AI_CHECKING}), UNDER_REVIEW),    # by the system: findings for the AG
     "CHECK_FAILED": ((), frozenset({AI_CHECKING}), AI_FAILED),       # by the system: verify again
     # Retired 9 Oct 2026 (no automatic return in pension or GP Fund): neither the system nor any
     # role may perform these now; the rows stay so history written before that day still resolves.
     "AUTO_RETURN":  ((), frozenset(), RETURNED),                      # was: by the system, documents missing
     "GPF_RETURN":   ((), frozenset(), RETURNED),                      # was: on the officer's return in the GP Fund module
-    "TAKE_UP":      (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({FORWARDED}), UNDER_REVIEW),
+    "TAKE_UP":      (("AG_SENIOR_AUDITOR",) + ANY_TIER, frozenset({FORWARDED}), UNDER_REVIEW),
     # Up the chain: Senior Auditor -> Assistant AO -> AO; and one tier back down, with a remark.
     # The status stays UNDER_REVIEW; the holder (holder_tier) moves. Internal to the AG: a DDO
     # never sees these rows.
-    "FORWARD_TIER": (("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_DAG"), frozenset({UNDER_REVIEW}), None),
-    "RETURN_TIER":  (("AG_ASSISTANT_AO", "AG_AO", "AG_DAG"), frozenset({UNDER_REVIEW}), None),
+    "FORWARD_TIER": (("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO") + ANY_TIER, frozenset({UNDER_REVIEW}), None),
+    "RETURN_TIER":  (("AG_ASSISTANT_AO", "AG_AO") + ANY_TIER, frozenset({UNDER_REVIEW}), None),
     # The decision is the Accounts Officer's (Q1); the return to the department is the Senior
     # Auditor's, who is the tier that talks to the department.
-    "APPROVE":      (("AG_AO", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), APPROVED),
-    "REJECT":       (("AG_AO", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), REJECTED),
-    "RETURN":       (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), RETURNED),
-    "REQUEST_DOCS": (("AG_SENIOR_AUDITOR", "AG_DAG"), frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), DOCS_REQUESTED),
-    "OVERRIDE":     (("AG_DAG",), frozenset(STATUSES), None),        # target given by the Deputy AG (G6)
+    "APPROVE":      (("AG_AO",) + ANY_TIER, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), APPROVED),
+    "REJECT":       (("AG_AO",) + ANY_TIER, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), REJECTED),
+    "RETURN":       (("AG_SENIOR_AUDITOR",) + ANY_TIER, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), RETURNED),
+    "REQUEST_DOCS": (("AG_SENIOR_AUDITOR",) + ANY_TIER, frozenset({UNDER_REVIEW, FORWARDED, AI_FAILED}), DOCS_REQUESTED),
+    "OVERRIDE":     (ANY_TIER, frozenset(STATUSES), None),           # target given by the Deputy AG or the AG's desk (G6)
     # The case type (29 Sep 2026): a department may change its declaration while the case is on
     # its side; the AG and the administrator may correct it at any point, with a remark.
     "SET_CASE_TYPE": (DEPARTMENT_SIDE + AG_SIDE, frozenset(STATUSES), None),
@@ -202,7 +205,7 @@ def holder_label(case: db.Row | dict) -> str | None:
 
 def may_see(user_role: str, user_department: str | None, case: db.Row | dict, user_wing: str | None = None) -> bool:
     """Reads: the department's side sees its own; a tier officer their own wing's cases; the
-    Deputy AG, the legacy reviewer and the administrator everything."""
+    Deputy AG, the AG's desk and the administrator everything."""
     if user_role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
         return True
     if user_role in TIER_ROLES:
@@ -219,7 +222,7 @@ def may_see_user(user: Any, case: db.Row | dict) -> bool:
 def check_holder(actor: Any, case: db.Row | dict, action: str) -> None:
     """A tier officer acts only on their own wing's case, and only while their tier holds it.
 
-    The Deputy AG is bound by neither (Q2). A case the AG holds with no holder recorded (filed
+    The Deputy AG and the AG's desk are bound by neither (Q2; 9 Oct 2026). A case the AG holds with no holder recorded (filed
     before 0014 and not migrated, which the migration prevents) counts as the Senior Auditor's."""
     role = getattr(actor, "role", "")
     tier = tier_of(role)

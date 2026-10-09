@@ -208,7 +208,7 @@ class V2Test(unittest.TestCase):
         r = self.client.post("/api/v2/auth/login", json={"username": "punjab-police", "password": db.SEED_PASSWORD},
                              headers={"X-Portal": "ag"})
         self.assertEqual(r.status_code, 200)                          # one portal for everyone
-        r = self.client.post("/api/v2/auth/login", json={"username": "syed.haider", "password": db.SEED_PASSWORD},
+        r = self.client.post("/api/v2/auth/login", json={"username": "ag.reviewer", "password": db.SEED_PASSWORD},
                              headers={"X-Portal": "punjab-police"})
         self.assertEqual(r.status_code, 403)
         self.assertIn(":5184/", r.json()["detail"])
@@ -755,7 +755,7 @@ class V2Test(unittest.TestCase):
         (runs.ARTIFACTS / "uploads" / "abcdef123456-widow.pdf").write_bytes(PDF)
         self.assertEqual(legacy.import_legacy_runs(), 1)
         self.assertEqual(legacy.import_legacy_runs(), 0)                 # idempotent
-        reviewer = self.login("syed.haider", "ag")                       # the legacy bucket has no wing: a cross-wing reader
+        reviewer = self.login("ag.reviewer", "ag")                       # the legacy bucket has no wing: the AG's desk reads every wing
         rows = self.client.get("/api/v2/cases", headers=reviewer).json()
         leg = next(r for r in rows if r["case_no"] == "LEGACY-abcdef123456")
         self.assertEqual((leg["status"], leg["department_code"], leg["claimant_name"], leg["created_via"]),

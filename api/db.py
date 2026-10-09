@@ -30,6 +30,7 @@ when the process ends -- so the suites run unchanged on either engine (``tools/r
     python3 -m api.db refresh-credentials <password>   # sheet rows for every account on this password; changes nothing
     python3 -m api.db add-reviewer <username> "<Officer's name>" --tier senior-auditor|assistant-ao|ao --wing Pension-III [<password>]
     python3 -m api.db add-reviewer <username> "<Officer's name>" --dag [<password>]   # the Deputy AG
+    python3 -m api.db seed-wing-tiers [<password>]   # the trial's 15 tier accounts (sa/aao/ao.pension1..5), idempotent
     python3 -m api.db forget-credentials   # delete the plaintext sheet once passwords are handed out
     python3 -m api.db drop-test-schemas    # remove schemas a killed test run left in the test database
 
@@ -97,21 +98,31 @@ CREDENTIALS_HTML = CREDENTIALS_DIR / "credentials.html"
 #: department's cases, role DEPT_OFFICER -- are generated from api.departments: one per
 #: department, username = the department's slug.
 AG_USERS: tuple[tuple[str, str, str], ...] = (
-    # Named logins for every reviewer (business decision C1, 7 Oct 2026): the shared "ag.reviewer"
-    # account is retired; the seed renames it in place (see seed()) so the trial's records stay
-    # attached, and further reviewers are created by the administrator or with
-    # `python3 -m api.db add-reviewer`. The Deputy AG (role AG_DAG) is created the same way.
-    ("syed.haider", "Syed Haider (AG Punjab, Pension Wing)", "AG_REVIEWER"),
+    # The Accountant General's own desk (decision of 9 Oct 2026, afternoon): one login, ag.reviewer,
+    # for the office's senior officers, acting at every tier in every wing and overriding like the
+    # Deputy AG. It is the one shared login the office keeps (the C1 rule of 7 Oct 2026 stands for
+    # every other account); the named trial login syed.haider of 7 Oct is renamed back to it by the
+    # seed (see seed()) so the trial's records stay attached. Tier officers are created by the
+    # administrator, with `python3 -m api.db add-reviewer`, or for the trial `seed-wing-tiers`.
+    ("ag.reviewer", "Accountant General's desk (all wings)", "AG_REVIEWER"),
     ("admin", "System Administrator", "ADMIN"),
 )
 
 #: Shared or role-named logins that production refuses to start with (C1): a decision must carry a
-#: person's name, and every one of these could be anyone at the desk.
-SHARED_LOGINS = ("ag.reviewer", "reviewer", "ag.upload", "dag", "dag.pension", "ao", "officer", "auditor")
+#: person's name, and every one of these could be anyone at the desk. ``ag.reviewer`` is not on the
+#: list since 9 Oct 2026: it is the Accountant General's desk by decision, shared by the office's
+#: senior officers, and the audit trail records it as that desk.
+SHARED_LOGINS = ("reviewer", "ag.upload", "dag", "dag.pension", "ao", "officer", "auditor")
 
-#: The shared reviewer account, renamed in place to the named login on the first seed after 7 Oct
-#: 2026: same id, same password, its sessions ended (token_version), its records untouched.
-RENAMED_LOGINS = {"ag.reviewer": "syed.haider"}
+#: Logins renamed in place by the seed: same id, same password, sessions ended (token_version),
+#: records untouched. 7 Oct 2026 renamed ag.reviewer to syed.haider (C1); 9 Oct 2026 renamed it
+#: back, the desk login being the office's decision.
+RENAMED_LOGINS = {"syed.haider": "ag.reviewer"}
+
+#: The trial's tier accounts (9 Oct 2026): a Senior Auditor, an Assistant AO and an AO per pension
+#: wing, named by desk; the office replaces them with named officers from the Users screen.
+WING_TIER_LOGINS = (("sa", "AG_SENIOR_AUDITOR", "Senior Auditor"), ("aao", "AG_ASSISTANT_AO", "Assistant Accounts Officer"),
+                    ("ao", "AG_AO", "Accounts Officer"))
 
 #: Accounts retired on 25 Sep 2026 -- the AG Upload role, and the first two demo officers whose
 #: usernames predate the slug rule. Their records move to the department's own officer (or the
@@ -713,6 +724,38 @@ def reset_password(username: str, password: str, conn: Connection | None = None)
 TIER_ARGS = {"senior-auditor": "AG_SENIOR_AUDITOR", "assistant-ao": "AG_ASSISTANT_AO", "ao": "AG_AO"}
 
 
+def seed_wing_tiers(password: str | None = None, conn: Connection | None = None) -> list[str]:
+    """The trial's tier accounts: sa.pension1, aao.pension1, ao.pension1 ... ao.pension5, one per tier
+    per wing, on ``password`` (the seed password by default). Accounts that exist are left alone;
+    the usernames created are returned. Decision of 9 Oct 2026: the office starts the wings on desk
+    logins and gives each officer a named account from the Users screen when the list arrives."""
+    from api import settings
+    from api.auth import hash_password
+    from api.departments import PENSION_SECTION_ORDER
+    pw = password or SEED_PASSWORD
+    own = conn is None
+    conn = conn or connect()
+    created: list[str] = []
+    try:
+        with transaction(conn):
+            for n, wing in enumerate(PENSION_SECTION_ORDER, start=1):
+                for short, role, label in WING_TIER_LOGINS:
+                    username = f"{short}.pension{n}"
+                    if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+                        continue
+                    stamp = now()
+                    conn.execute(
+                        "INSERT INTO users(id, username, display_name, password_hash, role, department_code, pension_wing, active, "
+                        "token_version, must_change_password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, ?, 1, 1, ?, ?, ?)",
+                        (new_id(), username, f"{label}, {wing}", hash_password(pw), role, wing,
+                         1 if settings.force_password_change() else 0, stamp, stamp))
+                    created.append(username)
+        return created
+    finally:
+        if own:
+            conn.close()
+
+
 def add_reviewer(username: str, display_name: str, *, dag: bool = False, password: str | None = None,
                  tier: str | None = None, wing: str | None = None, conn: Connection | None = None) -> str:
     """Create a named AG account and return its password: a tier officer (``tier`` one of
@@ -871,6 +914,11 @@ def main(argv: list[str]) -> int:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
         print(f"created {argv[2]} ({'AG_DAG' if dag else TIER_ARGS[tier] + ', ' + wing}); password: {pw}")
+        return 0
+    if cmd == "seed-wing-tiers":
+        migrate()
+        made = seed_wing_tiers(argv[2] if len(argv) > 2 else None)
+        print(f"created {len(made)} tier account(s): {', '.join(made) or 'none (all present)'}")
         return 0
     if cmd == "forget-credentials":
         removed = forget_credentials()

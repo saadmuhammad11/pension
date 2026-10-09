@@ -25,7 +25,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
 
     def _check(self, where: str) -> None:
         from api.check_inventory import compare
-        for user, role in (("syed.haider", "AG_REVIEWER"), ("admin", "ADMIN"),
+        for user, role in (("ag.reviewer", "AG_REVIEWER"), ("admin", "ADMIN"),
                            ("school-education", "DEPT_OFFICER"), ("agriculture", "DEPT_OFFICER")):
             h = self.login(user)
 
@@ -48,7 +48,7 @@ class InventoryIsOneSourceOfTruth(_rounds.RoundsOverTheApi):
         ids = lambda rows: {r["id"] for r in rows}
         dept = self.login(dept_user)
         self.assertIn(case_id, ids(self.client.get(f"/api/v2/inventory?product={product}", headers=dept).json()["rows"]))
-        for user in ("syed.haider", "admin"):
+        for user in ("ag.reviewer", "admin"):
             h = self.login(user)
             for q in ("", f"&department={dept_code}", f"&pension_section={section}"):
                 self.assertIn(case_id, ids(self.client.get(f"/api/v2/inventory?product={product}{q}", headers=h).json()["rows"]), (user, q))

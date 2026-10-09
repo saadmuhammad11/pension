@@ -30,9 +30,9 @@ describe('user form rules (C4)', () => {
     expect(needsWing('DEPT_OFFICER')).toBe(false); expect(needsDepartment('DEPT_OFFICER')).toBe(true)
     for (const r of ['AG_DAG', 'ADMIN']) { expect(needsWing(r)).toBe(false); expect(needsDepartment(r)).toBe(false) }
   })
-  it('the legacy reviewer role is named but not offered for new accounts', () => {
-    expect(ROLE_WORDS.AG_REVIEWER).toMatch(/legacy/)
-    expect(CREATABLE_ROLES).not.toContain('AG_REVIEWER')
-    expect(CREATABLE_ROLES).toEqual(expect.arrayContaining(['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG']))
+  it("the AG's desk is a role of its own: every tier, every wing, no wing field", () => {
+    expect(ROLE_WORDS.AG_REVIEWER).toMatch(/every tier/)
+    expect(needsWing('AG_REVIEWER')).toBe(false); expect(needsDepartment('AG_REVIEWER')).toBe(false)
+    expect(CREATABLE_ROLES).toEqual(expect.arrayContaining(['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_REVIEWER']))
   })
 })

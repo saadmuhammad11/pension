@@ -71,7 +71,7 @@ def main(argv: list[str]) -> int:
     # "username:ROLE,username:ROLE" for a reviewer and the administrator (go-live runbook, step 17).
     import os
     password = os.environ.get("PENSION_CHECK_PASSWORD") or "1234"
-    users_spec = os.environ.get("PENSION_CHECK_USERS") or "syed.haider:AG_REVIEWER,admin:ADMIN"
+    users_spec = os.environ.get("PENSION_CHECK_USERS") or "ag.reviewer:AG_REVIEWER,admin:ADMIN"
 
     def login(user: str) -> str:
         req = urllib.request.Request(f"{base}/api/v2/auth/login", data=json.dumps({"username": user, "password": password}).encode(),

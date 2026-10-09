@@ -112,12 +112,12 @@ class Backend(unittest.TestCase):
         reviewer = self.sa()
         me = self.client.get("/api/v2/auth/me", headers=reviewer).json()
         self.assertEqual(me["password_min_length"], settings.min_password_length())
-        r = self.client.post("/api/v2/auth/login", json={"username": "syed.haider", "password": "Pension@2026"}, headers={"X-Portal": "ag"})
+        r = self.client.post("/api/v2/auth/login", json={"username": "ag.reviewer", "password": "Pension@2026"}, headers={"X-Portal": "ag"})
         self.assertEqual(r.json()["password_min_length"], settings.min_password_length())
 
     # -- N23 -------------------------------------------------------------------------------------
     def test_the_old_register_is_read_only_in_production(self) -> None:
-        reviewer = self.login("syed.haider", "ag")                   # signed in before production refuses the trial password
+        reviewer = self.login("ag.reviewer", "ag")                   # signed in before production refuses the trial password
         with mock.patch.dict(os.environ, {"PENSION_ENV": "production"}):
             self.assertFalse(settings.legacy_register_writes())
             r = self.client.post("/api/runs", files=[("file", ("x.pdf", io.BytesIO(_v2.PDF), "application/pdf"))], headers=reviewer)
@@ -164,14 +164,14 @@ class Backend(unittest.TestCase):
         r = self.client.post("/api/v2/auth/login", json={"username": secret_typed_in_the_wrong_box, "password": "x"},
                              headers={"X-Portal": "ag"})
         self.assertEqual(r.status_code, 401)
-        r = self.client.post("/api/v2/auth/login", json={"username": "syed.haider", "password": "wrong-wrong"}, headers={"X-Portal": "ag"})
+        r = self.client.post("/api/v2/auth/login", json={"username": "ag.reviewer", "password": "wrong-wrong"}, headers={"X-Portal": "ag"})
         self.assertEqual(r.status_code, 401)
         admin = self.login("admin", "ag")
         log = self.client.get("/api/v2/admin/audit-log?limit=50", headers=admin).json()
         failed = [e for e in log if e["action"] in ("LOGIN_FAILED", "LOGIN_REFUSED")]
         self.assertNotIn(secret_typed_in_the_wrong_box, str(log))
         self.assertTrue(any(e["entity_id"].startswith("(unknown) sha256:") for e in failed), failed)
-        self.assertTrue(any(e["entity_id"] == "syed.haider" for e in failed), failed)
+        self.assertTrue(any(e["entity_id"] == "ag.reviewer" for e in failed), failed)
 
     # -- N28 -------------------------------------------------------------------------------------
     def test_an_override_to_returned_opens_a_round_request(self) -> None:
@@ -204,7 +204,7 @@ class Backend(unittest.TestCase):
         seen = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
         self.assertIsNone(seen["case_type_source"])
         self.assertIsNone(seen["detected_case_type"])
-        ag = self.client.get(f"/api/v2/cases/{case_id}", headers=self.login("syed.haider", "ag")).json()
+        ag = self.client.get(f"/api/v2/cases/{case_id}", headers=self.login("ag.reviewer", "ag")).json()
         self.assertEqual(ag["case_type_source"], "DETECTED")
 
     # -- N30 -------------------------------------------------------------------------------------

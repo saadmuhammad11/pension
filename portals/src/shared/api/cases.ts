@@ -395,7 +395,8 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
   const usual: Record<string, CaseAction[]> = {
     AG_SENIOR_AUDITOR: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN', 'REQUEST_DOCS'], AG_ASSISTANT_AO: ['FORWARD_TIER', 'RETURN_TIER'],
     AG_AO: ['APPROVE', 'REJECT', 'RETURN_TIER'], AG_DAG: ['RUN_CHECK', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'],
-    AG_REVIEWER: [], ADMIN: [], DEPT_OFFICER: ['ADD_DOCS', 'FORWARD'],
+    AG_REVIEWER: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN_TIER', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'],   // the AG's desk: every tier
+    ADMIN: [], DEPT_OFFICER: ['ADD_DOCS', 'FORWARD'],
   }
   const a = new Set<CaseAction>(c.allowed_actions.length ? c.allowed_actions : (usual[role] ?? []))
   const m = STATUS_META[c.status]

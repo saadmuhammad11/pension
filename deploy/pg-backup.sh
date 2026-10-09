@@ -26,7 +26,9 @@ KEEP="${PENSION_BACKUP_KEEP:-30}"
 
 if [[ "${1:-}" == "install-cron" ]]; then
   line="30 2 * * * $ROOT/deploy/pg-backup.sh >> $ROOT/artifacts/logs/pg-backup.log 2>&1"
-  ( crontab -l 2>/dev/null | grep -v "deploy/pg-backup.sh" ; echo "$line" ) | crontab -
+  # `grep -v` answers 1 when nothing is left (an empty crontab), which pipefail would turn into a
+  # silent exit before the line was written (found 9 Oct 2026); `|| true` keeps the pipe going.
+  ( crontab -l 2>/dev/null | grep -v "deploy/pg-backup.sh" || true ; echo "$line" ) | crontab -
   echo "installed: $line"; exit 0
 fi
 

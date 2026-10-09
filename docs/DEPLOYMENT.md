@@ -337,8 +337,11 @@ On first start it seeds the 88 accounts with generated passwords and writes them
    Officer, Accounts Officer, or Deputy AG) and, for the three tiers, a **pension wing** (Pension-I to
    Pension-V); the wing is a separate field, not a department. Every wing needs at least one active
    officer at every tier or its cases stop there: the Users screen's "Wing coverage" card flags a gap.
-   An account that still holds the old `AG_REVIEWER` role reads every case and acts on none until the
-   administrator gives it a tier and a wing ("Tier / wing" on the Users screen, reason required).
+   `ag.reviewer` (role `AG_REVIEWER`) is the Accountant General's own desk: no wing, no tier, acts on
+   any case in any wing and overrides like the Deputy AG; by the decision of 9 Oct 2026 it is the one
+   login the senior officers share, and the one shared name production allows. The administrator may
+   move any AG account between tiers and wings ("Tier / wing" on the Users screen, reason required).
+   For a trial, `python3 -m api.db seed-wing-tiers` creates sa/aao/ao.pension1..5 on the seed password.
    From the command line: `python3 -m api.db add-reviewer <username> "<Name>" --tier senior-auditor|assistant-ao|ao --wing Pension-III`.
 3. Give each user their one-time password through a separate channel (not the same email as the
    link). The portal makes them choose their own at first sign-in (F1).

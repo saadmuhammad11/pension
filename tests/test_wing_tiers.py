@@ -223,17 +223,49 @@ class Tiers(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertIsNone(r.json()["case"]["holder_tier"])
 
-    # -- the legacy reviewer ----------------------------------------------------------------------
-    def test_the_legacy_reviewer_reads_every_case_and_acts_on_none(self) -> None:
-        case_id, ddo = self._case()
-        legacy = self.login("syed.haider", "ag")
-        c = self._status(case_id, legacy)
-        self.assertEqual(c["allowed_actions"], [])
-        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/check", headers=legacy).status_code, 403)
-        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/approve", headers=legacy, json={"remark": "x" * 20}).status_code, 403)
-        me = self.client.get("/api/v2/auth/me", headers=legacy).json()
-        self.assertFalse(me["capabilities"]["run_check"])
-        self.assertTrue(me["capabilities"]["review"])
+    # -- the Accountant General's desk ------------------------------------------------------------
+    def test_the_ag_desk_acts_at_every_tier_in_every_wing(self) -> None:
+        """ag.reviewer (decision of 9 Oct 2026, afternoon): the office's senior officers share one
+        login that is bound to no wing and no tier, runs the verification, climbs the chain itself,
+        decides, and overrides like the Deputy AG."""
+        desk = self.login("ag.reviewer", "ag")
+        me = self.client.get("/api/v2/auth/me", headers=desk).json()
+        self.assertTrue(me["capabilities"]["run_check"] and me["capabilities"]["decide"] and me["capabilities"]["override"])
+        self.assertIsNone(me["capabilities"]["tier"])
+        police_case, _ = self._case("punjab-police")                               # Pension-V
+        agri_case, _ = self._case("agriculture")                                   # Pension-I
+        self.assertEqual(len(self.client.get("/api/v2/cases", headers=desk).json()), 2)   # every wing
+        self.assertIn("RUN_CHECK", self._status(police_case, desk)["allowed_actions"])
+        self.verify(desk, police_case)
+        # Bound to no tier: while the Senior Auditor holds the case the desk may already decide, forward,
+        # return or override; only a return one tier down has nowhere to go from the first tier.
+        c = self._status(police_case, desk)
+        self.assertEqual(sorted(c["allowed_actions"]), ["APPROVE", "FORWARD_TIER", "OVERRIDE", "REJECT", "REQUEST_DOCS", "RETURN", "RUN_CHECK"])
+        self.assertEqual(self.client.post(f"/api/v2/cases/{police_case}/forward-tier", headers=desk, json={}).status_code, 200)
+        self.assertEqual(self.client.post(f"/api/v2/cases/{police_case}/forward-tier", headers=desk, json={}).status_code, 200)
+        self.assertEqual(self._status(police_case, desk)["holder_tier"], "AO")
+        self.assertIn("RETURN_TIER", self._status(police_case, desk)["allowed_actions"])
+        r = self.client.post(f"/api/v2/cases/{police_case}/approve", headers=desk, json={"remark": "Approved at the AG's desk."})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["event"]["actor_role"], "AG_REVIEWER")
+        # The other wing's case, straight to a decision after its verification.
+        self.verify(desk, agri_case)
+        self.escalate(agri_case, "agriculture")
+        r = self.client.post(f"/api/v2/cases/{agri_case}/override", headers=desk,
+                             json={"to_status": "RETURNED", "reason": "Returned on the Accountant General's direction."})
+        self.assertEqual(r.status_code, 200, r.text)
+        from api import gpf_bridge
+        self.assertEqual(gpf_bridge.OFFICER_FOR_ROLE["AG_REVIEWER"], "dag")
+
+    def test_the_trial_tier_accounts_are_seeded_once(self) -> None:
+        made = db.seed_wing_tiers()
+        self.assertEqual(len(made), 15)
+        self.assertEqual(made[:3], ["sa.pension1", "aao.pension1", "ao.pension1"])
+        self.assertEqual(db.seed_wing_tiers(), [])                                 # idempotent
+        r = self.client.post("/api/v2/auth/login", json={"username": "ao.pension5", "password": db.SEED_PASSWORD}, headers={"X-Portal": "ag"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual((r.json()["user"]["role"], r.json()["user"]["pension_wing"], r.json()["user"]["display_name"]),
+                         ("AG_AO", "Pension-V", "Accounts Officer, Pension-V"))
 
     # -- GP Fund cases follow the same holders (Q3) ----------------------------------------------
     def test_a_gp_fund_case_maps_the_tiers_to_the_module_s_levels(self) -> None:

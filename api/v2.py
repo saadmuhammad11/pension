@@ -271,21 +271,22 @@ def gpf_act_check(x_gpf_session: str | None = Header(default=None),
 def capabilities(user: User) -> dict:
     """What the screens may offer this user. The server re-checks every one of them."""
     # The administrator manages users and reads; it takes no case action (business decision G6,
-    # 7 Oct 2026). The override is the Deputy AG's. The tiers (C3, 9 Oct 2026): the Senior Auditor
-    # verifies and talks to the department; the Accounts Officer decides; the legacy reviewer reads.
+    # 7 Oct 2026). The override is the Deputy AG's and the AG desk's. The tiers (C3, 9 Oct 2026): the
+    # Senior Auditor verifies and talks to the department; the Accounts Officer decides; the AG's
+    # desk (AG_REVIEWER, shared by the office's senior officers) acts at every tier in every wing.
     dept_side = user.role == "DEPT_OFFICER"
     ag_side = user.role in workflow.AG_SIDE
     reads_ag = user.role in workflow.AG_READERS
     tier = workflow.tier_of(user.role)
     return {
         "create_case": dept_side, "add_documents": dept_side,
-        "run_check": user.role in ("AG_SENIOR_AUDITOR", "AG_DAG"),
+        "run_check": user.role in ("AG_SENIOR_AUDITOR",) + workflow.ANY_TIER,
         "forward": dept_side, "pick_department": False,
         "intake_choices": ag_side,
         # The declared case type (29 Sep 2026): the AG may correct it, with a remark.
         "correct_case_type": ag_side,
-        "review": reads_ag and user.role != "ADMIN", "dispose": ag_side, "override": user.role == "AG_DAG",
-        "decide": user.role in ("AG_AO", "AG_DAG"), "return_to_department": user.role in ("AG_SENIOR_AUDITOR", "AG_DAG"),
+        "review": reads_ag and user.role != "ADMIN", "dispose": ag_side, "override": user.role in workflow.ANY_TIER,
+        "decide": user.role in ("AG_AO",) + workflow.ANY_TIER, "return_to_department": user.role in ("AG_SENIOR_AUDITOR",) + workflow.ANY_TIER,
         "tier": tier, "tier_label": workflow.TIER_LABELS.get(tier or "", None), "pension_wing": user.pension_wing,
         "manage_users": user.role == "ADMIN", "audit_log": user.role == "ADMIN",
         "all_departments": user.role in ("AG_DAG", "ADMIN", "AG_REVIEWER"),
@@ -1142,8 +1143,8 @@ def _allowed_actions(conn: db.Connection, user: User, row: db.Row) -> list[str]:
         except workflow.WorkflowError:
             continue
         out.append(a)
-    if user.role == "AG_DAG":
-        out.append("OVERRIDE")                                # the Deputy AG's, not the administrator's (G6)
+    if user.role in workflow.ANY_TIER:
+        out.append("OVERRIDE")                                # the Deputy AG's and the AG desk's, not the administrator's (G6)
     if "APPROVE" in out and user.id in _submitters(conn, row):
         out.remove("APPROVE")                                 # maker-checker (C1): the submitter does not approve
     return out
@@ -1151,7 +1152,7 @@ def _allowed_actions(conn: db.Connection, user: User, row: db.Row) -> list[str]:
 
 #: What the old register (api.cases) records as the deciding desk for each portal role.
 MIRROR_ROLE_LABELS = {"AG_SENIOR_AUDITOR": "Senior Auditor, Pension wing (AG)", "AG_ASSISTANT_AO": "Assistant Accounts Officer, Pension wing (AG)",
-                      "AG_AO": "Accounts Officer, Pension wing (AG)", "AG_REVIEWER": "Auditor, Pension wing (AG / DAO)",
+                      "AG_AO": "Accounts Officer, Pension wing (AG)", "AG_REVIEWER": "Accountant General's desk (all wings)",
                       "AG_DAG": "Deputy Accountant General (Pension)"}
 
 #: Acting on a case (29 Sep 2026) needs a completed AI examination of the papers as they stand:
@@ -1434,7 +1435,7 @@ def download_document(case_id: str, doc_id: str, user: User = Depends(current_us
 
 
 @router.post("/cases/{case_id}/check", status_code=202)
-def run_check(case_id: str, user: User = Depends(require_roles("AG_SENIOR_AUDITOR", "AG_DAG")),
+def run_check(case_id: str, user: User = Depends(require_roles("AG_SENIOR_AUDITOR", *workflow.ANY_TIER)),
               conn: db.Connection = Depends(get_conn)) -> dict:
     """"Verify case with AI": the Accountant General's button. The outcome moves the case by
     itself (api.case_runs): returned with the missing documents, approved, or under review."""
@@ -1521,7 +1522,7 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
             raise workflow.WorkflowError(422, f"{action.replace('_', ' ').title()} needs a remark")
         if action in ("APPROVE", "REJECT", "RETURN", "REQUEST_DOCS") and row["status"] == workflow.FORWARDED:
             workflow.check_holder(user, row, action)
-            take_up_by = user if workflow.tier_of(user.role) == workflow.SENIOR_AUDITOR or user.role == "AG_DAG" else None
+            take_up_by = user if workflow.tier_of(user.role) == workflow.SENIOR_AUDITOR or user.role in workflow.ANY_TIER else None
             if take_up_by is None:
                 raise workflow.WorkflowError(409, "a newly submitted case is with the Senior Auditor")
             workflow.transition(conn, row, "TAKE_UP", take_up_by, remark="", run_id=run_id)
@@ -1573,7 +1574,7 @@ def _forward_gate_or_422(conn: db.Connection, row: db.Row) -> None:
 
 @router.post("/cases/{case_id}/forward-tier")
 def forward_tier(case_id: str, body: dict = Body(default={}),
-                 user: User = Depends(require_roles("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_DAG")),
+                 user: User = Depends(require_roles("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", *workflow.ANY_TIER)),
                  conn: db.Connection = Depends(get_conn)) -> dict:
     """Up one tier: Senior Auditor -> Assistant AO -> Accounts Officer (C3). Internal to the AG."""
     return _act(conn, user, case_id, "FORWARD_TIER", body)
@@ -1581,7 +1582,7 @@ def forward_tier(case_id: str, body: dict = Body(default={}),
 
 @router.post("/cases/{case_id}/return-tier")
 def return_tier(case_id: str, body: dict = Body(default={}),
-                user: User = Depends(require_roles("AG_ASSISTANT_AO", "AG_AO", "AG_DAG")),
+                user: User = Depends(require_roles("AG_ASSISTANT_AO", "AG_AO", *workflow.ANY_TIER)),
                 conn: db.Connection = Depends(get_conn)) -> dict:
     """Down one tier, with a remark: AO -> Assistant AO -> Senior Auditor (C3). Internal to the AG."""
     return _act(conn, user, case_id, "RETURN_TIER", body)
@@ -1631,7 +1632,7 @@ def request_docs(case_id: str, body: dict = Body(default={}),
 
 @router.post("/cases/{case_id}/override")
 def override(case_id: str, request: Request, body: dict = Body(...),
-             user: User = Depends(require_roles("AG_DAG")),
+             user: User = Depends(require_roles(*workflow.ANY_TIER)),
              conn: db.Connection = Depends(get_conn)) -> dict:
     body = {**body, "remark": body.get("reason") or body.get("remark")}
     return _act(conn, user, case_id, "OVERRIDE", body, request)
@@ -2118,8 +2119,7 @@ def create_user(request: Request, body: dict = Body(...), user: User = Depends(r
     if not re.fullmatch(r"[a-z0-9._-]{3,40}", username):
         raise HTTPException(422, "username: 3-40 characters, letters, digits, . _ -")
     if role not in CREATABLE_ROLES:
-        raise HTTPException(422, f"role must be one of {list(CREATABLE_ROLES)}" + (
-            "; the AG reviewer role is legacy -- give the officer a tier and a wing" if role == "AG_REVIEWER" else ""))
+        raise HTTPException(422, f"role must be one of {list(CREATABLE_ROLES)}")
     if username in SHARED_LOGINS and settings.production():
         raise HTTPException(422, "a login carries the officer's own name (decision C1)")
     dept, wing = _wing_or_422(role, body.get("pension_wing"), dept, conn)
@@ -2146,8 +2146,8 @@ def create_user(request: Request, body: dict = Body(...), user: User = Depends(r
 @router.post("/admin/users/{user_id}/role")
 def set_user_role(request: Request, user_id: str, body: dict = Body(...), user: User = Depends(require_roles("ADMIN")),
                   conn: db.Connection = Depends(get_conn)) -> dict:
-    """Give an AG account its tier and wing (C4): the way a legacy AG_REVIEWER becomes a Senior
-    Auditor, Assistant AO or AO of a wing, or an officer moves between wings. A DDO stays a DDO
+    """Give an AG account its tier and wing (C4): the way an officer moves between tiers or wings,
+    or an AG-desk account becomes a tier officer. A DDO stays a DDO
     (a department's account is not turned into an AG one). Every session of the account ends.
     Audited with before and after and a reason."""
     row = _user_row(conn, user_id)
@@ -2155,7 +2155,7 @@ def set_user_role(request: Request, user_id: str, body: dict = Body(...), user: 
     if row["role"] == "DEPT_OFFICER" or role == "DEPT_OFFICER":
         raise HTTPException(422, "a DDO account is a department's; create the officer an AG account instead")
     if role not in CREATABLE_ROLES or role == "ADMIN":
-        raise HTTPException(422, "role must be a tier (AG_SENIOR_AUDITOR, AG_ASSISTANT_AO, AG_AO) or AG_DAG")
+        raise HTTPException(422, "role must be a tier (AG_SENIOR_AUDITOR, AG_ASSISTANT_AO, AG_AO), AG_DAG or AG_REVIEWER")
     if row["id"] == user.id:
         raise HTTPException(409, "you cannot change your own role")
     reason = " ".join(str(body.get("reason") or "").split())

@@ -32,7 +32,9 @@ class ThePermissionTable(unittest.TestCase):
     def test_the_pension_side_maps_the_deputy_ag_to_the_dag_band(self):
         from api.gpf_bridge import OFFICER_FOR_ROLE
         self.assertEqual(OFFICER_FOR_ROLE.get("AG_DAG"), "dag")
-        self.assertEqual(OFFICER_FOR_ROLE.get("AG_REVIEWER"), "ao")
+        self.assertEqual(OFFICER_FOR_ROLE.get("AG_REVIEWER"), "dag")   # the AG's desk acts as the DAG (decision S10, 9 Oct 2026)
+        self.assertEqual(OFFICER_FOR_ROLE.get("AG_SENIOR_AUDITOR"), "da")
+        self.assertEqual(OFFICER_FOR_ROLE.get("AG_AO"), "ao")
 
 
 class TheScreensAskForGrounds(unittest.TestCase):

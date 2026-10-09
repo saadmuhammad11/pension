@@ -166,7 +166,7 @@ async function scenario(): Promise<void> {
   //    the case, the decision.
   await signOut()
   await switchPortal(AG)
-  await login('syed.haider')
+  await login('ag.reviewer')
   await D.waitFor(() => D.q('.dept-sidebar'))
   await D.sleep(1800)
   await D.hover(D.byText('.tile', 'Awaiting decision')!); await D.sleep(900)
