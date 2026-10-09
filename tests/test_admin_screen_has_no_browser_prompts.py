@@ -33,7 +33,7 @@ class NoBrowserPrompts(unittest.TestCase):
         self.assertIn("minLength", field)
         reason_input = form[form.index('<input id="ask-reason"'):]
         self.assertIn("required", reason_input[:reason_input.index("/>")])
-        self.assertIn("resetPassword(user.id, value)", users)
+        self.assertIn("resetPassword(user.id, value, reason.trim())", users)   # the reset carries its reason (N25)
         self.assertIn("disableUser(user.id, value)", users)
 
 

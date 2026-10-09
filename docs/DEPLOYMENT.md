@@ -42,7 +42,7 @@ deployment types. Part 4 is LAN only, and Part 5 adds what a public deployment n
 | 5 | **OCR model** PaddleOCR-VL 1.6 | Reads scanned text | vLLM | 8012 | No |
 | 6 | **Embedding model** Qwen3-Embedding-4B | Rules/RAG search | vLLM | 8093 | No |
 | 7 | **Reranker** Qwen3-Reranker-4B | Rules/RAG ranking | vLLM (Spark-1 today) | 8094 | No |
-| 8 | **Database** | PostgreSQL 16 (`PENSION_DATABASE_URL`), schema migrations `api/migrations/0001…0011` (+ `postgres/` overrides); SQLite file only where there is no PostgreSQL | postgres | 5432 (loopback) | No |
+| 8 | **Database** | PostgreSQL 16 (`PENSION_DATABASE_URL`), schema migrations `api/migrations/0001…0014` (+ `postgres/` overrides); SQLite file only where there is no PostgreSQL | postgres | 5432 (loopback) | No |
 | 9 | **Case files** | Uploaded scans + per-run outputs (`artifacts/run-*`, `artifacts/cases`) | files | — | No |
 
 ### 1.2 How the parts connect
@@ -321,7 +321,9 @@ curl -s http://127.0.0.1:8201/api/health        # check "mode": "vllm", not stub
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5184/      # 200
 ```
 
-The API applies the migrations in `api/migrations/` on startup (0009 is the latest at v1.0.0).
+The API applies the migrations in `api/migrations/` on startup (0009 is the latest at v1.0.0; 0014,
+the pension wing tiers, since 9 Oct 2026). Before a release whose migrations touch the live database,
+take a dump with `deploy/pg-backup.sh` and confirm it restores into a scratch database (§7.2).
 On first start it seeds the 88 accounts with generated passwords and writes them once to
 `/var/lib/pension/artifacts/credentials/credentials.csv` (readable by the service account only).
 
@@ -330,7 +332,14 @@ On first start it seeds the 88 accounts with generated passwords and writes them
 1. Read the admin's generated password from `credentials.csv` on the server
    (`sudo -u pension cat /var/lib/pension/artifacts/credentials/credentials.csv`). Sign in; the
    portal makes you choose your own password before anything else.
-2. Create each user from the agreed list (D6): AG desks, DDO per department, admin.
+2. Create each user from the agreed list (D6): AG officers, DDO per department, admin. An AG officer
+   (9 Oct 2026, scope change C3/C4) is created with a **role** (Senior Auditor, Assistant Accounts
+   Officer, Accounts Officer, or Deputy AG) and, for the three tiers, a **pension wing** (Pension-I to
+   Pension-V); the wing is a separate field, not a department. Every wing needs at least one active
+   officer at every tier or its cases stop there: the Users screen's "Wing coverage" card flags a gap.
+   An account that still holds the old `AG_REVIEWER` role reads every case and acts on none until the
+   administrator gives it a tier and a wing ("Tier / wing" on the Users screen, reason required).
+   From the command line: `python3 -m api.db add-reviewer <username> "<Name>" --tier senior-auditor|assistant-ao|ao --wing Pension-III`.
 3. Give each user their one-time password through a separate channel (not the same email as the
    link). The portal makes them choose their own at first sign-in (F1).
 4. Disable every seeded account that isn't on the list.

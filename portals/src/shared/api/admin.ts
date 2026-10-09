@@ -5,8 +5,10 @@ export interface AdminUser {
   id: string
   username: string
   display_name: string
-  role: 'DEPT_OFFICER' | 'AG_REVIEWER' | 'ADMIN'
+  role: 'DEPT_OFFICER' | 'AG_SENIOR_AUDITOR' | 'AG_ASSISTANT_AO' | 'AG_AO' | 'AG_DAG' | 'ADMIN' | 'AG_REVIEWER'
   department_code: string | null
+  /** The pension wing of a tier officer (C3); null for everyone else. */
+  pension_wing: string | null
   active: boolean
   token_version: number
   created_at: string
@@ -29,12 +31,28 @@ export interface AuditEntry {
   ip: string | null
 }
 
-export const listUsers = () => get<AdminUser[]>('/api/v2/admin/users')
-export const createUser = (body: { username: string; display_name: string; role: string; department_code?: string; password: string }) =>
+export const listUsers = (q: { role?: string; pension_wing?: string } = {}) => {
+  const p = new URLSearchParams()
+  if (q.role) p.set('role', q.role)
+  if (q.pension_wing) p.set('pension_wing', q.pension_wing)
+  const qs = p.toString()
+  return get<AdminUser[]>('/api/v2/admin/users' + (qs ? `?${qs}` : ''))
+}
+export const createUser = (body: { username: string; display_name: string; role: string; department_code?: string; pension_wing?: string; password: string }) =>
   post<AdminUser>('/api/v2/admin/users', body)
+/** Give an AG account its tier and wing (C4): how a legacy reviewer becomes a tier officer. */
+export const setUserRole = (id: string, body: { role: string; pension_wing?: string; reason: string }) =>
+  post<AdminUser>(`/api/v2/admin/users/${id}/role`, body)
+export interface WingCoverage {
+  wings: { wing: string; tiers: Record<string, number>; gaps: string[] }[]
+  tier_labels: Record<string, string>
+  gaps: { wing: string; tier: string }[]
+  deputy_ag: number
+}
+export const wingCoverage = () => get<WingCoverage>('/api/v2/admin/wing-coverage')
 export const disableUser = (id: string, reason: string) => post<AdminUser>(`/api/v2/admin/users/${id}/disable`, { reason })
 export const enableUser = (id: string) => post<AdminUser>(`/api/v2/admin/users/${id}/enable`)
-export const resetPassword = (id: string, password: string) => post<{ ok: boolean }>(`/api/v2/admin/users/${id}/reset-password`, { password })
+export const resetPassword = (id: string, password: string, reason: string) => post<{ ok: boolean }>(`/api/v2/admin/users/${id}/reset-password`, { password, reason })
 export const auditLog = (q: { since?: string; actor?: string } = {}) => {
   const p = new URLSearchParams()
   if (q.since) p.set('since', q.since)

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException,
 from fastapi.responses import JSONResponse
 
 from api import case_runs, db, gpf_bridge, settings, workflow
+from api.db import SHARED_LOGINS
 from api.artefacts import bundle as run_bundle
 from api.artefacts import event_stream, get_run, page_image, report, signature_image, status
 from api.auth import (MEDIA_SCOPE, MEDIA_TOKEN_TTL, AuthError, User, authenticate, current_user, current_user_q, get_conn,
@@ -2054,9 +2055,15 @@ def _public_user(row: db.Row) -> dict:
 
 
 @router.get("/admin/users")
-def list_users(user: User = Depends(require_roles("ADMIN")),
+def list_users(role: str | None = None, pension_wing: str | None = None, user: User = Depends(require_roles("ADMIN")),
                conn: db.Connection = Depends(get_conn)) -> list[dict]:
-    return [_public_user(r) for r in conn.execute("SELECT * FROM users ORDER BY role, username")]
+    """Every account, narrowed by role and pension wing where asked (C4)."""
+    where, args = ["1 = 1"], []
+    if role:
+        where.append("role = ?"); args.append(role)
+    if pension_wing:
+        where.append("pension_wing = ?"); args.append(pension_wing)
+    return [_public_user(r) for r in conn.execute(f"SELECT * FROM users WHERE {' AND '.join(where)} ORDER BY role, username", args)]
 
 
 def _wing_or_422(role: str, wing: str | None, dept: str | None, conn: db.Connection) -> tuple[str | None, str | None]:
@@ -2084,6 +2091,22 @@ def _wing_or_422(role: str, wing: str | None, dept: str | None, conn: db.Connect
     return None, None
 
 
+@router.get("/admin/wing-coverage")
+def wing_coverage(user: User = Depends(require_roles("ADMIN")), conn: db.Connection = Depends(get_conn)) -> dict:
+    """Per pension wing, how many active officers each tier has, and the tiers with none -- a wing
+    with a gap stops its cases at that tier (C4)."""
+    counts = {w: {t: 0 for t in workflow.TIERS} for w in PENSION_SECTION_ORDER}
+    for r in conn.execute("SELECT pension_wing, role, COUNT(*) n FROM users WHERE active = 1 AND pension_wing IS NOT NULL "
+                          "GROUP BY pension_wing, role"):
+        tier = workflow.tier_of(r["role"])
+        if tier and r["pension_wing"] in counts:
+            counts[r["pension_wing"]][tier] = int(r["n"])
+    wings = [{"wing": w, "tiers": c, "gaps": [t for t in workflow.TIERS if not c[t]]} for w, c in counts.items()]
+    return {"wings": wings, "tier_labels": workflow.TIER_LABELS,
+            "gaps": [{"wing": w["wing"], "tier": t} for w in wings for t in w["gaps"]],
+            "deputy_ag": conn.execute("SELECT COUNT(*) FROM users WHERE active = 1 AND role = 'AG_DAG'").fetchone()[0]}
+
+
 @router.post("/admin/users", status_code=201)
 def create_user(request: Request, body: dict = Body(...), user: User = Depends(require_roles("ADMIN")),
                 conn: db.Connection = Depends(get_conn)) -> dict:
@@ -2093,13 +2116,12 @@ def create_user(request: Request, body: dict = Body(...), user: User = Depends(r
     password = str(body.get("password", ""))
     if not re.fullmatch(r"[a-z0-9._-]{3,40}", username):
         raise HTTPException(422, "username: 3-40 characters, letters, digits, . _ -")
-    if role not in ROLES:
-        raise HTTPException(422, f"role must be one of {list(ROLES)}")
-    if role == "DEPT_OFFICER" and not conn.execute(
-            "SELECT 1 FROM departments WHERE code = ? AND active = 1 AND code != ?", (dept, LEGACY_DEPARTMENT[0])).fetchone():
-        raise HTTPException(422, "a DDO account needs an active department")
-    if role != "DEPT_OFFICER":
-        dept = None
+    if role not in CREATABLE_ROLES:
+        raise HTTPException(422, f"role must be one of {list(CREATABLE_ROLES)}" + (
+            "; the AG reviewer role is legacy -- give the officer a tier and a wing" if role == "AG_REVIEWER" else ""))
+    if username in SHARED_LOGINS and settings.production():
+        raise HTTPException(422, "a login carries the officer's own name (decision C1)")
+    dept, wing = _wing_or_422(role, body.get("pension_wing"), dept, conn)
     problem = password_problem(password, username)
     if problem:
         raise HTTPException(422, f"password: {problem}")
@@ -2110,13 +2132,13 @@ def create_user(request: Request, body: dict = Body(...), user: User = Depends(r
     with db.transaction(conn):
         # A password the administrator chose is the administrator's; the officer replaces it at
         # first sign-in where the deployment asks for that (api.settings: production).
-        conn.execute("INSERT INTO users(id, username, display_name, password_hash, role, department_code, "
+        conn.execute("INSERT INTO users(id, username, display_name, password_hash, role, department_code, pension_wing, "
                      "active, token_version, must_change_password, created_at, updated_at) "
-                     "VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
                      (uid, username, str(body.get("display_name") or username), hash_password(password),
-                      role, dept, int(settings.force_password_change()), now, now))
+                      role, dept, wing, int(settings.force_password_change()), now, now))
         workflow.audit(conn, actor=user, action="USER_CREATE", entity_type="user", entity_id=uid, ip=_client_address(request),
-                       before=None, after={"username": username, "role": role, "department_code": dept})
+                       before=None, after={"username": username, "role": role, "department_code": dept, "pension_wing": wing})
     return _public_user(_user_row(conn, uid))
 
 
