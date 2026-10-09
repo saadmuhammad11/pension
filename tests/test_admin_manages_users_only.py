@@ -98,7 +98,9 @@ class TheNameTravels(unittest.TestCase):
             return _Resp()
         with mock.patch.object(urllib.request, "urlopen", fake_open):
             gpf_bridge.act("gpf-1", "verify", {"officer": "ao"}, acting_name="Ayesha Khan (Auditor)")
-        self.assertEqual(seen["headers"].get("x-gpf-user"), "Ayesha Khan (Auditor)")
+        from urllib.parse import unquote
+        # Percent-encoded on the wire since 9 Oct 2026 (N30), so a non-ASCII name arrives whole.
+        self.assertEqual(unquote(seen["headers"].get("x-gpf-user")), "Ayesha Khan (Auditor)")
         with mock.patch.object(urllib.request, "urlopen", fake_open):
             gpf_bridge.act("gpf-1", "verify", {"officer": "ao"})
         self.assertNotIn("x-gpf-user", seen["headers"])
@@ -107,7 +109,7 @@ class TheNameTravels(unittest.TestCase):
         from pathlib import Path
         src = (Path(__file__).resolve().parents[1] / "api/portal_server.py").read_text()
         self.assertIn('headers["X-GPF-Officer"] = band', src)
-        self.assertIn('headers["X-GPF-User"] = name', src)
+        self.assertIn('headers["X-GPF-User"] = gpf_bridge.header_name(name)', src)
         self.assertIn('"x-gpf-user"', src)                           # a browser's own copy is dropped
         v2 = (Path(__file__).resolve().parents[1] / "api/v2.py").read_text()
         self.assertEqual(v2.count("acting_name=user.display_name"), 2)   # every bridge action carries the name

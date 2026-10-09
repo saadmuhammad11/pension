@@ -5,7 +5,7 @@ export class RestartSignal extends Error {}
 
 let paused = false
 let restartRequested = false
-export let SPEED = 1
+export const SPEED = 1
 
 const cursor = document.createElement('div')
 cursor.className = 'demo-cursor'

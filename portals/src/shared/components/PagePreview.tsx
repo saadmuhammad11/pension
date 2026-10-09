@@ -7,8 +7,10 @@
  */
 import { openProtected } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
+import type React from 'react'
 import { createPortal } from 'react-dom'
 import { pageImageUrl } from '../api'
+import { imageRefused, useMediaTokenVersion } from '../auth/useMediaToken'
 
 export function PagePreview(
   { runId, page, document: doc, onClose, srcFor }:
@@ -16,6 +18,8 @@ export function PagePreview(
     /** Where the page image is, for pages that are not a pension run's (the GP Fund claim's). */
     srcFor?: (page: number) => string },
 ) {
+  // Addresses carry the short-lived media token (F10); they are rebuilt when it changes.
+  useMediaTokenVersion()
   const imageUrl = (pg: number) => srcFor ? srcFor(pg) : pageImageUrl(runId, pg)
   const [zoom, setZoom] = useState(false)
   // Pages arrive as scanned: a landscape table, a CNIC copied sideways, a form fed in upside
@@ -25,6 +29,25 @@ export function PagePreview(
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
   const [room, setRoom] = useState(0)
   const pane = useRef<HTMLDivElement>(null)
+  const dialog = useRef<HTMLDivElement>(null)
+  const [openError, setOpenError] = useState<string | null>(null)
+
+  // Focus goes into the dialog when it opens, stays inside it (Tab wraps), and goes back to the
+  // button that opened it when it closes (F15).
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    const first = dialog.current?.querySelector<HTMLElement>('button, a[href]')
+    first?.focus()
+    return () => { before?.focus?.() }
+  }, [])
+  const trap = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab' || !dialog.current) return
+    const items = Array.from(dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'))
+    if (!items.length) return
+    const first = items[0], last = items[items.length - 1]
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+  }
 
   useEffect(() => { setTurn(0); setNatural(null) }, [runId, page])
 
@@ -84,7 +107,9 @@ export function PagePreview(
       }}
     >
       <div
+        ref={dialog}
         onClick={e => e.stopPropagation()}
+        onKeyDown={trap}
         style={{
           background: '#fff', borderRadius: 14, maxWidth: zoom ? '98vw' : 940,
           width: '100%', maxHeight: '92dvh', display: 'flex', flexDirection: 'column',
@@ -103,7 +128,7 @@ export function PagePreview(
               {zoom ? 'Fit to width' : 'Actual size'}
             </button>
             <a className="btn" href={imageUrl(page).split('?')[0]} rel="noreferrer"
-               onClick={e => { e.preventDefault(); openProtected(imageUrl(page).split('?')[0], `page ${page}`).catch(() => {}) }}
+               onClick={e => { e.preventDefault(); setOpenError(null); openProtected(imageUrl(page).split('?')[0], `page ${page}`).catch(err => setOpenError(err instanceof Error ? err.message : String(err))) }}
                style={{ textDecoration: 'none', display: 'inline-block',
                         padding: '11px 22px', border: '1px solid var(--line)',
                         borderRadius: 10, fontWeight: 600, color: 'var(--ink)' }}>
@@ -112,6 +137,7 @@ export function PagePreview(
             <button className="primary" onClick={onClose}>Close</button>
           </div>
         </div>
+        {openError && <div className="banner bad" role="alert" style={{ margin: '0 var(--s5)' }}><span className="mark">!</span><div className="sub">Could not open the full page. {openError}</div></div>}
         {/* minHeight 0: a flex child will not shrink below its content otherwise, and a tall
             page pushed the dialog's own header -- and its buttons -- off the top of the screen. */}
         <div ref={pane} style={{ overflow: 'auto', background: 'var(--bg)', padding: 16,
@@ -124,6 +150,7 @@ export function PagePreview(
               src={imageUrl(page)}
               alt={`Scanned page ${page}${turn ? `, turned ${turn}°` : ''}`}
               onLoad={e => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              onError={imageRefused}
               style={shown ? {
                 position: 'absolute', left: '50%', top: '50%', width: shown.w, height: shown.h,
                 maxWidth: 'none', transform: `translate(-50%, -50%) rotate(${turn}deg)`,

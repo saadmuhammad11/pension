@@ -34,6 +34,7 @@ PENSION_TRUST_PORT_HEADER is ignored.
 from __future__ import annotations
 
 import asyncio
+from urllib.parse import quote
 import contextlib
 import json
 import os
@@ -52,7 +53,7 @@ from starlette.responses import RedirectResponse, FileResponse, HTMLResponse, JS
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from api import settings
+from api import gpf_bridge, settings
 from api.departments import AG_PORTAL_PORT, AG_PORTAL_SLUG, BY_PORT, DEPARTMENTS, SINGLE_PORTAL
 from api.themes import theme_for
 
@@ -102,7 +103,7 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self' 'nonce-" + NONCE + "'; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'self' blob:; "
+        "img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; "
         "frame-src 'self' blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"),
 }
 
@@ -145,6 +146,24 @@ def render_index(template: str, port: int) -> str:
     if "</head>" in template:
         return template.replace("</head>", tag + "\n</head>", 1)
     return tag + template
+
+
+def gpf_subpath(raw: str) -> str | None:
+    """The path under /gpf/ as one normalised string, used for the action check AND the forwarded
+    request -- or None for a path that must be refused.
+
+    The check matched the case id on the raw path while aiohttp/yarl collapsed dot segments on the
+    way out, so ``/gpf/api/cases/nonexistent/../REALID/dispose`` passed the check on "nonexistent"
+    and acted on REALID (frontend review F3, 9 Oct 2026). Starlette hands the route the path
+    decoded once; a ``%`` still in it is a second layer of encoding, refused along with a ``.`` or
+    ``..`` segment, an empty segment, a backslash and control characters.
+    """
+    path = raw or ""
+    if "%" in path or "\\" in path or any(ord(c) < 32 or c == "\x7f" for c in path):
+        return None
+    if any(seg in ("", ".", "..") for seg in path.split("/")):
+        return None
+    return "/" + path
 
 
 class PortalApp:
@@ -230,7 +249,7 @@ class PortalApp:
         reset shows here at once."""
         if self._port(request) != AG_PORTAL_PORT or settings.production():
             return Response("not found", status_code=404)
-        from api import db
+        from api import db, gpf_bridge
         path = db.CREDENTIALS_HTML
         if not path.exists():
             return Response("The credentials sheet has not been generated yet (python3 -m api.db credentials).",
@@ -335,12 +354,14 @@ class PortalApp:
         if officer is None:
             return self._gpf_refused()
         assert self.session is not None
-        sub = "/" + request.path_params.get("path", "")
+        sub = gpf_subpath(request.path_params.get("path", ""))
+        if sub is None:
+            return JSONResponse({"detail": "not a valid GP Fund path"}, status_code=400)
         if request.method not in ("GET", "HEAD", "OPTIONS") and not self.gpf_open():
             refused = await self.gpf_act_refused(request, sub)
             if refused is not None:
                 return refused
-        url = f"{self.gpf}{sub}" + (f"?{request.url.query}" if request.url.query else "")
+        url = f"{self.gpf}{quote(sub, safe='/-_.~:@!$&()*+,;=')}" + (f"?{request.url.query}" if request.url.query else "")
         # The module gets neither the portal's cookies (the frame's sign-in among them) nor its token,
         # and the officer it records is the signed-in account's: a browser's X-GPF-Officer is dropped.
         headers = {k: v for k, v in request.headers.items()
@@ -349,7 +370,7 @@ class PortalApp:
             band, _, name = officer.partition("|")
             headers["X-GPF-Officer"] = band
             if name:
-                headers["X-GPF-User"] = name.encode("ascii", "replace").decode()
+                headers["X-GPF-User"] = gpf_bridge.header_name(name)
         body = await request.body()
         try:
             async with self.session.request(request.method, url, headers=headers, data=body, allow_redirects=False) as up:

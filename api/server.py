@@ -331,6 +331,14 @@ def _intake_choices(variant: str | None, annual_pay: str | None,
     }
 
 
+def _legacy_writes_or_403() -> None:
+    """The old register records nothing in production unless asked to (N23): every filing and
+    every decision goes through a case, with its department and its second officer."""
+    from api import settings as _settings
+    if not _settings.legacy_register_writes():
+        raise HTTPException(403, "the old register is read-only here; file and decide the case in the portal")
+
+
 @app.post("/api/runs", status_code=202)
 async def create_run(
     request: Request,
@@ -357,6 +365,7 @@ async def create_run(
     (SOP §4.1, §4.3, §4.4); only the Auditor, Pension Wing, selects the variant or supplies
     pay and commutation figures (SOP §4.4(1)-(2)). The desk is the ``X-Desk`` header.
     """
+    _legacy_writes_or_403()
     choices = _intake_choices(variant, annual_pay, commutation_percent, retirement_date,
                               pension_in_payment, date_of_death, x_desk, request)
     from rules.case_type import OFFICE_CASE_TYPES, canonical_office_type
@@ -463,6 +472,7 @@ def make_decision(request: Request, run_id: str, body: dict = Body(...),
     §4.6). The desk is ``role`` in the body, or the ``X-Desk`` header where the body has none;
     the entry records the desk's label as the portal prints it.
     """
+    _legacy_writes_or_403()
     from api.decisions import DecisionError, record_decision
     from api.desks import DESKS
     stated = str(body.get("role") or "") or x_desk

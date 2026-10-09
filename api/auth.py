@@ -181,6 +181,12 @@ def issue_token(user: User) -> str:
 
 #: The GP Fund frame's sign-in (api.v2 /auth/gpf-session): a token that opens /gpf/ and nothing else.
 GPF_SCOPE = "gpf"
+#: A short-lived token for the URLs a browser cannot send a header with -- page images,
+#: signature crops, the event stream, document downloads (frontend review F10, 9 Oct 2026). GET
+#: and HEAD only, 15 minutes, refused on every JSON route and every write. The session token
+#: itself no longer needs to ride on an image URL into the browser's disk cache.
+MEDIA_SCOPE = "media"
+MEDIA_TOKEN_TTL = timedelta(minutes=15)
 GPF_TOKEN_TTL = timedelta(hours=2)
 
 
@@ -357,12 +363,22 @@ def current_user(request: Request, authorization: str | None = Header(default=No
 def current_user_q(request: Request, authorization: str | None = Header(default=None),
                    token: str | None = Query(default=None),
                    conn: db.Connection = Depends(get_conn)) -> User:
-    """Like ``current_user`` but also reads ``?token=`` -- for ``<img>`` and ``EventSource``."""
+    """Like ``current_user`` but also reads ``?token=`` -- for ``<img>``, ``EventSource`` and a
+    download link. A media token (``MEDIA_SCOPE``) is accepted here, on GET and HEAD only; so is a
+    session token, for the portal that has not yet been rebuilt to ask for media tokens."""
     value = _bearer(authorization) or token
     if not value:
         raise HTTPException(401, "sign in first")
     try:
-        user = user_for_token(value, conn)
+        try:
+            user = user_for_token(value, conn)
+        except AuthError as plain:
+            if request.method not in ("GET", "HEAD"):
+                raise
+            try:
+                user = user_for_token(value, conn, scope=MEDIA_SCOPE)
+            except AuthError:
+                raise plain from None
     except AuthError as exc:
         raise HTTPException(exc.status, exc.detail) from None
     if password_change_due(user, request.url.path):

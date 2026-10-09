@@ -50,6 +50,14 @@ class GpfError(Exception):
         self.status, self.detail = status, detail
 
 
+def header_name(name: str) -> str:
+    """An officer's name as the X-GPF-User header carries it: percent-encoded, so a name in
+    Urdu or with a diacritic arrives whole instead of as ??? (review N30, 9 Oct 2026); the GP
+    Fund module decodes it (gpf/api.py _acting_name). Plain ASCII letters pass unchanged."""
+    from urllib.parse import quote
+    return quote(" ".join(str(name or "").split()), safe="")
+
+
 def _request(method: str, path: str, *, body: bytes | None = None, content_type: str | None = None,
              timeout: float = TIMEOUT, acting_name: str | None = None) -> dict:
     req = urllib.request.Request(GPF_URL + path, data=body, method=method)
@@ -58,7 +66,7 @@ def _request(method: str, path: str, *, body: bytes | None = None, content_type:
     if acting_name:
         # The signed-in officer's own name (G6): the module records the action under it, with the
         # band's powers. Header-safe: one line, ASCII where the name is not.
-        req.add_header("X-GPF-User", acting_name.replace("\r", " ").replace("\n", " ").encode("ascii", "replace").decode())
+        req.add_header("X-GPF-User", header_name(acting_name))
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8") or "{}")

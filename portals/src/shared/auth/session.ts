@@ -7,6 +7,7 @@
  *  for; what a user may see follows from their credentials, not from the address they opened.
  */
 import { portal } from '../portal'
+import { clearMediaToken, withMediaToken } from './media'
 
 export const PORTAL_SLUG = () => portal().slug ?? 'ag'
 
@@ -68,16 +69,16 @@ export function takeNext(): string | null {
   try { const v = sessionStorage.getItem(nextKey()); sessionStorage.removeItem(nextKey()); return v } catch { return null }
 }
 
-/** A URL with the token on it, for `<img src>` and `EventSource`, which cannot send headers. */
+/** A URL with a token on it, for `<img src>` and `EventSource`, which cannot send headers.
+ *  The token is the short-lived media token (auth/media.ts), never the session token: image
+ *  addresses land in the browser's cache and history (frontend review F10, 9 Oct 2026). */
 export function withToken(url: string): string {
-  const t = getToken()
-  if (!t) return url
-  return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t)
+  return withMediaToken(url)
 }
 
 let onUnauthorised: (() => void) | null = null
 export function setUnauthorisedHandler(fn: (() => void) | null): void { onUnauthorised = fn }
-export function unauthorised(): void { setToken(null); onUnauthorised?.() }
+export function unauthorised(): void { setToken(null); clearMediaToken(); onUnauthorised?.() }
 
 /** Ask the server whether the session still stands; used when an <img> or event stream fails,
  *  which cannot tell a 401 from a network hiccup. */

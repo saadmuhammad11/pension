@@ -12,6 +12,8 @@
  *  cases with that filter set. Without one, everything is on one page.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import type React from 'react'
+import { nextTabFor } from '../components/tabs'
 import { PRODUCT_SLUG, STATUS_META, gpfKindLabel, nextStep, type CaseStatus, type CaseSummary, type Product } from '../api/cases'
 import { caseTypeLabel } from '../labels'
 import { CASE_TYPE_SOURCE_WORDS } from '../caseTypes'
@@ -66,7 +68,8 @@ function daysWaiting(r: CaseSummary): number | null {
 }
 const slaTone = (days: number) => days > 7 ? 'over' : days > 3 ? 'warn' : 'ok'
 
-/** Phones page the register; a desktop shows every matching row. */
+/** Phones page the register twelve at a time; a desktop fifty (F16: a register of hundreds of
+ *  rows re-rendered on every 3-second refresh was what made an old office PC crawl). */
 function useNarrow(): boolean {
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches)
   useEffect(() => {
@@ -77,10 +80,12 @@ function useNarrow(): boolean {
   }, [])
   return narrow
 }
-const PAGE = 12
+export const PAGE_NARROW = 12
+export const PAGE_WIDE = 50
+const BUCKETS: Bucket[] = ['mine', 'theirs', 'done', 'all']
 
 export function CaseRegister(
-  { product, rows, title, lead, waitingOn, onOpen, onNew, newLabel, showDepartment, error, loading, role, charts, view, casesFirst,
+  { product, rows, title, lead, waitingOn, onOpen, onNew, newLabel, showDepartment, error, stale, loading, role, charts, view, casesFirst,
     statusCounts, total }:
   { product: Product
     casesFirst?: boolean
@@ -98,6 +103,8 @@ export function CaseRegister(
     newLabel?: string
     showDepartment?: boolean
     error?: string | null
+    /** The rows are on screen but the last refresh failed: a quiet notice, retried on its own (F12). */
+    stale?: boolean
     loading?: boolean
     role: string
     charts?: ReactNode },
@@ -156,9 +163,12 @@ export function CaseRegister(
   const showDash = view !== 'cases'
   const showCases = view !== 'dashboard'
 
-  const pages = narrow ? Math.max(1, Math.ceil(shown.length / PAGE)) : 1
+  const PAGE = narrow ? PAGE_NARROW : PAGE_WIDE
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE))
   const current = Math.min(page, pages)
-  const visible = narrow ? shown.slice((current - 1) * PAGE, current * PAGE) : shown
+  const visible = shown.slice((current - 1) * PAGE, current * PAGE)
+  // Left/Right on the tiles move between them (F15).
+  const tileKeys = (e: React.KeyboardEvent) => { const n = nextTabFor(BUCKETS, bucket, e.key); if (n) { e.preventDefault(); pickBucket(n); (e.currentTarget.querySelector(`[data-bucket="${n}"]`) as HTMLElement | null)?.focus() } }
 
   const theirsLabel = isDept ? 'With the Accountant General' : 'With the departments'
   const theirsDesc = isDept ? 'Submitted; awaiting the Pension Wing.' : 'Not yet submitted, or returned for correction.'
@@ -179,23 +189,23 @@ export function CaseRegister(
         {onNew && <button className="primary big" onClick={onNew}>{newLabel ?? 'New case'}</button>}
       </div>
 
-      <div className="tiles" role="tablist" aria-label="Filter the cases">
-        <button role="tab" aria-selected={bucket === 'mine'} className={`tile hot${bucket === 'mine' ? ' is-on' : ''}`} onClick={() => pickBucket('mine')}>
+      <div className="tiles" role="tablist" aria-label="Filter the cases" onKeyDown={tileKeys}>
+        <button role="tab" data-bucket="mine" tabIndex={bucket === 'mine' ? 0 : -1} aria-selected={bucket === 'mine'} className={`tile hot${bucket === 'mine' ? ' is-on' : ''}`} onClick={() => pickBucket('mine')}>
           <div className="t">{bucketLabel.mine}</div>
           <div className="n">{tile.mine}</div>
           <div className="d">{isDept ? 'Cases to verify, submit or correct.' : 'Submitted by departments; decision pending.'}</div>
         </button>
-        <button role="tab" aria-selected={bucket === 'theirs'} className={`tile wait${bucket === 'theirs' ? ' is-on' : ''}`} onClick={() => pickBucket('theirs')}>
+        <button role="tab" data-bucket="theirs" tabIndex={bucket === 'theirs' ? 0 : -1} aria-selected={bucket === 'theirs'} className={`tile wait${bucket === 'theirs' ? ' is-on' : ''}`} onClick={() => pickBucket('theirs')}>
           <div className="t">{theirsLabel}</div>
           <div className="n">{tile.theirs}</div>
           <div className="d">{theirsDesc}</div>
         </button>
-        <button role="tab" aria-selected={bucket === 'done'} className={`tile ok${bucket === 'done' ? ' is-on' : ''}`} onClick={() => pickBucket('done')}>
+        <button role="tab" data-bucket="done" tabIndex={bucket === 'done' ? 0 : -1} aria-selected={bucket === 'done'} className={`tile ok${bucket === 'done' ? ' is-on' : ''}`} onClick={() => pickBucket('done')}>
           <div className="t">Disposed</div>
           <div className="n">{tile.done}</div>
           <div className="d">Approved or rejected.</div>
         </button>
-        <button role="tab" aria-selected={bucket === 'all'} className={`tile${bucket === 'all' ? ' is-on' : ''}`} onClick={() => pickBucket('all')}>
+        <button role="tab" data-bucket="all" tabIndex={bucket === 'all' ? 0 : -1} aria-selected={bucket === 'all'} className={`tile${bucket === 'all' ? ' is-on' : ''}`} onClick={() => pickBucket('all')}>
           <div className="t">All cases</div>
           <div className="n">{tile.all}</div>
           <div className="d">Every case on this register.</div>
@@ -252,6 +262,7 @@ export function CaseRegister(
       </div>
 
       {error && <div className="banner bad" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">{error}</div></div>}
+      {stale && !error && <div className="muted" role="status" style={{ marginTop: 'var(--s3)', fontSize: 'var(--t-small)' }}>Connection lost — retrying. The list shows what was last received.</div>}
 
       <div className="card table-wrap register-table" style={{ marginTop: 'var(--s3)', padding: 0 }}>
         <table>
@@ -347,7 +358,7 @@ export function CaseRegister(
           </tbody>
         </table>
       </div>
-      {narrow && pages > 1 && (
+      {pages > 1 && (
         <nav className="pager" aria-label="Register pages">
           <button type="button" disabled={current <= 1} onClick={() => setPage(current - 1)}>‹ Prev</button>
           <span className="pager-info" role="status" aria-live="polite">Page {current} of {pages} · {(current - 1) * PAGE + 1}–{Math.min(current * PAGE, shown.length)} of {shown.length}</span>

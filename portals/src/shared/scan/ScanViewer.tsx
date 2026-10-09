@@ -29,6 +29,7 @@
  *    waiting  the text of the waiting state, before the first page exists
  */
 import { useEffect, useRef, useState } from 'react'
+import { imageRefused, useMediaTokenVersion } from '../auth/useMediaToken'
 import './scan.css'
 
 export type ScanState = 'live' | 'done' | 'failed'
@@ -48,6 +49,8 @@ export function ScanViewer({ src, pageKey, label, caption, state = 'live', note,
   const [back, setBack] = useState<Layer | null>(null)
   const wanted = useRef<string | null>(null)
   const layers = useRef<Layer[]>([])
+  // A new media token means the page's address (built by the caller with withToken) changed too.
+  const tokenVersion = useMediaTokenVersion()
 
   // Fetch and decode the next page off screen; cross-fade only once it can be drawn at once.
   useEffect(() => {
@@ -59,7 +62,10 @@ export function ScanViewer({ src, pageKey, label, caption, state = 'live', note,
     ;(async () => {
       let url = src, revoke = false
       try {
-        const r = await fetch(src, { cache: 'force-cache' })
+        // Not `force-cache` (F10): the address carries a token, and a cached copy of it is a token
+        // on disk. The server answers no-store; the blob below is this view's own cache.
+        const r = await fetch(src, { cache: 'no-store' })
+        if (r.status === 401 || r.status === 403) imageRefused()
         if (!r.ok) throw new Error(String(r.status))
         url = URL.createObjectURL(await r.blob()); revoke = true
         const img = new Image()
@@ -76,7 +82,7 @@ export function ScanViewer({ src, pageKey, label, caption, state = 'live', note,
       setFront(prev => { setBack(prev); return next })
     })()
     return () => { cancelled = true }
-  }, [src, pageKey])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [src, pageKey, tokenVersion])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Free the blobs of pages no longer on screen.
   useEffect(() => {

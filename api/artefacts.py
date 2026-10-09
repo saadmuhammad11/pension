@@ -66,7 +66,8 @@ def page_image(run: Run, page: int) -> FileResponse:
         if int(p.get("page", 0)) == page:
             img = run.run_dir / p["image_path"]
             if img.is_file():
-                return FileResponse(img, media_type="image/png")
+                # A token rides on the URL; the browser's disk cache must not keep it (review F10).
+                return FileResponse(img, media_type="image/png", headers={"Cache-Control": "no-store"})
             break
     raise HTTPException(404, f"no rendered image for page {page} of this run")
 
@@ -77,7 +78,7 @@ def signature_image(run: Run, name: str) -> FileResponse:
     path = run.run_dir / "signatures" / name
     if not path.exists():
         raise HTTPException(404, "no such signature")
-    return FileResponse(path, media_type="image/jpeg")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 def bundle(run: Run) -> Any:

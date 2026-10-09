@@ -14,11 +14,14 @@ ADVANCES = ("refundable", "nonrefundable")
 
 
 def num(v: Any):
-    """Parse a loose numeric string (commas, spaces, trailing '/-') to a number.
+    """Parse a loose numeric string (commas, spaces, trailing '/-') to a signed number.
 
-    Returns None when empty or not a number. Mirrors sap.js `num`. SAP prints a debit with a
-    trailing minus ("1,234.00-"): that is a negative figure, not 1,234 (audit 6 Oct 2026, G3);
-    "1,234/-" is the rupee sign-off and positive.
+    Returns None when empty, not a number, or signed twice ("-1,234-"). Mirrors sap.js `num`.
+    SAP prints a debit with a trailing minus ("1,234.00-"): that is a negative figure, not 1,234
+    (audit 6 Oct 2026, G3); "1,234/-" is the rupee sign-off and positive. Use this for a BALANCE
+    or a closing figure, where the sign carries meaning; a subscription, an instalment or an
+    amount is a magnitude -- read those with ``amount()`` (9 Oct 2026, review C1: a deduction
+    printed "GPF Subscription 1,150.00-" is Rs 1,150 deducted, not a negative subscription).
     """
     if v is None or isinstance(v, bool):
         return None
@@ -26,18 +29,31 @@ def num(v: Any):
         return int(v) if float(v).is_integer() else v
     s = str(v).replace(",", "").replace(" ", "")
     s = re.sub(r"/-$", "", s)
-    negative = s.endswith("-")
-    if negative:
+    trailing = s.endswith("-")
+    if trailing:
         s = s[:-1]
-    if s == "":
+    leading = s.startswith("-")
+    if leading and trailing:
+        return None                                   # "-1,234-": signed twice, not a figure
+    if leading:
+        s = s[1:]
+    if s == "" or s.startswith("-") or s.endswith("-"):
         return None
     try:
         f = float(s)
     except ValueError:
         return None
-    if negative:
+    if trailing or leading:
         f = -f
     return int(f) if f.is_integer() else f
+
+
+def amount(v: Any):
+    """A magnitude: ``num()`` without its sign. For subscriptions, instalments, advances and
+    claimed amounts, where SAP's deduction minus (or an OCR that lost the slash of "50,000/-")
+    must not turn the figure negative. None stays None."""
+    n = num(v)
+    return None if n is None else abs(n)
 
 
 def fmt(n: Any) -> str:

@@ -21,7 +21,7 @@ class PollingStops(unittest.TestCase):
         inventory = (SRC / "data" / "inventory.ts").read_text()
         stop = inventory[inventory.index("export function stopInventoryPolling"):]
         stop = stop[:stop.index("\n}\n") + 3]
-        self.assertIn("clearInterval(polling)", stop)
+        self.assertIn("clearTimeout(polling)", stop)          # a chained timeout since F16 (9 Oct 2026)
         self.assertIn("removeEventListener('visibilitychange', checkVersion)", stop)
         self.assertIn("removeEventListener('focus', checkVersion)", stop)
         self.assertIn("cache.clear()", stop)

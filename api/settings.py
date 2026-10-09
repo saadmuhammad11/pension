@@ -21,7 +21,11 @@ def production() -> bool:
 
 
 def _flag(name: str) -> bool | None:
-    value = os.environ.get(name, "").strip().lower()
+    return _parse_flag(os.environ.get(name, ""))
+
+
+def _parse_flag(value: str) -> bool | None:
+    value = (value or "").strip().lower()
     if value in ("1", "true", "yes", "on"):
         return True
     if value in ("0", "false", "no", "off"):
@@ -70,3 +74,12 @@ def max_case_pages() -> int:
         return max(1, int(os.environ.get("PENSION_MAX_PAGES", "500")))
     except ValueError:
         return 500
+
+
+def legacy_register_writes() -> bool:
+    """Whether the old single-screen register (``POST /api/runs``, ``/api/runs/{id}/decision``) may
+    still create runs and record decisions outside any case. Off in production (audit 7 Oct 2026,
+    N23: it let one Deputy AG upload a file and record a FORWARD with no case, department or second
+    officer); PENSION_LEGACY_REGISTER_WRITES=1 turns it on, =0 turns it off in a trial."""
+    given = _parse_flag(os.environ.get("PENSION_LEGACY_REGISTER_WRITES", ""))
+    return (not production()) if given is None else given

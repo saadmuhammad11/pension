@@ -5,8 +5,9 @@
  *  The case type (29 Sep 2026) comes first and is mandatory for a pension case: it decides which
  *  documents the office asks for, so the list is shown as soon as the type is chosen, before
  *  anything is attached. The list of types is config/case_types.json, shared with the rules. */
-import { useEffect, useState, type FormEvent } from 'react'
-import { GPF_KINDS, PRODUCT_WORDS, createCase, departments, fetchCaseTypes, type CaseTypeInfo, type Department, type Product } from '../api/cases'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { GPF_KINDS, PRODUCT_WORDS, createCase, departments, fetchCaseTypes, newIdempotencyKey, type CaseTypeInfo, type Department, type Product } from '../api/cases'
+import { checkFiles, progressWords } from '../upload/limits'
 import { useSession } from '../auth/AuthProvider'
 import { CASE_TYPE_LIST } from '../caseTypes'
 
@@ -30,12 +31,33 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
   const [more, setMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Files left out of the last pick, and why (a duplicate, too large, a type the office does not take) (F8).
+  const [refused, setRefused] = useState<string[]>([])
+  const [progress, setProgress] = useState<{ sent: number; total: number } | null>(null)
+  // One key per attempt at filing (F8): a retry after a dropped connection carries the same key,
+  // so the server files the case once; a change to the papers starts a new attempt.
+  const attemptKey = useRef<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadTry, setLoadTry] = useState(0)
   const pickDept = !!can?.pick_department
 
   useEffect(() => {
-    if (!gpf) fetchCaseTypes().then(setTypeInfo).catch(() => setTypeInfo([]))
-    if (pickDept) departments().then(setDepts).catch(() => setDepts([]))
-  }, [pickDept, gpf])
+    // A failed load used to leave "Loading the document list…" and an empty department list
+    // for good (F12); now it says so and offers Retry.
+    setLoadError(null)
+    const jobs: Promise<unknown>[] = []
+    if (!gpf) jobs.push(fetchCaseTypes().then(setTypeInfo))
+    if (pickDept) jobs.push(departments().then(setDepts))
+    Promise.all(jobs).catch(e => setLoadError(e instanceof Error ? e.message : String(e)))
+  }, [pickDept, gpf, loadTry])
+
+  // Leaving the page mid-upload would abandon it; the browser asks first (F8).
+  useEffect(() => {
+    if (!busy) return
+    const guard = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', guard)
+    return () => window.removeEventListener('beforeunload', guard)
+  }, [busy])
 
   const typeDef = CASE_TYPE_LIST.find(t => t.id === caseType)
   const info = typeInfo.find(t => t.id === caseType)
@@ -48,10 +70,11 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
   const add = (list: FileList | null) => {
     if (!list) return
     if (typeMissing) { setTypeError('Select the case type before attaching documents.'); return }
-    const next = [...files]
-    for (const f of Array.from(list)) if (!next.some(x => x.name === f.name && x.size === f.size)) next.push(f)
-    setFiles(next)
+    const { accepted, refused: left } = checkFiles(files, Array.from(list))
+    setFiles(accepted); setRefused(left)
+    attemptKey.current = null                              // the papers changed: a new attempt
   }
+  const remove = (f: File) => { setFiles(files.filter(x => x !== f)); attemptKey.current = null }
   const pickType = (id: string) => { setCaseType(id); setColumn(''); setTypeError(null) }
   const year = new Date().getFullYear()
   const years = [year - 3, year - 2, year - 1]
@@ -62,7 +85,8 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
     e.preventDefault()
     if (typeMissing) { setTypeError('Select the case type before submitting the case.'); return }
     if (columnMissing) { setTypeError('Say who is claiming before submitting the case.'); return }
-    setBusy(true); setError(null)
+    setBusy(true); setError(null); setProgress(null)
+    attemptKey.current ??= newIdempotencyKey()
     try {
       const r = await createCase(files, {
         product, department_code: pickDept ? department : undefined,
@@ -73,11 +97,12 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
           annual_pay: Object.fromEntries(Object.entries(pay).filter(([, v]) => v.trim())),
           commutation_percent: commutation || undefined,
         }),
-      })
+      }, { idempotencyKey: attemptKey.current, onProgress: setProgress })
+      attemptKey.current = null
       onCreated(r.case.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    } finally { setBusy(false) }
+    } finally { setBusy(false); setProgress(null) }
   }
 
   const blocked = busy || files.length === 0 || (pickDept && !department) || typeMissing || columnMissing
@@ -89,9 +114,14 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
       <button className="ghost" onClick={onCancel}>Back to the register</button>
       <h1 style={{ marginTop: 8 }}>{PRODUCT_WORDS[product].file}</h1>
       <p className="lead">
-        {gpf ? 'Attach every page of the GP Fund claim: the application or sanction, the pay slip, the CNIC, the nomination or death papers as the kind of claim requires. Filing submits the claim to the Office of the Accountant General, where the GP Fund module examines it: if a required document is missing the claim comes back with the list; otherwise it proceeds to the pre-audit and disposal.'
-             : 'Choose the case type, then attach every document in the pension file. Filing submits the case to the Office of the Accountant General, where it is verified with AI against the checklist for that type: if a required document is missing the case comes back with the list; otherwise it proceeds to decision.'}
+        {gpf ? 'Attach every page of the GP Fund claim: the application or sanction, the pay slip, the CNIC, the nomination or death papers as the kind of claim requires. Filing submits the claim to the Office of the Accountant General, where the GP Fund module examines it and the reviewer decides; a missing document is asked for by the reviewer.'
+             : 'Choose the case type, then attach every document in the pension file. Filing submits the case to the Office of the Accountant General, where it is verified with AI against the checklist for that type and the reviewer decides; a missing document is asked for by the reviewer.'}
       </p>
+      {loadError && (
+        <div className="banner bad" role="alert"><span className="mark">!</span>
+          <div className="sub">Could not load the form's lists ({loadError}). <button type="button" style={{ marginLeft: 8 }} onClick={() => setLoadTry(n => n + 1)}>Retry</button></div>
+        </div>
+      )}
       <form onSubmit={submit} className="stack" style={{ gap: 'var(--s4)' }} noValidate>
         {pickDept && (
           <div className="card">
@@ -175,12 +205,21 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
                       <td className="mono muted" style={{ width: 36 }}>{i + 1}</td>
                       <td style={{ fontSize: 15 }}>{f.name}</td>
                       <td className="muted num" style={{ width: 90 }}>{kb(f.size)}</td>
-                      <td style={{ width: 90 }}><button type="button" className="ghost" onClick={() => setFiles(files.filter(x => x !== f))}>Remove</button></td>
+                      <td style={{ width: 90 }}><button type="button" className="ghost" aria-label={`Remove ${f.name}`} onClick={() => remove(f)}>Remove</button></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </>
+          )}
+          {refused.length > 0 && (
+            <div className="banner warn" role="status" style={{ marginTop: 10 }}>
+              <span className="mark" aria-hidden="true">!</span>
+              <div className="sub">
+                <strong>Not attached:</strong>
+                <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{refused.map(r => <li key={r}>{r}</li>)}</ul>
+              </div>
+            </div>
           )}
         </div>
 
@@ -220,7 +259,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
                     <label className="label">Basic pay on 1 July of the last three years (self pension only)</label>
                     <div className="row" style={{ gap: 8 }}>
                       {years.map(y => (
-                        <input key={y} placeholder={`${y}`} value={pay[y] ?? ''} inputMode="numeric"
+                        <input key={y} placeholder={`${y}`} aria-label={`Basic pay on 1 July ${y}`} value={pay[y] ?? ''} inputMode="numeric"
                                onChange={e => setPay({ ...pay, [y]: e.target.value })} />
                       ))}
                     </div>
@@ -235,7 +274,23 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
           )}
         </div>
 
-        {error && <div className="banner bad"><span className="mark">!</span><div className="sub">{error}</div></div>}
+        {error && <div className="banner bad" role="alert"><span className="mark">!</span><div className="sub">{error}</div></div>}
+
+        {busy && (
+          // How far the papers have got (F8): the bar fills with the bytes sent; on office Wi-Fi a
+          // scanned file of 200 MB takes minutes, and a screen that said only "Filing…" read as stuck.
+          <div className="card gpf-progress" role="status" aria-live="polite">
+            <div style={{ fontWeight: 600 }}>Sending the documents…</div>
+            <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100}
+                 aria-valuenow={progress && progress.total ? Math.round((progress.sent / progress.total) * 100) : undefined}>
+              <span style={{ width: progress && progress.total ? `${Math.round((progress.sent / progress.total) * 100)}%` : '0%' }} />
+            </div>
+            <div className="muted" style={{ fontSize: 'var(--t-small)' }}>
+              {progress ? progressWords(progress.sent, progress.total) : 'Starting…'}{progress && progress.sent >= progress.total ? ' · the server is filing the case' : ''}
+            </div>
+            <div className="help">Keep this page open until the case is filed.</div>
+          </div>
+        )}
 
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <span className="num" style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--green)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800 }}>{num()}</span>

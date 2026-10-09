@@ -1,11 +1,12 @@
 /** A department's view of where one case is, on its register row (29 Sep 2026): three steps --
  *  Sent, Processing at the Accountant General, Outcome -- with the outcome named as Returned,
  *  Approved or Rejected. A DDO reads the whole register at a glance without opening a case. */
+import { fmtDateTime } from '../fmt'
 import type { CaseStatus, CaseSummary } from '../api/cases'
 
 type Step = { label: string; state: 'done' | 'active' | 'todo'; tone?: 'ok' | 'bad' | 'wait'; sub?: string }
 
-const fmt = (iso: string | null | undefined) => iso ? iso.replace('T', ' ').slice(0, 16) : ''
+const fmt = (iso: string | null | undefined) => fmtDateTime(iso)
 
 export function timelineFor(r: CaseSummary): Step[] {
   const s: CaseStatus = r.status

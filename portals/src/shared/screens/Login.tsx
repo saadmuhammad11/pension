@@ -13,6 +13,7 @@ import type { Theme } from '../theme/types'
 import type { PortalConfig } from '../portal'
 import { useSession } from '../auth/AuthProvider'
 import { Crest } from '../components/Header'
+import { PasswordField } from '../components/PasswordField'
 
 const RIVERS = [
   'M-40 120 C 140 60, 260 220, 440 150 S 700 240, 720 180',
@@ -143,7 +144,7 @@ export function Login({ theme, portal }: { theme: Theme; portal: PortalConfig })
 }
 
 export function ChangePassword({ theme, portal }: { theme: Theme; portal: PortalConfig }) {
-  const { user, changePassword, logout } = useSession()
+  const { user, changePassword, logout, passwordMinLength } = useSession()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [again, setAgain] = useState('')
@@ -173,7 +174,7 @@ export function ChangePassword({ theme, portal }: { theme: Theme; portal: Portal
             <div className="banner warn" style={{ margin: 0 }}>
               <span className="mark" aria-hidden="true">!</span>
               <div className="sub">Your password was set by the administrator. Choose your own before you continue: at least
-                10 characters, not a common password, and not your username.</div>
+                {passwordMinLength} characters, not a common password, and not your username.</div>
             </div>
             {error && <ErrorLine text={error} />}
             <div className="field">
@@ -183,12 +184,7 @@ export function ChangePassword({ theme, portal }: { theme: Theme; portal: Portal
                        onChange={e => setCurrent(e.target.value)} />
               </div>
             </div>
-            <div className="field">
-              <label htmlFor="new">New password</label>
-              <div className="field-input">
-                <input id="new" type="password" autoComplete="new-password" value={next} onChange={e => setNext(e.target.value)} />
-              </div>
-            </div>
+            <PasswordField id="new" label="New password" value={next} onChange={setNext} minLength={passwordMinLength} username={user?.username} />
             <div className="field">
               <label htmlFor="again">New password again</label>
               <div className="field-input">
@@ -197,7 +193,7 @@ export function ChangePassword({ theme, portal }: { theme: Theme; portal: Portal
               </div>
             </div>
             {mismatch && <ErrorLine text="The two new passwords differ." />}
-            <button className="btn-primary" type="submit" disabled={busy || !current || !next || next !== again}>
+            <button className="btn-primary" type="submit" disabled={busy || !current || !next || next !== again || next.length < passwordMinLength}>
               {busy ? <><span className="spinner" aria-hidden="true" /> Saving…</> : 'Save and continue'}
             </button>
             <button type="button" onClick={logout}>Sign out</button>

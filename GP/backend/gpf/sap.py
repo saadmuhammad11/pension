@@ -11,7 +11,7 @@ import json
 import re
 from typing import Optional
 
-from .format import digits, num
+from .format import amount, digits, num
 
 PAYSLIP_KEYS = {
     "personnel no": "persNo", "pers no": "persNo", "name": "name", "designation": "designation",
@@ -22,7 +22,12 @@ PAYSLIP_KEYS = {
 }
 RECALC_COLS = ["start", "end", "opening", "subscription", "adjustments", "tempAdvance",
                "recTempAdvance", "permanentAdvance", "interest", "closing"]
-_NUM_KEYS = ("gpfBalance", "gpfSubscription", "loanInstalment", "loanBalance", "basicPay")
+#: Balances keep SAP's sign (a trailing minus is a debit); the rest are magnitudes (review C1, 9 Oct 2026).
+_SIGNED_KEYS = ("gpfBalance", "loanBalance")
+_AMOUNT_KEYS = ("gpfSubscription", "loanInstalment", "basicPay")
+_NUM_KEYS = _SIGNED_KEYS + _AMOUNT_KEYS
+#: Re-calculation report columns: opening, closing and adjustments carry a sign; the movements are magnitudes.
+_SIGNED_COLS = ("opening", "closing", "adjustments")
 
 
 def parse_sap_text(text: str) -> dict:
@@ -53,7 +58,7 @@ def parse_sap_text(text: str) -> dict:
                 continue  # header row
             r = {}
             for i, k in enumerate(RECALC_COLS):
-                r[k] = cells[i] if i < 2 else num(cells[i])
+                r[k] = cells[i] if i < 2 else (num(cells[i]) if k in _SIGNED_COLS else amount(cells[i]))
             cur["rows"].append(r)
             continue
         m = re.match(r"^([^:]+):\s*(.*)$", line)
@@ -66,7 +71,7 @@ def parse_sap_text(text: str) -> dict:
             if not k:
                 out["warnings"].append("Ignored pay slip line: " + line)
                 continue
-            cur[k] = num(val) if k in _NUM_KEYS else val
+            cur[k] = (num(val) if k in _SIGNED_KEYS else amount(val)) if k in _NUM_KEYS else val
         else:
             if key == "personnel no":
                 cur["persNo"] = val

@@ -54,8 +54,34 @@ def test_nothing_is_written_without_a_path(tmp_path):
     assert doa_mod.load_register(tmp_path / "doa.json") is False
 
 
-def test_a_damaged_file_is_ignored(tmp_path):
-    (tmp_path / "doa.json").write_text("{not json")
+def test_a_damaged_file_is_kept_aside_and_the_register_refuses_changes(tmp_path):
+    """A corrupt saved register must not fall back to the sample register silently and then be
+    written over (review C4, 9 Oct 2026): the file is kept, changes are refused, health says so."""
+    path = tmp_path / "doa.json"
+    path.write_text("{not json")
     before = copy.deepcopy(doa_mod.DOA)
-    assert doa_mod.load_register(tmp_path / "doa.json") is False
-    assert doa_mod.DOA == before
+    try:
+        assert doa_mod.load_register(path) is False
+        assert doa_mod.DOA == before                                   # the provisional register stays in memory
+        assert not path.exists()
+        kept = list(tmp_path.glob("doa.json.corrupt-*"))
+        assert len(kept) == 1 and kept[0].read_text() == "{not json"
+        assert doa_mod.DAMAGED == kept[0]
+        assert "changes are refused" in doa_mod.register_problem()
+        doa_mod.DOA_PATH = path
+        with pytest.raises(doa_mod.RegisterDamaged):
+            doa_mod.doa_finalize("Officer", "2026-10-09")
+        assert not path.exists()                                       # nothing was written over the damaged file
+    finally:
+        doa_mod.DAMAGED = None
+
+
+def test_a_good_file_clears_the_damage_flag(tmp_path):
+    path = tmp_path / "doa.json"
+    doa_mod.DAMAGED = tmp_path / "doa.json.corrupt-x"
+    path.write_text(json.dumps({"authorities": []}))
+    try:
+        assert doa_mod.load_register(path) is True
+        assert doa_mod.DAMAGED is None and doa_mod.register_problem() is None
+    finally:
+        doa_mod.DAMAGED = None

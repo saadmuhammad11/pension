@@ -18,19 +18,21 @@ import { fetchStats, type Ageing, type Product, type Stats } from '../api/cases'
 import { useInventoryTick } from '../data/inventory'
 import { Bars, ChartCard, Columns, Donut, Gauge, SplitBars } from '../charts/Charts'
 
-export function useStats(department?: string | null, product?: Product, pensionSection?: string | null) {
+export function useStats(department?: string | null, product?: Product, pensionSection?: string | null, enabled = true) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Refetched with the inventory (any change anywhere moves the tick), so the charts and KPI
   // cards move in the same moment as the lists; and once a minute for the ageing figures.
+  // Not fetched at all for a view that draws no chart (the cases list, F16).
   const tick = useInventoryTick()
   useEffect(() => {
+    if (!enabled) return
     let live = true
     const load = () => { if (document.visibilityState !== 'visible') return; fetchStats(department, product, pensionSection).then(s => { if (live) { setStats(s); setError(null) } }).catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)) }) }
     load()
     const t = setInterval(load, 60000)
     return () => { live = false; clearInterval(t) }
-  }, [department, product, pensionSection, tick])
+  }, [department, product, pensionSection, tick, enabled])
   return { stats, error }
 }
 

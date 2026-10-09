@@ -1,4 +1,5 @@
 /** The case history: every transition, who made it, and what they wrote. */
+import { fmtDateTime } from '../fmt'
 import type { CaseEvent } from '../api/cases'
 import { statusLabelOf } from './StatusPill'
 
@@ -42,7 +43,7 @@ export function HistoryTimeline({ events, highlightAg = false }: { events: CaseE
                 <strong>{ACTION_WORDS[e.action] ?? e.action}</strong>
                 <span className="muted" style={{ fontSize: 'var(--t-small)' }}>
                   {e.actor_name ?? 'System'}{e.actor_role && e.actor_role !== 'SYSTEM' ? ` · ${ROLE_WORDS[e.actor_role] ?? e.actor_role}` : ''}
-                  {' · '}{e.at.replace('T', ' ')}
+                  {' · '}{fmtDateTime(e.at)}
                 </span>
                 {e.from_status && e.from_status !== e.to_status && (
                   <span className="muted" style={{ fontSize: 'var(--t-small)' }}>

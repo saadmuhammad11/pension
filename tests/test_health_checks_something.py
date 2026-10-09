@@ -3,8 +3,8 @@
     python3 -m unittest tests.test_health_checks_something -v
 
 The route reported the run count only, so monitoring showed green through a real outage. It now
-fails (503) when the database cannot be read or the artefact disk is below its reserve, and
-reports the model servers and GP Fund as degraded, probed at most every 30 seconds.
+fails (503) only when the database cannot be read; a short disk, the model servers and GP Fund
+are reported as degraded, probed in the background at most every 30 seconds (review C3, 9 Oct 2026).
 """
 from __future__ import annotations
 
@@ -69,15 +69,51 @@ class Health(unittest.TestCase):
         self.assertFalse(r.json()["ok"])
         self.assertIn("unable to open", r.json()["database"]["problem"])
 
-    def test_a_short_disk_fails_the_check(self) -> None:
+    def test_a_short_disk_is_degraded_not_failed(self) -> None:
+        # A 503 here showed every user the portal's outage screen while the API still served
+        # cases (review C3, 9 Oct 2026); uploads are refused on their own with the reason (R8).
         health.forget()
         from api import gpf_bridge
         with mock.patch.object(health, "_disk", lambda: (False, {"free_gb": 1.2, "problem": "the server has 1.2 GB free"})), \
                 mock.patch.object(health, "probe", lambda url, timeout=2.0: True), \
                 mock.patch.object(gpf_bridge, "health", lambda: {"ok": True}):
             r = self.client.get("/api/health")
-        self.assertEqual(r.status_code, 503, r.text)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(r.json()["ok"])
+        self.assertFalse(r.json()["disk"]["ok"])
+        self.assertIn("disk", r.json()["degraded"])
         self.assertIn("1.2 GB free", r.json()["disk"]["problem"])
+
+    def test_a_stale_probe_is_answered_from_memory_and_refreshed_behind(self) -> None:
+        health.forget()
+        from api import gpf_bridge
+        slow = []
+
+        def probe(url, timeout=2.0):
+            slow.append(url); return True
+        with mock.patch.object(health, "probe", probe), mock.patch.object(gpf_bridge, "health", lambda: {"ok": True}):
+            self.client.get("/api/health")                              # first answers probe synchronously
+            with mock.patch.object(health, "PROBE_TTL_S", 0.0):          # everything is stale at once
+                import time
+                t0 = time.monotonic()
+                r = self.client.get("/api/health")                      # answered from memory, refresh in the background
+                self.assertLess(time.monotonic() - t0, 1.0)
+                self.assertEqual(r.json()["models"], {"vision": True, "ocr": True, "embedding": True})
+            for t in [t for t in __import__("threading").enumerate() if t.name.startswith("health-")]:
+                t.join(2)
+        self.assertGreaterEqual(len(slow), 3)
+
+    def test_in_production_the_database_error_text_stays_in_the_log(self) -> None:
+        health.forget()
+        from api import gpf_bridge
+        with mock.patch.dict("os.environ", {"PENSION_ENV": "production"}), \
+                mock.patch.object(health, "probe", lambda url, timeout=2.0: True), \
+                mock.patch.object(gpf_bridge, "health", lambda: {"ok": True}), \
+                mock.patch("api.db.connect", side_effect=RuntimeError("password authentication failed for user pension")):
+            r = self.client.get("/api/health")
+        self.assertEqual(r.status_code, 503, r.text)
+        self.assertEqual(r.json()["database"]["problem"], "the database is unavailable")
+        self.assertNotIn("password", r.text)
 
     def test_the_health_url_sits_beside_the_endpoint(self) -> None:
         self.assertEqual(health.health_url("http://127.0.0.1:8011/v1/chat/completions"), "http://127.0.0.1:8011/health")

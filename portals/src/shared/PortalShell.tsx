@@ -33,6 +33,7 @@ import { AuditLog } from './screens/admin/AuditLog'
 import { PRODUCT_OF_SLUG, PRODUCT_SLUG, PRODUCT_WORDS, caseHref, type CaseStatus, type Product } from './api/cases'
 import type { SessionUser } from './auth/session'
 import { portal, type PortalConfig } from './portal'
+import { checkApiOnline } from './apiOnline'
 
 const DEPT_WAITING: CaseStatus[] = ['DRAFT', 'AI_CHECKED', 'RETURNED', 'DOCS_REQUESTED']
 const AG_WAITING: CaseStatus[] = ['FORWARDED', 'AI_FAILED', 'UNDER_REVIEW']
@@ -56,18 +57,13 @@ export function PortalApp() {
 }
 
 /** The API is probed a few times before the outage screen is shown: one dropped request must
- *  not switch a working portal into "unavailable". */
+ *  not switch a working portal into "unavailable", and a degraded answer (503 for a short disk or
+ *  a model down) is still an answer (frontend review F11; shared/apiOnline.ts). */
 function useApiOnline(): boolean | null {
   const [online, setOnline] = useState<boolean | null>(null)
   useEffect(() => {
-    let live = true, tries = 0
-    const retry = () => { tries += 1; if (live) { if (tries >= 3) setOnline(false); else setTimeout(probe, 1500) } }
-    const probe = () => {
-      fetch('/api/health', { signal: AbortSignal.timeout(3000) })
-        .then(r => { if (!live) return; if (r.ok) setOnline(true); else retry() })
-        .catch(retry)
-    }
-    probe()
+    let live = true
+    checkApiOnline({ isLive: () => live }).then(r => { if (live && r !== null) setOnline(r) })
     return () => { live = false }
   }, [])
   return online

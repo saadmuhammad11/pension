@@ -37,18 +37,18 @@ class ThePermissionTable(unittest.TestCase):
 
 class TheScreensAskForGrounds(unittest.TestCase):
     def test_the_portal_sends_no_empty_grounds(self):
-        tsx = (ROOT / "portals/src/shared/screens/GpfFindings.tsx").read_text()
+        # GP Fund dispositions are made in the module's own frame (GpfFindings.tsx, which nothing
+        # imported, was removed on 9 Oct 2026); the pension findings screen asks for grounds the same way.
+        tsx = (ROOT / "portals/src/shared/screens/CaseFindings.tsx").read_text()
         self.assertNotIn("onDispose('uphold', '', '')", tsx)
-        self.assertNotIn("onDispose('correct', '', '')", tsx)
-        self.assertNotIn("onDispose('refer', '', '')", tsx)
         self.assertIn("ground.trim().length < 15", tsx)
-        self.assertIn("setOpen('uphold')", tsx); self.assertIn("setOpen('refer')", tsx); self.assertIn("setOpen('correct')", tsx)
+        self.assertFalse((ROOT / "portals/src/shared/screens/GpfFindings.tsx").exists())
 
     def test_the_module_s_own_screen_asks_too(self):
         js = (ROOT / "GP/backend/web/js/app.js").read_text()
         self.assertNotIn("'uphold', '', ''", js)
         self.assertNotIn("'refer', '', ''", js)
-        self.assertIn("ground.trim().length < 15", js)
+        self.assertIn("ground.text.length < 15", js)               # the prompt's text, trimmed by noteFromPrompt (F1)
 
     def test_the_service_refuses_short_grounds(self):
         from gpf.service import MIN_GROUND

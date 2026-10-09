@@ -20,11 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 
 from api import case_runs, db, gpf_bridge, settings, workflow
 from api.artefacts import bundle as run_bundle
 from api.artefacts import event_stream, get_run, page_image, report, signature_image, status
-from api.auth import (AuthError, User, authenticate, current_user, current_user_q, get_conn,
+from api.auth import (MEDIA_SCOPE, MEDIA_TOKEN_TTL, AuthError, User, authenticate, current_user, current_user_q, get_conn,
+                      issue_scoped_token,
                       hash_password, issue_token, password_problem, require_roles)
 from api.departments import (AG_PORTAL_PORT, AG_PORTAL_SLUG, DEPARTMENTS, DEPARTMENT_NAMES,
                              PENSION_SECTION_ORDER, LEGACY_DEPARTMENT, ROLES, SINGLE_PORTAL, portal_for)
@@ -37,6 +39,7 @@ router = APIRouter(prefix="/api/v2")
 MAX_FILES = 40                                  # files in one upload
 MAX_UPLOAD_TOTAL = 512 * 1024 * 1024            # bytes in one upload, all files together
 MAX_UPLOAD = 256 * 1024 * 1024
+MIN_RESET_REASON = 10                           # characters an administrator's password reset must explain itself in (N25)
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._ ()\-]+")
 
 
@@ -83,18 +86,53 @@ def login(request: Request, body: dict = Body(...), x_portal: str | None = Heade
         # Every refused sign-in is on the audit trail with the name typed and the address, so a
         # guessing run shows up there (docs/DEPLOYMENT.md F6). The password never is.
         action = {429: "LOGIN_LOCKED", 401: "LOGIN_FAILED"}.get(exc.status, "LOGIN_REFUSED")
-        workflow.audit(conn, actor=None, action=action, entity_type="user", entity_id=typed or "(blank)",
+        workflow.audit(conn, actor=None, action=action, entity_type="user", entity_id=_audit_login_name(conn, typed),
                        before=None, after={"portal": portal, "status": exc.status}, reason=exc.detail, ip=address)
         _raise(exc)
+    after = {"portal": portal, "must_change_password": user.must_change_password}
+    if _follows_admin_reset(conn, user.id):
+        # The administrator's reset is the one way to act as another officer (audit 7 Oct 2026,
+        # N25): the first sign-in after one is marked, so the trail shows it.
+        after["after_admin_reset"] = True
     workflow.audit(conn, actor=user, action="LOGIN", entity_type="user", entity_id=user.id,
-                   before=None, after={"portal": portal, "must_change_password": user.must_change_password}, ip=address)
+                   before=None, after=after, ip=address)
     return {"token": issue_token(user), "user": user.to_dict(),
-            "capabilities": capabilities(user)}
+            "capabilities": capabilities(user), "password_min_length": settings.min_password_length()}
+
+
+def _audit_login_name(conn: db.Connection, typed: str) -> str:
+    """What a refused sign-in records as the account: the name typed when it is an account, else a
+    hash of it. A password typed into the username box must not become a plaintext audit row
+    (audit 7 Oct 2026, N27)."""
+    if not typed:
+        return "(blank)"
+    if conn.execute("SELECT 1 FROM users WHERE username = ?", (typed.lower(),)).fetchone():
+        return typed.lower()
+    return "(unknown) sha256:" + hashlib.sha256(typed.encode("utf-8")).hexdigest()[:16]
+
+
+def _follows_admin_reset(conn: db.Connection, user_id: str) -> bool:
+    """True when the administrator reset this account's password after its last sign-in."""
+    last_login = conn.execute("SELECT MAX(at) FROM audit_log WHERE action = 'LOGIN' AND entity_id = ?", (user_id,)).fetchone()[0]
+    row = conn.execute("SELECT 1 FROM audit_log WHERE action = 'USER_RESET_PASSWORD' AND entity_id = ? AND at > ? LIMIT 1",
+                       (user_id, last_login or "")).fetchone()
+    return row is not None
 
 
 @router.get("/auth/me")
 def me(user: User = Depends(current_user)) -> dict:
-    return {"user": user.to_dict(), "capabilities": capabilities(user)}
+    # The password rule is the server's; the screens read it here instead of carrying their own
+    # number (frontend review F14, 9 Oct 2026).
+    return {"user": user.to_dict(), "capabilities": capabilities(user), "password_min_length": settings.min_password_length()}
+
+
+@router.get("/auth/media-token")
+def media_token(user: User = Depends(current_user)) -> dict:
+    """A 15-minute GET-only token for the URLs a browser cannot send a header with: page images,
+    signature crops, the event stream and document downloads (frontend review F10). The session
+    token stays out of image URLs and the browser's disk cache; the client refreshes this one."""
+    return {"token": issue_scoped_token(user, MEDIA_SCOPE, MEDIA_TOKEN_TTL),
+            "expires_in": int(MEDIA_TOKEN_TTL.total_seconds())}
 
 
 @router.post("/auth/change-password")
@@ -551,6 +589,8 @@ def _redact(d: dict, user: User) -> dict:
         return d
     d["detected_case_type"] = None
     d["detected_case_type_confidence"] = None
+    if d.get("case_type_source") == "DETECTED":
+        d["case_type_source"] = None                      # an undeclared case's type came from the engine (N29)
     if d.get("latest_run"):
         d["latest_run"] = {k: d["latest_run"].get(k) for k in _RUN_PUBLIC}
     if "runs" in d:
@@ -925,7 +965,8 @@ def create_case(
     case_type: str | None = Form(default=None),
     user: User = Depends(require_roles("DEPT_OFFICER")),
     conn: db.Connection = Depends(get_conn),
-) -> dict:
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> Any:
     """A new case with its documents, submitted to the Accountant General at once (decision of
     28 Sep 2026: filing is submission; the AI verification runs on the AG's desk).
 
@@ -933,6 +974,9 @@ def create_case(
     kind of claim). A DDO (role DEPT_OFFICER) files for their own department, always; only the
     administrator picks.
     """
+    replay = _idempotent_replay(conn, user, idempotency_key)
+    if replay is not None:
+        return replay
     if product not in PRODUCTS:
         raise HTTPException(422, f"unknown product {product!r}; one of {', '.join(PRODUCTS)}")
     if product == "GPF" and gpf_kind not in gpf_bridge.KINDS:
@@ -961,11 +1005,13 @@ def create_case(
         raise HTTPException(422, "choose the department the case belongs to")
     uploads = _read_uploads(files)
     try:
-        return _create_case(conn, user, uploads, department_code, claimant_name, variant, annual_pay,
-                            commutation_percent, retirement_date, pension_in_payment, date_of_death,
-                            product, gpf_kind, gazetted, declared)
+        result = _create_case(conn, user, uploads, department_code, claimant_name, variant, annual_pay,
+                              commutation_percent, retirement_date, pension_in_payment, date_of_death,
+                              product, gpf_kind, gazetted, declared)
     finally:
         _discard_staged(uploads)                      # whatever was not filed
+    _idempotent_remember(conn, user, idempotency_key, 201, result)
+    return result
 
 
 def _create_case(conn, user, uploads, department_code, claimant_name, variant, annual_pay, commutation_percent,
@@ -1017,6 +1063,32 @@ def _create_case(conn, user, uploads, department_code, claimant_name, variant, a
     row = conn.execute("SELECT * FROM cases WHERE id = ?", (case["id"],)).fetchone()
     result: dict[str, Any] = {"case": _redact(_case_dict(conn, row, full=True), user)}
     return result
+
+
+def _idempotent_replay(conn: db.Connection, user: User, key: str | None):
+    """The first answer again, for a request the client is repeating (frontend review F8, 9 Oct
+    2026): a browser on slow Wi-Fi retries a filing whose answer never arrived, and without this
+    the retry filed the case twice. Keys are the client's (a UUID per attempt), per user, kept a day."""
+    key = (key or "").strip()[:80]
+    if not key:
+        return None
+    row = conn.execute("SELECT status_code, response_json FROM idempotency_keys WHERE user_id = ? AND key = ?",
+                       (user.id, key)).fetchone()
+    if row is None:
+        return None
+    return JSONResponse(json.loads(row["response_json"]), status_code=int(row["status_code"]),
+                        headers={"Idempotent-Replayed": "true"})
+
+
+def _idempotent_remember(conn: db.Connection, user: User, key: str | None, status_code: int, result: dict) -> None:
+    key = (key or "").strip()[:80]
+    if not key:
+        return
+    from datetime import datetime, timedelta
+    conn.execute("DELETE FROM idempotency_keys WHERE created_at < ?",
+                 ((datetime.now() - timedelta(days=1)).isoformat(timespec="seconds"),))
+    conn.execute("INSERT OR IGNORE INTO idempotency_keys(user_id, key, created_at, status_code, response_json) "
+                 "VALUES (?, ?, ?, ?, ?)", (user.id, key, db.now(), status_code, json.dumps(result, default=str)))
 
 
 @router.get("/cases/{case_id}")
@@ -1140,15 +1212,21 @@ def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
 @router.post("/cases/{case_id}/documents", status_code=201)
 def add_documents(case_id: str, files: list[UploadFile] = File(default=[]),
                         user: User = Depends(require_roles("DEPT_OFFICER")),
-                        conn: db.Connection = Depends(get_conn)) -> dict:
+                        conn: db.Connection = Depends(get_conn),
+                        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")) -> Any:
     """More papers on the case. After an AG return this opens the next round of submission, and the
     case goes to DRAFT ("not yet resubmitted"), so the next document added does not open yet
     another round; the officer then resubmits it to the Accountant General."""
+    replay = _idempotent_replay(conn, user, idempotency_key)
+    if replay is not None:
+        return replay
     uploads = _read_uploads(files)
     try:
-        return _add_documents(conn, user, case_id, uploads)
+        result = _add_documents(conn, user, case_id, uploads)
     finally:
         _discard_staged(uploads)
+    _idempotent_remember(conn, user, idempotency_key, 201, result)
+    return result
 
 
 def _add_documents(conn: db.Connection, user: User, case_id: str, uploads: list[_Staged]) -> dict:
@@ -1543,10 +1621,13 @@ def case_gpf_cure(case_id: str, resultId: str = Form(...), values: str = Form("{
         raise HTTPException(422, "values must be JSON") from None
     content = None
     if file is not None:
-        body = file.file.read(MAX_UPLOAD + 1)
-        if len(body) > MAX_UPLOAD:
-            raise HTTPException(413, f"{file.filename} exceeds {MAX_UPLOAD // 1048576} MB")
-        content = (file.filename or "document", body)
+        # Staged to disk with the size limit enforced on the way (N26), as the document routes do,
+        # rather than read whole into memory first; the module takes the bytes afterwards.
+        staged = _read_uploads([file])
+        try:
+            content = (staged[0].name, staged[0].path.read_bytes())
+        finally:
+            _discard_staged(staged)
     try:
         res = gpf_bridge.cure(row["gpf_case_id"], resultId, gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao"), parsed, content, acting_name=user.display_name)
     except gpf_bridge.GpfError as exc:
@@ -1963,12 +2044,16 @@ def reset_user_password(request: Request, user_id: str, body: dict = Body(...), 
     problem = password_problem(password, row["username"])
     if problem:
         raise HTTPException(422, f"password: {problem}")
+    reason = " ".join(str(body.get("reason") or "").split())
+    if len(reason) < MIN_RESET_REASON:
+        # The one remaining way to act as another officer is written down every time (N25).
+        raise HTTPException(422, f"a password reset needs a reason of at least {MIN_RESET_REASON} characters")
     with db.transaction(conn):
         conn.execute("UPDATE users SET password_hash = ?, token_version = token_version + 1, "
                      "must_change_password = ?, updated_at = ? WHERE id = ?",
                      (hash_password(password), int(settings.force_password_change()), db.now(), row["id"]))
         workflow.audit(conn, actor=user, action="USER_RESET_PASSWORD", entity_type="user", ip=_client_address(request),
-                       entity_id=row["id"], before=None, after=None, reason=str(body.get("reason") or ""))
+                       entity_id=row["id"], before=None, after=None, reason=reason)
     return {"ok": True}
 
 

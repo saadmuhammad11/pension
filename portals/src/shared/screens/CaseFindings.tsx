@@ -2,6 +2,7 @@
  *
  *  Copied from the AI Pension Portal's Review screen. Who may act on a finding is decided by
  *  the signed-in user's capabilities (`can.dispose`), which the server enforces on its side. */
+import { fmtAmount, fmtDateTime } from '../fmt'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ChecklistPanel } from '../components/ChecklistPanel'
 import { PagePreview } from '../components/PagePreview'
@@ -11,6 +12,7 @@ import {
   caseTypeLabel, confidenceWord, documentLabel, findingLabel, hasId, maskIds, titleCase, verdictLabel,
 } from '../labels'
 import type { CaseReport, Flag, Severity, SpecimenSideBySide } from '../types'
+import { imageRefused, useMediaTokenVersion } from '../auth/useMediaToken'
 
 
 const TABS = ['Summary', 'Extracted Data', 'Checklist', 'Flags', 'Identity'] as const
@@ -66,14 +68,15 @@ function Verdict({ report, text }: { report: CaseReport; text: (s: string) => st
 }
 
 function FlagCard(
-  { f, index = 0, runId, onPage, disposition, onDispose, mayDecide, text }:
+  { f, index = 0, runId, onPage, disposition, onDispose, mayDecide, text, lastOpen }:
   { f: Flag; index?: number; runId: string
     /** Text for the screen: national ID numbers masked unless the officer asked to see them. */
     text: (s: string) => string
     onPage: (page: number, doc: string) => void
     disposition?: Disposition
     onDispose: (flagId: string, action: Disposition['action'], ground: string) => Promise<void>
-    mayDecide: boolean },
+    mayDecide: boolean
+    lastOpen?: (action: Disposition['action']) => boolean },
 ) {
   const tone = TONE[f.severity]
   return (
@@ -137,7 +140,7 @@ function FlagCard(
       {f.specimen && <SpecimenPanel s={f.specimen} runId={runId}
                                     onPage={p => onPage(p, f.evidence.asserted[0]?.doc ?? '')} />}
 
-      <FlagDisposition f={f} disposition={disposition} onDispose={onDispose} mayDecide={mayDecide} />
+      <FlagDisposition f={f} disposition={disposition} onDispose={onDispose} mayDecide={mayDecide} lastOpen={lastOpen} />
     </div>
   )
 }
@@ -157,13 +160,14 @@ function SpecimenPanel(
     borderRadius: 10, padding: 'var(--s3)',
   }
   const img: CSSProperties = { display: 'block', width: '100%', height: 'auto', marginTop: 6 }
+  useMediaTokenVersion()                                  // the cut-out's address carries the media token (F10)
   return (
     <div className="row" style={{ marginTop: 'var(--s3)', gap: 'var(--s3)', alignItems: 'stretch',
                                   flexWrap: 'wrap', color: 'var(--ink)' }}>
       <div style={box}>
         <div style={{ fontWeight: 700 }}>On the sanction form{s.page ? ` (p.${s.page})` : ''}</div>
         {s.signature_image
-          ? <img src={signatureImageUrl(runId, s.signature_image)} alt="Signature cut from the form" style={img} />
+          ? <img src={signatureImageUrl(runId, s.signature_image)} alt="Signature cut from the form" style={img} onError={imageRefused} />
           : <div className="muted" style={{ fontSize: 'var(--t-small)', marginTop: 6 }}>
               The signature could not be cut out of the page; open the page to see it.</div>}
         {s.page && <button className="chip" style={{ marginTop: 8, cursor: 'pointer' }}
@@ -187,24 +191,39 @@ function SpecimenPanel(
  *  a WAIVE clears: upholding is the officer agreeing the finding is right, and agreeing a
  *  case is defective is not a reason to compute its pension.
  */
+/** True when recording `action` on `flagId` would leave no finding open on the case: the officer
+ *  is told so and asked for confirmation (F4). Only a WAIVE clears a finding. */
+export function clearsLastOpenFinding(flags: { id: string }[], disposed: Record<string, { action: string }>,
+                                      flagId: string, action: Disposition['action']): boolean {
+  if (action !== 'WAIVE') return false
+  const open = flags.filter(f => f.id !== flagId && disposed[f.id]?.action !== 'WAIVE')
+  return open.length === 0
+}
+
+/** What each decision does, in the words the officer sees (F4: the labels say what happens). */
+export const DISPOSITION_WORDS: Record<string, string> = {
+  WAIVE: 'Cleared — does not stand against the case',
+  UPHOLD: 'Upheld — the finding stands; the case cannot be approved while it does',
+  HOLD: 'On hold — exceptional-case lane',
+}
+
 function FlagDisposition(
-  { f, disposition, onDispose, mayDecide }:
+  { f, disposition, onDispose, mayDecide, lastOpen = () => false }:
   { f: Flag; disposition?: Disposition
     onDispose: (flagId: string, action: Disposition['action'], ground: string) => Promise<void>
-    mayDecide: boolean },
+    mayDecide: boolean
+    /** Whether recording this action would clear the last open finding (F4). */
+    lastOpen?: (action: Disposition['action']) => boolean },
 ) {
   const [open, setOpen] = useState(false)
   const [action, setAction] = useState<Disposition['action'] | null>(null)
   const [ground, setGround] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmLast, setConfirmLast] = useState(false)
 
   const TONE_FOR: Record<string, string> = { WAIVE: 'low', UPHOLD: 'high', HOLD: 'medium' }
-  const WORD: Record<string, string> = {
-    WAIVE: 'Approved — does not prevent payment',
-    UPHOLD: 'Rejected — the case cannot proceed',
-    HOLD: 'On hold — exceptional-case lane',
-  }
+  const WORD = DISPOSITION_WORDS
 
   if (disposition && !open) {
     return (
@@ -213,7 +232,7 @@ function FlagDisposition(
         <div className="row" style={{ gap: 'var(--s2)' }}>
           <span className={`pill ${TONE_FOR[disposition.action]}`}>{WORD[disposition.action]}</span>
           <span className="muted" style={{ fontSize: 'var(--t-small)' }}>
-            {disposition.officer} · {disposition.at.replace('T', ' ')}
+            {disposition.officer} · {fmtDateTime(disposition.at)}
           </span>
           {mayDecide && (
             <button className="ghost" style={{ padding: 0, fontSize: 'var(--t-small)' }}
@@ -247,13 +266,13 @@ function FlagDisposition(
     <div style={{ marginTop: 'var(--s3)', paddingTop: 'var(--s3)',
                   borderTop: '1px dashed rgba(31,41,55,.12)' }}>
       <div className="row" style={{ gap: 'var(--s2)' }}>
-        <button className={action === 'WAIVE' ? 'primary' : ''} onClick={() => setAction('WAIVE')}
+        <button className={action === 'WAIVE' ? 'primary' : ''} onClick={() => { setAction('WAIVE'); setConfirmLast(false) }}
                 style={{ padding: '7px 14px', fontSize: 'var(--t-small)' }}>
-          Approve — clears this finding
+          Clear — set this finding aside
         </button>
-        <button className={action === 'UPHOLD' ? 'primary' : ''} onClick={() => setAction('UPHOLD')}
+        <button className={action === 'UPHOLD' ? 'primary' : ''} onClick={() => { setAction('UPHOLD'); setConfirmLast(false) }}
                 style={{ padding: '7px 14px', fontSize: 'var(--t-small)' }}>
-          Reject — return to the department
+          Uphold — the finding stands
         </button>
       </div>
       {needsGround && (
@@ -265,18 +284,33 @@ function FlagDisposition(
                     placeholder="Recorded against your name in the audit trail…" />
         </div>
       )}
+      {action && lastOpen(action) && (
+        // The last open finding: once it is cleared nothing stands against the case and it can
+        // be approved, so the officer is told before it is recorded (F4). Nothing is approved by
+        // itself (M1): the decision is still the AG's, with a remark.
+        <div className="banner warn" style={{ marginTop: 'var(--s3)' }} role="status">
+          <span className="mark" aria-hidden="true">!</span>
+          <div className="sub">
+            <strong>This is the last open finding.</strong> Once it is cleared, nothing stands against the case and it can be approved.
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
+              <input type="checkbox" checked={confirmLast} onChange={e => setConfirmLast(e.target.checked)} />
+              I understand; record it.
+            </label>
+          </div>
+        </div>
+      )}
       {action && (
         <div className="row" style={{ marginTop: 'var(--s3)', gap: 'var(--s2)' }}>
-          <button className="gold" disabled={blocked || busy}
+          <button className="gold" disabled={blocked || busy || (lastOpen(action) && !confirmLast)}
                   onClick={async () => {
                     setBusy(true); setError(null)
-                    try { await onDispose(f.id, action, ground); setOpen(false); setAction(null) }
+                    try { await onDispose(f.id, action, ground); setOpen(false); setAction(null); setConfirmLast(false) }
                     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
                     finally { setBusy(false) }
                   }}>
             {busy ? 'Recording…' : 'Record'}
           </button>
-          <button onClick={() => { setAction(null); setGround(''); setError(null) }}>Cancel</button>
+          <button onClick={() => { setAction(null); setGround(''); setError(null); setConfirmLast(false) }}>Cancel</button>
         </div>
       )}
       {error && (
@@ -531,14 +565,14 @@ export function CaseFindings(
                   {emol.components.map(c => (
                     <tr key={`${c.printed_label}-${c.page ?? ''}`}>
                       <td>{c.printed_label}</td>
-                      <td>{c.amount.toLocaleString('en-PK')}</td>
+                      <td>{fmtAmount(c.amount)}</td>
                       <td>{c.page && <span className="chip">p.{c.page}</span>}</td>
                     </tr>
                   ))}
                   {emol.printed_total != null && (
                     <tr className="total">
                       <td>Total Pay the form prints</td>
-                      <td>{emol.printed_total.toLocaleString('en-PK')}</td>
+                      <td>{fmtAmount(emol.printed_total)}</td>
                       <td className="muted">as printed; whether the lines add up to it is a finding, not a figure</td>
                     </tr>
                   )}
@@ -568,7 +602,7 @@ export function CaseFindings(
             </div>
             <ul style={{ margin: 'var(--s2) 0 0', paddingLeft: '1.2em', fontSize: 'var(--t-small)' }}>
               {lapsed.map((l, i) => (
-                <li key={i}>{l.action} by {l.officer} on {l.at.replace('T', ' ')} — “{l.flag_title}”: {l.why}.</li>
+                <li key={i}>{l.action} by {l.officer} on {fmtDateTime(l.at)} — “{l.flag_title}”: {l.why}.</li>
               ))}
             </ul>
           </div>
@@ -579,6 +613,7 @@ export function CaseFindings(
           ? <div className="empty">No issues found.</div>
           : report.flags.slice(0, showAll ? undefined : 5).map((f, i) => (
               <FlagCard key={f.id} f={f} index={i} runId={runId} text={text}
+                        lastOpen={a => clearsLastOpenFinding(report.flags, disposed, f.id, a)}
                         onPage={(page, doc) => setPreview({ page, doc })}
                         disposition={disposed[f.id]} onDispose={dispose}
                         mayDecide={mayDecide} />

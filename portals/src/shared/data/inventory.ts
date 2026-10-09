@@ -9,8 +9,9 @@
  *  *   A change made in this tab (any POST through the API client) refetches at once, and is
  *      broadcast to the other tabs of this browser, which refetch at once too.
  *  *   A change made anywhere else (another officer, the verification finishing) moves the
- *      server's version token, polled every 3 s while the tab is visible and at once when it
- *      comes back into view. A moved token refetches every open view together.
+ *      server's version token, polled every 3 s while the officer is at the screen (every 15 s
+ *      when the tab is hidden or has been idle a minute, F16) and at once when it comes back
+ *      into view. A moved token refetches every open view together.
  */
 import { useEffect, useState } from 'react'
 import { dataChanged, get } from '../api/client'
@@ -39,6 +40,15 @@ const urlOf = (q: InventoryQuery) => {
 }
 
 type Entry = { q: InventoryQuery; data: Inventory | null; error: string | null; listeners: Set<() => void>; inflight: boolean; again: boolean }
+
+/** How often the version is asked for: every 3 s while the officer is at the screen; every 15 s
+ *  when the tab is hidden or nothing has been touched for a minute (F16). */
+export const POLL_ACTIVE_MS = 3000
+export const POLL_QUIET_MS = 15000
+export const IDLE_AFTER_MS = 60_000
+export function pollInterval(hidden: boolean, msSinceActivity: number): number {
+  return hidden || msSinceActivity > IDLE_AFTER_MS ? POLL_QUIET_MS : POLL_ACTIVE_MS
+}
 const cache = new Map<string, Entry>()
 const versionListeners = new Set<() => void>()
 let version = ''
@@ -74,35 +84,51 @@ const channel: BroadcastChannel | null = typeof BroadcastChannel !== 'undefined'
 if (channel) channel.onmessage = () => refreshAll(false)
 dataChanged.addEventListener('change', () => refreshAll(true))
 
-let polling: ReturnType<typeof setInterval> | null = null
+let polling: ReturnType<typeof setTimeout> | null = null
+let lastActivity = Date.now()
+const noteActivity = () => { lastActivity = Date.now() }
+const ACTIVITY = ['mousemove', 'keydown', 'scroll', 'touchstart', 'click'] as const
 async function checkVersion() {
-  if (document.visibilityState !== 'visible') return
   if (!getToken()) return                       // signed out: nothing to keep current, nobody to ask as
+  // An entry that failed last time is asked again on every tick, not only when the version
+  // moves (F12): a dropped request must not leave a register stale until something changes.
+  cache.forEach(e => { if (e.error && e.listeners.size && !e.inflight) fetchEntry(e) })
+  if (document.visibilityState !== 'visible') return
   try {
     const { version: v } = await get<{ version: string }>('/api/v2/inventory/version')
     if (v && v !== version) { version = v; refreshAll(false) }
   } catch { /* offline: try again on the next tick */ }
 }
+function schedule() {
+  if (polling) clearTimeout(polling)
+  polling = setTimeout(async () => {
+    polling = null
+    await checkVersion()
+    if (cache.size || versionListeners.size) schedule()
+  }, pollInterval(document.visibilityState !== 'visible', Date.now() - lastActivity))
+}
 function ensurePolling() {
   if (polling) return
-  polling = setInterval(checkVersion, 3000)
+  schedule()
   document.addEventListener('visibilitychange', checkVersion)
   window.addEventListener('focus', checkVersion)
+  ACTIVITY.forEach(ev => window.addEventListener(ev, noteActivity, { passive: true }))
 }
 
 /** Sign-out's share of the work: stop asking the server and forget what this session saw.
  *  The 3-second poll used to run on after sign-out, asking for the inventory as nobody and
  *  keeping the last officer's rows in memory for the next person at the PC (audit 6 Oct 2026, L5). */
 export function stopInventoryPolling() {
-  if (polling) { clearInterval(polling); polling = null }
+  if (polling) { clearTimeout(polling); polling = null }
   document.removeEventListener('visibilitychange', checkVersion)
   window.removeEventListener('focus', checkVersion)
+  ACTIVITY.forEach(ev => window.removeEventListener(ev, noteActivity))
   cache.clear()
   version = ''
 }
 
 /** The inventory for one query, kept current. Same query in two views = the same object. */
-export function useInventory(q: InventoryQuery): { data: Inventory | null; error: string | null; loading: boolean } {
+export function useInventory(q: InventoryQuery): { data: Inventory | null; error: string | null; loading: boolean; stale: boolean } {
   const key = keyOf(q)
   const [, force] = useState(0)
   useEffect(() => {
@@ -115,7 +141,9 @@ export function useInventory(q: InventoryQuery): { data: Inventory | null; error
     return () => { e!.listeners.delete(l) }
   }, [key])   // eslint-disable-line react-hooks/exhaustive-deps
   const e = cache.get(key)
-  return { data: e?.data ?? null, error: e?.error ?? null, loading: !e?.data && !e?.error }
+  // `stale`: rows are on screen but the last refresh failed -- a quiet "retrying" strip, not a
+  // red error, is what the officer should see (F12).
+  return { data: e?.data ?? null, error: e?.error ?? null, loading: !e?.data && !e?.error, stale: !!e?.data && !!e?.error }
 }
 
 /** A number that moves whenever the inventory does: for data that is not the inventory itself

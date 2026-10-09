@@ -285,7 +285,8 @@ async function handle(req: Request): Promise<Response> {
   }
   const u = userFor(req, url)
   if (!u) return fail(401, 'sign in first')
-  if (p === '/api/v2/auth/me') return json({ user: u, capabilities: capabilities(u) })
+  if (p === '/api/v2/auth/me') return json({ user: u, capabilities: capabilities(u), password_min_length: 10 })
+  if (p === '/api/v2/auth/media-token') return json({ token: 'demo-media-token', expires_in: 900 })   // the demo serves images without a token
   if (p === '/api/v2/departments') return json(DEPTS.map(d => ({ code: d.code, name: d.name, digital: 1, slug: d.slug })))
   if (p === '/api/v2/departments/counts') {
     return json(DEPTS.map(d => { const cs = state.cases.filter(c => c.department_code === d.code); const by: Record<string, number> = {}; cs.forEach(c => { by[c.status] = (by[c.status] ?? 0) + 1 })

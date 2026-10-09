@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { pageImageUrl, runStatus, subscribe, type RunEvent } from '../api'
 import { ScanViewer } from '../scan/ScanViewer'
 import { documentLabel } from '../labels'
+import { useMediaTokenVersion } from '../auth/useMediaToken'
 
 /** The stages as the officer knows them (BUILD §5), and the pipeline ids each covers. */
 const STAGES: [string, string, string[]][] = [
@@ -63,6 +64,9 @@ const WORK_ON = /(?:stage \d+\s+(?:reading\s+)?|signature\s+|form text\s+)([A-Za
 /** What each later stage is doing to the page it has open, for the label on the viewer. */
 const VERB: Record<number, string> = { 2: 'Second reading', 3: 'Reading the details', 4: 'Cross-checking', 5: 'Checking the signature' }
 
+/** How many log lines the screen keeps (F16). */
+const LOG_LINES = 300
+
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 const shortName = (t: string) => documentLabel(t).split(' — ')[0]
 
@@ -81,6 +85,7 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
   const [, setStartKnown] = useState(false)
   const mountedAt = useRef(Date.now())
   const consoleRef = useRef<HTMLDivElement>(null)
+  useMediaTokenVersion()                                  // page addresses carry the media token (F10)
 
   useEffect(() => {
     runStatus(runId).then(st => {
@@ -103,20 +108,22 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
     return stop
   }, [runId, onDone])
 
-  // The clock, while the run is live.
+  // The clock, while the run is live: once a second (F16; it was four times a second, and every
+  // tick re-rendered the whole screen for ten to twenty minutes on an old office PC).
   useEffect(() => {
     if (finished) return
-    const t = setInterval(() => setNow(Date.now()), 250)
+    const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [finished])
 
   // On to the findings only once the bar has visibly reached the end (or, at the latest, 12 s
   // after the run did): leaving at 90% reads as the screen giving up, not the work finishing.
+  const barFull = shown >= 99.5
   useEffect(() => {
     if (!finished) return
-    const t = setTimeout(onDone, finished !== 'done' ? 1500 : shown >= 99.5 ? 900 : 12000)
+    const t = setTimeout(onDone, finished !== 'done' ? 1500 : barFull ? 900 : 12000)
     return () => clearTimeout(t)
-  }, [finished, shown >= 99.5, onDone])
+  }, [finished, barFull, onDone])
 
   useEffect(() => {
     if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight
@@ -181,25 +188,20 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
     return from + range * Math.min(frac, 0.985)
   }, [facts, now, finished])
 
-  // Glide toward the target: never a jump, never backwards -- except on opening: a screen
+  // Toward the target: never backwards, and at most 3% a second -- when a stage ends sooner than
+  // its share of the bar, the bar catches up over several seconds instead of leaping 20% at once.
+  // The glide between two values is the CSS transition on the fill (F16), not a frame loop: one
+  // state change a second, no requestAnimationFrame re-rendering the screen. On opening, a screen
   // opened mid-run takes the run's real position at once rather than climbing from zero.
+  const hasEvents = events.length > 0
   useEffect(() => {
-    let raf = 0, last = performance.now()
-    const step = (t: number) => {
-      const dt = (t - last) / 1000; last = t
-      setShown(v => {
-        const gap = target - v
-        if (gap <= 0.01) return v
-        if (Date.now() - mountedAt.current < 2500 && events.length > 0) return target
-        // Eased, and capped at 3% a second: when a stage ends sooner than its share of the bar,
-        // the bar catches up over several seconds instead of leaping 20% at once.
-        return v + Math.min(gap, 3 * dt, Math.max(gap * (1 - Math.exp(-dt / 1.2)), 0.8 * dt))
-      })
-      raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [target, events.length > 0])   // eslint-disable-line react-hooks/exhaustive-deps
+    setShown(v => {
+      const gap = target - v
+      if (gap <= 0.01) return v
+      if (Date.now() - mountedAt.current < 2500 && hasEvents) return target
+      return v + Math.min(gap, 3)
+    })
+  }, [target, hasEvents])
 
   const elapsed = (now - startedAt.current) / 1000
   const pct = Math.floor(shown)
@@ -219,6 +221,8 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
     return () => clearTimeout(t)
   }, [targetPage, page, working])
   const quiet = (now - facts.lastEventAt) / 1000
+  // The log on screen is the last 300 lines (F16); the facts above are drawn from all of them.
+  const logLines = useMemo(() => events.slice(-LOG_LINES), [events])
   const workDoc = !working ? '' : /^[A-Z0-9_]+$/.test(working.doc) ? shortName(working.doc) : working.doc
   const slowLine = !finished && quiet > 45 && working
     ? `Still on ${workDoc} (p.${working.page}) — a dense page can take a minute or two. Last update ${mmss(quiet)} ago.`
@@ -241,7 +245,7 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
       {/* The bar. */}
       <div className="an-bar-wrap">
         <div className="an-bar">
-          <div className={`an-fill${finished ? '' : ' is-live'}`} style={{ width: `${shown}%` }} />
+          <div className={`an-fill${finished ? '' : ' is-live'}`} style={{ width: `${shown}%`, transition: 'width 1s linear' }} />
         </div>
         <span className="an-pct">{pct}%</span>
       </div>
@@ -289,7 +293,8 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
       <div className="an-log-head">Technical log</div>
       <div ref={consoleRef} className="mono an-log">
         {events.length === 0 && <div style={{ opacity: .6 }}>waiting for the first stage…</div>}
-        {events.map(e => (
+        {events.length > LOG_LINES && <div style={{ opacity: .6 }}>… {events.length - LOG_LINES} earlier lines not shown</div>}
+        {logLines.map(e => (
           <div key={e.seq} style={{
             color: e.level === 'error' ? '#FF9E93' : e.level === 'warn' ? '#E7C55B' : undefined,
           }}>

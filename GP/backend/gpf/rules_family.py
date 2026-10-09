@@ -388,10 +388,19 @@ def _adv_active(F):
             return {"status": "sap",
                     "finding": "The SAP pay slip and re-calculation report are needed to see any advance still outstanding.",
                     "cure": {"kind": "sap"}}
-        if not p.get("loanBalance"):
+        # An advance balance nobody could read is not "no advance outstanding" (audit 6 Oct 2026, G4;
+        # ported to the served rules 9 Oct 2026, review C2): unread is a verification task with the
+        # SAP cure, until the figure is on the case. A read zero still passes.
+        outstanding = num(p.get("loanBalance"))
+        if outstanding is None:
+            return {"status": "conf",
+                    "finding": ("The pay slip's GPF advance balance could not be read, so it cannot be said whether "
+                                "an earlier advance is still outstanding."),
+                    "cure": {"kind": "sap"}}
+        if not outstanding:
             return {"status": "ok", "finding": "The SAP pay slip shows no GPF advance outstanding."}
         return {"status": "conf",
-                "finding": ("The SAP pay slip shows a GPF advance balance of Rs " + fmt(p["loanBalance"])
+                "finding": ("The SAP pay slip shows a GPF advance balance of Rs " + fmt(outstanding)
                             + ". Without the re-calculation report it cannot be told whether this is the advance under examination."),
                 "cure": {"kind": "sap"}}
     rows = rc["rows"]

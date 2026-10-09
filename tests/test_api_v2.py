@@ -187,7 +187,7 @@ class V2Test(unittest.TestCase):
         admin = self.login("admin", "ag")
         police = self.login("punjab-police", "punjab-police")
         r = self.client.post("/api/v2/admin/users/punjab-police/reset-password", headers=admin,
-                             json={"password": "NewPass#2026"})
+                             json={"password": "NewPass#2026", "reason": "Officer forgot the password; identity confirmed."})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(self.client.get("/api/v2/auth/me", headers=police).status_code, 401)
         r = self.client.post("/api/v2/auth/login", json={"username": "punjab-police", "password": "NewPass#2026"},

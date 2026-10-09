@@ -1,5 +1,5 @@
 /** The case-level API: /api/v2/cases and /api/v2/departments. Shapes mirror api/v2.py. */
-import { get, post, postForm } from './client'
+import { get, newIdempotencyKey, post, postForm, upload, type UploadProgress } from './client'
 
 export type CaseStatus =
   | 'DRAFT' | 'AI_CHECKING' | 'AI_FAILED' | 'AI_CHECKED' | 'FORWARDED' | 'UNDER_REVIEW'
@@ -161,7 +161,12 @@ export interface NewCaseFields {
   date_of_death?: string
 }
 
-export function createCase(files: File[], fields: NewCaseFields) {
+/** How an upload is watched and retried (F8): progress as it goes; the same key on a retry of the
+ *  same attempt, so the server files the case once however often the connection drops. */
+export interface UploadOptions { onProgress?: (p: UploadProgress) => void; idempotencyKey?: string }
+export { newIdempotencyKey }
+
+export function createCase(files: File[], fields: NewCaseFields, opts: UploadOptions = {}) {
   const form = new FormData()
   files.forEach(f => form.append('files', f))
   form.append('product', fields.product ?? 'PENSION')
@@ -175,14 +180,14 @@ export function createCase(files: File[], fields: NewCaseFields) {
   for (const k of ['commutation_percent', 'retirement_date', 'pension_in_payment', 'date_of_death'] as const) {
     if (fields[k]) form.append(k, fields[k] as string)
   }
-  return postForm<{ case: CaseFull }>('/api/v2/cases', form)
+  return upload<{ case: CaseFull }>('/api/v2/cases', form, opts)
 }
 
 /** Put a corrected paper in place of one already filed; the old one stays on file, superseded. */
-export function replaceDocument(caseId: string, docId: string, file: File) {
+export function replaceDocument(caseId: string, docId: string, file: File, opts: UploadOptions = {}) {
   const form = new FormData()
   form.append('files', file)
-  return postForm<CaseFull>(`/api/v2/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(docId)}/replace`, form)
+  return upload<CaseFull>(`/api/v2/cases/${encodeURIComponent(caseId)}/documents/${encodeURIComponent(docId)}/replace`, form, opts)
 }
 
 /** The record of each submission round (api.rounds). `checks` is the AG's only. */
@@ -207,10 +212,10 @@ export interface CaseRound {
 export const fetchRounds = (caseId: string) =>
   get<{ rounds: CaseRound[]; submission_no: number }>(`/api/v2/cases/${encodeURIComponent(caseId)}/rounds`).then(r => r.rounds)
 
-export function addDocuments(caseId: string, files: File[]) {
+export function addDocuments(caseId: string, files: File[], opts: UploadOptions = {}) {
   const form = new FormData()
   files.forEach(f => form.append('files', f))
-  return postForm<CaseFull>(`/api/v2/cases/${encodeURIComponent(caseId)}/documents`, form)
+  return upload<CaseFull>(`/api/v2/cases/${encodeURIComponent(caseId)}/documents`, form, opts)
 }
 
 /** Change the case type: a department while the case is on its side; the AG or the administrator
@@ -370,7 +375,7 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
     if ((c.status === 'RETURNED' || c.status === 'DOCS_REQUESTED') && a.has('ADD_DOCS')) return { action: 'ADD_DOCS', title: m.label, text: m.dept }
     return { action: null, title: m.label, text: m.dept }
   }
-  if (c.status === 'FORWARDED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: 'Received: verify the case with AI', text: 'The verification reads every document. Missing documents send the case back to the department with the list; a clean case is approved; findings come to you to clear.' }
+  if (c.status === 'FORWARDED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: 'Received: verify the case with AI', text: 'The verification reads every document. Its findings, and any missing documents, come to you for a decision; nothing is approved or returned automatically.' }
   if (c.status === 'AI_FAILED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: m.label, text: m.ag }
   if (c.status === 'UNDER_REVIEW' && a.has('APPROVE')) return { action: null, title: 'Findings await your decision', text: m.ag }
   return { action: null, title: m.label, text: m.ag }

@@ -25,6 +25,11 @@ import { RoundsPanel } from '../components/RoundsPanel'
 import { ScanViewer } from '../scan/ScanViewer'
 import { withToken } from '../auth/session'
 import { post } from '../api/client'
+import { onGpfExpired, registerGpfFrame } from '../auth/frameActivity'
+import { fmtDateTime } from '../fmt'
+import { nextTabFor, tabId } from '../components/tabs'
+import { useMediaTokenVersion } from '../auth/useMediaToken'
+import type React from 'react'
 
 const TABS = ['Documents', 'AI findings', 'Remarks & history'] as const
 type Tab = typeof TABS[number]
@@ -41,6 +46,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const toast = useToast()
   const [c, setC] = useState<CaseFull | null>(null)
   const [report, setReport] = useState<CaseReport | null>(null)
+  // A report that could not be fetched is not a case that was never verified (F5): kept apart.
+  const [reportError, setReportError] = useState<string | null>(null)
   // The findings are read at the AG; a department officer opens on the papers.
   const deptView = (user?.role ?? '') === 'DEPT_OFFICER'
   const [tab, setTab] = useState<Tab>(initialTab && !(deptView && initialTab === 'AI findings') ? initialTab : deptView ? 'Documents' : 'AI findings')
@@ -50,13 +57,17 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const fileInput = useRef<HTMLInputElement>(null)
   const role = user?.role ?? ''
 
-  // Every load carries a sequence number; an answer older than the newest request (or than the
-  // last thing the officer did) is dropped, so a slow poll cannot overwrite a fresh action.
+  // Every load carries a sequence number; an answer older than the last thing the officer did
+  // is dropped, so a slow reply cannot overwrite a fresh action. A poll is not started while one
+  // is still out (F12): on a slow link a reply slower than the interval used to be thrown away
+  // every time, and the live view froze.
   const seq = useRef(0)
+  const inflight = useRef(false)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const load = useCallback(async () => {
     const mine = ++seq.current
+    inflight.current = true
     try {
       const full = await getCase(caseId)
       if (!mounted.current || mine !== seq.current) return
@@ -64,17 +75,29 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
       setError(null)
       const run = full.latest_run
       if (run && run.state === 'done' && !deptView && full.product !== 'GPF') {
-        let rep: CaseReport | null = null
-        try { rep = await fetchReport(run.run_id) } catch { rep = null }
-        if (!mounted.current || mine !== seq.current) return
-        setReport(rep)
-      } else setReport(null)
+        try {
+          const rep = await fetchReport(run.run_id)
+          if (!mounted.current || mine !== seq.current) return
+          setReport(rep); setReportError(null)
+        } catch (e) {
+          if (!mounted.current || mine !== seq.current) return
+          setReport(null); setReportError(e instanceof Error ? e.message : String(e))
+        }
+      } else { setReport(null); setReportError(null) }
     } catch (e) {
       if (mounted.current && mine === seq.current) setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (mine === seq.current) inflight.current = false
     }
   }, [caseId, deptView])
 
   useEffect(() => { load() }, [load])
+  // A first load that failed is tried again on its own every 10 s, and at once on Retry (F12).
+  useEffect(() => {
+    if (c || !error) return
+    const t = setTimeout(load, 10_000)
+    return () => clearTimeout(t)
+  }, [c, error, load])
   const told = useRef<string | null>(null)
   useEffect(() => {
     if (c && onProduct && told.current !== c.product) { told.current = c.product; onProduct(c.product) }
@@ -86,7 +109,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
     : c && ['FORWARDED', 'UNDER_REVIEW', 'AI_FAILED', 'DRAFT', 'AI_CHECKED', 'RETURNED', 'DOCS_REQUESTED'].includes(c.status) ? 15000 : 0
   useEffect(() => {
     if (!live) return
-    const tick = () => { if (document.visibilityState === 'visible') load() }
+    const tick = () => { if (document.visibilityState === 'visible' && !inflight.current) load() }
     const t = setInterval(tick, live)
     document.addEventListener('visibilitychange', tick)
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', tick) }
@@ -122,6 +145,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
     finally { setBusy(false) }
   }
 
+  // Replacing a paper is confirmed first (F14): the old one stays on file but is no longer read.
+  const [pendingReplace, setPendingReplace] = useState<{ doc: { id: string; filename: string }; file: File } | null>(null)
   async function doReplace(docId: string, file: File) {
     setBusy(true); setError(null)
     try { await replaceDocument(caseId, docId, file); seq.current += 1; await load(); toast('Document replaced. Submit the case when ready.') }
@@ -130,7 +155,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   }
 
   const [holdRun, setHoldRun] = useState<string | null>(null)
-  useEffect(() => { if (c?.status === 'AI_CHECKING' && c.latest_run) setHoldRun(c.latest_run.run_id) }, [c?.status, c?.latest_run?.run_id])
+  const latestRunId = c?.latest_run?.run_id ?? null
+  useEffect(() => { if (c?.status === 'AI_CHECKING' && latestRunId) setHoldRun(latestRunId) }, [c?.status, latestRunId])
   const analysisDone = useCallback(() => { setHoldRun(null); load() }, [load])
 
   const step = useMemo(() => c ? nextStep(c, role) : null, [c, role])
@@ -139,8 +165,12 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
     return (
       <div className="screen container" style={{ paddingTop: 22 }}>
         <button className="ghost" onClick={() => onBack('PENSION')}>Back to the register</button>
-        {error ? <div className="banner bad" style={{ marginTop: 12 }}><span className="mark">!</span><div className="sub">{error}</div></div>
-               : <div className="skeleton" style={{ height: 120, marginTop: 12 }} />}
+        {error ? (
+          <div className="banner bad" role="alert" style={{ marginTop: 12 }}><span className="mark">!</span>
+            <div className="sub">Could not load the case. {error} <button type="button" style={{ marginLeft: 8 }} onClick={() => load()}>Retry</button>
+              <span className="muted" style={{ marginLeft: 8, fontSize: 'var(--t-small)' }}>Trying again on its own every 10 seconds.</span></div>
+          </div>
+        ) : <div className="skeleton" style={{ height: 120, marginTop: 12 }} />}
       </div>
     )
   }
@@ -164,6 +194,13 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const verifying = c.status === 'AI_CHECKING' || (!!run && holdRun === run.run_id && c.status !== 'AI_FAILED')
   const remarks = c.events.filter(e => e.remark && e.actor_role !== 'SYSTEM').length
 
+  // Left/Right on the tab strip move between the tabs (F15); a department has no AI tab.
+  const tabKeys = (e: React.KeyboardEvent) => {
+    const order = TABS.filter(t => !(deptView && t === 'AI findings'))
+    const n = nextTabFor(order, tab, e.key)
+    if (n) { e.preventDefault(); setTab(n); (document.getElementById(tabId('case-tab', n)) as HTMLElement | null)?.focus() }
+  }
+
   function primary() {
     if (!step?.action) return
     if (step.action === 'RUN_CHECK') doCheck()
@@ -183,7 +220,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
         <StatusPill status={c.status} />
       </div>
       <p className="lead" style={{ marginTop: 4 }}>
-        <strong>{c.claimant_name ?? 'Claimant name not yet extracted'}</strong>
+        <strong>{c.claimant_name ?? (c.product === 'GPF' ? 'Subscriber name not yet read' : 'Claimant name not yet extracted')}</strong>
         {c.product === 'GPF' && c.intake?.gpf_kind ? ` · ${gpfKindLabel(String(c.intake.gpf_kind))}` : ''}
         {c.product !== 'GPF' && c.case_type && <> · <span title={CASE_TYPE_SOURCE_WORDS[c.case_type_source ?? ''] ?? ''}>{caseTypeLabel(c.case_type)}{c.case_type_source === 'DETECTED' ? ' (detected)' : ''}</span></>}
         {' · '}{c.department_name}
@@ -198,7 +235,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           <p className="next-text">{step.text}</p>
           {lastAg && deptSide && (c.status === 'RETURNED' || c.status === 'DOCS_REQUESTED' || c.status === 'REJECTED') && (
             <p className="next-text" style={{ marginTop: 8, color: 'var(--ink)' }}>
-              <strong>Remarks of the Accountant General:</strong> “{lastAg.remark}” <span className="muted">— {lastAg.actor_name}, {lastAg.at.replace('T', ' ').slice(0, 16)}</span>
+              <strong>Remarks of the Accountant General:</strong> “{lastAg.remark}” <span className="muted">— {lastAg.actor_name}, {fmtDateTime(lastAg.at)}</span>
             </p>
           )}
           {missingDocs.length > 0 && (
@@ -217,7 +254,19 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
         )}
       </div>
 
-      {error && <div className="banner bad" style={{ marginTop: 'var(--s3)' }}><span className="mark">!</span><div className="sub">{error}</div></div>}
+      {error && <div className="banner bad" role="alert" style={{ marginTop: 'var(--s3)' }}><span className="mark">!</span><div className="sub">{error}</div></div>}
+      {pendingReplace && (
+        <div className="banner warn" role="alertdialog" aria-label="Confirm the replacement" style={{ marginTop: 'var(--s3)' }}>
+          <span className="mark" aria-hidden="true">!</span>
+          <div className="sub">
+            Replace <strong>{pendingReplace.doc.filename}</strong> with <strong>{pendingReplace.file.name}</strong>? The earlier paper stays on file, marked replaced, and is no longer read.
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <button className="primary" disabled={busy} onClick={() => { const r = pendingReplace; setPendingReplace(null); doReplace(r.doc.id, r.file) }}>Replace the document</button>
+              <button disabled={busy} onClick={() => setPendingReplace(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* For the AG: what the department wrote when it resubmitted. */}
       {c.officer_remark && !deptSide && m.side === 'ag' && (
@@ -229,24 +278,27 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
 
       <div className="detail-grid">
         <div style={{ minWidth: 0 }}>
-          <div className="tabs" role="tablist">
-            <button className="tab" role="tab" aria-selected={tab === 'Documents'} onClick={() => setTab('Documents')}>
+          <div className="tabs" role="tablist" onKeyDown={tabKeys}>
+            <button className="tab" role="tab" id={tabId('case-tab', 'Documents')} aria-controls={tabId('case-panel', 'Documents')} tabIndex={tab === 'Documents' ? 0 : -1}
+                    aria-selected={tab === 'Documents'} onClick={() => setTab('Documents')}>
               Documents <span className="count">{c.documents.length}</span>
             </button>
             {!deptView && (
-              <button className="tab" role="tab" aria-selected={tab === 'AI findings'} onClick={() => setTab('AI findings')}>
+              <button className="tab" role="tab" id={tabId('case-tab', 'AI findings')} aria-controls={tabId('case-panel', 'AI findings')} tabIndex={tab === 'AI findings' ? 0 : -1}
+                      aria-selected={tab === 'AI findings'} onClick={() => setTab('AI findings')}>
                 {c.product === 'GPF' ? 'GP Fund examination' : 'AI findings'} {report && <span className={`count${findingsHot ? ' hot' : ''}`}>{findings}</span>}
               </button>
             )}
-            <button className="tab" role="tab" aria-selected={tab === 'Remarks & history'} onClick={() => setTab('Remarks & history')}>
+            <button className="tab" role="tab" id={tabId('case-tab', 'Remarks & history')} aria-controls={tabId('case-panel', 'Remarks & history')} tabIndex={tab === 'Remarks & history' ? 0 : -1}
+                    aria-selected={tab === 'Remarks & history'} onClick={() => setTab('Remarks & history')}>
               Remarks and history <span className="count">{remarks}</span>
             </button>
           </div>
 
           {tab === 'Documents' && (
-            <div className="card" style={{ marginTop: 'var(--s4)' }}>
+            <div className="card" role="tabpanel" id={tabId('case-panel', 'Documents')} aria-labelledby={tabId('case-tab', 'Documents')} style={{ marginTop: 'var(--s4)' }}>
               <DocumentList caseId={c.id} documents={c.documents} currentSubmission={c.submission_no} busy={busy}
-                            onReplace={c.allowed_actions.includes('ADD_DOCS') ? (d, f) => doReplace(d.id, f) : undefined} />
+                            onReplace={c.allowed_actions.includes('ADD_DOCS') ? (d, f) => setPendingReplace({ doc: d, file: f }) : undefined} />
               {c.allowed_actions.includes('ADD_DOCS') && (
                 <div className="row" style={{ gap: 12, marginTop: 'var(--s4)', alignItems: 'center' }}>
                   <button onClick={() => fileInput.current?.click()} disabled={busy}>Add documents</button>
@@ -257,11 +309,13 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           )}
 
           {tab === 'AI findings' && !deptView && c.product === 'GPF' && (
-            <GpfExamination c={c} busy={busy} onVerify={doCheck} onChanged={load} offerVerify={step.action !== 'RUN_CHECK'} />
+            <div role="tabpanel" id={tabId('case-panel', 'AI findings')} aria-labelledby={tabId('case-tab', 'AI findings')}>
+              <GpfExamination c={c} busy={busy} onVerify={doCheck} onChanged={load} offerVerify={step.action !== 'RUN_CHECK'} />
+            </div>
           )}
 
           {tab === 'AI findings' && !deptView && c.product !== 'GPF' && (
-            <div style={{ marginTop: 'var(--s4)' }}>
+            <div role="tabpanel" id={tabId('case-panel', 'AI findings')} aria-labelledby={tabId('case-tab', 'AI findings')} style={{ marginTop: 'var(--s4)' }}>
               {!verifying && c.submission_no > 1 && (
                 <div style={{ marginBottom: 'var(--s4)' }}>
                   <RoundsPanel caseId={c.id} refreshKey={`${c.updated_at}${run?.state}`} onlyLatest agView />
@@ -271,7 +325,17 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
               {!verifying && report && run && (
                 <CaseFindings report={report} runId={run.run_id} canDispose={canReview} onSettled={load} />
               )}
-              {!verifying && !report && (
+              {!verifying && !report && reportError && (
+                <div className="card">
+                  <div className="empty" role="alert">
+                    <strong>Could not load the findings.</strong>
+                    <div className="help" style={{ marginTop: 6 }}>{reportError}</div>
+                    <div style={{ marginTop: 'var(--s3)' }}><button className="primary" onClick={() => load()} disabled={busy}>Retry</button></div>
+                    <div className="help" style={{ marginTop: 6 }}>The case was verified; only the reading of its findings failed just now. No re-verification is needed.</div>
+                  </div>
+                </div>
+              )}
+              {!verifying && !report && !reportError && (
                 <div className="card">
                   <div className="empty">
                     {run?.state === 'failed'
@@ -291,7 +355,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           )}
 
           {tab === 'Remarks & history' && (
-            <div className="card" style={{ marginTop: 'var(--s4)' }}>
+            <div className="card" role="tabpanel" id={tabId('case-panel', 'Remarks & history')} aria-labelledby={tabId('case-tab', 'Remarks & history')} style={{ marginTop: 'var(--s4)' }}>
               <HistoryTimeline events={c.events} highlightAg={deptSide} />
             </div>
           )}
@@ -304,7 +368,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
         </div>
 
         <aside className="stack">
-          <ActionPanel actions={c.allowed_actions} hasIssues={hasIssues} busy={busy} onAct={doAct}
+          <ActionPanel actions={c.allowed_actions} hasIssues={hasIssues} busy={busy} onAct={doAct} status={c.status}
                        checklist={(report?.checklist?.items ?? []).map(i => ({ id: i.id, requirement: i.requirement, status: i.status }))}
                        open={pendingAction} onOpenChange={setPendingAction} />
           {canReview && m.side === 'ag' && !c.allowed_actions.some(a => PANEL_ACTIONS.includes(a)) && (
@@ -338,8 +402,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
                     <td style={{ border: 0, padding: '3px 0', color: 'var(--amber)' }}>{caseTypeLabel(c.detected_case_type)}</td></tr>
               )}
               <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Pension section</td><td style={{ border: 0, padding: '3px 0' }}>{c.pension_section ?? 'Legacy'}</td></tr>
-              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Filed</td><td style={{ border: 0, padding: '3px 0' }}>{c.created_at.replace('T', ' ').slice(0, 16)}</td></tr>
-              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Last change</td><td style={{ border: 0, padding: '3px 0' }}>{c.updated_at.replace('T', ' ').slice(0, 16)}</td></tr>
+              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Filed</td><td style={{ border: 0, padding: '3px 0' }}>{fmtDateTime(c.created_at)}</td></tr>
+              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Last change</td><td style={{ border: 0, padding: '3px 0' }}>{fmtDateTime(c.updated_at)}</td></tr>
               <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Submission</td><td style={{ border: 0, padding: '3px 0' }}>submission {c.submission_no}</td></tr>
               <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Verifications</td><td style={{ border: 0, padding: '3px 0' }}>{c.runs.length}</td></tr>
             </tbody></table>
@@ -367,20 +431,33 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
   const [error, setError] = useState<string | null>(null)
   const [frameHeight, setFrameHeight] = useState(1200)
   const [frameSigned, setFrameSigned] = useState(false)
+  const [signError, setSignError] = useState<string | null>(null)
+  const [signTry, setSignTry] = useState(0)
+  const [frameKey, setFrameKey] = useState(0)
+  const frame = useRef<HTMLIFrameElement>(null)
   const reading = c.status === 'AI_CHECKING'
   const hasFrame = !!state?.embed_url
+  useMediaTokenVersion()                                  // the page being read carries the media token (F10)
   // The framed module is behind the portal's sign-in (5 Oct 2026): a frame cannot carry the
   // session token, so the server sets a GP-Fund-only cookie first, renewed well inside its 2 hours.
+  // A failed sign-in says so and offers Retry (F12) instead of "Opening…" for ever.
   useEffect(() => {
     if (!hasFrame) return
     let live = true
     const sign = () => post('/api/v2/auth/gpf-session')
-      .then(() => { if (live) setFrameSigned(true) })
-      .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)) })
+      .then(() => { if (live) { setFrameSigned(true); setSignError(null) } })
+      .catch(e => { if (live) { setFrameSigned(false); setSignError(e instanceof Error ? e.message : String(e)) } })
     sign()
     const renew = window.setInterval(sign, 90 * 60_000)
     return () => { live = false; window.clearInterval(renew) }
-  }, [hasFrame])
+  }, [hasFrame, signTry])
+  // The frame says its own sign-in lapsed (auth/frameActivity.ts): sign it again and reload it.
+  useEffect(() => onGpfExpired(() => { setFrameSigned(false); setSignTry(n => n + 1); setFrameKey(k => k + 1) }), [])
+  // The frame's window is registered while it is on screen, so its activity counts (F9).
+  useEffect(() => {
+    if (!frameSigned) return
+    return registerGpfFrame(frame.current?.contentWindow)
+  }, [frameSigned, frameKey])
   // The framed module reports its height, so the case screen scrolls as one page.
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -392,17 +469,23 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
     return () => window.removeEventListener('message', onMessage)
   }, [])
   useEffect(() => {
-    let live = true
-    const tick = () => gpfState(c.id).then(s => { if (!live) return; setState(s); setError(null); if (s.status !== c.status) onChanged() })
-      .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)) })
+    // One request at a time, the next scheduled only when the last has answered (F12): a fixed
+    // 1.5 s interval on a slow link piled requests up and showed answers out of order.
+    let live = true, timer: ReturnType<typeof setTimeout> | null = null, n = 0
+    const tick = () => {
+      const mine = ++n
+      gpfState(c.id)
+        .then(s => { if (!live || mine !== n) return; setState(s); setError(null); if (s.status !== c.status) onChanged() })
+        .catch(e => { if (live && mine === n) setError(e instanceof Error ? e.message : String(e)) })
+        // While the module reads, the job's page count is the progress; afterwards, a slow poll
+        // follows the officer's disposal in the frame back onto the case.
+        .finally(() => { if (live) timer = setTimeout(tick, reading ? 1500 : 8000) })
+    }
     tick()
-    // While the module reads, the job's page count is the progress; afterwards, a slow poll
-    // follows the officer's disposal in the frame back onto the case.
-    const t = setInterval(tick, reading ? 1500 : 8000)
-    return () => { live = false; clearInterval(t) }
+    return () => { live = false; if (timer) clearTimeout(timer) }
   }, [c.id, c.status, reading])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error && !state) return <div className="banner bad" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">{error}</div></div>
+  if (error && !state) return <div className="banner bad" role="alert" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">Could not reach the GP Fund examination. {error} <span className="muted">Trying again…</span></div></div>
   if (!state) return <div className="skeleton" style={{ height: 120, marginTop: 'var(--s4)' }} />
   if (!state.module_up && !state.gpf_case_id) {
     return <div className="banner warn" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">The GP Fund module is not running. Start it on the server (<code>./GP/run.sh</code>) and try again.</div></div>
@@ -461,8 +544,11 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
             case and its own intake, outside the portal's register and workflow. The frame is the way in. */}
       </div>
       {frameSigned
-        ? <iframe className="gpf-frame" src={state.embed_url} title="GP Fund examination" style={{ height: frameHeight }} />
-        : <div className="card"><div className="skeleton" style={{ height: 120 }} /><div className="muted" style={{ marginTop: 8 }}>Opening the GP Fund module…</div></div>}
+        ? <iframe key={frameKey} ref={frame} className="gpf-frame" src={state.embed_url} title="GP Fund examination" style={{ height: frameHeight }} />
+        : signError
+          ? <div className="banner bad" role="alert"><span className="mark">!</span>
+              <div className="sub">Could not open the GP Fund module. {signError} <button type="button" style={{ marginLeft: 8 }} onClick={() => setSignTry(n => n + 1)}>Retry</button></div></div>
+          : <div className="card"><div className="skeleton" style={{ height: 120 }} /><div className="muted" style={{ marginTop: 8 }}>Opening the GP Fund module…</div></div>}
     </div>
   )
 }

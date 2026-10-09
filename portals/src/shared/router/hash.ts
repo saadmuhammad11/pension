@@ -14,10 +14,19 @@ function current(): string {
   return raw.startsWith('/') ? raw : '/' + raw
 }
 
-/** How many hash changes this page has seen: zero means Back would leave the portal. */
+/** How many hash changes this page has seen that left a history entry behind them: zero means
+ *  Back would leave the portal. A `replace` navigation (the move to the home page after a
+ *  deep-link sign-in, a case settling on its product's address) leaves no entry, so it is not
+ *  counted; counting it sent "Back to the register" out of the portal (frontend review F17). */
 let navigations = 0
-if (typeof window !== 'undefined') window.addEventListener('hashchange', () => { navigations += 1 })
+let replacing = 0
+if (typeof window !== 'undefined') window.addEventListener('hashchange', () => {
+  if (replacing > 0) { replacing -= 1; return }
+  navigations += 1
+})
 export const inAppNavigations = () => navigations
+/** Tests only: forget what this page has seen. */
+export const _resetNavigations = () => { navigations = 0; replacing = 0 }
 
 /** The path after `#`, re-rendered on every change. Always begins with `/`. */
 export function useHashPath(): string {
@@ -32,8 +41,12 @@ export function useHashPath(): string {
 
 export function navigate(to: string, { replace = false } = {}): void {
   const target = '#' + (to.startsWith('/') ? to : '/' + to)
-  if (replace) window.location.replace(target)
-  else window.location.hash = target
+  if (replace) {
+    // The hashchange this fires must not count as a step Back could retrace (see above); a
+    // replace to the address already shown fires none, so only a real change is expected.
+    if (window.location.hash !== target) replacing += 1
+    window.location.replace(target)
+  } else window.location.hash = target
 }
 
 /** `match('/cases/:id', '/cases/abc')` → `{ id: 'abc' }`; `null` where the shapes differ. */

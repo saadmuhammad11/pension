@@ -9,9 +9,26 @@ GPF-O14).
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
+import threading
+import time
 from pathlib import Path
 from typing import Optional
+
+log = logging.getLogger(__name__)
+
+#: Set when the saved register could not be read (review C4, 9 Oct 2026): the damaged file is
+#: kept beside its path as ``doa.json.corrupt-<stamp>``, the provisional register stays in
+#: memory, and nothing is persisted until an operator restores a good file -- a sample register
+#: silently written over a final one would make an unlisted signatory's hard stop disappear.
+DAMAGED: Optional[Path] = None
+_lock = threading.RLock()
+
+
+class RegisterDamaged(RuntimeError):
+    """The saved register is unreadable; changes are refused until it is restored."""
 
 # (regex, replacement) — expand common designation abbreviations before matching.
 _DOA_ABBR = [
@@ -85,33 +102,65 @@ DOA_PATH: Optional[Path] = None
 
 
 def load_register(path: Optional[Path] = None) -> bool:
-    """Replace the provisional register with the saved one, where a saved one exists."""
+    """Replace the provisional register with the saved one, where a saved one exists.
+
+    A file that exists but cannot be read (half-written, edited by hand, wrong shape) is moved
+    aside as ``<name>.corrupt-<stamp>``, logged at error, and remembered in ``DAMAGED``: the
+    register then refuses every change (``RegisterDamaged``) until the file is restored.
+    """
+    global DAMAGED
     target = path or DOA_PATH
     if not target or not Path(target).is_file():
         return False
+    target = Path(target)
     try:
-        saved = json.loads(Path(target).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        saved = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(saved, dict) or "authorities" not in saved:
+            raise ValueError("not a register: no 'authorities'")
+    except (OSError, ValueError) as exc:
+        aside = target.with_name(target.name + ".corrupt-" + time.strftime("%Y%m%d-%H%M%S"))
+        try:
+            target.replace(aside)
+        except OSError:
+            aside = target
+        DAMAGED = aside
+        log.error("the signatory register %s could not be read (%s); kept as %s; the register refuses changes "
+                  "until a good file is restored", target, exc, aside)
         return False
-    if not isinstance(saved, dict) or "authorities" not in saved:
-        return False
-    DOA.clear()
-    DOA.update(saved)
+    with _lock:
+        DOA.clear()
+        DOA.update(saved)
+    DAMAGED = None
     return True
 
 
+def register_problem() -> Optional[str]:
+    """What is wrong with the saved register, for a health answer; None when all is well."""
+    if DAMAGED is None:
+        return None
+    return f"the saved signatory register could not be read; kept as {DAMAGED.name}; changes are refused until it is restored"
+
+
 def _persist() -> None:
-    """Write the register after every change; a half-written file never replaces a whole one."""
+    """Write the register after every change; a half-written file never replaces a whole one.
+
+    Refused while ``DAMAGED`` is set. Written to a temp name of its own, fsync'd, then renamed
+    into place; callers hold ``_lock`` so two changes cannot interleave their writes."""
     if not DOA_PATH:
         return
+    if DAMAGED is not None:
+        raise RegisterDamaged(register_problem() or "the saved register is damaged")
     target = Path(DOA_PATH)
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(json.dumps(DOA, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(DOA, ensure_ascii=False, indent=1))
+        fh.flush()
+        os.fsync(fh.fileno())
     tmp.replace(target)
 
 
-def doa_set_specimen(sig_id: str, image_ref: str, *, by: str = "", at: str = "") -> bool:
+def _doa_set_specimen(sig_id: str, image_ref: str, *, by: str = "", at: str = "") -> bool:
     """Record a specimen signature against a signatory (spec §8.2). Register only."""
     _, g = doa_find_signatory(sig_id)
     if not g:
@@ -121,7 +170,7 @@ def doa_set_specimen(sig_id: str, image_ref: str, *, by: str = "", at: str = "")
     return True
 
 
-def doa_add_signatory(authority_id: str, post: str, *, name: str = "", may_for: bool = False,
+def _doa_add_signatory(authority_id: str, post: str, *, name: str = "", may_for: bool = False,
                       powers: str = "") -> Optional[dict]:
     a = next((x for x in DOA["authorities"] if x["id"] == authority_id), None)
     if not a:
@@ -133,7 +182,7 @@ def doa_add_signatory(authority_id: str, post: str, *, name: str = "", may_for: 
     return sig
 
 
-def doa_finalize(published_by: str = "", published_at: str = "") -> None:
+def _doa_finalize(published_by: str = "", published_at: str = "") -> None:
     """Mark the register final. From here, an unlisted signatory is a hard stop (§8.3)."""
     DOA["status"] = "final"
     DOA["publishedBy"] = published_by
@@ -225,3 +274,18 @@ DOA = {
               "mayFor": False, "powers": "Confirms GP Fund account, forwards to AG", "specimen": None}]},
     ],
 }
+
+
+def _locked(inner):
+    def wrapped(*a, **k):
+        with _lock:
+            return inner(*a, **k)
+    wrapped.__name__ = inner.__name__[1:]
+    wrapped.__doc__ = inner.__doc__
+    return wrapped
+
+
+# Every change to the register and its write to disk happen under one lock (review C4).
+doa_set_specimen = _locked(_doa_set_specimen)
+doa_add_signatory = _locked(_doa_add_signatory)
+doa_finalize = _locked(_doa_finalize)

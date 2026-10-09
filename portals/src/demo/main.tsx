@@ -220,7 +220,7 @@ async function scenario(): Promise<void> {
 }
 
 async function forever(): Promise<void> {
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     reset()
     try { await scenario() }

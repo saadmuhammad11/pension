@@ -60,7 +60,13 @@ def _on_event(conn, case_id, action, entry, payload, actor) -> None:
         conn.execute("UPDATE case_rounds SET submitted_at = ?, submitted_by = ? "
                      "WHERE case_id = ? AND submission_no = ? AND closed_at IS NULL",
                      (entry["at"], by, case_id, n))
-    if action in SEND_BACK:
+    # The Deputy AG's override moves a case to a status of their choosing; for the round records it
+    # counts by where it lands (audit 7 Oct 2026, N28): sent back opens a request for the next
+    # round, approved or rejected closes the round.
+    to_status = entry.get("to_status")
+    send_back = action in SEND_BACK or (action == "OVERRIDE" and to_status in ("RETURNED", "DOCS_REQUESTED"))
+    closing = action in CLOSING or (action == "OVERRIDE" and to_status in ("RETURNED", "DOCS_REQUESTED", "APPROVED", "REJECTED"))
+    if send_back:
         conn.execute(
             "INSERT INTO case_round_requests(id, case_id, from_submission_no, for_submission_no, event_id, "
             "action, items_json, remark, requested_by, requested_by_name, run_id, at) "
@@ -69,7 +75,7 @@ def _on_event(conn, case_id, action, entry, payload, actor) -> None:
              json.dumps(request_items(action, payload), ensure_ascii=False), entry.get("remark") or "",
              by, getattr(actor, "display_name", None) or ("System (AI verification)" if actor is None else None),
              entry.get("run_id"), entry["at"]))
-    if action in CLOSING:
+    if closing:
         ensure_round(conn, case_id, n, via="BACKFILL", by=None, at=entry["at"])
         conn.execute("UPDATE case_rounds SET closed_at = ?, closed_action = ? "
                      "WHERE case_id = ? AND submission_no = ? AND closed_at IS NULL",

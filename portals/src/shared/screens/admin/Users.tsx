@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { createUser, disableUser, enableUser, listUsers, resetPassword, type AdminUser } from '../../api/admin'
 import { departments, type Department } from '../../api/cases'
+import { useSession } from '../../auth/AuthProvider'
+import { PasswordField } from '../../components/PasswordField'
 
 const ROLE_WORDS: Record<string, string> = {
   DEPT_OFFICER: 'DDO', AG_REVIEWER: 'AG Reviewer', AG_DAG: 'Deputy AG (Pension)', ADMIN: 'Administrator',
@@ -18,7 +20,9 @@ export function Users() {
   // Disable and reset used to go through window.prompt: a password typed into a browser prompt is
   // shown in clear, cannot be a password field, and the prompt is blocked by some browsers
   // (audit 6 Oct 2026, L9). They are ordinary forms now, with the password masked.
-  const [ask, setAsk] = useState<{ kind: 'disable' | 'reset'; user: AdminUser } | null>(null)
+  const [ask, setAsk] = useState<{ kind: 'disable' | 'reset' | 'enable'; user: AdminUser } | null>(null)
+  // The shortest password the server accepts (one rule, told at sign-in; F14).
+  const { passwordMinLength } = useSession()
   const [answer, setAnswer] = useState('')
   const deptName = useMemo(() => Object.fromEntries(depts.map(d => [d.code, d.name])), [depts])
   const shown = useMemo(() => {
@@ -55,8 +59,9 @@ export function Users() {
     if (!ask) return
     const { kind, user } = ask
     const value = answer
+    if (kind === 'reset' && value.length < passwordMinLength) return
     setAsk(null); setAnswer('')
-    run(() => kind === 'disable' ? disableUser(user.id, value) : resetPassword(user.id, value))
+    run(() => kind === 'disable' ? disableUser(user.id, value) : kind === 'enable' ? enableUser(user.id) : resetPassword(user.id, value))
   }
 
   return (
@@ -75,15 +80,25 @@ export function Users() {
       </div>
 
       {ask && (
-        <form className="card stack" style={{ marginTop: 'var(--s3)' }} onSubmit={answerAsk} aria-label={ask.kind === 'disable' ? 'Disable account' : 'Reset password'}>
-          <h3 style={{ margin: 0 }}>{ask.kind === 'disable' ? `Disable ${ask.user.username}` : `New password for ${ask.user.username}`}</h3>
-          {ask.kind === 'disable'
-            ? <div className="field"><label className="label" htmlFor="ask-reason">Reason (goes on the audit trail)</label>
-                <input id="ask-reason" autoFocus autoComplete="off" value={answer} onChange={e => setAnswer(e.target.value)} required /></div>
-            : <div className="field"><label className="label" htmlFor="ask-password">Password (8+ characters; the officer is asked to change it)</label>
-                <input id="ask-password" type="password" autoFocus autoComplete="new-password" value={answer} onChange={e => setAnswer(e.target.value)} required minLength={8} /></div>}
+        <form className="card stack" style={{ marginTop: 'var(--s3)' }} onSubmit={answerAsk}
+              aria-label={ask.kind === 'disable' ? 'Disable account' : ask.kind === 'enable' ? 'Enable account' : 'Reset password'}>
+          <h3 style={{ margin: 0 }}>{ask.kind === 'disable' ? `Disable ${ask.user.username}` : ask.kind === 'enable' ? `Enable ${ask.user.username}?` : `New password for ${ask.user.username}`}</h3>
+          {ask.kind === 'disable' && (
+            <div className="field"><label className="label" htmlFor="ask-reason">Reason (goes on the audit trail)</label>
+              <input id="ask-reason" autoFocus autoComplete="off" value={answer} onChange={e => setAnswer(e.target.value)} required /></div>
+          )}
+          {/* Enabling is confirmed (F14): the account can sign in again the moment it is pressed. */}
+          {ask.kind === 'enable' && (
+            <p className="help" style={{ margin: 0 }}>{ask.user.display_name} will be able to sign in again at once. This is audited.</p>
+          )}
+          {ask.kind === 'reset' && (
+            <PasswordField id="ask-password" label="Password (the officer is asked to change it)" value={answer} onChange={setAnswer}
+                           minLength={passwordMinLength} username={ask.user.username} autoFocus />
+          )}
           <div className="row" style={{ gap: 'var(--s2)' }}>
-            <button className="primary" type="submit" disabled={busy}>{ask.kind === 'disable' ? 'Disable account' : 'Set password'}</button>
+            <button className="primary" type="submit" disabled={busy || (ask.kind === 'reset' && answer.length < passwordMinLength)}>
+              {ask.kind === 'disable' ? 'Disable account' : ask.kind === 'enable' ? 'Enable account' : 'Set password'}
+            </button>
             <button type="button" onClick={() => { setAsk(null); setAnswer('') }}>Cancel</button>
           </div>
         </form>
@@ -107,7 +122,7 @@ export function Users() {
                     {u.active
                       ? <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
                                 onClick={() => { setAsk({ kind: 'disable', user: u }); setAnswer('') }}>Disable</button>
-                      : <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }} onClick={() => run(() => enableUser(u.id))}>Enable</button>}
+                      : <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }} onClick={() => { setAsk({ kind: 'enable', user: u }); setAnswer('') }}>Enable</button>}
                     {' '}
                     <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
                             onClick={() => { setAsk({ kind: 'reset', user: u }); setAnswer('') }}>Reset password</button>
@@ -135,9 +150,9 @@ export function Users() {
               </select>
               <div className="hint">The officer sees only this department's cases.</div></div>
           )}
-          <div className="field"><label className="label" htmlFor="nu-password">Password (8+ characters)</label>
-            <input id="nu-password" type="password" autoComplete="new-password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required minLength={8} /></div>
-          <button className="primary" type="submit" disabled={busy}>Create user</button>
+          <PasswordField id="nu-password" label="Password" value={form.password} onChange={v => setForm({ ...form, password: v })}
+                         minLength={passwordMinLength} username={form.username} />
+          <button className="primary" type="submit" disabled={busy || form.password.length < passwordMinLength}>Create user</button>
         </form>
       </div>
     </div>

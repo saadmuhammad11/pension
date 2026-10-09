@@ -4,15 +4,17 @@
  *  do. Remarks are required by the rules in ACTION_META and again by the server. The parent can
  *  open an action from its own big button (`open`). */
 import { useEffect, useState } from 'react'
-import { ACTION_META, type CaseAction, type CaseStatus, type RequestItem } from '../api/cases'
+import { ACTION_META, STATUS_META, type CaseAction, type CaseStatus, type RequestItem } from '../api/cases'
 
 const STATUSES: CaseStatus[] = ['DRAFT', 'AI_CHECKED', 'FORWARDED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'RETURNED', 'DOCS_REQUESTED']
 const ORDER: CaseAction[] = ['FORWARD', 'APPROVE', 'REQUEST_DOCS', 'RETURN', 'REJECT', 'OVERRIDE']
 
 export function ActionPanel(
-  { actions, hasIssues, busy, onAct, open: openProp, onOpenChange, checklist = [] }:
+  { actions, hasIssues, busy, onAct, open: openProp, onOpenChange, checklist = [], status }:
   { actions: CaseAction[]
     hasIssues: boolean
+    /** The case's present status, so the override says what it changes from (F14). */
+    status?: CaseStatus
     busy: boolean
     onAct: (action: CaseAction, remark: string, toStatus?: CaseStatus, items?: RequestItem[]) => Promise<void>
     open?: CaseAction | null
@@ -85,10 +87,13 @@ export function ActionPanel(
           {meta!.prompt && <p className="help" style={{ margin: '0 0 8px' }}>{meta!.prompt}</p>}
           {open === 'OVERRIDE' && (
             <div className="field" style={{ marginBottom: 8 }}>
-              <label className="label">Set the case to</label>
-              <select value={toStatus} onChange={e => setToStatus(e.target.value as CaseStatus)}>
-                {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+              <label className="label" htmlFor="override-to">Set the case to</label>
+              <select id="override-to" value={toStatus} onChange={e => setToStatus(e.target.value as CaseStatus)}>
+                {STATUSES.map(s => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
               </select>
+              <div className="help" style={{ marginTop: 4 }}>
+                Setting from {status ? STATUS_META[status].label : 'the present status'} to {STATUS_META[toStatus].label}. This is audited.
+              </div>
             </div>
           )}
           {asking && (
@@ -106,13 +111,13 @@ export function ActionPanel(
                 </div>
               )}
               <div className="row" style={{ gap: 8, marginTop: 6 }}>
-                <input value={other} onChange={e => setOther(e.target.value)} placeholder="Another document, in your words" style={{ flex: 2 }} />
-                <input value={otherPages} onChange={e => setOtherPages(e.target.value)} placeholder="Pages, e.g. 5, 6" style={{ flex: 1 }} />
+                <input value={other} onChange={e => setOther(e.target.value)} placeholder="Another document, in your words" aria-label="Another document, in your words" style={{ flex: 2 }} />
+                <input value={otherPages} onChange={e => setOtherPages(e.target.value)} placeholder="Pages, e.g. 5, 6" aria-label="Pages concerned" style={{ flex: 1 }} />
               </div>
               <div className="help" style={{ marginTop: 4 }}>The next submission is checked against this list, and only the papers it adds are read again.</div>
             </div>
           )}
-          <textarea rows={4} value={remark} onChange={e => { setRemark(e.target.value); setTouched(true) }} autoFocus
+          <textarea rows={4} value={remark} onChange={e => { setRemark(e.target.value); setTouched(true) }} autoFocus aria-label="Your remark"
                     placeholder={required ? `Your remark (required${minLen > 3 ? `, at least ${minLen} characters` : ''})…` : 'Your remark (optional)…'} />
           {required && !ready && touched && <div className="help" style={{ marginTop: 4 }}>{minLen - remark.trim().length} more character{minLen - remark.trim().length === 1 ? '' : 's'} needed.</div>}
           {error && <div className="banner bad" style={{ marginTop: 8 }}><span className="mark">!</span><div className="sub">{error}</div></div>}

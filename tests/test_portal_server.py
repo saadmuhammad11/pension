@@ -103,3 +103,62 @@ class PortalServer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class GpfProxyPaths(PortalServer):
+    """The path under /gpf/ is normalised once and used for both the check and the forwarded
+    request; dot segments and escapes are refused (frontend review F3, 9 Oct 2026)."""
+
+    class _NoModule:
+        """A session whose every request fails to connect, as with nothing on 127.0.0.1:1."""
+        def request(self, *a, **k):
+            import aiohttp
+
+            class _Ctx:
+                async def __aenter__(self_inner):
+                    raise aiohttp.ClientConnectionError("no module")
+
+                async def __aexit__(self_inner, *exc):
+                    return False
+            return _Ctx()
+
+    def _signed_in(self) -> None:
+        async def yes(request):
+            return "ao|Officer"
+        self.portal.gpf_signed_in = yes
+        self.portal.session = self._NoModule()
+
+    def test_dot_segments_escapes_and_empty_segments_are_refused(self) -> None:
+        g = portal_server.gpf_subpath
+        seen_checks: list = []
+
+        async def check(request, sub):
+            seen_checks.append(sub)
+            return None
+        for bad in ("api/cases/nonexistent/../REAL/dispose", "api/cases/%2e%2e/REAL/dispose", "api/cases//REAL/dispose",
+                    "api/cases/a%252e/dispose", "api/cases/./REAL/dispose", "api/cases/REAL%5c../dispose", "api/cases/x%00/y"):
+            self.assertIsNone(g(bad), bad)
+        # Starlette hands the route the path decoded once, so what reaches gpf_subpath for
+        # "a%252e" is "a%2e" -- an escape left over, refused.
+        self.assertEqual(g("api/cases/abc/dispose"), "/api/cases/abc/dispose")
+        # Through the server: an escape the browser would not collapse reaches the route and is refused
+        # before the action check or any request upstream (the fake session would answer 502).
+        self._signed_in()
+        self.portal.gpf_act_refused = check
+        for bad in ("api/cases/%2e%2e/REAL/dispose", "api/cases/REAL%5c../dispose", "api/cases/x%00/y"):
+            r = self.client.post(f"/gpf/{bad}", json={})
+            self.assertEqual(r.status_code, 400, bad)
+            self.assertIn("not a valid GP Fund path", r.text)
+        self.assertEqual(seen_checks, [])                         # refused before the action check
+
+    def test_the_normalised_path_is_what_the_check_and_the_upstream_see(self) -> None:
+        self._signed_in()
+        seen = {}
+
+        async def check(request, sub):
+            seen["check"] = sub
+            return None
+        self.portal.gpf_act_refused = check
+        r = self.client.post("/gpf/api/cases/ab%20c/dispose", json={})
+        self.assertEqual(seen["check"], "/api/cases/ab c/dispose")
+        self.assertEqual(r.status_code, 502)                  # the path was accepted; no module behind the fake session

@@ -24,10 +24,13 @@ class NoBrowserPrompts(unittest.TestCase):
     def test_the_reset_asks_for_the_password_in_a_password_field(self) -> None:
         users = (SRC / "shared" / "screens" / "admin" / "Users.tsx").read_text()
         form = users[users.index("{ask && ("):users.index("<div className=\"side-grid\"")]
-        password_input = form[form.index('<input id="ask-password"'):]
-        password_input = password_input[:password_input.index("/>")]
-        for attr in ('type="password"', 'autoComplete="new-password"', "minLength={8}", "required"):
-            self.assertIn(attr, password_input)
+        # The password is typed into the shared PasswordField (frontend review F14, 9 Oct 2026): a
+        # masked input with a Show toggle and the server's minimum length, never a browser prompt.
+        self.assertIn('<PasswordField id="ask-password"', form)
+        field = (SRC / "shared" / "components" / "PasswordField.tsx").read_text()
+        self.assertIn("'password'", field)
+        self.assertIn("autoComplete", field)
+        self.assertIn("minLength", field)
         reason_input = form[form.index('<input id="ask-reason"'):]
         self.assertIn("required", reason_input[:reason_input.index("/>")])
         self.assertIn("resetPassword(user.id, value)", users)

@@ -15,6 +15,7 @@
  *  either on one of the unrecognised pages (written up there) or it is waived. Every action is
  *  recorded against the officer; the engine's reading is kept beside it.
  */
+import { fmtDateTime } from '../fmt'
 import { useState } from 'react'
 import { postChecklistAction, type CalculationGate, type Role } from '../api'
 import { statusLabel } from '../labels'
@@ -136,7 +137,7 @@ export function ChecklistPanel(
                       <button key={p} className="chip" style={{ cursor: 'pointer' }}
                               onClick={() => onPage(p, n.name)}>p.{p}</button>))}</td>
                     <td className="muted" style={{ width: 230, fontSize: 'var(--t-small)' }}>
-                      {n.officer} · {n.at.replace('T', ' ')}
+                      {n.officer} · {fmtDateTime(n.at)}
                       {mayDecide && <> · <button className="ghost" style={{ padding: 0, fontSize: 'var(--t-small)' }}
                         onClick={() => act({ action: 'CLEAR', name_id: n.name_id, officer, role }).catch(() => {})}>Undo</button></>}
                     </td>
@@ -207,7 +208,7 @@ function ItemRow(
         <td style={{ fontSize: 'var(--t-small)' }}>
           {settled ? (<>
             <div className="muted">{settled.action === 'WAIVE' ? 'Approved' : 'Written up'} by {settled.officer}</div>
-            <div className="muted">{settled.at.replace('T', ' ')}</div>
+            <div className="muted">{fmtDateTime(settled.at)}</div>
             <button className="ghost" disabled={busy} style={{ padding: 0, fontSize: 'var(--t-small)' }}
                     onClick={() => run(onUndo)}>Undo</button>
           </>) : canWaive && !waiving ? (

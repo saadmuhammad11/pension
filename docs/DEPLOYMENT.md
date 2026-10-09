@@ -509,7 +509,15 @@ reference and training.
 | Config + secrets | `/etc/pension/`, `/etc/nginx/sites-available/pension`, systemd units | On change |
 | JWT secret | `PENSION_JWT_SECRET` in `/etc/pension/pension.env` (production refuses to start without one of 32+ characters) | On change |
 
-### 7.2 Nightly backup script (sketch)
+### 7.2 Nightly backup
+
+`deploy/pg-backup.sh` takes one consistent dump (`pg_dump -Fc`), reads it back with `pg_restore --list`, and keeps
+the newest 30 (`PENSION_BACKUP_KEEP`) under `PENSION_BACKUP_DIR` (default `artifacts/backups/pg`). On the trial box
+`deploy/pg-backup.sh install-cron` put it in the user's crontab at 02:30 (installed 9 Oct 2026); on production run it
+from a systemd timer or root's crontab with `/etc/pension/pension.env` sourced, writing to `/var/backups/pension/pg`.
+The files below (uploads, run outputs, GP Fund data) still need the rsync in the sketch.
+
+### 7.2a Nightly backup script (sketch, files)
 
 ```bash
 #!/usr/bin/env bash

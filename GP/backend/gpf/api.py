@@ -137,8 +137,16 @@ def _acting(request: Request, claimed: str) -> str:
     name where the portal sent it -- encoded ``band|name``, which ``service._officer`` reads."""
     fixed = (request.headers.get(ACTING_OFFICER_HEADER) or "").strip()
     band = fixed or claimed
-    name = (request.headers.get(ACTING_USER_HEADER) or "").strip()
+    name = _acting_name(request)
     return f"{band}|{name}" if fixed and name else band
+
+
+def _acting_name(request: Request) -> str:
+    """The officer's name from the portal, percent-encoded on the way (review N30, 9 Oct 2026: a
+    non-ASCII name arrived as ???); a plain name from an older portal reads unchanged."""
+    from urllib.parse import unquote
+    raw = (request.headers.get(ACTING_USER_HEADER) or "").strip()
+    return unquote(raw).strip() if "%" in raw else raw
 
 
 # ── request models ────────────────────────────────────────────────────────────
@@ -189,10 +197,19 @@ class OfficerBody(BaseModel):
 
 
 # ── meta ──────────────────────────────────────────────────────────────────────
+@app.exception_handler(doa_mod.RegisterDamaged)
+async def _register_damaged(request: Request, exc: doa_mod.RegisterDamaged):
+    # The saved signatory register could not be read at start-up (review C4): every change to it
+    # is refused with the reason, rather than written over the damaged file.
+    return JSONResponse({"detail": str(exc)}, status_code=503)
+
+
 @app.get("/api/health")
 def health():
+    problem = doa_mod.register_problem()
     return {"ok": True, "connector": connector.health().__dict__,
             "model": {"mode": getattr(model_client, "name", "?")},
+            "register": {"ok": problem is None, **({"problem": problem} if problem else {})},
             "cases": len(service.repo.list_ids())}
 
 
@@ -221,7 +238,7 @@ def acting(request: Request):
     """Who the pension portal says is acting, for the page to show (and to stop it offering a
     choice that the actions would ignore). None where the module is used on its own."""
     return {"officer": (request.headers.get(ACTING_OFFICER_HEADER) or "").strip() or None,
-            "name": (request.headers.get(ACTING_USER_HEADER) or "").strip() or None}
+            "name": _acting_name(request) or None}
 
 
 @app.get("/api/officers")

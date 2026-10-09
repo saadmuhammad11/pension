@@ -54,7 +54,7 @@ class TrialPassword(unittest.TestCase):
         uid = next(u["id"] for u in self.client.get("/api/v2/admin/users", headers=admin).json() if u["username"] == "agriculture")
         with mock.patch.dict("os.environ", PROD):
             r = self.client.post(f"/api/v2/admin/users/{uid}/reset-password", headers=admin,
-                                 json={"password": "Harbour-Timber-Crystal-41"})
+                                 json={"password": "Harbour-Timber-Crystal-41", "reason": "Trial password retired; new one handed over."})
             self.assertEqual(r.status_code, 200, r.text)
             r = self._login("agriculture", "Harbour-Timber-Crystal-41")
             self.assertEqual(r.status_code, 200, r.text)

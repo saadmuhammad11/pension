@@ -1,6 +1,7 @@
 // GP Fund Pre-Audit — SPA controller. Buildless ES module.
-import { api, BASE } from './api.js';
-import { $, $$, esc, h, badge, toast, openModal, closeModal, fmt, evidenceUrl, pageUrl } from './ui.js';
+import { api, BASE, tellPortal } from './api.js';
+import { $, $$, esc, h, badge, toast, openModal, closeModal, trapModalFocus, confirmDialog, busy, fmt, rupees, evidenceUrl, pageUrl } from './ui.js';
+import { noteFromPrompt, throttle, sequence, disposalConfirmText } from './pure.js';
 
 // Embedded in the AG Punjab portal (28 Sep 2026): `?embed=1&officer=ao` in the address hides the
 // header and the intake, fixes the officer the portal signed in, and shows one case's screens.
@@ -12,7 +13,17 @@ if (EMBED) {
   const tell = () => { try { parent.postMessage({ gpfHeight: document.documentElement.scrollHeight }, location.origin); } catch (e) { /* not framed */ } };
   new ResizeObserver(tell).observe(document.documentElement);
   window.addEventListener('load', tell);
+  // The portal's idle timer hears nothing from inside this frame, so an officer working here for
+  // half an hour was signed out under their hands (frontend review F9). Pointer and key activity
+  // is reported to the portal, at most once every ten seconds.
+  const active = throttle(() => tellPortal({ gpfActivity: 1 }), 10_000);
+  for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel']) {
+    window.addEventListener(ev, active, { passive: true });
+  }
 }
+
+// Renders are sequenced (F13): a slow earlier render must not write over a newer one.
+const ROUTE = sequence();
 
 const state = {
   officer: (EMBED && params.get('officer')) || localStorage.getItem('gpf.officer') || 'ao',
@@ -32,7 +43,7 @@ async function boot() {
   if (fixed) state.officer = fixed;
   const sel = $('#officer');
   sel.innerHTML = state.officers.map(o =>
-    `<option value="${o.id}">${esc(o.desig)} · ${esc(o.grade)}</option>`).join('');
+    `<option value="${esc(o.id)}">${esc(o.desig)} · ${esc(o.grade)}</option>`).join('');
   sel.value = state.officer;
   setOfficerInitials();
   if (EMBED || fixed) sel.disabled = true;
@@ -42,10 +53,22 @@ async function boot() {
   };
   $('#modal-close').onclick = closeModal;
   $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); else trapModalFocus(e); });
   window.addEventListener('hashchange', route);
   if (!location.hash) location.hash = '#/cases';
   route();
+}
+
+// boot() used to have no catch: a failed first request left "Loading…" on screen for good (F13).
+async function start() {
+  try {
+    await boot();
+  } catch (e) {
+    const app = $('#app');
+    app.innerHTML = `<div class="panel"><h2>The GP Fund module could not load</h2>
+      <p class="muted">${esc(e.message)}</p><button class="btn primary" id="boot-retry">Retry</button></div>`;
+    $('#boot-retry').onclick = () => { app.innerHTML = '<div class="loading">Loading…</div>'; start(); };
+  }
 }
 
 // The header avatar. The select names a designation; who is sitting in it matters when the
@@ -62,25 +85,30 @@ function setNav(name) {
 }
 
 async function route() {
+  const seq = ROUTE.next();
   const hash = location.hash.slice(2) || 'cases';
   const [head, arg] = hash.split('/');
   const app = $('#app');
   app.innerHTML = '<div class="loading">Loading…</div>';
   try {
     if (EMBED && head !== 'case') { app.innerHTML = '<div class="panel"><p class="muted">Open a GP Fund case from the portal.</p></div>'; return; }
-    if (head === 'cases') { setNav('cases'); await renderCases(app); }
-    else if (head === 'case') { setNav('cases'); await renderCase(app, arg); }
-    else if (head === 'doa') { setNav('doa'); await renderDoa(app); }
-    else if (head === 'rules') { setNav('rules'); await renderRules(app); }
+    if (head === 'cases') { setNav('cases'); await renderCases(app, seq); }
+    else if (head === 'case') { setNav('cases'); await renderCase(app, arg, seq); }
+    else if (head === 'doa') { setNav('doa'); await renderDoa(app, seq); }
+    else if (head === 'rules') { setNav('rules'); await renderRules(app, seq); }
     else { location.hash = '#/cases'; }
   } catch (e) {
-    app.innerHTML = `<div class="panel"><h2>Something went wrong</h2><p class="muted">${esc(e.message)}</p></div>`;
+    if (ROUTE.isStale(seq)) return;
+    app.innerHTML = `<div class="panel"><h2>Something went wrong</h2><p class="muted">${esc(e.message)}</p>
+      <button class="btn" id="route-retry">Retry</button></div>`;
+    $('#route-retry').onclick = route;
   }
 }
 
 // ── cases list + intake ───────────────────────────────────────────────────────
-async function renderCases(app) {
+async function renderCases(app, seq = ROUTE.current) {
   const [templates, open] = await Promise.all([api.templates(), api.listCases()]);
+  if (ROUTE.isStale(seq)) return;
   app.innerHTML = `
     <div class="panel">
       <div class="spread"><h2>Intake — open a case</h2>
@@ -140,13 +168,13 @@ async function renderCases(app) {
         · ${t.hasSap ? 'SAP pages present' : 'no SAP pages'}</p>
       <button class="btn primary small" data-open="${esc(t.key)}">Open case</button>
     </div>`).join('');
-  $$('#tmpl-cards [data-open]').forEach(b => b.onclick = async () => {
+  $$('#tmpl-cards [data-open]').forEach(b => b.onclick = () => busy(b, async () => {
     try {
       const r = await api.createCase(b.dataset.open, $('#nosap').checked, state.officer);
       toast('Case opened, initial processing done');
-      location.hash = '#/case/' + r.id;
+      location.hash = '#/case/' + encodeURIComponent(r.id);
     } catch (e) { toast(e.message, true); }
-  });
+  }));
   $('#scan-go').onclick = async () => {
     const files = $('#scan-files').files;
     if (!files.length) return toast('Choose the scanned pages first', true);
@@ -156,7 +184,7 @@ async function renderCases(app) {
                                     rd.update, rd.uploaded);
       rd.finish();
       toast('Scans read, case opened');
-      location.hash = '#/case/' + r.id;
+      location.hash = '#/case/' + encodeURIComponent(r.id);
     } catch (e) { rd.fail(); toast(e.message, true); }
   };
   const oc = $('#open-cases');
@@ -165,11 +193,11 @@ async function renderCases(app) {
     <th>Case</th><th>Subject</th><th>Ver.</th><th>Hard</th><th>Verify</th><th>SAP</th><th>Open obs.</th><th>State</th><th></th>
     </tr></thead><tbody>${open.map(c => `<tr>
       <td><b>${esc(c.label)}</b><div class="mono small muted">${esc(c.id)}</div></td>
-      <td class="small">${esc(c.subject || '')}</td><td>${c.version}</td>
+      <td class="small">${esc(c.subject || '')}</td><td>${esc(c.version)}</td>
       <td>${c.hard ? badge('hard', c.hard) : '0'}</td>
       <td>${c.conf ? badge('conf', c.conf) : '0'}</td>
       <td>${c.sap ? badge('sap', c.sap) : '0'}</td>
-      <td>${c.open}</td>
+      <td>${esc(c.open)}</td>
       <td>${c.issued ? '<span class="pill">issued</span>' : (c.mayAdvance ? badge('ok', 'may advance') : badge('hard', 'blocked'))}</td>
       <td><a class="btn small" href="#/case/${esc(c.id)}">Open</a></td>
     </tr>`).join('')}</tbody></table></div>`;
@@ -254,8 +282,9 @@ function readingProgress(pageCount) {
 }
 
 // ── single case ───────────────────────────────────────────────────────────────
-async function renderCase(app, id) {
+async function renderCase(app, id, seq = ROUTE.current) {
   const c = await api.getCase(id);
+  if (ROUTE.isStale(seq)) return;
   const p = c.position;
   app.innerHTML = `
     <div class="panel">
@@ -287,8 +316,8 @@ async function renderCase(app, id) {
 }
 
 const stat = (cls, n, label) =>
-  `<div class="stat ${cls}${Number(n) ? '' : ' zero'}"><b>${n}</b><span>${label}</span></div>`;
-const tabBtn = (t, label) => `<button data-tab="${t}" class="${state.tab === t ? 'on' : ''}">${label}</button>`;
+  `<div class="stat ${esc(cls)}${Number(n) ? '' : ' zero'}"><b>${esc(n)}</b><span>${esc(label)}</span></div>`;
+const tabBtn = (t, label) => `<button data-tab="${esc(t)}" class="${state.tab === t ? 'on' : ''}">${esc(label)}</button>`;
 
 function renderTab(id, c) {
   $$('#subnav button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
@@ -327,15 +356,15 @@ function viewSap(c) {
             <tr><td>Personnel no.</td><td class="mono">${esc(ps.persNo)}</td></tr>
             <tr><td>Name</td><td>${esc(ps.name)}</td></tr>
             <tr><td>Month</td><td>${esc(ps.month)}</td></tr>
-            <tr><td>GPF balance</td><td>Rs ${fmt(ps.gpfBalance)}</td></tr>
-            <tr><td>Loan balance</td><td>Rs ${fmt(ps.loanBalance)}</td></tr>
-            <tr><td>Basic pay</td><td>Rs ${fmt(ps.basicPay)}</td></tr>
+            <tr><td>GPF balance</td><td>${rupees(ps.gpfBalance)}</td></tr>
+            <tr><td>Loan balance</td><td>${rupees(ps.loanBalance)}</td></tr>
+            <tr><td>Basic pay</td><td>${rupees(ps.basicPay)}</td></tr>
           </tbody></table></div>
         <div style="flex:1;min-width:260px"><h4>Re-calculation report</h4>
           <table><tbody>
             <tr><td>Report date</td><td>${esc(rc.reportDate || '')}</td></tr>
             <tr><td>Rows</td><td>${rc.rows || 0}</td></tr>
-            <tr><td>Last closing</td><td>Rs ${fmt(rc.lastClosing)}</td></tr>
+            <tr><td>Last closing</td><td>${rupees(rc.lastClosing)}</td></tr>
           </tbody></table></div>
       </div>
       <hr class="hr"><p class="muted small">A fresher extract can replace this. Uploading re-evaluates the case.</p>
@@ -366,16 +395,16 @@ function wireSap(id, c) {
       $('#sap-text').value = await res.text();
     } catch { toast('Could not load sample', true); }
   };
-  $('#sap-submit').onclick = async () => {
+  $('#sap-submit').onclick = () => busy($('#sap-submit'), async () => {
     const text = $('#sap-text').value.trim();
     if (!text) return toast('Paste the extract first', true);
     try {
       const r = await api.sapText(id, 'extract.txt', text, state.officer);
       state.lastDiff = r.diff; state.tab = 'exam';
       toast('SAP extract accepted, case re-checked');
-      renderCase($('#app'), id);
+      refresh(id);
     } catch (e) { toast(e.message, true); }
-  };
+  });
 }
 
 // ── examination ───────────────────────────────────────────────────────────────
@@ -411,8 +440,7 @@ function itemHtml(c, r, collapsed) {
   const ev = (r.evidence || []).filter(e => e && (e.url || e.crop || e.page));
   const evHtml = ev.length ? `<div class="evgrid">${ev.map(e => {
     const url = e.url ? `${BASE}/${e.url}` : e.crop ? evidenceUrl(c.template, e.crop) : pageUrl(c.template, e.page, c);
-    return `<figure><img loading="lazy" src="${url}" onerror="this.closest('figure').remove()"
-      data-zoom="${url}"><figcaption>${esc(e.label ? (e.reference || !e.page || /page/i.test(e.label) ? e.label : e.label + ' · page ' + e.page) : ('page ' + e.page))}</figcaption></figure>`;
+    return `<figure><img loading="lazy" src="${esc(url)}" data-zoom="${esc(url)}"><figcaption>${esc(e.label ? (e.reference || !e.page || /page/i.test(e.label) ? e.label : e.label + ' · page ' + e.page) : ('page ' + e.page))}</figcaption></figure>`;
   }).join('')}</div>` : '';
   const calc = r.calc ? `<pre class="small mono" style="white-space:pre-wrap;background:var(--na-bg);padding:10px;border-radius:8px">${esc(JSON.stringify(r.calc, null, 1))}</pre>` : '';
   return `<div class="item ${collapsed ? '' : ''}" data-id="${esc(r.id)}">
@@ -459,8 +487,11 @@ function actionsHtml(r) {
 
 function wireExam(id, c) {
   $$('#tabc .item-head').forEach(head => head.onclick = () => head.parentElement.classList.toggle('open'));
-  $$('#tabc [data-zoom]').forEach(img => img.onclick = e => {
-    e.stopPropagation(); openModal('Evidence', `<img src="${img.dataset.zoom}">`);
+  $$('#tabc [data-zoom]').forEach(img => {
+    // An evidence image that fails to load drops out of the grid. Bound here, not inline: the
+    // portal's CSP allows no inline handlers under /gpf/ (F13).
+    img.addEventListener('error', () => { const f = img.closest('figure'); if (f) f.remove(); });
+    img.onclick = e => { e.stopPropagation(); openModal('Evidence', `<img src="${esc(img.dataset.zoom)}" alt="Evidence">`); };
   });
   $$('#tabc .item').forEach(item => {
     const rid = item.dataset.id;
@@ -468,7 +499,7 @@ function wireExam(id, c) {
     item.querySelectorAll('[data-act]').forEach(btn => {
       btn.onclick = async (e) => {
         e.stopPropagation();
-        await handleAction(id, c, r, btn.dataset.act);
+        await handleAction(id, c, r, btn.dataset.act, btn);
       };
     });
   });
@@ -484,25 +515,38 @@ function findResult(c, id) {
 
 async function refresh(id, diff) {
   if (diff) state.lastDiff = diff;
-  await renderCase($('#app'), id);
+  try {
+    await renderCase($('#app'), id);
+  } catch (e) {
+    // The POST succeeded; only the screen is stale. Say so, rather than "something went wrong".
+    toast('The action was recorded, but the screen could not be refreshed: ' + e.message + '. Reload the case.', true);
+  }
 }
 
-async function handleAction(id, c, r, act) {
+async function handleAction(id, c, r, act, btn) {
   try {
-    if (act === 'gosap') { state.tab = 'sap'; renderCase($('#app'), id); return; }
+    if (act === 'gosap') { state.tab = 'sap'; refresh(id); return; }
     if (act === 'verify-ok' || act === 'verify-no') {
       const ok = act === 'verify-ok';
-      const note = prompt(ok ? 'Note (what did you verify?)' : 'Note (why did it not verify?)', '') || '';
-      const res = await api.verify(id, r.cure.vid, ok, note, state.officer);
-      toast('Verification recorded'); return refresh(id, res.diff);
+      // Cancel on the note aborts and records nothing (F1): prompt() answers null for Cancel,
+      // and `|| ''` used to turn that into an empty note and carry on.
+      const note = noteFromPrompt(prompt(ok ? 'Note (what did you verify?)' : 'Note (why did it not verify?)', ''));
+      if (note.cancelled) return;
+      return busy(btn, async () => {
+        const res = await api.verify(id, r.cure.vid, ok, note.text, state.officer);
+        toast('Verification recorded'); await refresh(id, res.diff);
+      });
     }
     if (act === 'disp-uphold' || act === 'disp-refer') {
       // Written grounds on every disposition (G1, 7 Oct 2026): the next desk reads why.
       const what = act === 'disp-uphold' ? 'uphold' : 'refer';
-      const ground = prompt(`Grounds for ${what === 'uphold' ? 'upholding' : 'referring'} this observation (at least 15 characters)`, '') || '';
-      if (ground.trim().length < 15) { toast('Written grounds of at least 15 characters are required.', true); return; }
-      await api.setDisposition(id, r.id, what, ground.trim(), '', state.officer);
-      toast(what === 'uphold' ? 'Upheld' : 'Referred upward'); return refresh(id);
+      const ground = noteFromPrompt(prompt(`Grounds for ${what === 'uphold' ? 'upholding' : 'referring'} this observation (at least 15 characters)`, ''));
+      if (ground.cancelled) return;
+      if (ground.text.length < 15) { toast('Written grounds of at least 15 characters are required.', true); return; }
+      return busy(btn, async () => {
+        await api.setDisposition(id, r.id, what, ground.text, '', state.officer);
+        toast(what === 'uphold' ? 'Upheld' : 'Referred upward'); await refresh(id);
+      });
     }
     if (act === 'disp-waive') return waiveModal(id, r);
     if (act === 'cure-doc') return cureDocModal(id, r);
@@ -516,12 +560,12 @@ function waiveModal(id, r) {
     <div class="field"><label>Ground for the waiver</label><input type="text" id="w-ground"></div>
     <div class="field"><label>Authority relied on</label><input type="text" id="w-auth"></div>
     <button class="btn primary" id="w-go">Waive</button>`);
-  $('#w-go').onclick = async () => {
+  $('#w-go').onclick = () => busy($('#w-go'), async () => {
     try {
       await api.setDisposition(id, r.id, 'waive', $('#w-ground').value, $('#w-auth').value, state.officer);
       closeModal(); toast('Waived'); refresh(id);
     } catch (e) { toast(e.message, true); }
-  };
+  });
 }
 
 function cureDocModal(id, r) {
@@ -537,7 +581,7 @@ function cureDocModal(id, r) {
     ${fh}
     <div class="field"><label>Attach the file (optional)</label><input type="file" id="c-file"></div>
     <button class="btn primary" id="c-go">Confirm and re-check</button>`);
-  $('#c-go').onclick = async () => {
+  $('#c-go').onclick = () => busy($('#c-go'), async () => {
     const values = {};
     $$('#modal-body [data-k]').forEach(inp => { values[inp.dataset.k] = inp.value; });
     const file = $('#c-file').files[0] || null;
@@ -545,7 +589,7 @@ function cureDocModal(id, r) {
       const res = await api.cure(id, r.id, values, state.officer, file);
       closeModal(); toast('Document applied, case re-checked'); refresh(id, res.diff);
     } catch (e) { toast(e.message, true); }
-  };
+  });
 }
 
 function fieldSelect(f, opts) {
@@ -560,7 +604,7 @@ function cureQrModal(id, r) {
     <div class="chk field"><input type="checkbox" data-k="agrees" checked> The code agrees with the document</div>
     <div class="field"><label>Attach the image (optional)</label><input type="file" id="q-file"></div>
     <button class="btn primary" id="q-go">Apply</button>`);
-  $('#q-go').onclick = async () => {
+  $('#q-go').onclick = () => busy($('#q-go'), async () => {
     const values = { payload: $('#modal-body [data-k="payload"]').value,
                      agrees: $('#modal-body [data-k="agrees"]').checked };
     const file = $('#q-file').files[0] || null;
@@ -568,7 +612,7 @@ function cureQrModal(id, r) {
       const res = await api.cure(id, r.id, values, state.officer, file);
       closeModal(); toast('QR checked, case re-checked'); refresh(id, res.diff);
     } catch (e) { toast(e.message, true); }
-  };
+  });
 }
 
 // ── disposal ──────────────────────────────────────────────────────────────────
@@ -582,7 +626,7 @@ function viewDisposal(c) {
     <div class="item"><div class="item-head" style="cursor:default">
       <span class="item-title">${esc(DISPOSAL_LABEL[o.action] || o.action)}</span>
       ${o.allowed ? badge('ok', 'available') : `<span class="muted small">${esc(o.reason || 'not available')}</span>`}
-      <button class="btn small primary" data-disp="${o.action}" ${o.allowed ? '' : 'disabled'}>Do this</button>
+      <button class="btn small primary" data-disp="${esc(o.action)}" ${o.allowed ? '' : 'disabled'}>Do this</button>
     </div></div>`).join('');
   return `<div class="panel">
     <h2>Disposal</h2>
@@ -596,14 +640,25 @@ function viewDisposal(c) {
 function wireDisposal(id, c) {
   $$('#tabc [data-disp]').forEach(b => b.onclick = async () => {
     const action = b.dataset.disp;
+    const label = DISPOSAL_LABEL[action] || action;
+    // A disposal is the case's outcome: it is confirmed first, naming the case and the outcome,
+    // and sent once (F2). Cancel anywhere along the way records nothing (F1).
+    const sure = await confirmDialog(label, disposalConfirmText(label, c.meta), label);
+    if (!sure) return;
     let note = '';
-    if (action === 'return' || action === 'refer' || action === 'hold') note = prompt('Note (optional)', '') || '';
-    try {
-      const res = await api.dispose(id, action, note, state.officer);
-      toast((DISPOSAL_LABEL[action] || action) + ' — done');
-      if (action === 'return' || action === 'pay' || action === 'part') { state.tab = 'issue'; }
-      renderCase($('#app'), id);
-    } catch (e) { toast(e.message, true); }
+    if (action === 'return' || action === 'refer' || action === 'hold') {
+      const answer = noteFromPrompt(prompt('Note (optional)', ''));
+      if (answer.cancelled) return;
+      note = answer.text;
+    }
+    await busy(b, async () => {
+      try {
+        await api.dispose(id, action, note, state.officer);
+        toast(label + ' — done');
+        if (action === 'return' || action === 'pay' || action === 'part') { state.tab = 'issue'; }
+        await refresh(id);
+      } catch (e) { toast(e.message, true); }
+    });
   });
 }
 
@@ -636,8 +691,9 @@ async function renderIssue(id, el) {
 }
 
 // ── DOA register ──────────────────────────────────────────────────────────────
-async function renderDoa(app) {
+async function renderDoa(app, seq = ROUTE.current) {
   const doa = await api.doa();
+  if (ROUTE.isStale(seq)) return;
   const level = state.officers.find(o => o.id === state.officer)?.level || 1;
   app.innerHTML = `<div class="panel">
     <div class="spread"><h2>Delegation of Authority register</h2>
@@ -659,10 +715,12 @@ async function renderDoa(app) {
           <td>${level >= 2 ? `<button class="btn small" data-spec="${esc(g.id)}">Upload specimen</button>` : ''}</td>
         </tr>`).join('')}</tbody></table>
       </div></div>`).join('');
-  if ($('#finalize')) $('#finalize').onclick = async () => {
+  if ($('#finalize')) $('#finalize').onclick = () => busy($('#finalize'), async () => {
+    const sure = await confirmDialog('Mark the register final', 'Marking the Delegation of Authority register final ends the provisional period: an unlisted signatory becomes a hard stop. This is recorded under your name.', 'Mark final');
+    if (!sure) return;
     try { await api.doaFinalize(state.officer); toast('Register marked final'); renderDoa(app); }
     catch (e) { toast(e.message, true); }
-  };
+  });
   $$('#auth-list [data-spec]').forEach(b => b.onclick = () => specimenModal(b.dataset.spec, app));
 }
 
@@ -671,22 +729,23 @@ function specimenModal(sigId, app) {
     <p class="small muted">The specimen is placed beside the case signature for the officer to compare (§8.4).</p>
     <div class="field"><label>Specimen image</label><input type="file" id="spec-file"></div>
     <button class="btn primary" id="spec-go">Upload</button>`);
-  $('#spec-go').onclick = async () => {
+  $('#spec-go').onclick = () => busy($('#spec-go'), async () => {
     const f = $('#spec-file').files[0];
     if (!f) return toast('Choose a file', true);
     try { await api.doaSpecimen(sigId, state.officer, f); closeModal(); toast('Specimen recorded'); renderDoa(app); }
     catch (e) { toast(e.message, true); }
-  };
+  });
 }
 
 // ── rules in force ────────────────────────────────────────────────────────────
-async function renderRules(app) {
+async function renderRules(app, seq = ROUTE.current) {
   const r = await api.rules();
+  if (ROUTE.isStale(seq)) return;
   const clar = r.officeClarifications.map(x => `<tr><td><b>${esc(x.code)}</b></td><td>${esc(x.text)}</td></tr>`).join('');
   const limits = r.advanceLimits.map(l => `<tr>
     <td class="mono">${esc(l.clause)}</td><td>${esc(l.label)}</td>
-    <td>${l.pct}%${l.months ? ' / ' + l.months + ' mo' : ''}${l.combine ? ' (' + l.combine + ')' : ''}</td>
-    <td>${l.officePct}%</td><td class="small ${l.flag ? '' : 'muted'}">${l.flag ? '⚑ ' + esc(l.flag) : '—'}</td></tr>`).join('');
+    <td>${esc(l.pct)}%${l.months ? ' / ' + esc(l.months) + ' mo' : ''}${l.combine ? ' (' + esc(l.combine) + ')' : ''}</td>
+    <td>${esc(l.officePct)}%</td><td class="small ${l.flag ? '' : 'muted'}">${l.flag ? '⚑ ' + esc(l.flag) : '—'}</td></tr>`).join('');
   const open = r.openItems.map(o => `<tr><td><b>${esc(o.ref)}</b></td><td>${esc(o.item)}</td></tr>`).join('');
   app.innerHTML = `
     <div class="panel"><h2>Rules in force</h2>
@@ -729,4 +788,4 @@ async function renderRules(app) {
   $('#cite-q').addEventListener('keydown', e => { if (e.key === 'Enter') runCite(); });
 }
 
-boot();
+start();

@@ -3,12 +3,17 @@
 The route used to report the run count and nothing else, so monitoring showed green through a
 real outage (audit 6 Oct 2026, later report item 11). Now:
 
-* ``ok`` is false, and the answer 503, when the database cannot be read or the artefact disk is
-  below its reserve: the API cannot do its job.
-* the model servers and the GP Fund module are reported but do not fail the check: the API still
-  serves cases and the register without them, and a case verification says what is down. They
-  are probed at most every 30 seconds, with a 2-second timeout, so the route stays cheap for a
-  poller.
+* ``ok`` is false, and the answer 503, only when the database cannot be read: without it the API
+  cannot do its job at all.
+* a short artefact disk, a model server that does not answer and a GP Fund module that is down
+  are reported in ``degraded`` with the answer still 200: the API still serves the register and
+  the cases, uploads are refused on their own with the reason (R8), and a verification says what
+  is down. A 503 for a low disk showed every user the portal's outage screen (review C3, 9 Oct 2026).
+* the model servers and GP Fund are probed in the background -- one probe per target at a time,
+  in parallel, at most every 30 seconds with a 2-second timeout -- and the route answers from the
+  last result at once, so a poller never waits on nine seconds of timeouts.
+* in production the database error's text stays in the log; the answer says only that the
+  database is unavailable.
 """
 from __future__ import annotations
 
@@ -47,22 +52,49 @@ def probe(url: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
         return False
 
 
+_inflight: set[str] = set()
+
+
+def _refresh(name: str, fetch) -> None:
+    try:
+        value = bool(fetch())
+    except Exception:                                 # noqa: BLE001 -- a probe that raises is a probe that failed
+        value = False
+    with _cache_lock:
+        _cache[name] = (time.monotonic() + PROBE_TTL_S, value)
+        _inflight.discard(name)
+
+
 def _cached(name: str, fetch) -> bool:
+    """The last known answer for ``name``; a stale or missing one is refreshed in the background
+    (single-flight per target). The very first question about a target is answered by probing it
+    once, synchronously, so a fresh process does not report everything down for 30 seconds."""
     now = time.monotonic()
     with _cache_lock:
         hit = _cache.get(name)
         if hit and hit[0] > now:
             return hit[1]
-    value = bool(fetch())
-    with _cache_lock:
-        _cache[name] = (now + PROBE_TTL_S, value)
-    return value
+        if hit is None:
+            start_sync = name not in _inflight
+            _inflight.add(name)
+        else:
+            start_sync = False
+            if name in _inflight:
+                return hit[1]
+            _inflight.add(name)
+    if start_sync:
+        _refresh(name, fetch)
+        with _cache_lock:
+            return _cache[name][1]
+    threading.Thread(target=_refresh, args=(name, fetch), name=f"health-{name}", daemon=True).start()
+    return hit[1]
 
 
 def forget() -> None:
     """Drop the probe memory (tests)."""
     with _cache_lock:
         _cache.clear()
+        _inflight.clear()
 
 
 def _engine() -> str:
@@ -79,6 +111,11 @@ def _database() -> tuple[bool, str | None]:
         finally:
             conn.close()
     except Exception as exc:                                     # noqa: BLE001 -- any failure is the finding
+        from api import settings
+        import logging
+        logging.getLogger(__name__).error("health: the database cannot be read: %s: %s", type(exc).__name__, exc)
+        if settings.production():
+            return False, "the database is unavailable"            # the detail is in the log, not for the network
         return False, f"{type(exc).__name__}: {exc}"
     return (n > 0), (None if n > 0 else "no migration applied")
 
@@ -108,8 +145,9 @@ def report() -> tuple[dict, int]:
         models[name] = _cached(f"model:{name}", lambda u=url: probe(u))
     gpf_ok = _cached("gpf", lambda: gpf_bridge.health() is not None)
     active = sum(1 for r in RUNS.values() if r.state in ("queued", "running"))
-    degraded = [n for n, ok in models.items() if not ok] + ([] if gpf_ok else ["gpf"])
-    ok = db_ok and disk_ok
+    # The disk, the models and GP Fund degrade the service; only the database fails it (review C3).
+    degraded = ([] if disk_ok else ["disk"]) + [n for n, ok in models.items() if not ok] + ([] if gpf_ok else ["gpf"])
+    ok = db_ok
     body = {
         "ok": ok,
         "runs": active,

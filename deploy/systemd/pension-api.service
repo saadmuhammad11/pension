@@ -40,6 +40,9 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
+# A blocked call fails with EPERM instead of killing the process with SIGSYS (review C5, 9 Oct 2026):
+# LibreOffice and the OCR path probe calls the filter refuses, and a refused call they can handle.
+SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=
 AmbientCapabilities=
 UMask=0077

@@ -12,7 +12,7 @@ export function ReviewHome({ product, view }: { product: Product; view?: 'dashbo
   // rows the "All departments" list shows, counted on the server -- they cannot disagree.
   const inv = useInventory({ product })
   const counts = (inv.data?.sidebar?.by_department ?? []) as DepartmentCount[]
-  const error = inv.error
+  const error = inv.stale ? null : inv.error
 
   const dept = selected?.kind === 'department' ? counts.find(c => c.code === selected.code) : null
   const section = selected?.kind === 'section' ? selected.name : null
@@ -26,6 +26,7 @@ export function ReviewHome({ product, view }: { product: Product; view?: 'dashbo
     <div className="container review-grid" style={{ paddingTop: 22 }}>
       <div className="review-side">
         {error && <div className="banner bad" style={{ marginBottom: 'var(--s3)' }}><span className="mark">!</span><div className="sub">{error}</div></div>}
+        {inv.stale && <div className="muted" role="status" style={{ marginBottom: 'var(--s3)', fontSize: 'var(--t-small)' }}>Connection lost — retrying. The list shows what was last received.</div>}
         <DeptSidebar counts={counts} selected={selected} onSelect={setSelected} />
       </div>
       <div style={{ minWidth: 0 }}>

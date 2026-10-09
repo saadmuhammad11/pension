@@ -639,3 +639,8 @@ button.btn-primary:not(:disabled):hover { box-shadow: none; transform: none; }
 .rt-step.is-done .rt-rail { background: var(--green2); }
 .register-table col.c-timeline { width: 430px; }
 @media (max-width: 767px) { .row-timeline { min-width: 0; flex-direction: column; gap: 4px; } .rt-rail { display: none; } .rt-step { flex: 0 0 auto; } }
+
+/* A document's link on the case screen, in the portal's own colours rather than the browser's
+   default blue (frontend review F17). */
+.doc-link { color: var(--green2); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.doc-link:hover { color: var(--green); }

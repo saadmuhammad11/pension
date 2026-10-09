@@ -21,15 +21,18 @@ export function RegisterHome(
   // other view of this product reads, refetched together whenever anything changes.
   const inv = useInventory({ product, department, section })
   const rows = inv.data?.rows ?? []
-  const error = inv.error
+  // Rows already on screen stay; a failed refresh is a quiet strip, not a red error (F12).
+  const error = inv.stale ? null : inv.error
+  const stale = inv.stale
   const loading = inv.loading
-  const { stats, error: statsError } = useStats(department, product, section)
+  // The cases view draws no chart, so it asks for no statistics (F16).
+  const { stats, error: statsError } = useStats(department, product, section, !!charts && view !== 'cases')
 
   return (
     <CaseRegister product={product} rows={rows} title={title} lead={lead} waitingOn={waitingOn} newLabel={newLabel}
                   showDepartment={showDepartment} onOpen={id => navigate(caseHref(product, id))} onNew={onNew}
                   statusCounts={inv.data?.counts.by_status} total={inv.data?.counts.total}
-                  error={error} loading={loading} role={user?.role ?? ''} view={view} casesFirst={casesFirst}
+                  error={error} stale={stale} loading={loading} role={user?.role ?? ''} view={view} casesFirst={casesFirst}
                   charts={charts ? <Dashboard stats={stats} error={statsError} variant={charts} department={department} /> : null} />
   )
 }
