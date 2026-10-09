@@ -129,11 +129,11 @@ def me(user: User = Depends(current_user)) -> dict:
 
 
 @router.get("/auth/media-token")
-def media_token(user: User = Depends(current_user)) -> dict:
+def media_token(request: Request, user: User = Depends(current_user)) -> dict:
     """A 15-minute GET-only token for the URLs a browser cannot send a header with: page images,
     signature crops, the event stream and document downloads (frontend review F10). The session
     token stays out of image URLs and the browser's disk cache; the client refreshes this one."""
-    return {"token": issue_scoped_token(user, MEDIA_SCOPE, MEDIA_TOKEN_TTL),
+    return {"token": issue_scoped_token(user, MEDIA_SCOPE, MEDIA_TOKEN_TTL, parent_jti=_claims_of_request(request).get("jti")),
             "expires_in": int(MEDIA_TOKEN_TTL.total_seconds())}
 
 
@@ -171,6 +171,12 @@ def change_password(body: dict = Body(...), request: Request = None, user: User 
 GPF_COOKIE = "pension_gpf"
 
 
+def _claims_of_request(request: Request | None) -> dict:
+    """The verified claims of the bearer token on this request, or {}."""
+    from api.auth import _bearer, claims_of
+    return claims_of(_bearer(request.headers.get("authorization"))) if request is not None else {}
+
+
 @router.post("/auth/gpf-session")
 def gpf_session(request: Request, user: User = Depends(require_roles(*workflow.AG_SIDE))):
     """Sign the GP Fund frame in. The AG's case screen shows the module's own page in a frame,
@@ -184,7 +190,8 @@ def gpf_session(request: Request, user: User = Depends(require_roles(*workflow.A
     # only way in: a browser then never sends the cookie over plain HTTP, whatever a proxy header
     # says (audit 6 Oct 2026, L2). The trial, served over plain HTTP, keeps a cookie it can use.
     https = (request.headers.get("x-forwarded-proto") or request.url.scheme) == "https"
-    response.set_cookie(GPF_COOKIE, issue_scoped_token(user, GPF_SCOPE, GPF_TOKEN_TTL),
+    parent = _claims_of_request(request).get("jti")      # the session this frame belongs to: its sign-out ends the frame too
+    response.set_cookie(GPF_COOKIE, issue_scoped_token(user, GPF_SCOPE, GPF_TOKEN_TTL, parent_jti=parent),
                         max_age=int(GPF_TOKEN_TTL.total_seconds()), path="/gpf", httponly=True,
                         samesite="strict", secure=https or settings.production())
     return response
@@ -197,18 +204,20 @@ def logout(request: Request, authorization: str | None = Header(default=None),
 
     The token lives in the tab, but dropping it there did not end it: a copy taken from the tab
     (or the frame cookie's token) stayed valid until its 12-hour expiry (audit 6 Oct 2026, later
-    report 6b). Signing out now bumps the officer's ``token_version``, which every request checks,
-    so the token -- and the frame token, which carries the same version -- is refused from here on.
-    That ends this officer's session on every device, as a password reset does; an officer signs
-    in on one PC at a time, so that is the right scope.
+    report 6b). Signing out records the token's jti in ``revoked_tokens`` until the token's own
+    expiry (migration 0015), which every request checks, so this token -- and the frame and media
+    tokens derived from it -- is refused from here on. The account's other sessions go on: the
+    senior officers share one login (ag.reviewer, decision S10), and until 9 Oct 2026 the sign-out
+    bumped ``token_version`` and threw every one of them out mid-case.
 
     The frame cookie is HttpOnly, path /gpf and lives two hours: on a shared office PC the next
     person could open /gpf/ as the officer who had just signed out or been timed out. Needs no
     session, because the idle timeout and a refused token call it after the session is gone; an
     absent, expired or already-ended token is not an error here.
     """
+    from datetime import datetime, timezone
     from fastapi.responses import JSONResponse
-    from api.auth import _bearer, user_for_token
+    from api.auth import _bearer, claims_of, user_for_token
     token = _bearer(authorization)
     if token:
         try:
@@ -216,9 +225,17 @@ def logout(request: Request, authorization: str | None = Header(default=None),
         except AuthError:
             user = None                      # nothing left to end
         if user is not None:
+            claims = claims_of(token)
+            jti = claims.get("jti")
+            expires = datetime.fromtimestamp(int(claims.get("exp", 0)), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
             with db.transaction(conn):
-                conn.execute("UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?",
-                             (db.now(), user.id))
+                if jti:
+                    conn.execute("INSERT OR IGNORE INTO revoked_tokens(jti, user_id, expires_at, revoked_at) VALUES (?, ?, ?, ?)",
+                                 (jti, user.id, expires, db.now()))
+                    conn.execute("DELETE FROM revoked_tokens WHERE expires_at < ?", (db.now(),))
+                else:
+                    # A token from before 0015 carries no jti: only the account-wide switch can end it.
+                    conn.execute("UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?", (db.now(), user.id))
                 workflow.audit(conn, actor=user, action="SIGN_OUT", entity_type="user", entity_id=user.id,
                                before=None, after=None, ip=_client_address(request))
     response = JSONResponse({"ok": True})
@@ -1545,7 +1562,11 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
                                   MIRROR_ROLE_LABELS.get(user.role, "System administrator"),
                                   remark)
     fresh = conn.execute("SELECT * FROM cases WHERE id = ?", (row["id"],)).fetchone()
-    return {"event": entry, "case": _redact(_case_dict(conn, fresh, full=True), user)}
+    # The answer is the case as the screen will show it next, moves included: the screen puts it up
+    # before its own reload, and a case without allowed_actions blanked the page (9 Oct 2026).
+    answer = _redact(_case_dict(conn, fresh, full=True), user)
+    answer["allowed_actions"] = _allowed_actions(conn, user, fresh)
+    return {"event": entry, "case": answer}
 
 
 def _forward_gate_or_422(conn: db.Connection, row: db.Row) -> None:

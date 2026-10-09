@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const deadline = useRef<number>(0)
   const extend = useCallback(() => { deadline.current = Date.now() + IDLE_MINUTES * 60_000; setWarning(null); setAnnounced('') }, [])
   useEffect(() => {
-    if (!user) return
+    if (!user || !IDLE_MINUTES) return                            // no idle sign-out (session.ts)
     deadline.current = Date.now() + IDLE_MINUTES * 60_000
     let last = 0
     const onActivity = () => {

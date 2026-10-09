@@ -6,7 +6,7 @@ import { CREATABLE_ROLES, ROLE_WORDS, needsDepartment, needsWing } from '../../s
 describe('tier moves', () => {
   it('forward names the next tier and return the previous one', () => {
     expect(actionLabel('FORWARD_TIER', 'SENIOR_AUDITOR')).toBe('Forward to Assistant AO')
-    expect(actionLabel('FORWARD_TIER', 'ASSISTANT_AO')).toBe('Forward to AO')
+    expect(actionLabel('FORWARD_TIER', 'ASSISTANT_AO')).toBe('Approve and forward to AO')   // the AAO's forward is their approval
     expect(actionLabel('RETURN_TIER', 'AO')).toBe('Return to Assistant AO')
     expect(actionLabel('RETURN_TIER', 'ASSISTANT_AO')).toBe('Return to Senior Auditor')
     expect(actionLabel('FORWARD_TIER', null)).toBe('Forward to Assistant AO')      // no holder recorded: the Senior Auditor's

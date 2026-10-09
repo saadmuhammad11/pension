@@ -19,6 +19,7 @@ until it has.
 """
 from __future__ import annotations
 
+import uuid
 import base64
 import hashlib
 import hmac
@@ -179,7 +180,8 @@ def user_from_row(row: db.Row) -> User:
 
 def issue_token(user: User) -> str:
     now = datetime.now(timezone.utc)
-    return jwt.encode({"sub": user.id, "role": user.role, "dept": user.department_code,
+    # jti: the token's own identity, so a sign-out can end this token and no other (migration 0015).
+    return jwt.encode({"sub": user.id, "role": user.role, "dept": user.department_code, "jti": uuid.uuid4().hex,
                        "portal": user.portal, "tv": user.token_version, "iat": now, "exp": now + TOKEN_TTL},
                       _secret(), algorithm="HS256")
 
@@ -195,11 +197,22 @@ MEDIA_TOKEN_TTL = timedelta(minutes=15)
 GPF_TOKEN_TTL = timedelta(hours=2)
 
 
-def issue_scoped_token(user: User, scope: str, ttl: timedelta) -> str:
+def issue_scoped_token(user: User, scope: str, ttl: timedelta, parent_jti: str | None = None) -> str:
     """A token for one purpose. ``user_for_token`` refuses it anywhere but that purpose."""
     now = datetime.now(timezone.utc)
-    return jwt.encode({"sub": user.id, "role": user.role, "tv": user.token_version, "scope": scope,
-                       "iat": now, "exp": now + ttl}, _secret(), algorithm="HS256")
+    # pj: the session token this one was derived from, so that session's sign-out ends it too.
+    return jwt.encode({"sub": user.id, "role": user.role, "tv": user.token_version, "scope": scope, "jti": uuid.uuid4().hex,
+                       **({"pj": parent_jti} if parent_jti else {}), "iat": now, "exp": now + ttl}, _secret(), algorithm="HS256")
+
+
+def claims_of(token: str | None) -> dict:
+    """The verified claims of a token, or {} for none, an expired or a forged one."""
+    if not token:
+        return {}
+    try:
+        return jwt.decode(token, _secret(), algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        return {}
 
 
 class AuthError(Exception):
@@ -324,6 +337,11 @@ def user_for_token(token: str, conn: db.Connection, scope: str | None = None) ->
         raise AuthError(401, "this account has been disabled")
     if int(claims.get("tv", -1)) != user.token_version:
         raise AuthError(401, "your session was ended by a password reset; sign in again")
+    # A token that signed out, or one derived from a session that did (migration 0015): the other
+    # sessions of the same account are untouched.
+    ids = [j for j in (claims.get("jti"), claims.get("pj")) if j]
+    if ids and conn.execute(f"SELECT 1 FROM revoked_tokens WHERE jti IN ({','.join('?' * len(ids))})", ids).fetchone():
+        raise AuthError(401, "you signed out; sign in again")
     return user
 
 

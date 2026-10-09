@@ -123,7 +123,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
       if (action === 'OVERRIDE') answer = await act(caseId, 'OVERRIDE', { reason: remark, to_status: toStatus })
       else if (action !== 'ADD_DOCS' && action !== 'RUN_CHECK') answer = await act(caseId, action, { remark, ...(items ? { items } : {}) })
       seq.current += 1                                    // anything already in flight is stale now
-      if (answer?.case && answer.case.id === caseId) setC(answer.case)
+      // Only a complete answer goes on screen before the reload: one without the moves blanked the page (9 Oct 2026).
+      if (answer?.case && answer.case.id === caseId && Array.isArray(answer.case.allowed_actions)) setC(answer.case)
       await load()
       toast(ACTION_META[action].done)
       setPendingAction(null)
@@ -187,6 +188,10 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const missingDocs = (sentBack?.payload as { missing_checklist?: { id: string; requirement: string; status?: string }[] } | undefined)?.missing_checklist ?? []
   const agRemarks = c.events.filter(e => (isAgReader(e.actor_role ?? '') || e.actor_role === 'ADMIN') && e.remark && e.action !== 'CREATE' && e.action !== 'FORWARD')
   const lastAg = agRemarks[agRemarks.length - 1]
+  // Who has signed the case off so far, tier by tier (9 Oct 2026): the DDO's history carries no tier moves.
+  const approvals = c.events.filter(e => (e.action === 'FORWARD_TIER' && (e.actor_role === 'AG_SENIOR_AUDITOR' || e.actor_role === 'AG_ASSISTANT_AO'))
+    || ((e.action === 'APPROVE' || e.action === 'REJECT') && e.actor_role === 'AG_AO'))
+    .map(e => `${e.action === 'FORWARD_TIER' ? (e.actor_role === 'AG_SENIOR_AUDITOR' ? 'Verified' : 'Approved') : e.action === 'APPROVE' ? 'Approved (final)' : 'Rejected (final)'} by ${e.actor_name ?? e.actor_role}, ${fmtDateTime(e.at)}`)
   // The tab's count is the number of findings listed under it, the same as the Flags tab inside.
   const findings = report?.flags.length ?? 0
   const findingsHot = !!report?.flags.some(f => f.severity === 'HIGH')
@@ -227,6 +232,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
         {' · '}{c.department_name}
         {c.holder_label && <> · <span className="muted" title="Who holds the case now">{c.holder_label}</span></>}
       </p>
+
+      {approvals.length > 0 && <p className="muted" style={{ marginTop: 4, fontSize: 'var(--t-small)' }} aria-label="Approvals so far">{approvals.join(' · ')}</p>}
 
       <CaseProgress status={c.status} />
 

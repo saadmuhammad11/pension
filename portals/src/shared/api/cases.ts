@@ -19,7 +19,8 @@ const PREVIOUS_TIER: Record<string, HolderTier | undefined> = { AO: 'ASSISTANT_A
  *  "Return to Senior Auditor". Other actions keep their ACTION_META label. */
 export function actionLabel(action: CaseAction, holderTier: HolderTier | null | undefined): string {
   const from = holderTier ?? 'SENIOR_AUDITOR'
-  if (action === 'FORWARD_TIER') { const to = NEXT_TIER[from]; return to ? `Forward to ${TIER_LABELS[to]}` : 'Forward' }
+  // The Assistant AO's forward is their approval of the case (9 Oct 2026): the AO gives the final one.
+  if (action === 'FORWARD_TIER') { const to = NEXT_TIER[from]; return to ? (from === 'ASSISTANT_AO' ? `Approve and forward to ${TIER_LABELS[to]}` : `Forward to ${TIER_LABELS[to]}`) : 'Forward' }
   if (action === 'RETURN_TIER') { const to = PREVIOUS_TIER[from]; return to ? `Return to ${TIER_LABELS[to]}` : 'Return to the previous tier' }
   return ACTION_META[action].label
 }

@@ -61,6 +61,7 @@ class Tiers(unittest.TestCase):
         # SA -> AAO
         r = self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=sa, json={"remark": "Papers complete; no finding."})
         self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["case"]["allowed_actions"], [])                        # the answer is complete: the SA no longer holds it
         self.assertEqual((r.json()["case"]["status"], r.json()["case"]["holder_tier"]), ("UNDER_REVIEW", "ASSISTANT_AO"))
         import json as _json
         self.assertEqual(_json.loads(r.json()["event"]["payload_json"]), {"from_tier": "SENIOR_AUDITOR", "to_tier": "ASSISTANT_AO"})

@@ -23,6 +23,19 @@ const ROLE_WORDS: Record<string, string> = {
 }
 const AG_ACTOR = ['AG_REVIEWER', 'AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG']
 
+/** What a row says: the tier moves name the tier and what the move meant (9 Oct 2026): the
+ *  Senior Auditor verifies and forwards, the Assistant AO approves and forwards, the Accounts
+ *  Officer gives the final approval. */
+export function actionWords(e: { action: string; actor_role: string | null }): string {
+  if (e.action === 'FORWARD_TIER') {
+    if (e.actor_role === 'AG_ASSISTANT_AO') return 'Approved by the Assistant AO and forwarded to the Accounts Officer'
+    if (e.actor_role === 'AG_SENIOR_AUDITOR') return 'Verified by the Senior Auditor and forwarded to the Assistant AO'
+  }
+  if (e.action === 'APPROVE' && e.actor_role === 'AG_AO') return 'Approved by the Accounts Officer (final)'
+  if (e.action === 'REJECT' && e.actor_role === 'AG_AO') return 'Rejected by the Accounts Officer (final)'
+  return ACTION_WORDS[e.action] ?? e.action
+}
+
 const tone = (a: string) =>
   ['APPROVE', 'AUTO_APPROVE'].includes(a) ? 'var(--ok)' : ['REJECT', 'RETURN', 'AUTO_RETURN', 'REQUEST_DOCS', 'CHECK_FAILED', 'OVERRIDE'].includes(a) ? 'var(--red)'
   : ['FORWARD', 'TAKE_UP', 'FORWARD_TIER'].includes(a) ? 'var(--amber)' : a === 'RETURN_TIER' ? 'var(--red)' : 'var(--green3)'
@@ -43,7 +56,7 @@ export function HistoryTimeline({ events, highlightAg = false }: { events: CaseE
                           boxShadow: highlightAg && ag ? '0 0 0 3px var(--amberbg)' : undefined }} />
             <div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                <strong>{ACTION_WORDS[e.action] ?? e.action}</strong>
+                <strong>{actionWords(e)}</strong>
                 <span className="muted" style={{ fontSize: 'var(--t-small)' }}>
                   {e.actor_name ?? 'System'}{e.actor_role && e.actor_role !== 'SYSTEM' ? ` · ${ROLE_WORDS[e.actor_role] ?? e.actor_role}` : ''}
                   {' · '}{fmtDateTime(e.at)}

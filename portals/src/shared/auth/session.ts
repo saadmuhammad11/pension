@@ -15,7 +15,10 @@ const key = () => `pension.${PORTAL_SLUG()}.token`
 const nextKey = () => `pension.${PORTAL_SLUG()}.next`
 
 /** Minutes without a click, key or scroll before the session ends, and the warning before it. */
-export const IDLE_MINUTES = 30
+/** 0: no idle sign-out. The office asked for it to go (9 Oct 2026): an officer reading a long
+ *  case was signed out mid-work. A session still ends with its 12-hour token, on sign-out, and
+ *  at once on any 401. Set a number of minutes to bring the timer back. */
+export const IDLE_MINUTES = 0
 export const IDLE_WARNING_MINUTES = 2
 
 /** The roles the server knows. The three tiers of a pension wing arrived on 9 Oct 2026 (C3);

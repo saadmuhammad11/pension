@@ -3,8 +3,10 @@
     python3 -m unittest tests.test_signout_ends_token -v
 
 ``/api/v2/auth/logout`` only cleared the GP Fund frame cookie; the bearer token stayed valid until
-its 12-hour expiry. It now bumps the officer's ``token_version`` when it is given a valid token, so
-that token (and the frame token, which carries the same version) is refused from then on.
+its 12-hour expiry. It now records that token's jti in ``revoked_tokens`` (migration 0015), so the
+token, and the frame and media tokens derived from it, are refused from then on -- and nothing
+else: the account's other sessions go on (9 Oct 2026: the senior officers share one login, and
+the earlier token_version bump threw them all out when one signed out).
 """
 from __future__ import annotations
 
@@ -41,6 +43,30 @@ class SignOutEndsToken(unittest.TestCase):
         self.assertEqual(check(), 200)
         self.client.post("/api/v2/auth/logout", headers=headers)
         self.assertEqual(check(), 401)
+
+    def test_the_other_session_of_the_same_account_keeps_working(self) -> None:
+        first, second = self.login("ag.reviewer", "ag"), self.login("ag.reviewer", "ag")
+        self.assertNotEqual(first, second)
+        self.assertEqual(self.client.post("/api/v2/auth/logout", headers=first).status_code, 200)
+        self.assertEqual(self.client.get("/api/v2/auth/me", headers=first).status_code, 401)
+        self.assertEqual(self.client.get("/api/v2/auth/me", headers=second).status_code, 200)     # the colleague is still in
+        self.assertEqual(self.client.get("/api/v2/cases", headers=second).status_code, 200)
+
+    def test_a_media_token_dies_with_its_session_and_not_with_another(self) -> None:
+        a, b = self.sa(), self.sa()
+        ma = self.client.get("/api/v2/auth/media-token", headers=a).json()["token"]
+        mb = self.client.get("/api/v2/auth/media-token", headers=b).json()["token"]
+        from api.auth import MEDIA_SCOPE, user_for_token
+        from api import db
+        conn = db.connect()
+        try:
+            self.client.post("/api/v2/auth/logout", headers=a)
+            user_for_token(mb, conn, scope=MEDIA_SCOPE)                                    # still good
+            from api.auth import AuthError
+            with self.assertRaises(AuthError):
+                user_for_token(ma, conn, scope=MEDIA_SCOPE)
+        finally:
+            conn.close()
 
     def test_a_fresh_sign_in_works_afterwards(self) -> None:
         headers = self.sa()
