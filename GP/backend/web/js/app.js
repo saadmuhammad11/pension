@@ -443,6 +443,11 @@ function itemHtml(c, r, collapsed) {
     return `<figure><img loading="lazy" src="${esc(url)}" data-zoom="${esc(url)}"><figcaption>${esc(e.label ? (e.reference || !e.page || /page/i.test(e.label) ? e.label : e.label + ' · page ' + e.page) : ('page ' + e.page))}</figcaption></figure>`;
   }).join('')}</div>` : '';
   const calc = r.calc ? `<pre class="small mono" style="white-space:pre-wrap;background:var(--na-bg);padding:10px;border-radius:8px">${esc(JSON.stringify(r.calc, null, 1))}</pre>` : '';
+  // Specimens on file for the signing authority, beside the signature as read (C1, 9 Oct 2026). The
+  // comparison is the officer's; the images come from the shared master store, never cached.
+  const specs = Array.isArray(r.specimens) ? r.specimens.filter(sp => sp && sp.url) : [];
+  const specHtml = specs.length ? `<div class="small muted" style="margin-top:8px">Specimen on file${r.specimen_authority ? ` · ${esc(r.specimen_authority.officer || r.specimen_authority.post)}, ${esc(r.specimen_authority.department)}${r.specimen_authority.provisional ? ' (provisional register)' : ''}` : ''}</div>
+    <div class="evgrid">${specs.map(sp => { const u = `${BASE}/${sp.url}`; return `<figure><img loading="lazy" src="${esc(u)}" data-zoom="${esc(u)}" alt="Specimen signature"><figcaption>Specimen</figcaption></figure>`; }).join('')}</div>` : '';
   return `<div class="item ${collapsed ? '' : ''}" data-id="${esc(r.id)}">
     <div class="item-head">
       ${badge(r.status)}
@@ -455,7 +460,7 @@ function itemHtml(c, r, collapsed) {
       <div class="finding">${esc(r.finding || '')}</div>
       ${r.remedy ? `<div class="remedy small"><b>Remedy:</b> ${esc(r.remedy)}</div>` : ''}
       ${r.ref ? `<div class="small muted" style="margin-top:6px">Reference: ${esc(r.ref)}</div>` : ''}
-      ${calc}${evHtml}
+      ${calc}${evHtml}${specHtml}
       <div class="item-actions">${actionsHtml(r)}</div>
     </div>
   </div>`;

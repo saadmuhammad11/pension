@@ -410,3 +410,25 @@ Not on the list, and therefore a check for the reviewer: grandchildren, sons- an
 ---
 
 *Recorded by:* the pension rules owner, through the project lead  *Date:* 7 October 2026
+
+---
+
+## Scope changes of 9 October 2026 (`docs/FIX-PROMPT-four-changes.md`)
+
+Four changes asked for on 9 October 2026 and built the same day. Every open question was answered with the
+default the request named; each default is marked **assumed, awaiting confirmation** in the code and in
+`docs/STATUS.md` until the AG office confirms or corrects it.
+
+| # | Decision | Status | Effect in the code |
+|---|---|---|---|
+| S1 | **One master store of signing authorities with specimen signatures**, shared by pension and GP Fund; entries are closed with an end date, never deleted; every change audited; specimens shown to AG-side roles only, never to a DDO (Q6); the comparison stays the officer's (no model compares signatures). | decided (request C1) | `api/signatories.py`, migration 0013, `pipeline/signatory.py`, `GP/backend/gpf/signatories.py`, admin screen `#/signatories` |
+| S2 | **The existing S&GAD specimen and the GP Fund provisional register are imported** as the first entries; the GP Fund entries keep their provisional flag until the administrator marks that register final. | decided (request C1) | `python3 -m api.signatories import` (idempotent) |
+| S3 | **Service book → new proforma (C2): blocked.** No form layout is guessed. Waits for the blank and filled proforma, its notification and effective date, whether old service books stay acceptable and for which cases, and whether it replaces the Character & Service Roll for gazetted officers (Q7). | **blocked on the AG office** | nothing changed; AG-10 stays "service book / Character & Service Roll" |
+| S4 | **Three AG tiers per pension wing: Senior Auditor → Assistant AO → AO; the AO approves or rejects (Q1).** The Senior Auditor runs the verification and is the one who returns a case to the department; forwarding to the Assistant AO is refused while a checklist line is Missing or Defective unless the document was named on its pages or the line waived with grounds; returns go one tier down at a time; remarks between tiers are internal and never reach the DDO. | **assumed, awaiting confirmation** (Q1) | `api/workflow.py`, migration 0014 (`users.pension_wing`, `cases.holder_tier`), `api/v2.py`, portal register and case screens |
+| S5 | **The Deputy AG is outside the chain (Q2):** overrides any status (reason ≥ 15 characters, audited) and clears GP Fund hard stops, as before. | **assumed, awaiting confirmation** | unchanged `OVERRIDE` |
+| S6 | **The tiers apply to pension only (Q3).** GP Fund keeps its disposal rules; the tiers map to the module's levels Senior Auditor → `da`, Assistant AO → `ao`, AO → `ao`, Deputy AG → `dag`. | **assumed, awaiting confirmation** | `api/gpf_bridge.OFFICER_FOR_ROLE` |
+| S7 | **One or more officers per tier per wing (Q4):** a case sits in the wing's queue for the tier, not with a named person. | **assumed, awaiting confirmation** | holder = tier + wing |
+| S8 | **Existing `AG_REVIEWER` accounts (`syed.haider`) become a legacy, read-only role (Q5);** the administrator reassigns each to a tier and a wing on the users screen. Existing cases under review move to the Senior Auditor queue of their wing. | **assumed, awaiting confirmation** | migration 0014 data step; `may_see` |
+| S9 | **User management (C4):** an AG account carries a role and a pension wing (a separate field; the wings are not departments); a DDO carries a department; the Deputy AG and the administrator carry neither; a reset needs a written reason; a wing coverage view flags any tier with no active user. No tier accounts are seeded: the administrator creates them from the AG office's list. | decided (request C4) | `/api/v2/admin/users`, `/api/v2/admin/wing-coverage`, `Users.tsx` |
+
+*Recorded by:* the project lead, from the request of 9 October 2026  *Date:* 9 October 2026

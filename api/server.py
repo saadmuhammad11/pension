@@ -550,7 +550,13 @@ def specimen_register() -> dict:
 
 
 @app.get("/api/specimens/{specimen_id}/images/{name}", include_in_schema=False)
-def specimen_image(specimen_id: str, name: str) -> FileResponse:
+def specimen_image(request: Request, specimen_id: str, name: str) -> FileResponse:
+    # Specimens are for the AG's side and the administrator only (C1, Q6); the token middleware
+    # has put the account on the request. The portal uses /api/v2/signatories/... now.
+    from api.signatories import viewer_roles
+    user = getattr(request.state, "user", None)
+    if user is None or user.role not in viewer_roles():
+        raise HTTPException(403, "specimen signatures are for the Accountant General's desk")
     from rules import specimens
     spec = next((s for s in specimens.load() if s.id == specimen_id), None)
     path = next((p for p in (spec.images if spec else ()) if p.name == name), None)
@@ -788,6 +794,8 @@ def _get(run_id: str) -> Run:
 from api.v2 import router as _v2_router  # noqa: E402
 
 app.include_router(_v2_router)
+from api.signatories import router as _signatories_router  # noqa: E402  -- signing authorities (C1, 9 Oct 2026)
+app.include_router(_signatories_router)
 
 #: The old portal's routes carry no sign-in of their own. Now that every case belongs to a
 #: department, they are reachable only with a case-system token; the handful of reference
@@ -878,7 +886,8 @@ async def _v1_requires_a_token(request: Request, call_next):
         # opens only the case system, which scopes every run to its case.
         # Writes on the old register are the Deputy AG's (G6: the administrator takes no case
         # action); the administrator and the reviewers read.
-        allowed = user.role == "AG_DAG" or (user.role in ("AG_REVIEWER", "ADMIN") and request.method in ("GET", "HEAD"))
+        from api import workflow as _wf
+        allowed = user.role == "AG_DAG" or (user.role in _wf.AG_READERS and request.method in ("GET", "HEAD"))
         if not allowed:
             return JSONResponse({"detail": "this address is read-only for your role; case actions are taken in the case system"}, status_code=403)
     return await call_next(request)
@@ -905,6 +914,12 @@ def _v2_startup() -> None:
         # on 25 Sep 2026); PENSION_IMPORT_LEGACY=1 before start brings them back under LEGACY.
         if os.environ.get("PENSION_IMPORT_LEGACY", "").lower() in ("1", "true", "yes"):
             legacy.import_legacy_runs()
+        # The signing-authority master store (scope change C1, 9 Oct 2026): the two legacy registers
+        # imported where missing, and the pension export the pipeline reads written and activated.
+        from api import signatories as _signatories
+        added = _signatories.start_up()
+        if added["pension"] or added["gpf"]:
+            print(f"[v2] signing authorities imported: {added}", flush=True)
         # Cases filed before the case type existed (29 Sep 2026) take the AI's reading, marked DETECTED.
         filled = case_runs.backfill_case_types()
         if filled:

@@ -58,6 +58,9 @@ else:
     docstore = DocumentStore(DATA_DIR / "uploads")
 connector = ManualUploadConnector()
 service = CaseService(repo, docstore, connector)
+# The signing-authority master store (C1, 9 Oct 2026) is read through the same connection.
+from . import signatories as signatories_mod  # noqa: E402
+signatories_mod.set_connection(getattr(repo, "conn", None))
 
 # Reading pipeline (stages 1-5). Point GPF_VLLM_URL at the DGX Spark's vLLM server
 # to enable real scan reading; otherwise the stub is used and /from-scans returns 503.
@@ -254,6 +257,17 @@ def rules():
 @app.get("/api/doa")
 def doa():
     return service.doa_register()
+
+
+@app.get("/api/signatories/{spec_id}/image", include_in_schema=False)
+def signatory_specimen_image(spec_id: str):
+    """A specimen from the shared master store, beside the signature as read. The frame this page
+    runs in is the AG's side only (the portal signs it in); never cached (C1)."""
+    path = signatories_mod.specimen_path(spec_id)
+    if path is None:
+        raise HTTPException(404, "no such specimen")
+    media = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+    return FileResponse(str(path), media_type=media, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/api/citations/search")

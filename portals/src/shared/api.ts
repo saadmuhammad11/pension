@@ -135,8 +135,10 @@ export const postChecklistAction = (
 export const pageImageUrl = (runId: string, page: number) =>
   withToken(`/api/v2/runs/${runId}/pages/${page}`)
 
-/** The specimen register is reference data, open to every desk; the cut signature is a run artefact. */
+/** A specimen image from the signing-authority master store (C1, 9 Oct 2026): served to the AG's
+ *  side only, never cached, every view audited; the address carries the media token like any
+ *  other protected image. The cut signature is a run artefact. */
 export const specimenImageUrl = (specimenId: string, name: string) =>
-  `/api/specimens/${encodeURIComponent(specimenId)}/images/${encodeURIComponent(name)}`
+  withToken(`/api/v2/signatories/${encodeURIComponent(specimenId)}/images/${encodeURIComponent(name)}`)
 export const signatureImageUrl = (runId: string, name: string) =>
   withToken(`/api/v2/runs/${runId}/signatures/${encodeURIComponent(name)}`)

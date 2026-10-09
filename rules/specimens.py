@@ -26,6 +26,20 @@ from pathlib import Path
 
 REGISTER = Path(__file__).resolve().parent / "specimens" / "register.json"
 
+#: Since 9 Oct 2026 (scope change C1) the master copy of this register is the database table
+#: ``signing_authorities`` (api.signatories), which the API exports to a JSON file in this same
+#: shape after every change and names here. The bundled file stays the fallback for a pipeline
+#: that runs without a database (tests, a box without PostgreSQL). ``rules`` stays standard
+#: library: it reads a file, whichever one the API has pointed it at.
+ACTIVE: Path | None = None
+
+
+def active_register() -> Path:
+    """The register file in use: the API's export where it exists, else the bundled one."""
+    if ACTIVE is not None and ACTIVE.exists():
+        return ACTIVE
+    return REGISTER
+
 
 @dataclass(frozen=True)
 class Specimen:
@@ -80,7 +94,8 @@ def names_post(spec: Specimen, text: str | None) -> bool:
     return _mentions(text, spec.post_aliases)
 
 
-def load(path: Path = REGISTER) -> tuple[Specimen, ...]:
+def load(path: Path | None = None) -> tuple[Specimen, ...]:
+    path = active_register() if path is None else path
     if not path.exists():
         return ()
     raw = json.loads(path.read_text())

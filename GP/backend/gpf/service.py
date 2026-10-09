@@ -496,4 +496,7 @@ class CaseService:
         if officer["level"] < 3:
             raise ServiceError("Marking the register final needs the DAG (Funds).", 403)
         doa_mod.doa_finalize(published_by=officer["name"], published_at=_now())
-        return {"ok": True, "status": doa_mod.DOA["status"]}
+        # The shared master store's GP Fund rows become final with it (C1, 9 Oct 2026).
+        from .signatories import mark_gpf_final
+        made_final = mark_gpf_final(getattr(self.repo, "conn", None))
+        return {"ok": True, "status": doa_mod.DOA["status"], "master_rows_made_final": made_final}

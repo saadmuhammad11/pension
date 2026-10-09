@@ -281,11 +281,18 @@ def _doa(F):
                         "remedy": "Obtain the document under the signature of an approved signatory."})
             continue
         prov = "" if DOA["status"] == "final" else " The register is provisional until the office supplies its DOA list."
+        # The specimens on file for this department and post, from the shared master store (C1,
+        # 9 Oct 2026), shown beside the signature as read; the comparison stays the officer's.
+        from .signatories import specimens_for
+        on_file = specimens_for((m.get("authority") or {}).get("dept") or g["authority"], g["signedBy"] or g["authority"], None)
+        has_specimen = bool(on_file["specimens"]) or m["status"] == "listed_with_specimen"
         remedy = ("Compare the signature with the specimen and record the result."
-                  if m["status"] == "listed_with_specimen"
+                  if has_specimen
                   else "Confirm the signatory's authority, and add the specimen to the register when received.")
         out.append({**base, "status": "conf",
-                    "finding": "Signed by " + who + ". " + doa_status_text(m) + prov,
+                    "finding": "Signed by " + who + ". " + doa_status_text(m) + prov
+                    + ("" if on_file["specimens"] else " " + on_file["message"] + "."),
+                    "specimens": on_file["specimens"], "specimen_authority": on_file["authority"],
                     "remedy": remedy, "cure": {"kind": "verify", "vid": "DOA:" + g["id"]}})
     return out
 
