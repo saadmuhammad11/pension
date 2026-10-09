@@ -49,10 +49,13 @@ class OverrideGuard(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()["case"]["status"], "APPROVED")
 
-    def test_the_gp_fund_return_is_a_system_action(self) -> None:
-        self.assertIn("GPF_RETURN", workflow.SYSTEM_ACTIONS)
-        roles, froms, target = workflow.TRANSITIONS["GPF_RETURN"]
-        self.assertEqual((roles, target), ((), workflow.RETURNED))
+    def test_the_system_returns_no_case_and_has_no_pseudo_officer(self) -> None:
+        # 9 Oct 2026: no automatic return in pension or GP Fund. The retired actions stay in the
+        # table for old history rows, but nobody may perform them.
+        self.assertNotIn("GPF_RETURN", workflow.SYSTEM_ACTIONS)
+        self.assertNotIn("AUTO_RETURN", workflow.SYSTEM_ACTIONS)
+        self.assertFalse(any(workflow.TRANSITIONS[a][2] == workflow.RETURNED for a in workflow.SYSTEM_ACTIONS))
+        self.assertEqual(workflow.TRANSITIONS["GPF_RETURN"][:2], ((), frozenset()))
         from api import case_runs
         self.assertFalse(hasattr(case_runs, "_SystemOfficer"))
 

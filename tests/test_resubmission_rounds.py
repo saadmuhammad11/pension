@@ -458,7 +458,10 @@ class RoundsOverTheApi(unittest.TestCase):
         case_id = self.file(dept)
         first = self.verify(ag, case_id)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=ag).json()
-        self.assertEqual(case["status"], "RETURNED")                      # the automatic return
+        self.assertEqual(case["status"], "UNDER_REVIEW")                  # no automatic return (9 Oct 2026)
+        r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=ag,
+                             json={"remark": "FRC missing.", "items": [{"id": "AG-06"}]})
+        self.assertEqual(r.status_code, 200, r.text)
 
         # The department sends the FRC; round 2.
         r = self.client.post(f"/api/v2/cases/{case_id}/documents", headers=dept,
@@ -472,9 +475,9 @@ class RoundsOverTheApi(unittest.TestCase):
 
         rounds = self.client.get(f"/api/v2/cases/{case_id}/rounds", headers=ag).json()["rounds"]
         self.assertEqual([r["submission_no"] for r in rounds], [1, 2])
-        self.assertEqual(rounds[0]["closed_action"], "AUTO_RETURN")
+        self.assertEqual(rounds[0]["closed_action"], "RETURN")
         req = rounds[1]["requests"][0]
-        self.assertEqual((req["action"], req["items"][0]["id"]), ("AUTO_RETURN", "AG-06"))
+        self.assertEqual((req["action"], req["items"][0]["id"]), ("RETURN", "AG-06"))
         check = rounds[1]["checks"][0]
         self.assertEqual((check["mode"], check["base_run_id"]), ("INCREMENTAL", first))
         self.assertEqual(check["resolution"][0]["resolution"], "RESOLVED")

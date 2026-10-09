@@ -261,18 +261,32 @@ class V2Test(unittest.TestCase):
         # The old register agrees: a FORWARD decision was mirrored onto the run.
         self.assertTrue((runs.ARTIFACTS / f"run-{run_id}" / "decisions.jsonl").exists())
 
-    def test_missing_documents_return_the_case_with_the_list(self) -> None:
+    def test_missing_documents_wait_for_the_ag_who_returns_the_case_with_the_list(self) -> None:
         self.report_to_write = FLAGGED_REPORT
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police)["case"]["id"]
         reviewer = self.login("syed.haider", "ag")
         self.verify(reviewer, case_id)
+        # No automatic return (9 Oct 2026): the case waits for the AG, who sees what is missing.
+        case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
+        self.assertEqual(case["status"], "UNDER_REVIEW")
+        self.assertEqual(case["events"][-1]["action"], "CHECK_DONE")
+        self.assertEqual([i["id"] for i in case["events"][-1]["payload"]["missing_checklist"]], ["AG-06"])
+        self.assertIn("missing or defective", case["events"][-1]["remark"])
+        seen = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
+        self.assertEqual(seen["status"], "UNDER_REVIEW")
+        self.assertNotIn("missing_checklist", seen["events"][-1]["payload"])   # the AI's reading stays at the AG
+        self.assertNotIn("ADD_DOCS", seen["allowed_actions"])
+        # The AG returns it, naming the paper.
+        r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer,
+                             json={"remark": "NADRA FRC missing; attach and resubmit.", "items": [{"id": "AG-06"}]})
+        self.assertEqual(r.status_code, 200, r.text)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
         self.assertEqual(case["status"], "RETURNED")
         last = case["events"][-1]
-        self.assertEqual(last["action"], "AUTO_RETURN")
+        self.assertEqual((last["action"], last["actor_role"]), ("RETURN", "AG_REVIEWER"))
         self.assertIn("NADRA FRC", last["remark"])
-        self.assertEqual([i["id"] for i in last["payload"]["missing_checklist"]], ["AG-06"])
+        self.assertEqual([i["id"] for i in last["payload"]["items"]], ["AG-06"])
         self.assertNotIn("high_flags", last["payload"])                   # findings stay at the AG
         self.assertIn("ADD_DOCS", case["allowed_actions"])
         # Attach the paper and resubmit: a new round, then back on the AG's desk.
@@ -495,20 +509,30 @@ class V2Test(unittest.TestCase):
         # The department's screens never reach the module.
         self.assertEqual(self.client.get(f"/api/v2/cases/{made['case']['id']}/gpf", headers=police).status_code, 403)
 
-    def test_a_gp_fund_examination_returns_the_case_for_a_missing_document(self) -> None:
+    def test_a_gp_fund_examination_with_a_missing_document_waits_for_the_ag(self) -> None:
         self._gpf_module(self._gpf_view(hard_doc=True))
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police, product="GPF", gpf_kind="refundable")["case"]["id"]
         reviewer = self.login("syed.haider", "ag")
         r = self.verify(reviewer, case_id)
         self.assertTrue(r["run_id"].startswith(case_runs.GPF_RUN_PREFIX))
-        case = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
-        self.assertEqual(case["status"], "RETURNED")
+        # No automatic return (9 Oct 2026): the AG sees the missing paper and decides.
+        case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
+        self.assertEqual(case["status"], "UNDER_REVIEW")
         last = case["events"][-1]
-        self.assertEqual(last["action"], "AUTO_RETURN")
+        self.assertEqual(last["action"], "CHECK_DONE")
         self.assertEqual([m["id"] for m in last["payload"]["missing_checklist"]], ["A3"])
-        self.assertIn("CNIC", last["remark"])
-        self.assertNotIn("gpf", last["payload"])                        # the module's reading stays at the AG
+        seen = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
+        self.assertEqual(seen["status"], "UNDER_REVIEW")
+        self.assertNotIn("gpf", seen["events"][-1]["payload"])          # the module's reading stays at the AG
+        self.assertNotIn("missing_checklist", seen["events"][-1]["payload"])
+        r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer,
+                             json={"remark": "CNIC copy missing; attach and resubmit.",
+                                   "items": [{"label": "CNIC copy of the subscriber"}]})
+        self.assertEqual(r.status_code, 200, r.text)
+        case = self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()
+        self.assertEqual((case["status"], case["events"][-1]["action"]), ("RETURNED", "RETURN"))
+        self.assertIn("CNIC", case["events"][-1]["remark"])
         full = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         self.assertEqual(full["gpf_case_id"], "gpf-case-1")
         g = self.client.get(f"/api/v2/cases/{case_id}/gpf", headers=reviewer).json()
@@ -533,7 +557,7 @@ class V2Test(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=police).json()["status"], "APPROVED")
 
-    def test_a_clean_gp_fund_examination_waits_for_the_ag_and_a_return_carries_the_hard_stops(self) -> None:
+    def test_a_clean_gp_fund_examination_waits_for_the_ag_and_so_does_a_return_made_in_the_module(self) -> None:
         self._gpf_module(self._gpf_view())
         police = self.login("punjab-police", "punjab-police")
         case_id = self.create(police, product="GPF", gpf_kind="balance_transfer")["case"]["id"]
@@ -546,11 +570,17 @@ class V2Test(unittest.TestCase):
         self.verify(reviewer, other)
         self.assertEqual(self.client.get(f"/api/v2/cases/{other}", headers=reviewer).json()["status"], "UNDER_REVIEW")
         self._gpf_module(self._gpf_view(hard_doc=True, disp="returned"))
+        # The module's own return moves nothing on the pension side (9 Oct 2026: no automatic
+        # return); the case waits until the AG returns it with the Return button.
         case = self.client.get(f"/api/v2/cases/{other}", headers=police).json()
-        self.assertEqual(case["status"], "RETURNED")
-        self.assertEqual(case["events"][-1]["action"], "GPF_RETURN")          # a system action, no pseudo-officer (G6)
-        self.assertEqual(case["events"][-1]["actor_role"], "SYSTEM")
-        self.assertEqual([m["id"] for m in case["events"][-1]["payload"]["missing_checklist"]], ["A3"])
+        self.assertEqual(case["status"], "UNDER_REVIEW")
+        self.assertNotIn("GPF_RETURN", [e["action"] for e in case["events"]])
+        r = self.client.post(f"/api/v2/cases/{other}/return", headers=reviewer,
+                             json={"remark": "Returned after the GP Fund examination: CNIC copy missing."})
+        self.assertEqual(r.status_code, 200, r.text)
+        case = self.client.get(f"/api/v2/cases/{other}", headers=police).json()
+        self.assertEqual((case["status"], case["events"][-1]["action"], case["events"][-1]["actor_role"]),
+                         ("RETURNED", "RETURN", "AG_REVIEWER"))
 
     def test_uploads_must_be_documents_and_names_are_bounded(self) -> None:
         police = self.login("punjab-police", "punjab-police")

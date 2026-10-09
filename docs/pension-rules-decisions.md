@@ -352,9 +352,17 @@ Three further decisions by the rules owner, taken after the day's implementation
 
 | # | Decision | Effect in the code |
 |---|---|---|
-| E1 | **Automatic return stays.** A case whose required documents are missing or defective is still returned to the department automatically with the list; only automatic *approval* was removed (item 1). | `api/case_runs.py outcome()`: `AUTO_RETURN` kept, `AUTO_APPROVE` gone (`17f14fb`). |
+| E1 | **Automatic return stays** — *superseded 9 Oct 2026, see below.* A case whose required documents are missing or defective is still returned to the department automatically with the list; only automatic *approval* was removed (item 1). | `api/case_runs.py outcome()`: `AUTO_RETURN` kept, `AUTO_APPROVE` gone (`17f14fb`). |
 | E2 | **GP Fund's check figures stay.** The module computes no payable amount; the figures it does compute (advance limit and excess, outstanding earlier advance, challan variance, balance-transfer sum, death-claim expected amount) are check results and remain as they are. | No change to `GP/`; the scope decision applies to pension amounts. |
 | E3 | **H6 relations list goes live as advisory only.** The draft list is applied, its two findings are MEDIUM checks for the reviewer and never block a case, until the owner confirms Appendix B and its assumptions. | `9f941ce`; Appendix B below. |
+
+**9 Oct 2026 — no automatic return, in pension and in GP Fund.** E1 is withdrawn. A verification that
+finds required documents missing or defective now leaves the case with the Accountant General
+(`UNDER_REVIEW`) with the list in the history row; the AG returns it with the Return button, naming the
+papers. A return the officer makes inside the GP Fund module's own screens no longer moves the
+pension-side case either; the AG returns that case the same way. The system's only actions are to
+record a verification's outcome (`CHECK_DONE`, `CHECK_FAILED`). `AUTO_RETURN` and `GPF_RETURN` remain in
+the transition table only so history written before that day still reads.
 
 ## Appendix B: eligible family-pension relations — **Draft, pending rules-owner confirmation**
 

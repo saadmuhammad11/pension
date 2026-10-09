@@ -249,18 +249,14 @@ def open_issues(report: dict | None) -> dict:
 
 
 def outcome(issues: dict) -> str:
-    """Where a finished verification sends the case.
+    """Where a finished verification sends the case: to the Accountant General, always.
 
-    * documents missing or defective -> AUTO_RETURN, with the list, so the department can attach
-      them. Unless pages could not be identified: a paper reported "not found" may be on one of
-      them, and returning a case for a paper that is in the bundle is the error the office most
-      wants to avoid -- so those go to the AG (UNDER_REVIEW) to name the pages first.
-    * otherwise -> CHECK_DONE (UNDER_REVIEW): the AG clears the findings and decides. A clean
-      verification goes the same way: nothing is approved without an officer's decision
-      (business decision M1, 7 Oct 2026; until then a clean case was AUTO_APPROVEd).
+    CHECK_DONE (UNDER_REVIEW): the AG reads the findings and the list of missing or defective
+    documents and decides -- approve, reject, return, or ask for papers. Nothing is approved and
+    nothing is returned by the system (business decisions M1 of 7 Oct 2026 and of 9 Oct 2026: no
+    automatic return in pension or GP Fund; until then a case with documents missing was
+    AUTO_RETURNed to the department with the list).
     """
-    if issues["missing_checklist"] and not issues["unidentified_pages"]:
-        return "AUTO_RETURN"
     return "CHECK_DONE"
 
 
@@ -268,14 +264,6 @@ def nothing_outstanding(issues: dict) -> bool:
     """Every required document present, a checklist applied and no finding: the shape that used
     to approve a case by itself. Said in the history now, decided by an officer."""
     return bool(not issues["missing_checklist"] and not issues["flags_total"] and issues["checklist_present"])
-
-
-def _return_remark(issues: dict) -> str:
-    items = issues["missing_checklist"]
-    words = "; ".join(f"{i['id']} {i['requirement']}" + (" (defective)" if i.get("status") == "DEFECTIVE" else "")
-                      for i in items)
-    return (f"Returned by the AI verification: {len(items)} required document{'s' if len(items) != 1 else ''} "
-            f"missing or defective — {words}. Attach the documents and resubmit the case.")
 
 
 def mirror_decision(run_id: str, action: str, officer: str, role: str, remark: str) -> None:
@@ -562,35 +550,14 @@ def sync_run_states(conn: db.Connection, *, force: bool = False) -> int:
 
 
 def sync_gpf_case(conn: db.Connection, case: db.Row) -> dict | None:
-    """A GP Fund case under review follows a RETURN the officer made in the module's own screens:
-    back to the department with the hard stops. Called on every read of such a case. Returns the
-    history row, or None.
+    """Nothing moves a GP Fund case on the pension side but the Accountant General.
 
-    Until 7 Oct 2026 "passed for payment" in the module, or nothing left open, approved the
-    pension-side case by itself. Business decision M1: no automatic approval. The examination's
-    state is on the case screen; the AG approves the case by hand, with a remark."""
-    if case["status"] != workflow.UNDER_REVIEW or not case["gpf_case_id"]:
-        return None
-    try:
-        issues = gpf_issues_for_case(case["gpf_case_id"])
-    except gpf_bridge.GpfError:
-        return None
-    run_id = case["current_run_id"]
-    try:
-        if issues["gpf_returned"]:
-            who = issues["gpf"].get("disposed_by")
-            remark = ((f"Returned by {who} in the GP Fund examination" if who
-                       else "Returned in the GP Fund examination")
-                      + (f": {issues['gpf']['note']}" if issues["gpf"].get("note") else "")
-                      + (". Documents to attach — " + "; ".join(f"{m['id']} {m['requirement']}" for m in issues["missing_checklist"])
-                         if issues["missing_checklist"] else "") + ".")
-            # A system action (GPF_RETURN) mirroring the officer's return in the module -- not a
-            # pseudo-officer with no account (audit 7 Oct 2026, G6). The module's own audit names
-            # the officer; the payload carries that name.
-            return workflow.transition(conn, case, "GPF_RETURN", None, run_id=run_id,
-                                       payload={**issues, "auto": True, "returned_by": who}, remark=remark)
-    except (workflow.WorkflowError, db.OperationalError):
-        return None
+    Until 7 Oct 2026 "passed for payment" in the module approved the pension-side case by itself
+    (business decision M1 ended that), and until 9 Oct 2026 a RETURN the officer made in the
+    module's own screens returned the pension-side case by itself (GPF_RETURN). Decision of 9 Oct
+    2026: no automatic return in pension or GP Fund. The module's examination -- its disposal
+    included -- shows on the case screen, and the AG returns the case with the Return button and
+    a remark. Kept as the hook every read of a GP Fund case still calls; returns None."""
     return None
 
 
@@ -607,17 +574,10 @@ def _move_case_on(conn: db.Connection, case_id: str, run_id: str | None, state: 
             workflow.transition(conn, case, "CHECK_FAILED", None, run_id=run_id,
                                 remark=_plain_failure(error))
             return
-        action = outcome(issues)
-        if action == "AUTO_RETURN":
-            workflow.transition(conn, case, action, None, run_id=run_id, payload={**issues, "auto": True},
-                                remark=_return_remark(issues))
-            mirror_decision(run_id, "RETURN_FOR_CORRECTION", "System (AI verification)",
-                            "Auditor, Pension wing (AG / DAO)", _return_remark(issues))
-        else:
-            clean = nothing_outstanding(issues)
-            workflow.transition(conn, case, "CHECK_DONE", None, run_id=run_id,
-                                payload={**issues, **({"nothing_outstanding": True} if clean else {})},
-                                remark=_clean_remark() if clean else _summary_line(issues))
+        clean = nothing_outstanding(issues)
+        workflow.transition(conn, case, outcome(issues), None, run_id=run_id,
+                            payload={**issues, **({"nothing_outstanding": True} if clean else {})},
+                            remark=_clean_remark() if clean else _summary_line(issues))
     except (workflow.WorkflowError, db.OperationalError):
         pass                                  # somebody moved the case meanwhile, or the database was busy
 
@@ -645,7 +605,8 @@ def _summary_line(issues: dict) -> str:
     if issues.get("high_flags"):
         parts.append(f"{len(issues['high_flags'])} HIGH finding(s)")
     if issues.get("missing_checklist"):
-        parts.append(f"{len(issues['missing_checklist'])} checklist item(s) missing or defective")
+        parts.append(f"{len(issues['missing_checklist'])} checklist item(s) missing or defective — "
+                     f"return the case to the department for them if required")
     if issues.get("unidentified_pages"):
         parts.append(f"{issues['unidentified_pages']} page(s) could not be identified — name them before returning the case")
     return "AI verification complete, for the Accountant General's decision: " + (", ".join(parts) if parts else "no issues found") + "."

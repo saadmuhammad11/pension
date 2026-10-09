@@ -44,7 +44,7 @@ class TransitionTable(unittest.TestCase):
         with self.assertRaises(workflow.WorkflowError) as cm:
             workflow.check("DEPT_OFFICER", workflow.FORWARDED, "ADD_DOCS")
         self.assertEqual(cm.exception.status, 409)                       # the AG holds it now
-        self.assertIn(workflow.RETURNED, workflow.TRANSITIONS["AUTO_RETURN"][1] | {workflow.RETURNED})
+        self.assertNotIn("AUTO_RETURN", workflow.SYSTEM_ACTIONS)         # no automatic return (9 Oct 2026)
         self.assertNotIn("AUTO_APPROVE", workflow.TRANSITIONS)             # no automatic approval (M1, 7 Oct 2026)
         self.assertNotIn("AUTO_APPROVE", workflow.SYSTEM_ACTIONS)
         self.assertTrue(all(workflow.TRANSITIONS[a][2] != workflow.APPROVED for a in workflow.SYSTEM_ACTIONS))

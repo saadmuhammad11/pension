@@ -26,9 +26,10 @@ class TheOutcome(unittest.TestCase):
         self.assertEqual(case_runs.outcome(CLEAN), "CHECK_DONE")
         self.assertTrue(case_runs.nothing_outstanding(CLEAN))
 
-    def test_findings_and_missing_papers_behave_as_before(self):
+    def test_findings_and_missing_papers_wait_for_the_ag_too(self):
         self.assertEqual(case_runs.outcome({**CLEAN, "flags_total": 2}), "CHECK_DONE")
-        self.assertEqual(case_runs.outcome({**CLEAN, "missing_checklist": [{"id": "AG-06"}]}), "AUTO_RETURN")
+        # No automatic return (9 Oct 2026): a missing paper is for the AG to ask for.
+        self.assertEqual(case_runs.outcome({**CLEAN, "missing_checklist": [{"id": "AG-06"}]}), "CHECK_DONE")
         self.assertEqual(case_runs.outcome({**CLEAN, "missing_checklist": [{"id": "AG-06"}], "unidentified_pages": 2}), "CHECK_DONE")
         self.assertFalse(case_runs.nothing_outstanding({**CLEAN, "flags_total": 1}))
         self.assertFalse(case_runs.nothing_outstanding({**CLEAN, "checklist_present": False}))

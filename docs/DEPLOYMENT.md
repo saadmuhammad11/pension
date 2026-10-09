@@ -567,10 +567,10 @@ python3 -m api.check_inventory
 
 - [ ] AG desk, DDO and admin can each sign in, and each sees only what their role allows
 - [ ] A DDO sees only their own department's cases and **no AI output**
-- [ ] One self-pension case end to end: DDO files → AG Verify → auto-return or approve
+- [ ] One self-pension case end to end: DDO files → AG Verify → AG returns (missing papers) or approves
 - [ ] One family-pension case end to end
 - [ ] One GP Fund case end to end (`#/gpf`)
-- [ ] Missing-document auto-return works; flags show for AG
+- [ ] Missing documents are listed for the AG, who returns the case by hand; flags show for AG
 - [ ] Declared case type mismatch is flagged
 - [ ] Pension section filters/sidebar match the AG's sections
 
