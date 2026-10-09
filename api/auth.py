@@ -24,7 +24,6 @@ import hashlib
 import hmac
 import os
 import secrets
-import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -166,7 +165,7 @@ class User:
                 "must_change_password": self.must_change_password}
 
 
-def user_from_row(row: sqlite3.Row) -> User:
+def user_from_row(row: db.Row) -> User:
     return User(id=row["id"], username=row["username"], display_name=row["display_name"],
                 role=row["role"], department_code=row["department_code"],
                 active=bool(row["active"]), token_version=int(row["token_version"]),
@@ -209,12 +208,12 @@ def _attempt_key(username: str, address: str | None) -> str:
     return f"{username}@{address or '?'}"
 
 
-def _prune_attempts(conn: sqlite3.Connection) -> None:
+def _prune_attempts(conn: db.Connection) -> None:
     conn.execute("DELETE FROM login_attempts WHERE updated_at < ?",
                  ((datetime.now() - timedelta(days=1)).isoformat(timespec="seconds"),))
 
 
-def _locked(conn: sqlite3.Connection, username: str) -> int:
+def _locked(conn: db.Connection, username: str) -> int:
     """Seconds left on this key's lockout, or 0."""
     row = conn.execute("SELECT locked_until FROM login_attempts WHERE username = ?", (username,)).fetchone()
     if not row or not row["locked_until"]:
@@ -227,7 +226,7 @@ def _address_key(address: str | None) -> str | None:
     return f"*@{address}" if address else None
 
 
-def _note_failure(conn: sqlite3.Connection, username: str, *, max_failures: int = MAX_FAILURES,
+def _note_failure(conn: db.Connection, username: str, *, max_failures: int = MAX_FAILURES,
                   lockout_seconds: int = LOCKOUT_SECONDS) -> None:
     row = conn.execute("SELECT failures FROM login_attempts WHERE username = ?", (username,)).fetchone()
     failures = (row["failures"] if row else 0) + 1
@@ -241,7 +240,7 @@ def _note_failure(conn: sqlite3.Connection, username: str, *, max_failures: int 
                  (username, failures, locked, db.now()))
 
 
-def authenticate(username: str, password: str, portal: str | None, conn: sqlite3.Connection,
+def authenticate(username: str, password: str, portal: str | None, conn: db.Connection,
                  host: str | None = None, address: str | None = None) -> User:
     """Check the credentials, the rate limit, and that this account belongs on the portal that asked.
 
@@ -295,7 +294,7 @@ def authenticate(username: str, password: str, portal: str | None, conn: sqlite3
     return user
 
 
-def user_for_token(token: str, conn: sqlite3.Connection, scope: str | None = None) -> User:
+def user_for_token(token: str, conn: db.Connection, scope: str | None = None) -> User:
     """The account behind a token. A scoped token (``issue_scoped_token``) is accepted only where
     that scope is asked for, and an ordinary session token only where none is."""
     try:
@@ -319,7 +318,7 @@ def user_for_token(token: str, conn: sqlite3.Connection, scope: str | None = Non
 
 # -- FastAPI dependencies ----------------------------------------------------------------------
 
-def get_conn() -> sqlite3.Connection:
+def get_conn() -> db.Connection:
     conn = db.connect()
     try:
         yield conn
@@ -342,7 +341,7 @@ PASSWORD_CHANGE_DUE = "change your password before you continue"
 
 
 def current_user(request: Request, authorization: str | None = Header(default=None),
-                 conn: sqlite3.Connection = Depends(get_conn)) -> User:
+                 conn: db.Connection = Depends(get_conn)) -> User:
     token = _bearer(authorization)
     if not token:
         raise HTTPException(401, "sign in first")
@@ -357,7 +356,7 @@ def current_user(request: Request, authorization: str | None = Header(default=No
 
 def current_user_q(request: Request, authorization: str | None = Header(default=None),
                    token: str | None = Query(default=None),
-                   conn: sqlite3.Connection = Depends(get_conn)) -> User:
+                   conn: db.Connection = Depends(get_conn)) -> User:
     """Like ``current_user`` but also reads ``?token=`` -- for ``<img>`` and ``EventSource``."""
     value = _bearer(authorization) or token
     if not value:
@@ -382,7 +381,7 @@ def require_roles(*roles: str):
 
 # -- production start-up -------------------------------------------------------------------------
 
-def shared_logins(conn: sqlite3.Connection) -> list[str]:
+def shared_logins(conn: db.Connection) -> list[str]:
     """Active accounts whose login names a desk, not a person (``db.SHARED_LOGINS``). Production
     refuses to start with one (business decision C1, 7 Oct 2026): every decision is recorded
     under a named officer, and a shared login records nobody."""
@@ -391,7 +390,7 @@ def shared_logins(conn: sqlite3.Connection) -> list[str]:
     return sorted(r["username"] for r in rows if r["username"].lower() in SHARED_LOGINS)
 
 
-def flag_weak_passwords(conn: sqlite3.Connection) -> list[str]:
+def flag_weak_passwords(conn: db.Connection) -> list[str]:
     """Mark every active account still on a shared or obvious password to change it at next sign-in.
 
     Run when the API starts in production, so a database carried over from the trial -- where

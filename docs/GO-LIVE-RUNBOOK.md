@@ -13,10 +13,11 @@ separate box, steps 10 and 15 run there.
 
 ```bash
 # on the box whose API is about to stop; 0 = safe
-sqlite3 "file:$DB?mode=ro" "SELECT COUNT(*) FROM case_runs WHERE state IN ('queued','running')"
+psql "$PENSION_DATABASE_URL" -Atc "SELECT COUNT(*) FROM case_runs WHERE state IN ('queued','running')"
 ```
-(`$DB` is `artifacts/portal.sqlite3` on the trial box, `/var/lib/pension/artifacts/portal.sqlite3`
-on production.) `/api/health`'s `runs` field counts every run ever, not active ones.
+(`PENSION_DATABASE_URL` is in `deploy/postgres.env` on the trial box and `/etc/pension/pension.env` on
+production; on the trial box `docker exec pension-postgres psql -U pension -d pension -Atc "..."` works
+without a client installed.) `/api/health`'s `runs` field counts every run ever, not active ones.
 
 ---
 
@@ -26,11 +27,12 @@ on production.) `/api/health`'s `runs` field counts every run ever, not active o
 
 ```bash
 cd ~/Desktop/pension
-test "$(sqlite3 'file:artifacts/portal.sqlite3?mode=ro' "SELECT COUNT(*) FROM case_runs WHERE state IN ('queued','running')")" = 0
+set -a; . deploy/postgres.env; set +a
+test "$(docker exec pension-postgres psql -U pension -d pension -Atc "SELECT COUNT(*) FROM case_runs WHERE state IN ('queued','running')")" = 0
 STAMP=$(date +%F-%H%M)
 mkdir -p artifacts/backup-pre-golive-$STAMP && chmod 700 artifacts/backup-pre-golive-$STAMP
-sqlite3 artifacts/portal.sqlite3 ".backup 'artifacts/backup-pre-golive-$STAMP/portal.sqlite3'"
-sqlite3 artifacts/backup-pre-golive-$STAMP/portal.sqlite3 "PRAGMA integrity_check;"      # must print ok
+docker exec pension-postgres pg_dump -U pension -Fc pension > artifacts/backup-pre-golive-$STAMP/portal.dump
+docker exec -i pension-postgres pg_restore --list < artifacts/backup-pre-golive-$STAMP/portal.dump >/dev/null   # the archive reads back
 tar czf artifacts/backup-pre-golive-$STAMP/gpf-data.tgz -C GP/backend data
 chmod 600 artifacts/backup-pre-golive-$STAMP/*
 ```
@@ -77,7 +79,7 @@ scp dist-release/pension-1.0.0.tgz dist-release/pension-1.0.0.tgz.sha256 <admin>
 ### 5. Prepare the server **[sudo]** (first install only; §3.2)
 
 ```bash
-sudo apt update && sudo apt install -y python3.12-venv poppler-utils libreoffice-core libreoffice-writer nginx sqlite3 git ufw nmap
+sudo apt update && sudo apt install -y python3.12-venv poppler-utils libreoffice-core libreoffice-writer nginx postgresql-16 postgresql-client-16 git ufw nmap
 sudo useradd --system --home /opt/pension --shell /usr/sbin/nologin pension
 sudo mkdir -p /opt/pension/releases /var/lib/pension/{artifacts,gpf} /var/log/pension /etc/pension
 sudo chown -R pension:pension /var/lib/pension /var/log/pension
@@ -87,11 +89,12 @@ sudo chmod 750 /var/lib/pension /etc/pension
 ### 6. Back up the production database (every upgrade; skip on the first install) **[sudo]**
 
 ```bash
+set -a; . /etc/pension/pension.env; set +a
 sudo systemctl is-active pension-api && \
-  test "$(sudo -u pension sqlite3 'file:/var/lib/pension/artifacts/portal.sqlite3?mode=ro' "SELECT COUNT(*) FROM case_runs WHERE state IN ('queued','running')")" = 0
+  test "$(psql "$PENSION_DATABASE_URL" -Atc "SELECT COUNT(*) FROM case_runs WHERE state IN ('queued','running')")" = 0
 sudo mkdir -p /var/backups/pension/pre-v1.0.0
-sudo -u pension sqlite3 /var/lib/pension/artifacts/portal.sqlite3 ".backup '/var/backups/pension/pre-v1.0.0/portal.sqlite3'"
-sudo sqlite3 /var/backups/pension/pre-v1.0.0/portal.sqlite3 "PRAGMA integrity_check;"
+pg_dump -Fc "$PENSION_DATABASE_URL" | sudo tee /var/backups/pension/pre-v1.0.0/portal.dump >/dev/null
+sudo pg_restore --list /var/backups/pension/pre-v1.0.0/portal.dump >/dev/null
 sudo rsync -a /var/lib/pension/gpf/ /var/backups/pension/pre-v1.0.0/gpf/
 sudo tar czf /var/backups/pension/pre-v1.0.0/etc-pension.tgz -C /etc pension
 ```
@@ -134,14 +137,15 @@ Values that must be right (production refuses to start otherwise, or runs unsafe
 | `PENSION_ENV` | `production` |
 | `PENSION_JWT_SECRET` | `openssl rand -base64 48` (64+ characters; never `CHANGE_ME`) |
 | `PENSION_SEED_PASSWORD` | **unset** (seeded accounts get generated passwords) |
-| `PENSION_DB` | `/var/lib/pension/artifacts/portal.sqlite3` |
+| `PENSION_DATABASE_URL` | `postgresql://pension:<password>@127.0.0.1:5432/pension` (DEPLOYMENT §3.2 creates it) |
+| `PENSION_DB` | **unset** (SQLite fallback only) |
 | `PENSION_API_BIND`, `PENSION_PORTAL_BIND` | `127.0.0.1` |
 | `PENSION_TRUSTED_PROXIES` | `127.0.0.1` |
 | `PENSION_CORS_ORIGINS`, `PENSION_PUBLIC_HOST` | the portal's exact origin / host name |
 | `PENSION_PORTAL_DIST` | `/opt/pension/current/portals/dist` |
 | `PENSION_MODEL_API_KEY` | the same value as `VLLM_API_KEY` in step 10 |
 | `PENSION_VISION_URL` etc. | `http://127.0.0.1:8011`, `:8012`, `:8093` (the reranker's LAN address if remote) |
-| `GPF_DB` | `/var/lib/pension/artifacts/portal.sqlite3` |
+| `GPF_DB` | the same URL as `PENSION_DATABASE_URL` |
 | `GPF_DATA_DIR` | `/var/lib/pension/gpf` |
 | `PENSION_GPF_PROXY`, `PENSION_API_DOCS`, `PENSION_TRUST_PORT_HEADER`, `PENSION_DEPARTMENT_PORTS` | **unset** |
 
@@ -197,9 +201,10 @@ sudo systemctl stop pension-portal pension-gpf pension-api
 
 **Fresh start (recommended):** nothing to do; the API creates the schema on first start.
 
-**Carry-over:** restore the trial backup from step 1 into `/var/lib/pension/artifacts/portal.sqlite3`
-(plus the matching `artifacts/run-*` and `artifacts/cases/*` folders), `sudo chown -R pension:pension /var/lib/pension`,
-and remove `-wal`/`-shm` files. Trial accounts are dealt with in step 16 either way.
+**Carry-over:** restore the trial dump from step 1 into the empty production database,
+`pg_restore -d "$PENSION_DATABASE_URL" --no-owner portal.dump` (a trial that was still on the SQLite file:
+`python3 -m api.db import-sqlite portal.sqlite3`), plus the matching `artifacts/run-*` and `artifacts/cases/*`
+folders, `sudo chown -R pension:pension /var/lib/pension`. Trial accounts are dealt with in step 16 either way.
 
 ### 14. Switch the release and start the API **[sudo]**
 
@@ -252,12 +257,13 @@ alias pdb='sudo -u pension env $(sudo grep -v "^#" /etc/pension/pension.env | xa
    sign-in (`must_change_password`). The administrator's own password comes from `credentials.csv`.
 5. Verify, then destroy the sheet:
    ```bash
-   sudo -u pension sqlite3 'file:/var/lib/pension/artifacts/portal.sqlite3?mode=ro' \
+   psql "$PENSION_DATABASE_URL" -Atc \
      "SELECT username, role FROM users WHERE active = 1 AND username IN ('ag.reviewer','dag','ao','reviewer','officer','auditor','ag.upload')"   # must be empty
-   sudo -u pension /opt/pension/venv/bin/python3 - <<'EOF'
-   import sqlite3, sys; sys.path.insert(0, "/opt/pension/current")
+   sudo -u pension env PENSION_DATABASE_URL="$PENSION_DATABASE_URL" /opt/pension/venv/bin/python3 - <<'EOF'
+   import sys; sys.path.insert(0, "/opt/pension/current")
+   from api import db
    from api.auth import verify_password
-   con = sqlite3.connect("file:/var/lib/pension/artifacts/portal.sqlite3?mode=ro", uri=True)
+   con = db.connect()
    bad = [u for u, h in con.execute("SELECT username, password_hash FROM users WHERE active = 1") if verify_password("1234", h)]
    print("accounts on 1234:", bad or "none")
    EOF
@@ -305,8 +311,8 @@ Use when a step 14–17 check fails and cannot be fixed in minutes. **[sudo]** t
 3. **Database:** migrations 0010 (role check rebuild) and any seed rename are not reversible by the
    old code, so restore the pre-upgrade backup from step 6:
    ```bash
-   sudo -u pension cp /var/backups/pension/pre-v1.0.0/portal.sqlite3 /var/lib/pension/artifacts/portal.sqlite3
-   sudo rm -f /var/lib/pension/artifacts/portal.sqlite3-wal /var/lib/pension/artifacts/portal.sqlite3-shm
+   set -a; . /etc/pension/pension.env; set +a
+   pg_restore -d "$PENSION_DATABASE_URL" --clean --if-exists --no-owner /var/backups/pension/pre-v1.0.0/portal.dump
    sudo rsync -a /var/backups/pension/pre-v1.0.0/gpf/ /var/lib/pension/gpf/
    ```
    Anything filed between the backup and the rollback is lost; say so to the departments concerned.

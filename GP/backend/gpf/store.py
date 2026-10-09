@@ -2,12 +2,12 @@
 
 Two seams kept deliberately simple and swappable:
 
-* `SqliteCaseRepository` — the cases, in the shared portal database (29 Sep 2026): the same
-  SQLite file the AG Punjab pension case system keeps its cases in, ``artifacts/portal.sqlite3``
-  at the top of the pension tree, tables ``gpf_cases`` and ``gpf_documents`` (schema in
-  ``api/migrations/0005_gpf_cases.sql`` there). One backup covers both products. The
-  `Repository` protocol is the contract; the PostgreSQL implementation the spec names (§1)
-  satisfies the same one, and nothing above this layer changes.
+* `DbCaseRepository` — the cases, in the shared portal database (29 Sep 2026): the database the
+  AG Punjab pension case system keeps its cases in -- PostgreSQL, named by ``GPF_DB`` as a URL
+  (9 Oct 2026), or the SQLite file ``artifacts/portal.sqlite3`` at the top of the pension tree --
+  tables ``gpf_cases`` and ``gpf_documents`` (schema in ``api/migrations/0005_gpf_cases.sql``
+  there). One backup covers both products. The `Repository` protocol is the contract.
+  ``SqliteCaseRepository`` remains as the old name of the same class.
 * `CaseRepository` — the original in-memory store with write-through JSON snapshots. Kept for
   tests and for running the module on its own (``GPF_DB=`` empty); the snapshots it wrote before
   the move are imported into the database once, by id, the first time the SQLite repository sees
@@ -25,18 +25,19 @@ import hashlib
 import json
 import mimetypes
 import re
-import sqlite3
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Any, Optional, Protocol
 
+from .dbshim import dbcore
 from .engine import CaseState
 
 
 # ── document store ────────────────────────────────────────────────────────────
 class DocumentStore:
-    def __init__(self, root: Path, db: "Optional[SqliteCaseRepository]" = None):
+    def __init__(self, root: Path, db: "Optional[DbCaseRepository]" = None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.db = db
@@ -155,23 +156,25 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-class SqliteCaseRepository:
+class DbCaseRepository:
     """Cases in the shared portal database, with the in-memory map the service works on.
 
     Semantics are those of `CaseRepository`: `get` hands back the live object, `save` makes it
     durable. The database is the durable copy and the whole record is loaded at start-up, so a
     restart -- of this module or of the machine -- loses nothing that was saved.
+
+    ``db`` is a PostgreSQL URL or the path of a SQLite file (``dbcore`` tells them apart). The one
+    connection is shared by the request threads; writes take a lock, since a psycopg connection
+    runs one statement at a time (sqlite serialised them itself).
     """
 
-    def __init__(self, db_path: Path | str = DEFAULT_DB, *, schema_sql: Path = SCHEMA_SQL,
+    def __init__(self, db: Path | str = DEFAULT_DB, *, schema_sql: Path = SCHEMA_SQL,
                  import_dir: Optional[Path] = None):
-        self.path = Path(db_path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path, timeout=5.0, isolation_level=None, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA busy_timeout=5000")
-        self.conn.execute("PRAGMA foreign_keys=ON")
+        self.target: Any = str(db) if dbcore.is_postgres(str(db)) else Path(db)
+        self.path: Optional[Path] = self.target if isinstance(self.target, Path) else None   # None on PostgreSQL
+        self.conn = dbcore.connect(self.target)
+        self.backend = dbcore.backend_of(self.conn)
+        self._lock = threading.RLock()
         self._ensure_schema(schema_sql)
         self.imported = self.import_snapshots(import_dir) if import_dir else 0
         self._mem: dict[str, CaseState] = {}
@@ -179,11 +182,12 @@ class SqliteCaseRepository:
             self._mem[row["id"]] = _from_snapshot(json.loads(row["state_json"]))
 
     def _ensure_schema(self, schema_sql: Path) -> None:
-        have = {r["name"] for r in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        have = dbcore.table_names(self.conn)
         if {"gpf_cases", "gpf_documents"} <= have:
             return
         if not schema_sql.exists():
-            raise RuntimeError(f"{self.path} has no gpf_cases table and the schema file {schema_sql} is missing")
+            raise RuntimeError(f"{dbcore.masked(self.target)} has no gpf_cases table and the schema file "
+                               f"{schema_sql} is missing")
         # The same file the pension API applies at start-up; recorded there so it is not re-run.
         self.conn.executescript(schema_sql.read_text(encoding="utf-8"))
         self.conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations "
@@ -212,15 +216,17 @@ class SqliteCaseRepository:
         names = ", ".join(cols)
         marks = ", ".join("?" for _ in cols)
         updates = ", ".join(f"{c} = excluded.{c}" for c in cols if c not in ("id", "created_at"))
-        self.conn.execute(f"INSERT INTO gpf_cases({names}) VALUES ({marks}) "
-                          f"ON CONFLICT(id) DO UPDATE SET {updates}", tuple(cols.values()))
+        with self._lock:
+            self.conn.execute(f"INSERT INTO gpf_cases({names}) VALUES ({marks}) "
+                              f"ON CONFLICT(id) DO UPDATE SET {updates}", tuple(cols.values()))
 
     def record_document(self, case_id: str, meta: dict) -> None:
-        self.conn.execute(
-            "INSERT INTO gpf_documents(id, case_id, name, stored_as, sha256, bytes, content_type, saved_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (uuid.uuid4().hex, case_id, meta["name"] or "upload", meta["storedAs"], meta["hash"],
-             meta["size"], meta["type"], _now()))
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO gpf_documents(id, case_id, name, stored_as, sha256, bytes, content_type, saved_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (uuid.uuid4().hex, case_id, meta["name"] or "upload", meta["storedAs"], meta["hash"],
+                 meta["size"], meta["type"], _now()))
 
     def import_snapshots(self, snapshot_dir: Path) -> int:
         """Load the JSON snapshots the file-backed repository wrote, skipping ids already present.
@@ -261,3 +267,7 @@ class SqliteCaseRepository:
 
     def exists(self, case_id: str) -> bool:
         return case_id in self._mem
+
+
+#: The class's name until 9 Oct 2026, when the database stopped being only SQLite.
+SqliteCaseRepository = DbCaseRepository

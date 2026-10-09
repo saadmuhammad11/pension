@@ -147,13 +147,13 @@ class Database(unittest.TestCase):
     def test_history_and_audit_are_append_only(self) -> None:
         case = self._case(workflow.AI_CHECKED)
         workflow.transition(self.conn, case, "FORWARD", Actor("DEPT_OFFICER"), remark="x")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(db.IntegrityError):
             self.conn.execute("UPDATE case_events SET remark = 'edited'")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(db.IntegrityError):
             self.conn.execute("DELETE FROM case_events")
         workflow.audit(self.conn, actor=Actor("ADMIN"), action="X", entity_type="case", entity_id="c1",
                        before={"status": "A"}, after={"status": "B"}, reason="because")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(db.IntegrityError):
             self.conn.execute("DELETE FROM audit_log")
 
 

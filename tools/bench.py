@@ -20,7 +20,6 @@ import argparse
 import json
 import os
 import shutil
-import sqlite3
 import subprocess
 import sys
 import threading
@@ -30,7 +29,11 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TRIAL_DB = ROOT / "artifacts" / "portal.sqlite3"
+sys.path.insert(0, str(ROOT))
+from api import dbcore  # noqa: E402  -- no other project module yet: isolation is set below, before api.db loads
+
+#: The trial's database: PostgreSQL when PENSION_DATABASE_URL is set (deploy/postgres.env), else the file.
+TRIAL_DB = os.environ.get("PENSION_DATABASE_URL") or str(ROOT / "artifacts" / "portal.sqlite3")
 MODELS = {"vision": "http://127.0.0.1:8011", "ocr": "http://127.0.0.1:8012", "embed": "http://127.0.0.1:8093"}
 
 #: The fixed set. Pension cases are root PDFs (run id = sha256 prefix, as the API does it); the GP
@@ -45,13 +48,34 @@ CASES = {
 
 
 def _trial_runs_active() -> int:
-    if not TRIAL_DB.exists():
+    if not dbcore.is_postgres(TRIAL_DB) and not Path(TRIAL_DB).exists():
         return 0
-    con = sqlite3.connect(f"file:{TRIAL_DB}?mode=ro", uri=True)
+    con = dbcore.connect(TRIAL_DB)
     try:
+        if "case_runs" not in dbcore.table_names(con):
+            return 0
         return con.execute("SELECT COUNT(*) FROM case_runs WHERE state IN ('queued','running')").fetchone()[0]
     finally:
         con.close()
+
+
+def _isolated_target(bench_dir: Path, label: str) -> str:
+    """Where this benchmark's rows go, apart from the trial's: a schema of its own in the same
+    PostgreSQL database (bench_<label>, emptied first), or a SQLite file under the bench folder."""
+    if not dbcore.is_postgres(TRIAL_DB):
+        return str(bench_dir / "bench.sqlite3")
+    import re
+    import urllib.parse
+    schema = "bench_" + re.sub(r"[^a-z0-9_]", "_", label.lower())[:40]
+    con = dbcore.connect(TRIAL_DB)
+    try:
+        con.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        con.execute(f'CREATE SCHEMA "{schema}"')
+    finally:
+        con.close()
+    # libpq's options parameter: every connection made with this URL works in that schema.
+    sep = "&" if "?" in TRIAL_DB else "?"
+    return TRIAL_DB + sep + "options=" + urllib.parse.quote(f"-csearch_path={schema}")
 
 
 def _healthy(url: str) -> bool:
@@ -136,8 +160,8 @@ def _findings_gpf(view: dict) -> dict:
             "facts_keys": sorted((view.get("facts") or {}).keys()) if isinstance(view.get("facts"), dict) else None}
 
 
-def _timings(db_path: Path, run_id: str) -> dict:
-    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True); con.row_factory = sqlite3.Row
+def _timings(db_path: Path | str, run_id: str) -> dict:
+    con = dbcore.connect(str(db_path))
     try:
         rows = [dict(r) for r in con.execute("SELECT * FROM run_timings WHERE run_id = ? ORDER BY id", (run_id,))]
     finally:
@@ -158,7 +182,7 @@ def _timings(db_path: Path, run_id: str) -> dict:
     return {"stages": stages, "models": models, "rows": len(rows), "raw": rows}
 
 
-def run_pension(case: dict, bench_dir: Path, db_path: Path) -> dict:
+def run_pension(case: dict, bench_dir: Path, db_path: Path | str) -> dict:
     import hashlib
     from api import runs
     from pipeline import timing
@@ -179,7 +203,7 @@ def run_pension(case: dict, bench_dir: Path, db_path: Path) -> dict:
             "events": [{"stage": e.get("stage"), "message": e.get("message"), "at": e.get("at")} for e in run.events]}
 
 
-def run_gpf(case: dict, bench_dir: Path, db_path: Path) -> dict:
+def run_gpf(case: dict, bench_dir: Path, db_path: Path | str) -> dict:
     sys.path.insert(0, str(ROOT / "GP" / "backend"))
     from gpf import api as gpf_api
     pages = json.loads((ROOT / case["pages"]).read_text())
@@ -216,16 +240,20 @@ def main(argv: list[str]) -> int:
 
     bench_dir = ROOT / "artifacts" / "bench" / args.label
     bench_dir.mkdir(parents=True, exist_ok=True)
-    db_path = bench_dir / "bench.sqlite3"
-    # Isolation and model addresses, set before any project module is imported.
-    os.environ["PENSION_DB"] = str(db_path)
-    os.environ["GPF_DB"] = str(db_path)
+    db_path = _isolated_target(bench_dir, args.label)
+    # Isolation and model addresses, set before api.db (and the GP Fund module) are imported.
+    if dbcore.is_postgres(db_path):
+        os.environ["PENSION_DATABASE_URL"] = db_path
+    else:
+        os.environ.pop("PENSION_DATABASE_URL", None)
+        os.environ["PENSION_DB"] = db_path
+    os.environ.pop("PENSION_TEST_DATABASE_URL", None)
+    os.environ["GPF_DB"] = db_path
     os.environ["GPF_DATA_DIR"] = str(bench_dir / "gpf-data")
     os.environ.setdefault("PENSION_VISION_URL", MODELS["vision"] + "/v1/chat/completions")
     os.environ.setdefault("PENSION_OCR_URL", MODELS["ocr"] + "/v1/chat/completions")
     os.environ.setdefault("PENSION_EMBED_URL", MODELS["embed"] + "/v1/embeddings")
     os.environ.setdefault("GPF_VLLM_URLS", ",".join(MODELS.values()) + ",http://192.168.101.10:8001")
-    sys.path.insert(0, str(ROOT))
     from api import db, runs
     db.migrate()
     runs.ARTIFACTS = bench_dir / "artifacts"; runs.UPLOADS = runs.ARTIFACTS / "uploads"

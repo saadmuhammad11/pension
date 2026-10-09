@@ -17,7 +17,6 @@ import io
 import os
 import json
 from datetime import datetime
-import sqlite3
 import threading
 import time
 import zipfile
@@ -40,7 +39,7 @@ def document_dir(case_id: str, submission_no: int) -> Path:
     return CASE_FILES / case_id / f"s{submission_no}"
 
 
-def bundle_bytes(conn: sqlite3.Connection, case_id: str) -> tuple[bytes, list[dict]]:
+def bundle_bytes(conn: db.Connection, case_id: str) -> tuple[bytes, list[dict]]:
     """A zip of every document on the case, in upload order, with fixed timestamps.
 
     Fixed timestamps and names make the bytes a function of the content alone, so re-checking
@@ -71,7 +70,7 @@ def bundle_bytes(conn: sqlite3.Connection, case_id: str) -> tuple[bytes, list[di
     return buf.getvalue(), [dict(r) for r in rows]
 
 
-def documents_sha(conn: sqlite3.Connection, case_id: str) -> str:
+def documents_sha(conn: db.Connection, case_id: str) -> str:
     """One hash for the set of documents on the case now (their sha256s, in order)."""
     import hashlib
     rows = conn.execute("SELECT sha256 FROM case_documents WHERE case_id = ? AND superseded_in_submission IS NULL "
@@ -92,7 +91,7 @@ def _is_starting(case_id: str) -> bool:
         return case_id in _STARTING
 
 
-def start_check(conn: sqlite3.Connection, case: sqlite3.Row, user) -> dict:
+def start_check(conn: db.Connection, case: db.Row, user) -> dict:
     """Start (or resume) the verification of a case; see ``_start_check``."""
     with _STARTING_LOCK:
         _STARTING.add(case["id"])
@@ -103,7 +102,7 @@ def start_check(conn: sqlite3.Connection, case: sqlite3.Row, user) -> dict:
             _STARTING.discard(case["id"])
 
 
-def _start_check(conn: sqlite3.Connection, case: sqlite3.Row, user) -> dict:
+def _start_check(conn: db.Connection, case: db.Row, user) -> dict:
     """Start (or resume) the verification over the case's documents; record the run on the case.
 
     A pension case goes to the pension pipeline; a GP Fund case to the GP Fund module's reader
@@ -296,7 +295,7 @@ def mirror_decision(run_id: str, action: str, officer: str, role: str, remark: s
         pass
 
 
-def settle(conn: sqlite3.Connection, case: sqlite3.Row, run_id: str, gate: dict, officer: str,
+def settle(conn: db.Connection, case: db.Row, run_id: str, gate: dict, officer: str,
            by=None) -> dict | None:
     """Record that nothing is left outstanding on a case under review; move nothing.
 
@@ -360,7 +359,7 @@ def gpf_issues_for_case(gpf_case_id: str) -> dict:
     return gpf_bridge.issues(gpf_bridge.case(gpf_case_id))
 
 
-def referenced_run_ids(conn: sqlite3.Connection) -> set[str]:
+def referenced_run_ids(conn: db.Connection) -> set[str]:
     """Every run id a case has ever been verified under: never swept from disk."""
     return {r["run_id"] for r in conn.execute("SELECT run_id FROM case_runs")}
 
@@ -386,7 +385,7 @@ def _run_state(run_id: str) -> tuple[str, str | None]:
     return "failed", "the run left no artefacts"
 
 
-def record_detected_case_type(conn: sqlite3.Connection, case_id: str, issues: dict) -> None:
+def record_detected_case_type(conn: db.Connection, case_id: str, issues: dict) -> None:
     """What the verification read the case as, on the case. A case nobody declared a type for
     (filed before 29 Sep 2026, or imported) takes the detected type as its own, marked DETECTED;
     a declared or corrected type is never overwritten by the machine."""
@@ -401,7 +400,7 @@ def record_detected_case_type(conn: sqlite3.Connection, case_id: str, issues: di
                      (office, office, case_id))
 
 
-def backfill_case_types(conn: sqlite3.Connection | None = None) -> int:
+def backfill_case_types(conn: db.Connection | None = None) -> int:
     """Cases filed before the case type existed: take the AI's reading from their last report.
     Idempotent; run at start-up."""
     from api.runs import ARTIFACTS
@@ -449,7 +448,7 @@ _LAST_SYNC = 0.0
 _SYNC_LOCK = threading.Lock()
 
 
-def sync_run_states(conn: sqlite3.Connection, *, force: bool = False) -> int:
+def sync_run_states(conn: db.Connection, *, force: bool = False) -> int:
     """Bring ``case_runs`` up to date with the pipeline and move cases on. Idempotent.
 
     Returns the number of runs whose row changed. Safe to call from a timer and from every
@@ -525,7 +524,7 @@ def sync_run_states(conn: sqlite3.Connection, *, force: bool = False) -> int:
                                  (rep.get("claimant_name"), row["case_id"]))
                 if rep:
                     record_detected_case_type(conn, row["case_id"], issues)
-        except sqlite3.OperationalError:
+        except db.OperationalError:
             continue                              # the database was busy; the next sweep records it
         changed += 1
         _move_case_on(conn, row["case_id"], row["run_id"], state, issues, error)
@@ -534,7 +533,7 @@ def sync_run_states(conn: sqlite3.Connection, *, force: bool = False) -> int:
     for case in conn.execute(
             "SELECT c.*, cr.state AS run_state, cr.error AS run_error FROM cases c "
             "LEFT JOIN case_runs cr ON cr.id = (SELECT x.id FROM case_runs x WHERE x.case_id = c.id "
-            "AND x.run_id = c.current_run_id ORDER BY x.started_at DESC, x.rowid DESC LIMIT 1) "
+            "AND x.run_id = c.current_run_id ORDER BY x.started_at DESC, x.id DESC LIMIT 1) "
             "WHERE c.status = ? AND (cr.id IS NULL OR cr.state IN ('done', 'failed'))",
             (workflow.AI_CHECKING,)).fetchall():
         if case["run_state"] is None:
@@ -562,7 +561,7 @@ def sync_run_states(conn: sqlite3.Connection, *, force: bool = False) -> int:
     return changed
 
 
-def sync_gpf_case(conn: sqlite3.Connection, case: sqlite3.Row) -> dict | None:
+def sync_gpf_case(conn: db.Connection, case: db.Row) -> dict | None:
     """A GP Fund case under review follows a RETURN the officer made in the module's own screens:
     back to the department with the hard stops. Called on every read of such a case. Returns the
     history row, or None.
@@ -590,12 +589,12 @@ def sync_gpf_case(conn: sqlite3.Connection, case: sqlite3.Row) -> dict | None:
             # the officer; the payload carries that name.
             return workflow.transition(conn, case, "GPF_RETURN", None, run_id=run_id,
                                        payload={**issues, "auto": True, "returned_by": who}, remark=remark)
-    except (workflow.WorkflowError, sqlite3.OperationalError):
+    except (workflow.WorkflowError, db.OperationalError):
         return None
     return None
 
 
-def _move_case_on(conn: sqlite3.Connection, case_id: str, run_id: str | None, state: str, issues: dict,
+def _move_case_on(conn: db.Connection, case_id: str, run_id: str | None, state: str, issues: dict,
                   error: str | None) -> None:
     """CHECK_DONE or CHECK_FAILED on a case still in AI_CHECKING for this run; silent otherwise."""
     case = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
@@ -619,7 +618,7 @@ def _move_case_on(conn: sqlite3.Connection, case_id: str, run_id: str | None, st
             workflow.transition(conn, case, "CHECK_DONE", None, run_id=run_id,
                                 payload={**issues, **({"nothing_outstanding": True} if clean else {})},
                                 remark=_clean_remark() if clean else _summary_line(issues))
-    except (workflow.WorkflowError, sqlite3.OperationalError):
+    except (workflow.WorkflowError, db.OperationalError):
         pass                                  # somebody moved the case meanwhile, or the database was busy
 
 

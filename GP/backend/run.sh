@@ -60,6 +60,19 @@ if [[ -z "${PENSION_MODEL_API_KEY:-}" && -r /etc/pension/models.env ]]; then
 fi
 export PENSION_MODEL_API_KEY="${PENSION_MODEL_API_KEY:-}"
 export GPF_DATA_DIR="${GPF_DATA_DIR:-$ROOT/data}"
+# The shared database (9 Oct 2026): the pension tree's PostgreSQL, from deploy/postgres.env two
+# levels up, unless GPF_DB is already set. Without either the module uses the pension tree's
+# SQLite file (gpf/store.py DEFAULT_DB).
+PENSION_ROOT="$(cd "$ROOT/../.." && pwd)"
+if [[ -z "${GPF_DB:-}" ]]; then
+  if [[ -n "${PENSION_DATABASE_URL:-}" ]]; then
+    GPF_DB="$PENSION_DATABASE_URL"
+  elif [[ -r "$PENSION_ROOT/deploy/postgres.env" ]]; then
+    GPF_DB="$(sed -n 's/^PENSION_DATABASE_URL=//p' "$PENSION_ROOT/deploy/postgres.env" | tail -1)"
+  fi
+fi
+[[ -n "${GPF_DB:-}" ]] && export GPF_DB
+unset PENSION_TEST_DATABASE_URL
 
 C_OK=$'\e[32m'; C_BAD=$'\e[31m'; C_WARN=$'\e[33m'; C_OFF=$'\e[0m'
 ok()   { printf "  ${C_OK}%-7s${C_OFF} %s\n" "OK" "$1"; }
@@ -150,7 +163,8 @@ TEST_VENV="${GPF_TEST_VENV:-${XDG_CACHE_HOME:-$HOME/.cache}/gpf-test-venv}"
 tests() {
   # If the shared interpreter happens to have pytest, use it and build nothing.
   if "$VENV_PY" -c "import pytest" 2>/dev/null; then
-    ( cd "$ROOT" && exec "$VENV_PY" -m pytest "${@}" )
+    ( cd "$ROOT" && exec env -u GPF_VLLM_URLS -u GPF_VLLM_TIMEOUT -u GPF_DATA_DIR -u GPF_DB -u PENSION_TEST_DATABASE_URL \
+        "$VENV_PY" -m pytest "${@}" )
   fi
 
   if [[ ! -x "$TEST_VENV/bin/python" ]]; then
@@ -166,7 +180,9 @@ tests() {
   # state per test, so it is run with the server's model settings removed. GPF_DATA_DIR too: it
   # points at the live data folder, and conftest.py only sends the suite to a temporary one
   # when the variable is unset (a scan-read test once left its uploads among real cases).
-  ( cd "$ROOT" && exec env -u GPF_VLLM_URLS -u GPF_VLLM_TIMEOUT -u GPF_DATA_DIR \
+  # GPF_DB too (9 Oct 2026): it names the live PostgreSQL; conftest.py gives the suite a temporary
+  # SQLite file only when the variable is unset.
+  ( cd "$ROOT" && exec env -u GPF_VLLM_URLS -u GPF_VLLM_TIMEOUT -u GPF_DATA_DIR -u GPF_DB -u PENSION_TEST_DATABASE_URL \
       "$TEST_VENV/bin/python" -m pytest "${@}" )
 }
 

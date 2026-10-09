@@ -26,7 +26,6 @@ Standard library only, in the manner of ``api.desks``: the HTTP layer turns
 from __future__ import annotations
 
 import json
-import sqlite3
 from typing import Any, Callable
 
 from api import db
@@ -132,7 +131,7 @@ def check(role: str, status: str, action: str) -> None:
                  + (f"; from here you may: {', '.join(can)}" if can else ""))
 
 
-def owns_side(user_role: str, user_department: str | None, case: sqlite3.Row | dict) -> bool:
+def owns_side(user_role: str, user_department: str | None, case: db.Row | dict) -> bool:
     """May this user act on the department's side of this case?
 
     A department officer, on their own department's cases. Nobody else (the administrator acts
@@ -143,14 +142,14 @@ def owns_side(user_role: str, user_department: str | None, case: sqlite3.Row | d
     return False
 
 
-def may_see(user_role: str, user_department: str | None, case: sqlite3.Row | dict) -> bool:
+def may_see(user_role: str, user_department: str | None, case: db.Row | dict) -> bool:
     """Reads: the department's side sees its own; AG Review and Admin see everything."""
     if user_role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
         return True
     return owns_side(user_role, user_department, case)
 
 
-def record_event(conn: sqlite3.Connection, case_id: str, *, action: str, from_status: str | None,
+def record_event(conn: db.Connection, case_id: str, *, action: str, from_status: str | None,
                  to_status: str, actor: Any, remark: str = "", payload: dict | None = None,
                  run_id: str | None = None) -> dict:
     """Append one history row. Caller holds the transaction."""
@@ -177,10 +176,10 @@ def record_event(conn: sqlite3.Connection, case_id: str, *, action: str, from_st
     return entry
 
 
-def transition(conn: sqlite3.Connection, case: sqlite3.Row, action: str, actor: Any, *,
+def transition(conn: db.Connection, case: db.Row, action: str, actor: Any, *,
                remark: str = "", payload: dict | None = None, run_id: str | None = None,
                to_status: str | None = None,
-               within: Callable[[sqlite3.Connection, dict], None] | None = None) -> dict:
+               within: Callable[[db.Connection, dict], None] | None = None) -> dict:
     """Move the case and write the history row, inside one transaction.
 
     ``actor`` is an ``api.auth.User`` or None for the system (the reconciler). The permission
@@ -228,13 +227,16 @@ def transition(conn: sqlite3.Connection, case: sqlite3.Row, action: str, actor: 
     return entry
 
 
-def audit(conn: sqlite3.Connection, *, actor: Any, action: str, entity_type: str, entity_id: str,
+def audit(conn: db.Connection, *, actor: Any, action: str, entity_type: str, entity_id: str,
           before: dict | None, after: dict | None, reason: str = "", ip: str | None = None) -> None:
-    """One append-only audit row. Caller holds the transaction (or none: autocommit)."""
+    """One append-only audit row. Caller holds the transaction (or none: autocommit).
+
+    Stamped to the microsecond: the audit screen lists rows newest first, and two rows written in
+    the same second (a sign-in, then the action) must keep their order on any engine."""
     conn.execute(
         "INSERT INTO audit_log(id, at, actor_id, actor_name, actor_role, action, entity_type, "
         "entity_id, before_json, after_json, reason, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (db.new_id(), db.now(), getattr(actor, "id", None), getattr(actor, "display_name", None),
+        (db.new_id(), db.stamp(), getattr(actor, "id", None), getattr(actor, "display_name", None),
          getattr(actor, "role", None), action, entity_type, entity_id,
          json.dumps(before, ensure_ascii=False, default=str) if before is not None else None,
          json.dumps(after, ensure_ascii=False, default=str) if after is not None else None,

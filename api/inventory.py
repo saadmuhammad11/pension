@@ -24,11 +24,11 @@ Pension and GP Fund are separate inventories (``product``), each consistent with
 """
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
 
 from api import workflow
 from api.departments import LEGACY_DEPARTMENT, PENSION_SECTION_OF, PENSION_SECTION_ORDER
+from api import db
 
 LEGACY = LEGACY_DEPARTMENT[0]
 
@@ -38,7 +38,7 @@ def section_of(code: str | None) -> str:
     return PENSION_SECTION_OF.get(code or "") or LEGACY
 
 
-def section_codes(conn: sqlite3.Connection, section: str) -> list[str]:
+def section_codes(conn: db.Connection, section: str) -> list[str]:
     """Every department code in one Pension section, LEGACY included, from the same rule."""
     if section != LEGACY and section not in PENSION_SECTION_ORDER:
         raise KeyError(section)
@@ -47,7 +47,7 @@ def section_codes(conn: sqlite3.Connection, section: str) -> list[str]:
     return sorted(c for c in codes if section_of(c) == section)
 
 
-def scope(conn: sqlite3.Connection, user: Any, *, product: str | None = None, department: str | None = None,
+def scope(conn: db.Connection, user: Any, *, product: str | None = None, department: str | None = None,
           section: str | None = None, alias: str = "c") -> tuple[str, list]:
     """The SQL restriction for "the cases this user may see, narrowed by these filters"."""
     where, args = ["1 = 1"], []
@@ -63,7 +63,7 @@ def scope(conn: sqlite3.Connection, user: Any, *, product: str | None = None, de
     return " AND ".join(where), args
 
 
-def version(conn: sqlite3.Connection) -> str:
+def version(conn: db.Connection) -> str:
     """Changes whenever a case, its history or one of its runs changes."""
     c = conn.execute("SELECT COUNT(*), COALESCE(MAX(updated_at), '') FROM cases").fetchone()
     e = conn.execute("SELECT COUNT(*) FROM case_events").fetchone()
@@ -72,7 +72,7 @@ def version(conn: sqlite3.Connection) -> str:
     return f"{c[0]}.{c[1]}.{e[0]}.{r[0]}.{r[1]}.{r[2] or 0}"
 
 
-def counts_of(rows: list[dict], departments: list[sqlite3.Row]) -> dict:
+def counts_of(rows: list[dict], departments: list[db.Row]) -> dict:
     """Every count a view shows, from the rows themselves: they cannot disagree with the list."""
     by_status = {s: 0 for s in workflow.STATUSES}
     by_dept: dict[str, dict] = {}

@@ -19,6 +19,15 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_PY=/home/tmc/vllm_env/bin/python3
 API_PORT=8110
+# The database (9 Oct 2026): PostgreSQL, named by PENSION_DATABASE_URL. deploy/postgres.env holds the
+# URL for the container deploy/docker-compose.postgres.yml runs on this box; without the file (or the
+# variable) the API falls back to the SQLite file, artifacts/portal.sqlite3. The test database URL
+# is deliberately not exported to a server: tools/run-tests.sh sets it for the suites alone.
+if [[ -z "${PENSION_DATABASE_URL:-}" && -r "$ROOT/deploy/postgres.env" ]]; then
+  PENSION_DATABASE_URL="$(sed -n 's/^PENSION_DATABASE_URL=//p' "$ROOT/deploy/postgres.env" | tail -1)"
+fi
+export PENSION_DATABASE_URL="${PENSION_DATABASE_URL:-}"
+unset PENSION_TEST_DATABASE_URL
 # Trial period (25 Sep 2026): every account, including ones seeded later, uses this password.
 export PENSION_SEED_PASSWORD="${PENSION_SEED_PASSWORD:-1234}"
 UI_PORT=5184

@@ -1,0 +1,31 @@
+# PostgreSQL 16 for the pension case system and the GP Fund module (9 Oct 2026).
+#
+#   docker compose -p pension -f deploy/docker-compose.postgres.yml --env-file deploy/postgres.env up -d
+#
+# Loopback only, on 5433: 5432 on this box belongs to another stack's container. Data lives in the
+# named volume pension_postgres-data; the init script creates the pension_test database the test
+# suites use. Backups: see docs/DEPLOYMENT.md §Database (pg_dump).
+services:
+  postgres:
+    image: postgres:16
+    container_name: pension-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pension
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in deploy/postgres.env}
+      POSTGRES_DB: pension
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+      TZ: Asia/Karachi
+      PGTZ: Asia/Karachi
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pension -d pension"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  postgres-data:

@@ -40,10 +40,16 @@ doa_mod.load_register()
 PROTO = REPO_ROOT / "prototype"
 
 # ── singletons (swap the repository/connector for Postgres/RFC in production) ──
-# Cases live in the shared portal database (29 Sep 2026): GPF_DB names the SQLite file, default
-# the pension tree's artifacts/portal.sqlite3. GPF_DB set empty keeps the module on its own JSON
+# Cases live in the shared portal database (29 Sep 2026): GPF_DB names it -- a PostgreSQL URL
+# (9 Oct 2026; GP/backend/run.sh takes it from deploy/postgres.env) or a SQLite file, default the
+# pension tree's artifacts/portal.sqlite3. GPF_DB set empty keeps the module on its own JSON
 # snapshots under GPF_DATA_DIR/cases, which is also where the pre-move snapshots are imported from.
-DB_PATH = os.environ.get("GPF_DB", str(DEFAULT_DB))
+DB_PATH = os.environ.get("GPF_DB")
+if DB_PATH is None:
+    if not Path(DEFAULT_DB).exists():
+        raise RuntimeError("GPF_DB is not set: give the PostgreSQL URL (GP/backend/run.sh reads deploy/postgres.env), "
+                           "a SQLite file, or GPF_DB= (empty) for the JSON store")
+    DB_PATH = str(DEFAULT_DB)                         # a box still on the file
 if DB_PATH:
     repo = SqliteCaseRepository(DB_PATH, import_dir=DATA_DIR / "cases")
     docstore = DocumentStore(DATA_DIR / "uploads", db=repo)

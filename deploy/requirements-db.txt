@@ -1,0 +1,3 @@
+# The PostgreSQL driver, vendored into <root>/vendor by deploy/vendor-psycopg.sh (or installed into
+# the production venv: it is also listed in deploy/requirements.txt).
+psycopg[binary]==3.3.6

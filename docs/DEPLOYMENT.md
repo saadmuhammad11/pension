@@ -42,7 +42,7 @@ deployment types. Part 4 is LAN only, and Part 5 adds what a public deployment n
 | 5 | **OCR model** PaddleOCR-VL 1.6 | Reads scanned text | vLLM | 8012 | No |
 | 6 | **Embedding model** Qwen3-Embedding-4B | Rules/RAG search | vLLM | 8093 | No |
 | 7 | **Reranker** Qwen3-Reranker-4B | Rules/RAG ranking | vLLM (Spark-1 today) | 8094 | No |
-| 8 | **Database** | `portal.sqlite3` (SQLite, WAL mode), schema migrations `api/migrations/0001…0008` | file | — | No |
+| 8 | **Database** | PostgreSQL 16 (`PENSION_DATABASE_URL`), schema migrations `api/migrations/0001…0011` (+ `postgres/` overrides); SQLite file only where there is no PostgreSQL | postgres | 5432 (loopback) | No |
 | 9 | **Case files** | Uploaded scans + per-run outputs (`artifacts/run-*`, `artifacts/cases`) | files | — | No |
 
 ### 1.2 How the parts connect
@@ -57,7 +57,7 @@ deployment types. Part 4 is LAN only, and Part 5 adds what a public deployment n
                 │ http 127.0.0.1:5184
                 ▼
         ┌───────────────┐   /api/*   ┌──────────────┐
-        │ Portal server │ ─────────▶ │ Pension API  │──▶ portal.sqlite3, case files
+        │ Portal server │ ─────────▶ │ Pension API  │──▶ PostgreSQL, case files
         │   (5184)      │            │   (8110)     │
         └───────┬───────┘            └──────┬───────┘
                 │ /gpf/*                    │ AI pipeline
@@ -126,7 +126,8 @@ and the model ports, stay closed to everyone else.
 | Node.js | 24.x | **Build machine only**, to build `portals/dist`. Not needed on the server. |
 | nginx | distro package | Reverse proxy + TLS |
 | git | | Release control |
-| sqlite3 CLI | | Backups (`.backup`) and checks |
+| PostgreSQL 16 | server + client (`postgresql-16`, `postgresql-client-16`), or the `postgres:16` container (`deploy/docker-compose.postgres.yml`) | The database; `pg_dump` for backups |
+| sqlite3 CLI | | Only to read an old trial file for `python3 -m api.db import-sqlite` |
 
 ### 2.4 Network
 
@@ -197,7 +198,10 @@ box behaves as before, so preparing the deployment does not disturb the pilot.
 ```bash
 # OS packages
 sudo apt update && sudo apt install -y python3.12-venv poppler-utils libreoffice-core \
-     libreoffice-writer nginx sqlite3 git ufw
+     libreoffice-writer nginx postgresql-16 postgresql-client-16 git ufw
+# The database and its owner (PostgreSQL listens on 127.0.0.1 only by default; keep it so)
+sudo -u postgres psql -c "CREATE ROLE pension LOGIN PASSWORD '<long random password>'" \
+                      -c "CREATE DATABASE pension OWNER pension ENCODING 'UTF8'" 
 
 # Service account; the app never runs as a personal user
 sudo useradd --system --home /opt/pension --shell /usr/sbin/nologin pension
@@ -235,7 +239,8 @@ sudo chown -R pension:pension /var/lib/pension
 sudo rm -rf /opt/pension/current/artifacts
 sudo ln -sfn /var/lib/pension/artifacts /opt/pension/current/artifacts
 ```
-Set `PENSION_DB` to `/var/lib/pension/artifacts/portal.sqlite3` explicitly anyway.
+Set `PENSION_DATABASE_URL` to the database created in §3.2 (`postgresql://pension:<password>@127.0.0.1:5432/pension`).
+`PENSION_DB` only matters when the URL is unset: then the API runs on a SQLite file, which production should not.
 
 ### 3.4 Configure: `/etc/pension/pension.env`
 
@@ -245,7 +250,8 @@ Start from `deploy/pension.env.example`, which has every value below. The import
 |---|---|---|
 | `PENSION_ENV` | `production` | **The switch** for F1–F10 (§3.0) |
 | `PENSION_API_BIND` | `127.0.0.1` | API never listens on the network |
-| `PENSION_DB` | `/var/lib/pension/artifacts/portal.sqlite3` | |
+| `PENSION_DATABASE_URL` | `postgresql://pension:<password>@127.0.0.1:5432/pension` | **The database** (9 Oct 2026). The venv needs `psycopg[binary]` (`deploy/requirements.txt`) |
+| `PENSION_DB` | unset | SQLite fallback, used only when the URL is unset |
 | `PENSION_JWT_SECRET` | 64+ random characters (`openssl rand -base64 48`) | If you change it, everyone has to sign in again |
 | `PENSION_SEED_PASSWORD` | **unset** | Seed accounts must not get a shared password (F1) |
 | `PENSION_CORS_ORIGINS` | `https://pension.agpunjab.local` (or the public domain) | Exact origin only |
@@ -262,7 +268,7 @@ Start from `deploy/pension.env.example`, which has every value below. The import
 | `PENSION_TRUST_PORT_HEADER` | **unset** | Test-only switch; ignored in production anyway |
 | `PENSION_API_DOCS` | **unset** | `1` would bring `/docs` back |
 | `PENSION_IMPORT_LEGACY` | unset | One-time import only |
-| `GPF_DB` | `/var/lib/pension/artifacts/portal.sqlite3` | Shared DB (migration 0005) |
+| `GPF_DB` | the same URL as `PENSION_DATABASE_URL` | Shared database (migration 0005) |
 | `GPF_DATA_DIR` | `/var/lib/pension/gpf` | |
 | `GPF_VLLM_URL(S)` | model server address | |
 
@@ -476,9 +482,14 @@ reference and training.
 
 **Option 2: Carry over selected cases.**
 1. Stop the trial API (check that no run is active first; see §10).
-2. Make a consistent copy: `sqlite3 artifacts/portal.sqlite3 ".backup /tmp/portal-export.sqlite3"`
+2. Make a consistent copy: `pg_dump -Fc "$PENSION_DATABASE_URL" > /tmp/portal-export.dump` (trial box on
+   PostgreSQL), or `sqlite3 artifacts/portal.sqlite3 ".backup /tmp/portal-export.sqlite3"` for a trial that
+   was still on the file.
 3. Copy the matching `artifacts/run-*` and `artifacts/cases/*` folders.
-4. On production: restore into `/var/lib/pension/artifacts/`, `chown -R pension:pension`.
+4. On production: `pg_restore -d "$PENSION_DATABASE_URL" --no-owner /tmp/portal-export.dump` into the empty
+   database -- or, from a SQLite file, `python3 -m api.db import-sqlite /tmp/portal-export.sqlite3`
+   (migrates first, copies every table in foreign-key order, refuses a non-empty target without `--replace`);
+   files into `/var/lib/pension/artifacts/`, `chown -R pension:pension`.
 5. Start the API (migrations apply), then run `python3 -m api.check_inventory`. Every view must
    agree.
 6. **Remove all trial user accounts** and reset any account that is kept.
@@ -492,7 +503,7 @@ reference and training.
 
 | Item | Path | How often |
 |---|---|---|
-| Database | `/var/lib/pension/artifacts/portal.sqlite3` | Nightly + before every upgrade |
+| Database | PostgreSQL `pension` (`pg_dump -Fc`) | Nightly + before every upgrade |
 | Case files / run outputs | `/var/lib/pension/artifacts/` (rest) | Nightly (incremental) |
 | GP Fund data | `/var/lib/pension/gpf/` | Nightly |
 | Config + secrets | `/etc/pension/`, `/etc/nginx/sites-available/pension`, systemd units | On change |
@@ -507,9 +518,10 @@ set -euo pipefail
 STAMP=$(date +%F)
 DEST=/var/backups/pension/$STAMP
 mkdir -p "$DEST"
-# Never copy a live SQLite file with cp; use the online backup API
-sqlite3 /var/lib/pension/artifacts/portal.sqlite3 ".backup '$DEST/portal.sqlite3'"
-sqlite3 "$DEST/portal.sqlite3" "PRAGMA integrity_check;" | grep -qx ok
+# A consistent snapshot of the database, whatever is being written meanwhile
+set -a; . /etc/pension/pension.env; set +a
+pg_dump -Fc "$PENSION_DATABASE_URL" > "$DEST/portal.dump"
+pg_restore --list "$DEST/portal.dump" >/dev/null          # the archive reads back
 rsync -a --exclude 'portal.sqlite3*' /var/lib/pension/ "$DEST/files/"
 tar czf - -C /etc pension | gpg --encrypt -r backup@agpunjab > "$DEST/etc.tgz.gpg"
 # Off-box copy
@@ -524,8 +536,8 @@ Retention: 30 daily, 12 monthly, plus whatever the AG records policy requires.
 
 ```bash
 sudo systemctl stop pension-portal pension-gpf pension-api
-sudo -u pension cp /var/backups/pension/<date>/portal.sqlite3 /var/lib/pension/artifacts/portal.sqlite3
-sudo rm -f /var/lib/pension/artifacts/portal.sqlite3-wal /var/lib/pension/artifacts/portal.sqlite3-shm
+set -a; . /etc/pension/pension.env; set +a
+pg_restore -d "$PENSION_DATABASE_URL" --clean --if-exists --no-owner /var/backups/pension/<date>/portal.dump
 sudo rsync -a /var/backups/pension/<date>/files/ /var/lib/pension/
 sudo systemctl start pension-api pension-gpf pension-portal
 python3 -m api.check_inventory
@@ -632,7 +644,7 @@ These come from running the trial. Each one has already caused a problem.
 | **Restarting mid-run** | Restarting the API kills an AI run in progress; the officer's case is left half-done | Before any restart, check for active runs (health `runs` counts all runs, not active ones; check the run list) |
 | **Process manager kills jobs under memory pressure** | Long jobs started from a shell die when memory runs low | Run everything under systemd, never from a terminal session |
 | **Co-hosting other GPU models** | Unified memory OOM froze the box on 15 Jul 2026 | Model server runs this system's models only; `qwen3guard` stays disabled |
-| **Copying a live SQLite file** | `cp` of a database being written gives a corrupt backup | Always `sqlite3 … ".backup"` |
+| **Copying database files** | Copying PostgreSQL's data directory (or, before 9 Oct 2026, a live SQLite file) while it is written gives a corrupt backup | Always `pg_dump` (§7.2) |
 | **Weights on NFS** | Model services fail at boot if the NFS mount from `spark-46ef` isn't ready | Local copy of weights on the GPU box |
 | **Hard-coded model IPs** | Moving the GPU box breaks reading silently | Fix F4 before moving any machine |
 | **Other projects on the same box** | `pkill`-style commands have taken down a colleague's service (:5173, :8100, :8200) | On a dedicated production server this goes away; until then, only stop services by systemd unit name |

@@ -18,6 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from api import db
 from pipeline import carryover
 
 
@@ -326,22 +327,22 @@ class RoundTables(unittest.TestCase):
         c.execute("PRAGMA foreign_keys=OFF")
         c.execute("INSERT INTO case_rounds(id, case_id, submission_no, opened_at, opened_via, closed_at, closed_action) "
                   "VALUES ('r', 'c', 1, 'now', 'CREATE', 'now', 'RETURN')")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(db.IntegrityError):
             c.execute("UPDATE case_rounds SET closed_action = 'APPROVE' WHERE id = 'r'")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(db.IntegrityError):
             c.execute("DELETE FROM case_rounds WHERE id = 'r'")
         c.execute("INSERT INTO case_round_requests(id, case_id, from_submission_no, for_submission_no, action, at) "
                   "VALUES ('q', 'c', 1, 2, 'RETURN', 'now')")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(db.IntegrityError):
             c.execute("UPDATE case_round_requests SET remark = 'x' WHERE id = 'q'")
         c.execute("INSERT INTO case_round_checks(id, case_id, submission_no, run_id, mode, started_at, state, finished_at) "
                   "VALUES ('k', 'c', 1, 'run', 'FULL', 'now', 'done', 'now')")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(db.IntegrityError):
             c.execute("UPDATE case_round_checks SET state = 'failed' WHERE id = 'k'")
 
     def test_existing_rows_keep_their_meaning(self) -> None:
         cols = {r[1]: r for r in self.conn.execute("PRAGMA table_info(case_runs)")}
-        self.assertEqual(cols["mode"][4], "'FULL'")
+        self.assertTrue(str(cols["mode"][4]).startswith("'FULL'"))     # 'FULL' on sqlite, 'FULL'::text on PostgreSQL
         docs = {r[1] for r in self.conn.execute("PRAGMA table_info(case_documents)")}
         self.assertTrue({"replaces_document_id", "superseded_in_submission"} <= docs)
 

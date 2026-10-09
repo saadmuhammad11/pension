@@ -18,3 +18,5 @@ pillow==12.3.0
 numpy==2.3.5
 opencv-python-headless==5.0.0.93
 zxing-cpp==3.1.1
+# PostgreSQL driver with bundled libpq (9 Oct 2026); api/dbcore.py
+psycopg[binary]==3.3.6

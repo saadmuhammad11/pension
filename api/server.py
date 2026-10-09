@@ -226,7 +226,7 @@ def _refuse_recompute_behind_a_decision(run_id: str) -> None:
     try:
         link = conn.execute(
             "SELECT c.case_no, c.status, c.current_run_id FROM case_runs cr JOIN cases c ON c.id = cr.case_id "
-            "WHERE cr.run_id = ? ORDER BY cr.rowid DESC LIMIT 1", (run_id,)).fetchone()
+            "WHERE cr.run_id = ? ORDER BY cr.started_at DESC, cr.id DESC LIMIT 1", (run_id,)).fetchone()
     finally:
         conn.close()
     if link is None:

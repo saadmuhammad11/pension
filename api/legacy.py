@@ -13,7 +13,6 @@ started (``source.kind == "portal_v2"``) are its own and are skipped too.
 from __future__ import annotations
 
 import json
-import sqlite3
 from pathlib import Path
 
 from api import db, workflow
@@ -63,7 +62,7 @@ def _office_type(summary: dict) -> str | None:
     return declared or office_type_for(summary.get("case_type"), summary.get("case_variant"))
 
 
-def import_legacy_runs(conn: sqlite3.Connection | None = None, artifacts: Path | None = None) -> int:
+def import_legacy_runs(conn: db.Connection | None = None, artifacts: Path | None = None) -> int:
     """Import every finished old run not yet on a case. Returns how many were imported."""
     from api.runs import ARTIFACTS, _report_summary
     own = conn is None

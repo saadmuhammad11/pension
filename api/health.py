@@ -65,6 +65,11 @@ def forget() -> None:
         _cache.clear()
 
 
+def _engine() -> str:
+    from api import db
+    return db.backend()
+
+
 def _database() -> tuple[bool, str | None]:
     from api import db
     try:
@@ -108,7 +113,7 @@ def report() -> tuple[dict, int]:
     body = {
         "ok": ok,
         "runs": active,
-        "database": {"ok": db_ok, **({"problem": db_problem} if db_problem else {})},
+        "database": {"ok": db_ok, "engine": _engine(), **({"problem": db_problem} if db_problem else {})},
         "disk": {"ok": disk_ok, **disk},
         "models": models,
         "gpf": {"ok": gpf_ok},

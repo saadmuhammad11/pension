@@ -16,7 +16,6 @@ not the run.
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
 import threading
 import time
@@ -27,8 +26,8 @@ from typing import Any, Callable, Iterator
 
 _local = threading.local()
 _lock = threading.Lock()
-_conn: sqlite3.Connection | None = None
-_conn_path: Path | None = None
+_conn: Any = None
+_conn_path: Any = None          # what the connection was opened on: (target, DB_PATH) at the time
 
 
 def current() -> str | None:
@@ -64,27 +63,35 @@ def carry(fn: Callable[..., Any], *, stage: str, page: int | None = None) -> Cal
     return wrapped
 
 
-def _connection() -> sqlite3.Connection | None:
-    """One connection for the process (WAL, busy timeout), opened lazily on the app's database."""
+def _connection() -> Any:
+    """One connection for the process, opened lazily on the app's database (PostgreSQL or the
+    SQLite file, whatever ``api.db`` is pointed at); reopened if the database target changes."""
     global _conn, _conn_path
-    from api import db
-    path = Path(db.DB_PATH)
+    from api import db, dbcore
+    key = (str(db.target()), str(db.DB_PATH))
     with _lock:
-        if _conn is not None and _conn_path == path:
+        if _conn is not None and _conn_path == key:
             return _conn
         try:
-            conn = sqlite3.connect(path, timeout=5.0, isolation_level=None, check_same_thread=False)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=5000")
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS run_timings (id INTEGER PRIMARY KEY, run_id TEXT NOT NULL, kind TEXT NOT NULL, "
-                "stage TEXT NOT NULL, name TEXT, page INTEGER, started_at TEXT NOT NULL, ended_at TEXT NOT NULL, "
-                "duration_s REAL NOT NULL, queue_s REAL, pages INTEGER, status TEXT NOT NULL DEFAULT 'ok', detail_json TEXT)")
-            conn.execute("CREATE INDEX IF NOT EXISTS run_timings_run ON run_timings(run_id, started_at)")
-        except sqlite3.Error:
+            conn = db.connect()
+            for stmt in dbcore.run_timings_ddl(dbcore.backend_of(conn)):
+                conn.execute(stmt)
+        except Exception:                             # noqa: BLE001 -- no database, no timing rows
             return None
-        _conn, _conn_path = conn, path
+        _conn, _conn_path = conn, key
         return conn
+
+
+def _drop_connection() -> None:
+    """Forget a connection that failed; the next row opens a new one."""
+    global _conn, _conn_path
+    with _lock:
+        try:
+            if _conn is not None:
+                _conn.close()
+        except Exception:                             # noqa: BLE001
+            pass
+        _conn, _conn_path = None, None
 
 
 def record(kind: str, stage: str, *, started: float, ended: float, name: str | None = None, page: int | None = None,
@@ -106,8 +113,8 @@ def record(kind: str, stage: str, *, started: float, ended: float, name: str | N
                  datetime.fromtimestamp(ended).isoformat(timespec="milliseconds"), round(ended - started, 3),
                  None if queue_s is None else round(queue_s, 3), pages, status,
                  json.dumps(detail, ensure_ascii=False, default=str) if detail else None))
-    except sqlite3.Error:
-        pass
+    except Exception:                                 # noqa: BLE001 -- a lost row, never a lost run
+        _drop_connection()
 
 
 @contextmanager
@@ -147,7 +154,7 @@ def page_of(image: str | Path) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def summary(run_id: str, conn: sqlite3.Connection | None = None) -> dict:
+def summary(run_id: str, conn: Any = None) -> dict:
     """Totals per stage and per model role for one run, from the table."""
     from api import db
     own = conn is None

@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +32,7 @@ CLOSING = SEND_BACK | {"APPROVE", "REJECT", "AUTO_APPROVE"}
 
 
 # -- the hook -----------------------------------------------------------------------------
-def on_event(conn: sqlite3.Connection, case_id: str, action: str, entry: dict, payload: dict | None,
+def on_event(conn: db.Connection, case_id: str, action: str, entry: dict, payload: dict | None,
              actor: Any) -> None:
     """Keep the round records in step with one history row. Caller holds the transaction."""
     conn.execute("SAVEPOINT rounds")
@@ -77,7 +76,7 @@ def _on_event(conn, case_id, action, entry, payload, actor) -> None:
                      (entry["at"], action, case_id, n))
 
 
-def ensure_round(conn: sqlite3.Connection, case_id: str, n: int, *, via: str, by: str | None,
+def ensure_round(conn: db.Connection, case_id: str, n: int, *, via: str, by: str | None,
                  at: str | None = None) -> None:
     conn.execute("INSERT OR IGNORE INTO case_rounds(id, case_id, submission_no, opened_at, opened_by, opened_via) "
                  "VALUES (?, ?, ?, ?, ?, ?)", (db.new_id(), case_id, n, at or db.now(), by, via))
@@ -109,7 +108,7 @@ def request_items(action: str, payload: dict) -> list[dict]:
 
 
 # -- a verification in a round ------------------------------------------------------------------
-def base_run_for(conn: sqlite3.Connection, case: sqlite3.Row) -> sqlite3.Row | None:
+def base_run_for(conn: db.Connection, case: db.Row) -> db.Row | None:
     """The earlier round's finished pension run a resubmission reuses, or None (a full run).
 
     Round 1 has none, a GP Fund case has none (its reading is the GP Fund module's), and a
@@ -131,7 +130,7 @@ def base_run_for(conn: sqlite3.Connection, case: sqlite3.Row) -> sqlite3.Row | N
     return None
 
 
-def gpf_base_run_for(conn: sqlite3.Connection, case: sqlite3.Row) -> sqlite3.Row | None:
+def gpf_base_run_for(conn: db.Connection, case: db.Row) -> db.Row | None:
     """A GP Fund resubmission's earlier finished examination. The reuse itself happens in the
     GP Fund module (its per-case page cache); this names the round it reuses, for the record."""
     from api.case_runs import GPF_RUN_PREFIX
@@ -143,7 +142,7 @@ def gpf_base_run_for(conn: sqlite3.Connection, case: sqlite3.Row) -> sqlite3.Row
         (case["id"], case["submission_no"], GPF_RUN_PREFIX + "%")).fetchone()
 
 
-def check_finished_gpf(conn: sqlite3.Connection, run_row: sqlite3.Row, state: str, error: str | None,
+def check_finished_gpf(conn: db.Connection, run_row: db.Row, state: str, error: str | None,
                        issues: dict, job_view: dict | None) -> None:
     """Close the record of a GP Fund examination: pages read and reused, and the requested items."""
     row = conn.execute("SELECT * FROM case_round_checks WHERE case_id = ? AND run_id = ? AND finished_at IS NULL",
@@ -173,8 +172,8 @@ def check_finished_gpf(conn: sqlite3.Connection, run_row: sqlite3.Row, state: st
                   json.dumps(issues, ensure_ascii=False, default=str), error, row["id"]))
 
 
-def check_started(conn: sqlite3.Connection, case: sqlite3.Row, run_id: str, *, mode: str,
-                  base: sqlite3.Row | None, user: Any, documents: list[dict]) -> None:
+def check_started(conn: db.Connection, case: db.Row, run_id: str, *, mode: str,
+                  base: db.Row | None, user: Any, documents: list[dict]) -> None:
     """Open the record of one verification run. A re-check of the same papers (same run id) in
     the same round that has not finished is the same record."""
     open_row = conn.execute("SELECT id FROM case_round_checks WHERE case_id = ? AND run_id = ? AND finished_at IS NULL",
@@ -190,7 +189,7 @@ def check_started(conn: sqlite3.Connection, case: sqlite3.Row, run_id: str, *, m
          getattr(user, "id", None), db.now(), json.dumps(_documents_of_round(conn, case), ensure_ascii=False)))
 
 
-def _documents_of_round(conn: sqlite3.Connection, case: sqlite3.Row) -> list[dict]:
+def _documents_of_round(conn: db.Connection, case: db.Row) -> list[dict]:
     n = int(case["submission_no"])
     rows = conn.execute("SELECT id, submission_no, seq, filename, sha256, replaces_document_id, superseded_in_submission "
                         "FROM case_documents WHERE case_id = ? ORDER BY submission_no, seq", (case["id"],)).fetchall()
@@ -207,7 +206,7 @@ def _documents_of_round(conn: sqlite3.Connection, case: sqlite3.Row) -> list[dic
     return out
 
 
-def check_finished(conn: sqlite3.Connection, run_row: sqlite3.Row, state: str, error: str | None) -> dict | None:
+def check_finished(conn: db.Connection, run_row: db.Row, state: str, error: str | None) -> dict | None:
     """Close the record of a finished run: steps, findings, requested items, changes. Idempotent.
 
     For an incremental run the officer's decisions on the earlier round -- clearances of
@@ -390,7 +389,7 @@ def carry_decisions(base_dir: Path, run_dir: Path, base_report: dict, report: di
     return out
 
 
-def resolve_requests(conn: sqlite3.Connection, check_row: sqlite3.Row, report: dict,
+def resolve_requests(conn: db.Connection, check_row: db.Row, report: dict,
                      carry: dict | None) -> list[dict]:
     """How each item the AG asked this round for stands after its verification."""
     reqs = conn.execute("SELECT * FROM case_round_requests WHERE case_id = ? AND for_submission_no = ? ORDER BY at",
@@ -426,7 +425,7 @@ def resolve_requests(conn: sqlite3.Connection, check_row: sqlite3.Row, report: d
 
 
 # -- reading ---------------------------------------------------------------------------------
-def history(conn: sqlite3.Connection, case_id: str, *, for_department: bool) -> list[dict]:
+def history(conn: db.Connection, case_id: str, *, for_department: bool) -> list[dict]:
     """Every round of a case, oldest first. A department sees what was asked of it and what it
     sent; the findings and what the check did are the AG's (decision of 28 Sep 2026)."""
     rounds = conn.execute("SELECT * FROM case_rounds WHERE case_id = ? ORDER BY submission_no", (case_id,)).fetchall()
@@ -472,7 +471,7 @@ def history(conn: sqlite3.Connection, case_id: str, *, for_department: bool) -> 
 
 
 # -- existing cases ----------------------------------------------------------------------------
-def backfill(conn: sqlite3.Connection) -> int:
+def backfill(conn: db.Connection) -> int:
     """Round records for cases that predate them, from their history and runs. Idempotent.
 
     Only inserts: a round, request or check already recorded is left alone, and nothing in the

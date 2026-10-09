@@ -49,7 +49,7 @@ class _Fixture(unittest.TestCase):
         conn = db.connect()
         try:
             return conn.execute("SELECT a.*, u.username FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id "
-                                "WHERE a.entity_id = ? ORDER BY a.rowid", (case_id,)).fetchall()
+                                "WHERE a.entity_id = ? ORDER BY a.at", (case_id,)).fetchall()
         finally:
             conn.close()
 

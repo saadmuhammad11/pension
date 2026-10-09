@@ -1,25 +1,36 @@
-"""The shared database for the multi-department case system: SQLite, one file, WAL.
+"""The shared database for the multi-department case system: PostgreSQL (SQLite where there is none).
 
-Standard library only. The build spec (§4) names PostgreSQL for cases, reference data and
-append-only audit; on this box neither Postgres client libraries nor SQLAlchemy are installed
-and there is no pip, so the pilot runs on ``sqlite3`` with the schema written to port. The
-migrations are plain SQL files in ``api/migrations/``, applied in order and recorded in
-``schema_migrations``; the same files go under ``infra/postgres/init`` when that day comes.
+PostgreSQL since 9 Oct 2026: ``PENSION_DATABASE_URL`` (``postgresql://user:pw@host:port/db``) names
+the database; ``deploy/docker-compose.postgres.yml`` runs one on this box and both run scripts source
+``deploy/postgres.env``. The trial's SQLite file was imported and retired that day; a SQLite file is
+used only where ``PENSION_DB`` names one explicitly (a box with no PostgreSQL), never by default.
+The statements are written once; ``api.dbcore`` translates the sqlite3 idioms for PostgreSQL and
+hands back the same kind of connection and rows. The migrations are plain SQL files in
+``api/migrations/``, applied in order and recorded in ``schema_migrations``; where PostgreSQL needs
+its own DDL (triggers, identity columns, a widened CHECK) ``api/migrations/postgres/<same name>.sql``
+is applied in that file's place.
 
 Who writes: request threads and the run reconciler (``api.case_runs``). The pipeline thread
-never touches the database -- it writes its artefacts as it always has, and the reconciler
-reads them. The GP Fund module (GP/backend, its own process on :8201) keeps its cases in the
-same file, in ``gpf_cases`` and ``gpf_documents`` (migration 0005, 29 Sep 2026), and applies
-that migration itself if it starts first. WAL mode plus a busy timeout is enough for that traffic.
+never touches the database except to record its timings (``pipeline.timing``) -- it writes its
+artefacts as it always has, and the reconciler reads them. The GP Fund module (GP/backend, its
+own process on :8201) keeps its cases in the same database, in ``gpf_cases`` and
+``gpf_documents`` (migration 0005, 29 Sep 2026), and applies that migration itself if it starts first.
 
+Tests: with ``PENSION_TEST_DATABASE_URL`` set, every connection goes to that database and each
+test's ``DB_PATH`` (the temporary path the fixtures patch in) becomes a schema of its own, dropped
+when the process ends -- so the suites run unchanged on either engine (``tools/run-tests.sh``).
+
+    python3 -m api.db info               # which engine, which database, which migrations
     python3 -m api.db migrate            # apply migrations
     python3 -m api.db seed               # departments, one officer per department, AG users (idempotent)
+    python3 -m api.db import-sqlite artifacts/portal.sqlite3 [--replace]   # move a SQLite database's rows into PostgreSQL
     python3 -m api.db credentials        # rebuild artifacts/credentials/credentials.html from the CSV
     python3 -m api.db reset-department-password <slug>   # new generated password for one department
     python3 -m api.db reset-password <username> [<new password>]
     python3 -m api.db refresh-credentials <password>   # sheet rows for every account on this password; changes nothing
     python3 -m api.db add-reviewer <username> "<Officer's name>" [--dag] [<password>]   # a named reviewer / the Deputy AG
     python3 -m api.db forget-credentials   # delete the plaintext sheet once passwords are handed out
+    python3 -m api.db drop-test-schemas    # remove schemas a killed test run left in the test database
 
 Production (PENSION_ENV=production, api.settings): PENSION_SEED_PASSWORD is refused, every
 password the seed or a reset sets must be changed at first sign-in, and set-all-passwords is
@@ -33,22 +44,45 @@ plaintext ONCE to ``artifacts/credentials/credentials.csv`` (owner-readable only
 """
 from __future__ import annotations
 
+import atexit
+import hashlib
 import os
 import re
 import sqlite3
 import sys
+import threading
 import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator, Union
+
+from api import dbcore
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 
-#: Overridable for tests (``mock.patch.object(db, "DB_PATH", tmp)``) and deployments
-#: (``PENSION_DB``). Kept beside the run artefacts so one backup covers both.
-DB_PATH = Path(os.environ.get("PENSION_DB") or ROOT / "artifacts" / "portal.sqlite3")
+PG_MIGRATIONS = MIGRATIONS / "postgres"
+
+#: PostgreSQL, when set: ``postgresql://user:password@host:port/database``.
+DATABASE_URL: str | None = os.environ.get("PENSION_DATABASE_URL") or None
+#: The test suites' database. Every connection goes there, each ``DB_PATH`` as its own schema.
+#: Never set for a server: ``run.sh`` leaves it alone and ``tools/run-tests.sh`` sets it.
+TEST_DATABASE_URL: str | None = os.environ.get("PENSION_TEST_DATABASE_URL") or None
+#: A SQLite file, used only when ``PENSION_DB`` names one and no URL is set (a box with no
+#: PostgreSQL). Tests patch it (``mock.patch.object(db, "DB_PATH", tmp)``). None: PostgreSQL is
+#: required, and ``connect()`` refuses rather than quietly opening an empty file (9 Oct 2026, the day
+#: the trial's file was retired).
+DB_PATH: Path | None = Path(os.environ["PENSION_DB"]) if os.environ.get("PENSION_DB") else None
+
+#: For annotations: a connection and a row from either engine.
+Connection = Union[sqlite3.Connection, dbcore.PgConnection]
+Row = Union[sqlite3.Row, dbcore.Row]
+#: For ``except`` clauses: tuples holding both engines' classes.
+Error, IntegrityError, OperationalError = dbcore.Error, dbcore.IntegrityError, dbcore.OperationalError
+
+#: The one advisory lock every write transaction takes on PostgreSQL (see transaction()).
+WRITER_LOCK = 7_240_001
 
 #: One password for every seeded user, where set (tests, demos). Unset: each user gets a unique
 #: generated password, written once to the credentials sheet.
@@ -96,30 +130,119 @@ def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def stamp() -> str:
+    """A timestamp that orders rows written in the same second (audit rows): ISO-8601 with
+    microseconds. Sorts after the second-precision stamps of the same second, as text."""
+    return datetime.now().isoformat(timespec="microseconds")
+
+
 def new_id() -> str:
     return uuid.uuid4().hex
 
 
-def connect(path: Path | None = None) -> sqlite3.Connection:
-    """A connection with the pragmas this application relies on. Rows come back as sqlite3.Row."""
-    target = Path(path or DB_PATH)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(target, timeout=5.0, isolation_level=None, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+def target(path: Path | str | None = None) -> str | Path:
+    """What ``connect(path)`` opens: a PostgreSQL URL or a SQLite path."""
+    if path is not None and dbcore.is_postgres(path):
+        return str(path)
+    if TEST_DATABASE_URL:
+        return TEST_DATABASE_URL
+    if path is not None:
+        return Path(path)
+    if DATABASE_URL:
+        return DATABASE_URL
+    if DB_PATH is None:
+        raise RuntimeError("no database: set PENSION_DATABASE_URL (PostgreSQL; deploy/postgres.env) "
+                           "or PENSION_DB for a SQLite file")
+    return DB_PATH
+
+
+def backend() -> str:
+    """``postgres`` or ``sqlite``: the engine behind ``connect()``."""
+    return "postgres" if dbcore.is_postgres(target()) else "sqlite"
+
+
+def describe() -> str:
+    """The target for a log line, password hidden."""
+    t = target()
+    if TEST_DATABASE_URL:
+        return f"{dbcore.masked(t)} (test schema {_test_schema(None)})"
+    return dbcore.masked(t)
+
+
+def connect(path: Path | str | None = None) -> Connection:
+    """A connection to the database: PostgreSQL via ``PENSION_DATABASE_URL``, else the SQLite file.
+
+    Rows come back by name and by position (``sqlite3.Row`` / ``dbcore.Row``). Autocommit on both
+    engines: bracket related writes with ``transaction()``.
+    """
+    if path is not None and dbcore.is_postgres(path):
+        return dbcore.connect(str(path))
+    if TEST_DATABASE_URL:
+        return dbcore.connect(TEST_DATABASE_URL, schema=_test_schema(path))
+    if path is None and DATABASE_URL:
+        return dbcore.connect(DATABASE_URL)
+    return dbcore.connect_sqlite(target(path))
+
+
+# -- the test database: one schema per DB_PATH, gone when the process ends ----------------------
+_test_schemas: set[str] = set()
+_test_lock = threading.Lock()
+
+
+def _test_schema(path: Path | str | None) -> str:
+    name = "t_" + hashlib.sha1(str(Path(path or DB_PATH or "default")).encode("utf-8")).hexdigest()[:16]
+    with _test_lock:
+        fresh = name not in _test_schemas
+        _test_schemas.add(name)
+        if fresh:
+            if not _test_schemas - {name}:
+                atexit.register(drop_test_schemas)
+            conn = dbcore.connect(TEST_DATABASE_URL)
+            try:
+                conn.execute(f'DROP SCHEMA IF EXISTS "{name}" CASCADE')
+                conn.execute(f'CREATE SCHEMA "{name}"')
+            finally:
+                conn.close()
+    return name
+
+
+def drop_test_schemas(*, every: bool = False) -> list[str]:
+    """Drop the test schemas this process made -- or, with ``every``, all ``t_*`` schemas a killed
+    run may have left behind. Returns the names dropped."""
+    if not TEST_DATABASE_URL:
+        return []
+    try:
+        conn = dbcore.connect(TEST_DATABASE_URL)
+    except Exception:                                 # noqa: BLE001 -- the server is gone; nothing to tidy
+        return []
+    try:
+        with _test_lock:
+            names = sorted(_test_schemas)
+            _test_schemas.clear()
+        if every:
+            names = [r[0] for r in conn.execute(
+                "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 't\\_%' ESCAPE '\\'")]
+        for name in names:
+            conn.execute(f'DROP SCHEMA IF EXISTS "{name}" CASCADE')
+        return names
+    finally:
+        conn.close()
 
 
 @contextmanager
-def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
-    """``BEGIN IMMEDIATE`` ... ``COMMIT``, rolled back on any exception.
+def transaction(conn: Connection) -> Iterator[Connection]:
+    """``BEGIN`` ... ``COMMIT``, rolled back on any exception; writers queue behind one another.
 
-    IMMEDIATE takes the write lock up front, so two request threads changing the same case
-    queue behind each other instead of both reading the old status and both writing.
+    On SQLite, ``BEGIN IMMEDIATE`` takes the write lock up front, so two request threads changing
+    the same case queue instead of both reading the old status and both writing. PostgreSQL's
+    READ COMMITTED would let both proceed, so there the transaction takes one advisory lock
+    first (released with the transaction): the same discipline, and the write traffic is small.
     """
-    conn.execute("BEGIN IMMEDIATE")
+    if dbcore.backend_of(conn) == "postgres":
+        conn.execute("BEGIN")
+        conn.execute("SELECT pg_advisory_xact_lock(?)", (WRITER_LOCK,))
+    else:
+        conn.execute("BEGIN IMMEDIATE")
     try:
         yield conn
     except BaseException:
@@ -129,9 +252,22 @@ def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
         conn.execute("COMMIT")
 
 
-def _apply_migration(conn: sqlite3.Connection, script: str) -> None:
-    """Run a migration statement by statement (triggers span several semicolons, so statements
-    are cut where sqlite says one is complete); a column that already exists is not an error."""
+def _apply_migration(conn: Connection, script: str) -> None:
+    """Run one migration file.
+
+    PostgreSQL: the whole file in one transaction (functions with ``$$`` bodies cannot be split on
+    semicolons), with ``ADD COLUMN`` made ``IF NOT EXISTS`` (``dbcore.ddl_for_postgres``).
+    SQLite: statement by statement (triggers span several semicolons, so statements are cut where
+    sqlite says one is complete); a column that already exists is not an error."""
+    if dbcore.backend_of(conn) == "postgres":
+        conn.execute("BEGIN")
+        try:
+            conn.executescript(dbcore.ddl_for_postgres(script))
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        conn.execute("COMMIT")
+        return
     buf = ""
     for line in script.splitlines():
         if line.strip().startswith("--") and not buf:
@@ -150,10 +286,18 @@ def _apply_migration(conn: sqlite3.Connection, script: str) -> None:
     conn.commit()
 
 
-def migrate(conn: sqlite3.Connection | None = None) -> list[str]:
+def migration_file(path: Path, *, postgres: bool) -> Path:
+    """The file to apply for one version: the PostgreSQL override where there is one."""
+    if postgres and (PG_MIGRATIONS / path.name).exists():
+        return PG_MIGRATIONS / path.name
+    return path
+
+
+def migrate(conn: Connection | None = None) -> list[str]:
     """Apply every migration file not yet recorded. Returns the versions applied."""
     own = conn is None
     conn = conn or connect()
+    pg = dbcore.backend_of(conn) == "postgres"
     try:
         conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations "
                      "(version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
@@ -163,17 +307,18 @@ def migrate(conn: sqlite3.Connection | None = None) -> list[str]:
             version = path.stem
             if version in done:
                 continue
-            # executescript issues its own COMMIT first, so it cannot sit inside transaction().
-            # CREATE statements are IF NOT EXISTS; an ALTER TABLE ADD COLUMN has no such form,
-            # so a column a half-applied run already added is skipped rather than fatal.
-            # Schema changes run with foreign-key enforcement off (SQLite's own advice for a table
-            # rebuild, 0010): the pragma takes effect only outside a transaction, which is where
-            # _apply_migration leaves the connection.
-            conn.execute("PRAGMA foreign_keys=OFF")
+            # SQLite: schema changes run with foreign-key enforcement off (its own advice for a
+            # table rebuild, 0010); the pragma takes effect only outside a transaction, which is
+            # where _apply_migration leaves the connection. CREATE statements are IF NOT EXISTS;
+            # an ALTER TABLE ADD COLUMN has no such form there, so a column a half-applied run
+            # already added is skipped rather than fatal. PostgreSQL needs neither.
+            if not pg:
+                conn.execute("PRAGMA foreign_keys=OFF")
             try:
-                _apply_migration(conn, path.read_text(encoding="utf-8"))
+                _apply_migration(conn, migration_file(path, postgres=pg).read_text(encoding="utf-8"))
             finally:
-                conn.execute("PRAGMA foreign_keys=ON")
+                if not pg:
+                    conn.execute("PRAGMA foreign_keys=ON")
             # OR IGNORE: the GP Fund module records 0005 itself (gpf/store.py), and the two
             # starting together on a fresh database must not abort the migrations after it.
             conn.execute("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
@@ -185,7 +330,63 @@ def migrate(conn: sqlite3.Connection | None = None) -> list[str]:
             conn.close()
 
 
-def seed(conn: sqlite3.Connection | None = None, *, quiet: bool = False) -> dict:
+# -- moving a SQLite database into PostgreSQL ------------------------------------------------------
+
+#: Parents before children, so the foreign keys hold as the rows arrive.
+TABLES_IN_ORDER = ("departments", "users", "cases", "case_documents", "case_runs", "case_events", "audit_log",
+                   "login_attempts", "gpf_cases", "gpf_documents", "case_rounds", "case_round_requests",
+                   "case_round_checks", "run_timings")
+
+
+def import_sqlite(source: Path | str, *, replace: bool = False, conn: Connection | None = None) -> dict[str, int]:
+    """Copy every row of a SQLite database (the trial's ``portal.sqlite3``) into the PostgreSQL
+    database ``connect()`` opens, table by table in foreign-key order, in one transaction.
+
+    The target must be migrated and empty; ``replace`` empties it first (TRUNCATE, which the
+    append-only triggers do not stop). ``schema_migrations`` is not copied: the target records its
+    own. Returns rows copied per table.
+    """
+    own = conn is None
+    conn = conn or connect()
+    if dbcore.backend_of(conn) != "postgres":
+        raise RuntimeError("import-sqlite copies into PostgreSQL; set PENSION_DATABASE_URL")
+    src = sqlite3.connect(f"file:{Path(source)}?mode=ro", uri=True)
+    src.row_factory = sqlite3.Row
+    try:
+        have_src = dbcore.table_names(src)
+        have_dst = dbcore.table_names(conn)
+        tables = [t for t in TABLES_IN_ORDER if t in have_src and t in have_dst]
+        missing = [t for t in TABLES_IN_ORDER if t in have_src and t not in have_dst]
+        if missing:
+            raise RuntimeError(f"target lacks {missing}; run migrate first")
+        counts: dict[str, int] = {}
+        with transaction(conn):
+            if replace:
+                conn.execute("TRUNCATE " + ", ".join(reversed(tables)) + " RESTART IDENTITY CASCADE")
+            else:
+                for t in tables:
+                    if conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone():
+                        raise RuntimeError(f"target table {t} already has rows; use --replace to empty the target first")
+            for t in tables:
+                src_cols = [r["name"] for r in src.execute(f"PRAGMA table_info({t})")]
+                dst_cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({t})")}
+                cols = [c for c in src_cols if c in dst_cols]
+                sql = f"INSERT INTO {t}({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})"
+                rows = [tuple(r[c] for c in cols) for r in src.execute(f"SELECT {', '.join(cols)} FROM {t}")]
+                for i in range(0, len(rows), 500):
+                    conn.executemany(sql, rows[i:i + 500])
+                counts[t] = len(rows)
+            if "run_timings" in tables and counts["run_timings"]:
+                conn.execute("SELECT setval(pg_get_serial_sequence('run_timings', 'id'), "
+                             "(SELECT MAX(id) FROM run_timings))")
+        return counts
+    finally:
+        src.close()
+        if own:
+            conn.close()
+
+
+def seed(conn: Connection | None = None, *, quiet: bool = False) -> dict:
     """Departments, one officer per department, the AG users; the AG Upload retirement. Idempotent.
 
     Inserts what is missing and changes nothing already present -- except the department rows'
@@ -259,14 +460,14 @@ def seed(conn: sqlite3.Connection | None = None, *, quiet: bool = False) -> dict
             conn.close()
 
 
-def _dept_name(conn: sqlite3.Connection, code: str | None) -> str:
+def _dept_name(conn: Connection, code: str | None) -> str:
     if not code:
         return "Accountant General Punjab"
     row = conn.execute("SELECT name FROM departments WHERE code = ?", (code,)).fetchone()
     return row["name"] if row else code
 
 
-def _retire_ag_upload(conn: sqlite3.Connection) -> None:
+def _retire_ag_upload(conn: Connection) -> None:
     """Move a retired account's records to each case's own department officer, then remove the
     account. Runs inside the seed's transaction; a no-op once done."""
     for username in RETIRED_USERS:
@@ -332,7 +533,7 @@ def _record_credentials(created: list[dict]) -> None:
     render_credentials_html()
 
 
-def _credentials_rows(conn: sqlite3.Connection | None = None) -> list[dict]:
+def _credentials_rows(conn: Connection | None = None) -> list[dict]:
     import csv
     if not CREDENTIALS_CSV.exists():
         return []
@@ -403,7 +604,7 @@ q.addEventListener('input',filter);filter();
     return CREDENTIALS_HTML
 
 
-def reset_department_password(slug: str, conn: sqlite3.Connection | None = None) -> str | None:
+def reset_department_password(slug: str, conn: Connection | None = None) -> str | None:
     """A new generated password for one department's officer (or any username); recorded on the sheet."""
     from api import passwords, settings
     from api.auth import hash_password
@@ -428,7 +629,7 @@ def reset_department_password(slug: str, conn: sqlite3.Connection | None = None)
             conn.close()
 
 
-def set_all_passwords(password: str, conn: sqlite3.Connection | None = None) -> int:
+def set_all_passwords(password: str, conn: Connection | None = None) -> int:
     """One password for every live account (the office asked for ``1234`` while the system is being
     tried out); every existing session ends, and the sign-in sheet is rewritten to match.
     Refused in production."""
@@ -455,7 +656,7 @@ def set_all_passwords(password: str, conn: sqlite3.Connection | None = None) -> 
             conn.close()
 
 
-def refresh_credentials(password: str, conn: sqlite3.Connection | None = None) -> list[str]:
+def refresh_credentials(password: str, conn: Connection | None = None) -> list[str]:
     """Bring the sign-in sheet back in step with the accounts, without touching any account.
 
     The sheet is written when passwords are generated or set; after the trial's accounts were
@@ -482,7 +683,7 @@ def refresh_credentials(password: str, conn: sqlite3.Connection | None = None) -
             conn.close()
 
 
-def reset_password(username: str, password: str, conn: sqlite3.Connection | None = None) -> bool:
+def reset_password(username: str, password: str, conn: Connection | None = None) -> bool:
     """Set a user's password from the command line; their existing tokens stop working.
 
     Where the deployment forces it (production), the user must replace it at next sign-in."""
@@ -507,7 +708,7 @@ def reset_password(username: str, password: str, conn: sqlite3.Connection | None
 
 
 def add_reviewer(username: str, display_name: str, *, dag: bool = False, password: str | None = None,
-                 conn: sqlite3.Connection | None = None) -> str:
+                 conn: Connection | None = None) -> str:
     """Create a named reviewer account (AG_REVIEWER, or AG_DAG with ``dag``) and return its password.
 
     The way the office adds its officers from the command line (the Users screen does the same).
@@ -552,14 +753,49 @@ def forget_credentials() -> list[str]:
 
 def main(argv: list[str]) -> int:
     cmd = argv[1] if len(argv) > 1 else ""
+    if cmd == "info":
+        print(f"engine:   {backend()}")
+        print(f"database: {describe()}")
+        try:
+            conn = connect()
+            try:
+                versions = [r[0] for r in conn.execute("SELECT version FROM schema_migrations ORDER BY version")] \
+                    if "schema_migrations" in dbcore.table_names(conn) else []
+                counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                          for t in TABLES_IN_ORDER if t in dbcore.table_names(conn)}
+            finally:
+                conn.close()
+        except Exception as exc:                      # noqa: BLE001 -- the answer is the finding
+            print(f"cannot connect: {type(exc).__name__}: {exc}")
+            return 1
+        pending = [p.stem for p in sorted(MIGRATIONS.glob("*.sql")) if p.stem not in versions]
+        print(f"migrations: {len(versions)} applied" + (f", pending {pending}" if pending else ""))
+        for t, n in counts.items():
+            print(f"  {t:<22}{n:>8}")
+        return 0
     if cmd == "migrate":
         applied = migrate()
-        print(f"applied {applied or 'nothing new'} to {DB_PATH}")
+        print(f"applied {applied or 'nothing new'} to {describe()}")
         return 0
     if cmd == "seed":
         migrate()
         result = seed()
-        print(f"seeded {DB_PATH}: {result}")
+        print(f"seeded {describe()}: {result}")
+        return 0
+    if cmd == "import-sqlite" and len(argv) >= 3:
+        migrate()
+        try:
+            counts = import_sqlite(argv[2], replace="--replace" in argv[3:])
+        except RuntimeError as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 2
+        for t, n in counts.items():
+            print(f"  {t:<22}{n:>8}")
+        print(f"copied {sum(counts.values())} rows from {argv[2]} into {describe()}")
+        return 0
+    if cmd == "drop-test-schemas":
+        names = drop_test_schemas(every=True)
+        print(f"dropped {len(names)} test schema(s)" + (" (PENSION_TEST_DATABASE_URL is not set)" if not TEST_DATABASE_URL else ""))
         return 0
     if cmd == "credentials":
         migrate()
