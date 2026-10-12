@@ -1215,9 +1215,17 @@ DECISIONS_NEED_VERIFICATION = frozenset({"APPROVE", "REJECT", "RETURN", "REQUEST
 
 
 def _verified(conn: db.Connection, row: db.Row) -> bool:
-    """A verification that completed on the current round of papers."""
-    return conn.execute("SELECT 1 FROM case_runs WHERE case_id = ? AND submission_no = ? AND state = 'done' LIMIT 1",
-                        (row["id"], row["submission_no"])).fetchone() is not None
+    """A verification that completed on the current round of papers, and on the case's CURRENT run.
+
+    A decision rests on the examination the case is on, not on an earlier one that happened to
+    finish on the same papers. After a failed re-verification (AI_FAILED) the current run is the
+    failed one, so until it is verified again nobody approves, rejects or returns on findings
+    that predate it (audit of 12 Oct 2026)."""
+    if not row["current_run_id"]:
+        return False
+    return conn.execute("SELECT 1 FROM case_runs WHERE case_id = ? AND submission_no = ? AND run_id = ? "
+                        "AND state = 'done' LIMIT 1",
+                        (row["id"], row["submission_no"], row["current_run_id"])).fetchone() is not None
 
 
 def _section_codes_or_422(section: str) -> list[str]:
