@@ -268,6 +268,21 @@ def _service_statement_not_issued(record: CaseRecord) -> str | None:
     return None
 
 
+def _lpc_not_required_of_a_gazetted_self_pensioner(record: CaseRecord) -> str | None:
+    """AG-08 on a self pension: the LPC is required of a non-gazetted servant and not of a
+    gazetted one (user, 12 Oct 2026, decision S15; gazetted from BS-16 as GAZETTED_FROM_BPS).
+
+    Self-pension columns only: a death in service is family pension and outside the decision.
+    A grade that cannot be told keeps the requirement, so the line asks rather than excuses."""
+    if record.case_variant not in SELF_PENSION_VARIANTS:
+        return None
+    gazetted, basis = _service_record_pair(record)
+    if gazetted is True:
+        return (f"the servant is gazetted ({basis}); a gazetted officer's last pay is certified by "
+                f"Audit/Payrolls, so the Last Pay Certificate is not required of them")
+    return None
+
+
 def _pension_slip_stands_in(record: CaseRecord) -> str | None:
     """Items 23 and 24: "not required in case of on-line pension slip".
 
@@ -713,6 +728,7 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-08",
         "Last Pay Certificate (DDO for non-gazetted, Audit/Payrolls for gazetted)",
         ("LPC",),
+        not_applicable_when=_lpc_not_required_of_a_gazetted_self_pensioner,
         applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "REVISED", "DEATH_IN_SERVICE"}),
     ),
     Requirement(
