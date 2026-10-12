@@ -41,6 +41,11 @@ NOT_REQUIRED_FOR: dict[str, frozenset[str]] = {
     "AG-16": frozenset({"UNMARRIED_CHILD"}),
 }
 
+#: Why a line is not required, in the words the checklist shows.
+NOT_REQUIRED_WHY: dict[str, str] = {
+    "AG-16": "not required for an unmarried daughter / son (office rule)",
+}
+
 
 def not_required(item_id: str, variant: str | None) -> bool:
     """Whether the office requires this line at all for this column (30 Sep 2026)."""
@@ -693,6 +698,9 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "NADRA Family Registration Certificate/s, attested by the DDO",
         ("NADRA_FRC",),
         defective_when=_frc_stale,
+        # The sheet ticks the family-pension columns only, and applies_to mirrors the sheet
+        # (tests.test_checklist_fidelity). On a self pension the pensioner is alive and claims
+        # their own pension, so the FRC is not a line on that column at all.
         applies_to=frozenset({"DEATH_IN_SERVICE", "WIDOW", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER", "DISABLED_CHILD_SIBLING", "PARENT", "SISTER"}),
     ),
     Requirement(
@@ -880,7 +888,7 @@ def run_checklist(record: CaseRecord, *, variant: str | None = None) -> Checklis
                     located = doc.pages
                     break
             why = ("not required in any case type (office rule)" if req.id in NOT_REQUIRED_ANYWHERE
-                   else "not required for an unmarried daughter / son (office rule)")
+                   else NOT_REQUIRED_WHY.get(req.id, "not required for this case type (office rule)"))
             items.append(ChecklistItem(req.id, req.requirement,
                                        FOUND_NOT_REQUIRED if located else NOT_REQUIRED,
                                        located=located, reason=why))
