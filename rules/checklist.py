@@ -259,6 +259,50 @@ def _service_book_not_kept(record: CaseRecord) -> str | None:
     return None
 
 
+def _claimant_relation_key(record: CaseRecord) -> str | None:
+    """The claimant's relation as the prescribed form words it, read against the fixed list
+    (rules.relations); None where the form does not say."""
+    from rules.relations import parse_relation
+    stated = record.claimant_relation or record.frc_applicant_relation
+    return parse_relation(stated).key if stated else None
+
+
+def _medical_board_certificate_not_called_for(record: CaseRecord) -> str | None:
+    """AG-14, the medical board's certificate, is a conditional line: it proves an invalidation
+    or a claimant's disability. On a death in service it is called for only where the claimant is
+    a disabled child; on an invalid pension not where the retirement was a compulsory one (a
+    penalty, with no board). Until 12 Oct 2026 the line was demanded of every death in service,
+    so every complete Form D-I bundle read INCOMPLETE (audit of 12 Oct 2026). A relation the form
+    does not state keeps the line, so it asks rather than excuses."""
+    if record.case_variant == "DEATH_IN_SERVICE":
+        key = _claimant_relation_key(record)
+        if key is not None and key != "disabled_child":
+            return ("the claimant is not a disabled child; no medical board certificate is called for on "
+                    "this death in service")
+    if record.case_variant == "FRESH_INVALID" and record.has_document("COMPULSORY_RETIREMENT_ORDER") \
+            and not record.has_document("MEDICAL_BOARD_CERTIFICATE"):
+        return "a compulsory retirement is ordered as a penalty, not certified by a medical board"
+    return None
+
+
+def _income_certificate_not_called_for(record: CaseRecord) -> str | None:
+    """AG-17, the no-regular-income certificate, is for a dependent claimant other than the
+    spouse: on a death in service a widow or widower is not asked for one (audit of 12 Oct 2026)."""
+    if record.case_variant == "DEATH_IN_SERVICE" and _claimant_relation_key(record) == "spouse":
+        return "the claimant is the spouse; the no-regular-income certificate is for a dependent child, parent or sister"
+    return None
+
+
+def _divorce_certificate_not_called_for(record: CaseRecord) -> str | None:
+    """AG-21, the divorce certificate, proves a divorced daughter's or sister's status: on a death
+    in service it is called for only where the claimant is divorced (audit of 12 Oct 2026)."""
+    if record.case_variant == "DEATH_IN_SERVICE":
+        key = _claimant_relation_key(record)
+        if key is not None and key != "divorced_daughter":
+            return "the claimant is not a divorced daughter; no divorce certificate is called for"
+    return None
+
+
 def _lpc_not_required_of_a_gazetted_self_pensioner(record: CaseRecord) -> str | None:
     """AG-08 on a self pension: the LPC is required of a non-gazetted servant and not of a
     gazetted one (user, 12 Oct 2026, decision S15; gazetted from BS-16 as GAZETTED_FROM_BPS).
@@ -771,6 +815,7 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-14",
         "Original medical / disability certificate from a medical board",
         ("MEDICAL_BOARD_CERTIFICATE",),
+        not_applicable_when=_medical_board_certificate_not_called_for,
         applies_to=frozenset({"FRESH_INVALID", "DEATH_IN_SERVICE", "DISABLED_CHILD_SIBLING"}),
     ),
     Requirement(
@@ -789,6 +834,7 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-17",
         "No-regular-source-of-income certificate, signed by the PSA",
         ("NO_REGULAR_INCOME_CERTIFICATE",),
+        not_applicable_when=_income_certificate_not_called_for,
         applies_to=frozenset({"DEATH_IN_SERVICE", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER", "DISABLED_CHILD_SIBLING", "PARENT", "SISTER"}),
     ),
     Requirement(
@@ -814,6 +860,7 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-21",
         "Computerised divorce certificate/s, attested by the DDO",
         ("DIVORCE_CERTIFICATE",),
+        not_applicable_when=_divorce_certificate_not_called_for,
         applies_to=frozenset({"DEATH_IN_SERVICE", "SISTER"}),
     ),
     # AG-22, the Nikah Nama "where the applicant is not shown in the FRC", is not a checklist

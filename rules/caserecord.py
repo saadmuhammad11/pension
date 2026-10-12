@@ -271,6 +271,10 @@ class CaseRecord:
     #: in the papers rather than a value nobody supplied. Surfaced as a HIGH finding so it
     #: reaches the shortcoming letter, not only the determination panel.
     self_pension_defect: str | None = None
+    #: The self-pension engine found the service short of a monthly pension (QS-02). A MEDIUM
+    #: finding for the reviewer, with no figure: the length the engine counted is a computation
+    #: this release does not show (audit of 12 Oct 2026).
+    self_pension_service_short: str | None = None
     #: The case type the department declared at intake (29 Sep 2026), where it did, and what
     #: the papers themselves read as. ``case_type`` above is the one the rules ran on -- the
     #: declaration where there is one -- so the two are kept here for the check that

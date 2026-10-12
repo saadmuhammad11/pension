@@ -41,6 +41,16 @@ _MONEY = re.compile(r"Rs\.?\s*[\d,]+(?:\.\d+)?"                                 
                     r"|(?<![\d.])\d{1,3}(?:,\d{3})+(?:\.\d+)?(?!\d)(?!\.\d)"       # 161,765 / 1,234.50
                     r"|(?<![\d.\-/])\d{5,}(?:\.\d+)?(?![\d\-/])(?!\.\d)")          # 161765 (a bare run; a year is four digits)
 WITHHELD = "[amount withheld]"
+#: A length of service in prose: an ISO-8601 duration the engine writes ("P32Y2M10D"), or a count
+#: of years as the QS steps word it ("2 year(s) earned", "32 years"). Qualifying service is a
+#: figure the engine computes and this release does not show (decision of 7 Oct 2026; the audit
+#: of 12 Oct 2026 found it in the step notes of the "scrubbed" determination).
+_SERVICE = re.compile(r"\bP(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?\b(?<!\bP)"
+                      r"|(?<![\d.])\d+(?:\.\d+)?\s+(?:reckonable\s+)?year(?:\(s\)|s\b|\b)")
+SERVICE_WITHHELD = "[service withheld]"
+#: The caveat the engine writes about itself, reworded to what this release does.
+_COMPUTED_CAVEAT = "this determination was computed by the rules engine"
+_CHECKED_CAVEAT = "this determination's checks were run by the rules engine, and no figure is computed in this release"
 
 
 def strip_money(text: str | None) -> str | None:
@@ -51,14 +61,30 @@ def strip_money(text: str | None) -> str | None:
     return _MONEY.sub(WITHHELD, str(text))
 
 
+def strip_service(text: str | None) -> str | None:
+    """The text with every length of service the engine computed replaced by ``[service
+    withheld]``; applied with ``strip_money`` wherever engine prose is kept."""
+    if not text:
+        return text
+    return _SERVICE.sub(SERVICE_WITHHELD, str(text))
+
+
+def strip_figures(text: str | None) -> str | None:
+    """Money and service both withheld."""
+    return strip_service(strip_money(text))
+
+
 def scrub_determination(det: dict[str, Any] | None) -> dict[str, Any] | None:
     """The determination as a record of checks: which rules ran, what was provisional, what was
     read -- with every computed figure and its working removed."""
     if not det:
         return det
     out = dict(det)
+    # A note keeps its words with money AND service withheld: a qualifying-service step's note
+    # carried the computed length ("P32Y2M10D, exclusive day-counting"; "2 year(s) earned but
+    # not reckonable") past the first scrub (audit of 12 Oct 2026).
     out["steps"] = [{**{k: v for k, v in s.items() if k not in _STEP_COMPUTED},
-                     **({"note": strip_money(s["note"])} if s.get("note") else {})}
+                     **({"note": strip_figures(s["note"])} if s.get("note") else {})}
                     for s in det.get("steps", [])]
     out["ambiguities"] = [
         {**{k: v for k, v in a.items() if k not in ("difference",)},
@@ -67,7 +93,7 @@ def scrub_determination(det: dict[str, Any] | None) -> dict[str, Any] | None:
         for a in det.get("ambiguities", [])
     ]
     out["inputs"] = {k: v for k, v in (det.get("inputs") or {}).items() if k not in _INPUTS_COMPUTED}
-    out["caveats"] = [strip_money(c) for c in det.get("caveats", [])]
+    out["caveats"] = [strip_figures(str(c).replace(_COMPUTED_CAVEAT, _CHECKED_CAVEAT)) for c in det.get("caveats", [])]
     out["calculations"] = "not in this release"
     return out
 
@@ -96,9 +122,9 @@ def scrub_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
     # The engine's refusal and the stage's gap quote its arithmetic ("components sum to Rs ...").
     for key in ("self_pension_error",):
         if out.get(key):
-            out[key] = strip_money(out[key])
+            out[key] = strip_figures(out[key])
     if isinstance(out.get("determination_gap"), dict):
-        out["determination_gap"] = {k: strip_money(v) if isinstance(v, str) else v for k, v in out["determination_gap"].items()}
+        out["determination_gap"] = {k: strip_figures(v) if isinstance(v, str) else v for k, v in out["determination_gap"].items()}
     out["calculations_in_scope"] = CALCULATIONS_IN_SCOPE
     return out
 
@@ -125,9 +151,13 @@ def has_computed_amount(report: dict[str, Any] | None) -> list[str]:
     for i, s in enumerate(det.get("steps", [])):
         if s.get("note") and _MONEY.search(str(s["note"])):
             found.append(f"determination.steps[{i}].note(money)")
+        if s.get("note") and _SERVICE.search(str(s["note"])):
+            found.append(f"determination.steps[{i}].note(service)")
     for i, c in enumerate(det.get("caveats", [])):
         if _MONEY.search(str(c)):
             found.append(f"determination.caveats[{i}](money)")
+        if _COMPUTED_CAVEAT in str(c):
+            found.append(f"determination.caveats[{i}](computed)")
     if (report or {}).get("self_pension_error") and _MONEY.search(str(report["self_pension_error"])):
         found.append("self_pension_error(money)")
     emol = (report or {}).get("emoluments") or {}

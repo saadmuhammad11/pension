@@ -92,7 +92,10 @@ class TheFindings(unittest.TestCase):
         self.assertEqual(len(flags), 1)
         f = flags[0]
         self.assertEqual((f.severity, f.flag_class, f.owner), (MEDIUM, SERVICE_SHORT, "AG"))
-        self.assertIn("under 10 years (6 years)", f.title)
+        self.assertIn("may be under 10 years", f.title)
+        # No length of service in the finding: the count is a computation this release does not
+        # show (audit of 12 Oct 2026); the dates as read and the rule's minimum are what it says.
+        self.assertNotRegex(f.title + " " + f.finding, r"\(\d+ years?\)|\d+y \d+m")
         self.assertIn("QS-02", f.finding)
         self.assertIn("No entitlement is computed", f.finding)
 

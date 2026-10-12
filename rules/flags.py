@@ -1264,18 +1264,24 @@ def check_form_d_i_dates(record: CaseRecord, pack: RulePack) -> list[Flag]:
             owner="DEPARTMENT", asserted=sources, affects_determination=True,
         )]
     if entry and death:
-        years = span(entry, death).years
         try:
             minimum = int(pack.ref("qualifying_service", "min_years_for_monthly_pension"))
         except Exception:                                    # noqa: BLE001
             minimum = 10
-        if years < minimum:
+        # Whole calendar dates, not a day count: entry on 1 July 2011 and death on 30 June 2021
+        # is ten years with the day of death counted, and the exclusive count said nine. No
+        # figure in the finding either; the length is a computation this release does not show
+        # (audit of 12 Oct 2026).
+        from datetime import timedelta
+
+        from rules.engine import add_years
+        if death + timedelta(days=1) < add_years(entry, minimum):
             return [Flag(
                 id="", severity=MEDIUM, flag_class=SERVICE_SHORT,
-                title=f"Service at death under {minimum} years ({years} years)",
-                finding=(f"From first entry on {entry.isoformat()} to the death on {death.isoformat()} is "
-                         f"{span(entry, death).human}, under the {minimum} years the rules set for a monthly pension "
-                         f"(QS-02). No entitlement is computed in this release; the rule is for the reviewer to apply."),
+                title=f"Service at death may be under {minimum} years",
+                finding=(f"From first entry on {entry.isoformat()} to the death on {death.isoformat()} is less "
+                         f"than the {minimum} years the rules set for a monthly pension (QS-02), on the dates as "
+                         f"read. No entitlement is computed in this release; the rule is for the reviewer to apply."),
                 required_action=("Check the service against the service book (and any earlier service that counts), "
                                  "and decide the entitlement under QS-02 and the gratuity rules."),
                 owner="AG", asserted=sources, affects_determination=True,
@@ -2097,6 +2103,32 @@ def check_self_pension_refusal(record: CaseRecord, pack: RulePack) -> list[Flag]
     )]
 
 
+def check_self_pension_service_short(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """The self-pension engine found the service short of a monthly pension (QS-02). MEDIUM.
+
+    The same weight as SERVICE-SHORT on a Form D-I, and with the same restraint: the rule is
+    for the reviewer to apply, and the length the engine counted is not shown (decision of
+    7 Oct 2026). Until 12 Oct 2026 this refusal was a HIGH contradiction blamed on the
+    department, with the computed years in it (audit of 12 Oct 2026).
+    """
+    if not record.self_pension_service_short:
+        return []
+    return [Flag(
+        id="", severity=MEDIUM, flag_class=SERVICE_SHORT,
+        title="Service may be short of the minimum for a monthly pension",
+        finding=("The rules engine found the service, from the first entry to the retirement the sanction "
+                 "form states, short of the minimum the rules set for a monthly pension (QS-02). No "
+                 "entitlement is computed in this release; the rule is for the reviewer to apply."),
+        asserted=tuple(Source(d.pages[0], d.type) for d in record.documents
+                       if d.type.startswith("FORM_B_") and d.pages),
+        affects_determination=True,
+        required_action=("Check the dates of entry and retirement against the service book, and any "
+                         "earlier service that counts, and decide the entitlement under QS-02 and the "
+                         "gratuity rules."),
+        owner="AG",
+    )]
+
+
 def check_declared_case_type(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """The declared case type against what the papers read as.
 
@@ -2224,6 +2256,7 @@ BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_attestation,
     check_psa_specimen,
     check_self_pension_refusal,
+    check_self_pension_service_short,
     check_declared_case_type,
 )
 

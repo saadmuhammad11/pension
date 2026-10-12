@@ -523,6 +523,32 @@ def _cite_all(report: dict) -> dict:
 _DEFAULT_COMPUTED_AT = datetime(2026, 6, 3, 10, 0, 0)
 
 
+def _self_pension_refusal(exc: Exception) -> tuple[str, str | None, str | None]:
+    """What the self-pension engine's refusal becomes: ``(error, defect, service_short)``.
+
+    Without the engine's figures (scope decision of 7 Oct 2026): a refusal quotes what it summed
+    and counted, and the text reaches the screen and the department's letter, so money and
+    service are withheld from it. Then by kind:
+      - a contradiction between the papers' own dates (RetirementDateMismatch, ImpossibleDates)
+        is a defect in the department's paperwork and belongs in the shortcoming letter, not
+        only in the determination panel: the HIGH finding CONTRA-SERVICE-DATES carries it;
+      - service short of a monthly pension (ServiceTooShort) is a reviewer's finding, MEDIUM as
+        on a Form D-I, never a contradiction blamed on the department, never with the years;
+      - anything else (a gap in the rule pack's table, pay lines that do not sum, a bug) is a
+        determination gap the officer sees in the panel. Until 12 Oct 2026 every one of them
+        became a HIGH "the sanction form's own dates contradict" that blocked the PPO and went
+        into the department's letter (audit of 12 Oct 2026).
+    """
+    from rules.engine import ImpossibleDates, RetirementDateMismatch, ServiceTooShort
+    from rules.scope import strip_figures
+    error = strip_figures(str(exc)) or type(exc).__name__
+    if isinstance(exc, (RetirementDateMismatch, ImpossibleDates)):
+        return error, error, None
+    if isinstance(exc, ServiceTooShort):
+        return error, None, error
+    return error, None, None
+
+
 def _self_pension(run, bps, annual_pay: dict, retirement: "date | None",
                   case_type: str | None, fields_path,
                   computed_at: "datetime | None" = None,
@@ -1167,6 +1193,7 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
     # the point: a single pay slip is not the average the rule requires.
     self_pension_error = None
     self_pension_defect = None
+    self_pension_service_short = None
     # The date of retirement the officer typed at intake is the fallback where the sanction
     # form's own text yields none; the form governs where it speaks.
     retirement_for_self = entitlement_date
@@ -1213,15 +1240,7 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
                                    printed_average=printed_average,
                                    printed_base_note=printed_base_note)
         except Exception as exc:                         # noqa: BLE001
-            # Without the engine's figures (scope decision of 7 Oct 2026): a refusal quotes what it
-            # summed, and the text reaches the screen and the department's letter as a finding.
-            from rules.scope import strip_money
-            self_pension_error = strip_money(str(exc))
-            # A refusal that says the papers contradict each other is a defect in the
-            # department's paperwork, and belongs in the shortcoming letter -- not only in
-            # the determination panel. The engine names the contradiction; this carries it
-            # to the officer as a finding with the same weight as any other HIGH.
-            self_pension_defect = self_pension_error
+            self_pension_error, self_pension_defect, self_pension_service_short = _self_pension_refusal(exc)
 
     # What the pipeline said when it declined to determine, quoted rather than re-derived.
     # BRAIN §15.2: "Say so, precisely, and route to a human... prefer the visible gap every
@@ -1352,6 +1371,8 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         record = replace(record, prescribed_form_blanks=tuple(blanks))
     if self_pension_defect:
         record = replace(record, self_pension_defect=self_pension_defect)
+    if self_pension_service_short:
+        record = replace(record, self_pension_service_short=self_pension_service_short)
     flags = run_battery(record, pack)
     # Only the findings a reviewer must act on, one short line each, most serious first (office
     # rule, 30 Sep 2026). The rest are kept in the report, set aside with their reason.
