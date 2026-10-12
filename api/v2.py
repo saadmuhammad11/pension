@@ -1278,6 +1278,13 @@ def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
     row = _case_or_404(conn, case_id, user)
     if row["product"] != "PENSION":
         raise HTTPException(422, "only a pension case has a case type")
+    if user.role in workflow.AG_SIDE and row["status"] in workflow.AG_HOLDS:
+        # The type decides the checklist column the next verification runs on, so while the AG
+        # holds the case only the holding tier corrects it (audit of 12 Oct 2026).
+        try:
+            workflow.check_holder(user, row, "SET_CASE_TYPE")
+        except workflow.WorkflowError as exc:
+            _raise(exc)
     new_type = _case_type_or_422(body.get("case_type"))
     variant = (body.get("variant") or "").strip() or None
     columns = variants_for_case_type(new_type)
@@ -1710,6 +1717,14 @@ def _gpf_case_or_404(conn: db.Connection, case_id: str, user: User, *, acting: b
         raise HTTPException(404, "this GP Fund claim has not been examined yet")
     if acting:
         _gpf_may_act(row)
+        # The tier that holds the case acts in the examination; another tier reads it. The AAO
+        # and the AO share the module's "ao" band, so without this an Assistant AO could pass a
+        # claim for payment while the AO held the case (audit of 12 Oct 2026).
+        try:
+            workflow.check_holder(user, row, "DISPOSE")
+            workflow.check_one_tier_per_case(conn, user, row)
+        except workflow.WorkflowError as exc:
+            _raise(exc)
     return row
 
 
@@ -1886,8 +1901,21 @@ def _run_for(conn: db.Connection, user: User, case_id: str, run_id: str, *, acti
                                  "the department is told what is missing when a case is returned")
     if not conn.execute("SELECT 1 FROM case_runs WHERE case_id = ? AND run_id = ?", (row["id"], run_id)).fetchone():
         raise HTTPException(404, "this run does not belong to this case")
-    if acting and row["status"] not in workflow.AG_HOLDS:
-        raise HTTPException(409, "findings can be acted on only while the case is with the Accountant General")
+    if acting:
+        # Findings are cleared on the case's current examination, while it is under review, by
+        # the tier that holds the case, by an account that acted at no other tier on it. Until
+        # 12 Oct 2026 any AG-side officer who could see the case could waive a HIGH finding on
+        # any of its runs while another tier held it, and the Senior Auditor's forward gate
+        # trusted those waivers (audit of 12 Oct 2026).
+        if row["status"] != workflow.UNDER_REVIEW:
+            raise HTTPException(409, "findings can be acted on only while the case is under the Accountant General's review")
+        if run_id != row["current_run_id"]:
+            raise HTTPException(409, "this run is not the case's current examination; findings are acted on in the current one")
+        try:
+            workflow.check_holder(user, row, "DISPOSE")
+            workflow.check_one_tier_per_case(conn, user, row)
+        except workflow.WorkflowError as exc:
+            _raise(exc)
     return get_run(run_id)
 
 

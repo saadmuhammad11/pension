@@ -134,7 +134,10 @@ TRANSITIONS: dict[str, tuple[tuple[str, ...], frozenset[str], str | None]] = {
 #: The moves between tiers: never shown to the department (C3).
 INTERNAL_ACTIONS = frozenset({"FORWARD_TIER", "RETURN_TIER"})
 #: Actions a tier may take only while it holds the case.
-HOLDER_ACTIONS = frozenset({"RUN_CHECK", "TAKE_UP", "FORWARD_TIER", "RETURN_TIER", "APPROVE", "REJECT",
+#: DISPOSE (clearing a finding or a checklist line, acting in the GP Fund examination) and
+#: SET_CASE_TYPE are not status moves, but they change what the next tier decides on, so the
+#: holder rule covers them too (audit of 12 Oct 2026).
+HOLDER_ACTIONS = frozenset({"RUN_CHECK", "TAKE_UP", "FORWARD_TIER", "RETURN_TIER", "APPROVE", "REJECT", "DISPOSE", "SET_CASE_TYPE",
                             "RETURN", "REQUEST_DOCS"})
 
 #: Where a department may still change what it declared: the same statuses it may add papers in.
