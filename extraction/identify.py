@@ -27,7 +27,7 @@ that fits nothing is ``OTHER`` and reaches a human; the model never coins a type
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
@@ -91,6 +91,9 @@ class PageIdentity:
     downgraded_from: str | None = None
     #: Set when that rejection was followed by a successful re-read of what the page IS.
     reclassified: bool = False
+    #: Set when the model's label was replaced by a prescribed form that OCR found printed on the
+    #: page, number and title both (``_reclaim_form``). The label it replaced.
+    promoted_from: str | None = None
     #: Further separate documents printed on the same sheet (two certificates on one page).
     also_on_page: tuple[str, ...] = ()
 
@@ -318,6 +321,38 @@ def _deny_pay_claim_on_a_card(ident: PageIdentity, image: str | Path) -> PageIde
     )
 
 
+#: Labels a prescribed form has been filed under by mistake, and may be reclaimed from. On the
+#: self-pension case of 12 Oct 2026 the department's Form B-I, headed "Annex-B-1", was filed as
+#: ANNEX_A at confidence 1.00; nothing re-read it, so the bundle had no prescribed form and the
+#: case fell to manual routing. The set is deliberately short: a forwarding letter or a file cover
+#: names the forms it encloses, and a pension application quotes their clauses, so a page under
+#: those labels is never reclaimed however plainly it mentions a form.
+PROMOTABLE_LABELS = frozenset({"ANNEX_A", "OTHER", "AFFIDAVIT", "SUPERANNUATION_ORDER"})
+
+
+def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity, str]:
+    """A prescribed form the model filed under another label, reclaimed on OCR's evidence.
+
+    The bar is higher than for confirming a claim. To confirm, one printed form number or one
+    title is enough; to overrule the model, the page must print exactly ONE form number AND
+    that form's own scenario title (``form_titles_on``): "Annex-B-1" with "RETIREMENT ON
+    SUPERANNUATION" is Form B-I, while a descriptive roll that says "Annex-B-1 enclosed" is not,
+    and a page quoting two forms (B-III cites B-II) is left for a person. An OCR failure keeps
+    the label: no second reading is not evidence against the first. Returns the identity and
+    the page's text, which is the form's text when reclaimed.
+    """
+    from .ocr import form_titles_on, forms_printed_on, ocr_page
+    try:
+        text = ocr_page(image, ident.page)
+    except Exception:                                   # noqa: BLE001
+        return ident, ""
+    numbers = tuple(dict.fromkeys(forms_printed_on(text)))
+    if len(numbers) != 1 or numbers[0] not in form_titles_on(text):
+        return ident, text.text or ""
+    return replace(ident, document_type=numbers[0], is_first_page=True,
+                   promoted_from=ident.document_type), text.text or ""
+
+
 def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdentity:
     """Keep a proforma claim only where OCR reads the proforma's title on the page.
 
@@ -372,6 +407,10 @@ def verify_with_ocr(
             out.append(_verify_proforma_claim(ident, image_for(ident.page)))
             continue
         if ident.document_type not in _FORM_NUMBER:
+            if ident.document_type in PROMOTABLE_LABELS:
+                ident, page_text = _reclaim_form(ident, image_for(ident.page))
+                if ident.promoted_from:
+                    form_text[ident.page] = page_text[:8000]
             out.append(ident)
             continue
         text = ocr_page(image_for(ident.page), ident.page)

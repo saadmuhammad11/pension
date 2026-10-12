@@ -133,6 +133,10 @@ def stage_verify_forms(run_dir: str | Path, *, progress=None,
         # denial left as OTHER is reopened; one the re-read placed elsewhere stands.
         if r["document_type"] == "OTHER" and r.get("downgraded_from"):
             return r["downgraded_from"]
+        # A form reclaimed from the model's label (12 Oct 2026) is re-decided from that label
+        # for the same reason: a promotion must not outlive the OCR evidence that made it.
+        if r.get("promoted_from"):
+            return r["promoted_from"]
         return r["document_type"]
 
     identities = [
@@ -170,6 +174,23 @@ def stage_verify_forms(run_dir: str | Path, *, progress=None,
             if progress:
                 progress(f"p.{v.page:>2}  OCR now corroborates {v.document_type}; "
                          f"earlier denial withdrawn")
+        elif v.promoted_from:
+            # The model's label replaced by the prescribed form OCR finds printed on the page,
+            # number and title both (extraction.identify._reclaim_form). A form is a document
+            # of its own, so the page starts one.
+            row["document_type"] = v.document_type
+            row["promoted_from"] = v.promoted_from
+            row["is_first_page_of_document"] = True
+            row.pop("needs_human", None)
+            if progress:
+                progress(f"p.{v.page:>2}  OCR prints {v.document_type} with its title; "
+                         f"{v.promoted_from} -> {v.document_type}")
+        elif row.get("promoted_from"):
+            # An earlier promotion OCR no longer supports: back to what the model said.
+            row["document_type"] = v.document_type
+            row.pop("promoted_from", None)
+            if progress:
+                progress(f"p.{v.page:>2}  OCR no longer prints a form here; back to {v.document_type}")
     out = [by_page[k] for k in sorted(by_page)]
     _write(run / IDENTITIES, out)
     return out
