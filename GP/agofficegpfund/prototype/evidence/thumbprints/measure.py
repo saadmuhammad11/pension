@@ -36,23 +36,23 @@ def disp_to_native(slug, pn, box):
     return (int((pt[0] - bx[0]) * sx), int((pt[1] - bx[1]) * sy), int((pt[2] - bx[0]) * sx), int((pt[3] - bx[1]) * sy))
 
 T = [
- ("m_fpng_p4_cnic_printed_thumb", "fp-non-gazetted", 4, (676, 2483, 1493, 3196), "Fazal Din (subscriber); fingerprint printed on old-style CNIC back (card 3082XP)", "fp-non-gazetted p4 CNIC copy (back)", 945),
- ("m_fpng_p7_sb_thumb", "fp-non-gazetted", 7, (1627, 1894, 1997, 2147), "Fazal Din; Service Book ink thumb", "fp-non-gazetted p7 Service Book", None),
- ("m_fpng_p7_sb_fore", "fp-non-gazetted", 7, (382, 1903, 671, 2120), "Fazal Din; Service Book ink fore finger", "fp-non-gazetted p7 Service Book", None),
- ("m_fpng_p7_sb_middle", "fp-non-gazetted", 7, (1546, 1488, 1844, 1714), "Fazal Din; Service Book ink middle finger", "fp-non-gazetted p7 Service Book", None),
- ("m_fpng_p7_sb_ring", "fp-non-gazetted", 7, (779, 1389, 1068, 1606), "Fazal Din; Service Book ink ring finger", "fp-non-gazetted p7 Service Book", None),
- ("m_fpng_p7_sb_little", "fp-non-gazetted", 7, (319, 1407, 563, 1624), "Fazal Din; Service Book ink little finger", "fp-non-gazetted p7 Service Book", None),
- ("m_death_p1_thumb", "fp-death", 1, (1531 + 55, 2345 + 58, 1531 + 300, 2345 + 212), "claimant (probably widow Zubaida Bibi); ink thumb at 'Yours Obediently'", "fp-death p1 GPF-10", None),
- ("m_death_p8_petition_thumb", "fp-death", 8, ("disp", (860, 712, 1045, 812)), "petitioner No.1 (probably widow Zubaida Bibi); ink thumb above 'PETITIONER', overlapped by court stamp", "fp-death p8 succession petition", None),
+ ("m_fpng_p4_cnic_printed_thumb", "fp-non-gazetted", 4, (676, 2483, 1493, 3196), "Subscriber A. Test (subscriber); fingerprint printed on old-style CNIC back (card 3082XP)", "fp-non-gazetted p4 CNIC copy (back)", 945),
+ ("m_fpng_p7_sb_thumb", "fp-non-gazetted", 7, (1627, 1894, 1997, 2147), "Subscriber A. Test; Service Book ink thumb", "fp-non-gazetted p7 Service Book", None),
+ ("m_fpng_p7_sb_fore", "fp-non-gazetted", 7, (382, 1903, 671, 2120), "Subscriber A. Test; Service Book ink fore finger", "fp-non-gazetted p7 Service Book", None),
+ ("m_fpng_p7_sb_middle", "fp-non-gazetted", 7, (1546, 1488, 1844, 1714), "Subscriber A. Test; Service Book ink middle finger", "fp-non-gazetted p7 Service Book", None),
+ ("m_fpng_p7_sb_ring", "fp-non-gazetted", 7, (779, 1389, 1068, 1606), "Subscriber A. Test; Service Book ink ring finger", "fp-non-gazetted p7 Service Book", None),
+ ("m_fpng_p7_sb_little", "fp-non-gazetted", 7, (319, 1407, 563, 1624), "Subscriber A. Test; Service Book ink little finger", "fp-non-gazetted p7 Service Book", None),
+ ("m_death_p1_thumb", "fp-death", 1, (1531 + 55, 2345 + 58, 1531 + 300, 2345 + 212), "claimant (probably widow Claimant B. Test); ink thumb at 'Yours Obediently'", "fp-death p1 GPF-10", None),
+ ("m_death_p8_petition_thumb", "fp-death", 8, ("disp", (860, 712, 1045, 812)), "petitioner No.1 (probably widow Claimant B. Test); ink thumb above 'PETITIONER', overlapped by court stamp", "fp-death p8 succession petition", None),
  ("m_death_p12_imp1", "fp-death", 12, (1568 + 100, 2581 + 80, 1568 + 330, 2581 + 218), "claimant (probably widow); impression 1 of 3 at Employee Specimen Signature", "fp-death p12 FORM PAY 06", None),
  ("m_death_p12_imp2", "fp-death", 12, (1568 + 95, 2581 + 215, 1568 + 310, 2581 + 352), "claimant (probably widow); impression 2 of 3", "fp-death p12 FORM PAY 06", None),
  ("m_death_p12_imp3", "fp-death", 12, (1568 + 90, 2581 + 352, 1568 + 305, 2581 + 518), "claimant (probably widow); impression 3 of 3", "fp-death p12 FORM PAY 06", None),
- ("m_death_p6_sigbox_blob", "fp-death", 6, (1449 + 50, 2489 + 70, 1449 + 345, 2489 + 205), "Zubaida Bibi; dark oval mark in Holder's Signature box of smart CNIC (possibly a printed thumb)", "fp-death p6 CNIC copy (front)", 425),
+ ("m_death_p6_sigbox_blob", "fp-death", 6, (1449 + 50, 2489 + 70, 1449 + 345, 2489 + 205), "Claimant B. Test; dark oval mark in Holder's Signature box of smart CNIC (possibly a printed thumb)", "fp-death p6 CNIC copy (front)", 425),
  ("m_death_p6_halftone_control", "fp-death", 6, (1449 + 30, 2489 + 2, 1449 + 340, 2489 + 60), "control: halftone-only area (photo bottom) on the same card copy", "fp-death p6 CNIC copy (front)", 425),
- ("m_dism_p1_imp1", "fp-dismissal", 1, (1905 + 75, 2252 + 30, 1905 + 380, 2252 + 270), "Faizan Siddiqui (subscriber); impression 1 of 3", "fp-dismissal p1 FORM PAY 06", None),
- ("m_dism_p1_imp2", "fp-dismissal", 1, (1905 + 35, 2252 + 280, 1905 + 365, 2252 + 550), "Faizan Siddiqui; impression 2 of 3", "fp-dismissal p1 FORM PAY 06", None),
- ("m_dism_p1_imp3", "fp-dismissal", 1, (1905 + 25, 2252 + 590, 1905 + 375, 2252 + 900), "Faizan Siddiqui; impression 3 of 3", "fp-dismissal p1 FORM PAY 06", None),
- ("m_dism_p6_thumb", "fp-dismissal", 6, (391 + 40, 2764 - 130, 391 + 460, 2764 + 125), "Faizan Siddiqui; ink thumb on e-stamp affidavit", "fp-dismissal p6 e-stamp affidavit", None),
+ ("m_dism_p1_imp1", "fp-dismissal", 1, (1905 + 75, 2252 + 30, 1905 + 380, 2252 + 270), "Subscriber C. Test (subscriber); impression 1 of 3", "fp-dismissal p1 FORM PAY 06", None),
+ ("m_dism_p1_imp2", "fp-dismissal", 1, (1905 + 35, 2252 + 280, 1905 + 365, 2252 + 550), "Subscriber C. Test; impression 2 of 3", "fp-dismissal p1 FORM PAY 06", None),
+ ("m_dism_p1_imp3", "fp-dismissal", 1, (1905 + 25, 2252 + 590, 1905 + 375, 2252 + 900), "Subscriber C. Test; impression 3 of 3", "fp-dismissal p1 FORM PAY 06", None),
+ ("m_dism_p6_thumb", "fp-dismissal", 6, (391 + 40, 2764 - 130, 391 + 460, 2764 + 125), "Subscriber C. Test; ink thumb on e-stamp affidavit", "fp-dismissal p6 e-stamp affidavit", None),
 ]
 
 def fgmask(g):

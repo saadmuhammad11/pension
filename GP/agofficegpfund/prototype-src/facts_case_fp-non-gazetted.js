@@ -1,13 +1,13 @@
-/* Final Payment, Non-Gazetted: Fazal Din, Driver, Highway Mechanical Division Lahore */
+/* Final Payment, Non-Gazetted: Subscriber A. Test, Driver, Highway Mechanical Division Lahore */
 defCase('fp-non-gazetted', {
   label:'Final Payment, Non-Gazetted', kind:'final', family:'FINAL_PAYMENT',
   sub:'Final payment on superannuation, non-gazetted',
-  subject:'Fazal Din, Driver (BS-05/06)', dept:'Highway Mechanical Division, Lahore (C&W)',
+  subject:'Subscriber A. Test, Driver (BS-05/06)', dept:'Highway Mechanical Division, Lahore (C&W)',
   personnelNo:'90000374', pages:9, diary:'214465 / 989082, 11-08-2026', gazetted:'non-gazetted',
-  note:'Fazal Din, Driver, retired 09-06-2026. SAP pay slip and report in the case. Service Book pages lack the retirement entries; SAP shows an unexplained posting of Rs 74,178.',
+  note:'Subscriber A. Test, Driver, retired 09-06-2026. SAP pay slip and report in the case. Service Book pages lack the retirement entries; SAP shows an unexplained posting of Rs 74,178.',
   persNos:[{doc:'GPF-10 (account no.)',page:1,value:'90000374'},{doc:'FORM PAY 06',page:5,value:'90000374'},{doc:'SAP pay slip, June 2026',page:8,value:'90000374'},{doc:'GPF Final Re-calculation Report',page:9,value:'90000374'}],
   record:[
-    ['Subscriber','Fazal Din s/o Qutab-ud-Din, Driver','GPF-10 · office order · CNIC · SAP',0.98,1],
+    ['Subscriber','Subscriber A. Test s/o Father A. Test, Driver','GPF-10 · office order · CNIC · SAP',0.98,1],
     ['Personnel no. / GP Fund A/c','90000374','GPF-10 · Form 06 · Service Book · SAP',0.99,1],
     ['Old GP Fund A/c','017-00-171471 (SAP Old # 01700171471); not on the GPF-10','Form 06 · Service Book · pay slip',0.97,5],
     ['CNIC','00001-0000102-9 (old-style card, attested)','CNIC · Form 06 · pay slip',0.97,3],
@@ -25,8 +25,8 @@ defCase('fp-non-gazetted', {
       corroboration:'The old number 017-00-171471 is on Form 06, the Service Book cover and the SAP pay slip (Old # 01700171471)' },
     notification:{ present:true, page:2, label:'Retirement office order', no:'402/E/HMC', date:'03-06-2026', crop:'fp-non-gazetted_p002_office_order_402_body.png',
       note:'Driver (BS-05), retired w.e.f. 09-06-2026 (A.N.) on superannuation; attested by the Executive Engineer HMD Lahore.' },
-    cnics:[ { page:3, whose:'subscriber', type:'old', number:'00001-0000102-9', name:'Fazal Din', expiry:'lifetime', attested:true, attestedBy:'Executive Engineer, HMD Lahore' } ],
-    changeForm:{ present:true, label:'FORM PAY 06', page:5, personalNo:'90000374', name:'Fazal Din', cnic:'00001-0000102-9', sigKind:'signature', ddoSigned:true,
+    cnics:[ { page:3, whose:'subscriber', type:'old', number:'00001-0000102-9', name:'Subscriber A. Test', expiry:'lifetime', attested:true, attestedBy:'Executive Engineer, HMD Lahore' } ],
+    changeForm:{ present:true, label:'FORM PAY 06', page:5, personalNo:'90000374', name:'Subscriber A. Test', cnic:'00001-0000102-9', sigKind:'signature', ddoSigned:true,
       ddoStamp:'Executive Engineer, Highway Mechanical Division, Lahore', oldGpfNo:'017-00-171471',
       note:'100% of balance ticked. "For the month of 08/2026" is the processing month of the entry, not a deduction month.' },
     serviceBook:{ present:true, pages:[6,7], entries:{ dor:false, order:false, leave:false }, note:'cover No. 3194307 and the particulars page only' }

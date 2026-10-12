@@ -347,8 +347,8 @@ def name_key(value: Any) -> str:
 def same_name(left: Any, right: Any) -> bool | None:
     """Whether two renderings name the same person. ``None`` where one is missing.
 
-    Containment counts as agreement: the papers give "Barkat Ali", "Barkit Ali" and
-    "Mrs. Rubina Tariq" for people the personnel number already identifies, and a strict
+    Containment counts as agreement: the papers give "Subscriber F. Test", "Subscribar F. Test" and
+    "Mrs. Subscriber G. Test" for people the personnel number already identifies, and a strict
     comparison would raise a defect about a transliteration. ``None`` rather than False when
     a name is absent -- there is nothing to disagree with, and §14 rule 2 keeps the module
     from raising on that.

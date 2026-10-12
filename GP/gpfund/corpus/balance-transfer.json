@@ -15,9 +15,9 @@
    "daoConfirmed": "The GP Fund A/C No: P# 90000847 Is Hereby Confirmed",
    "daoCrop": "balance-transfer_p001_dao_endorsement_stamp_signature.png",
    "designation": "Director",
-   "father": "Mian Nawab",
+   "father": "Father H. Test",
    "lastDeduction": "",
-   "name": "Rafaqat Ahmad",
+   "name": "Subscriber H. Test",
    "newAc": "Personal No:- 90000847",
    "oldAc": "Personal No:- 90000847",
    "page": 1,
@@ -30,7 +30,7 @@
  "key": "balance-transfer",
  "kind": "balance_transfer",
  "label": "Balance Transfer",
- "note": "Rafaqat Ahmad, Director PR Faisalabad. One-page proforma. The DAO has confirmed P# 90000847 as the GP Fund account; old account and last deduction to come from SAP.",
+ "note": "Subscriber H. Test, Director PR Faisalabad. One-page proforma. The DAO has confirmed P# 90000847 as the GP Fund account; old account and last deduction to come from SAP.",
  "pages": 1,
  "persNos": [
   {
@@ -54,7 +54,7 @@
  "record": [
   [
    "Subscriber",
-   "Rafaqat Ahmad s/o Mian Nawab, Director",
+   "Subscriber H. Test s/o Father H. Test, Director",
    "Proforma columns 1 to 3",
    0.97,
    1
@@ -156,7 +156,7 @@
  ],
  "slug": "balance-transfer",
  "sub": "Transfer of GP Fund balances, Lahore postings to DAO Faisalabad",
- "subject": "Rafaqat Ahmad, Director",
+ "subject": "Subscriber H. Test, Director",
  "thumbs": [],
  "verifications": {}
 }

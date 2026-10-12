@@ -79,15 +79,15 @@ def _scripted_refundable():
             "basic_pay_stated": (19040, 0.5),  # deliberately low -> needs human
         }),
         "p2": _fields(A.CNIC_SMART_FRONT.value, {
-            "number": ("00001-0000101-3", 0.98), "name": ("Barkit Ali", 0.9),
+            "number": ("00001-0000101-3", 0.98), "name": ("Subscribar F. Test", 0.9),
             "holder_signature_present": (True, 0.95), "attested": (False, 0.95)}),
         "p3": _fields(A.CNIC_SMART_BACK.value, {"qr_present": (True, 0.95), "card_number": ("108261290869", 0.9)}),
         "p4": _fields(A.FORM_PAY_05.value, {
-            "personal_no": ("90000227", 0.98), "name": ("Barkat Ali", 0.9), "cnic": ("", 0.9),
+            "personal_no": ("90000227", 0.98), "name": ("Subscriber F. Test", 0.9), "cnic": ("", 0.9),
             "sig_kind": ("signature", 0.95), "ddo_signed": (True, 0.95),
             "ddo_stamp": ("SP Headquarters for DIG Operations, Lahore", 0.9)}),
         "p5": _fields(A.SAP_PAYSLIP.value, {
-            "pers_no": ("90000227", 0.99), "name": ("BARKAT ALI", 0.95), "month": ("August 2026", 0.95),
+            "pers_no": ("90000227", 0.99), "name": ("SUBSCRIBER F. TEST", 0.95), "month": ("August 2026", 0.95),
             "gpf_balance": (19194, 0.97), "gpf_loan_balance": (56000, 0.95), "basic_pay": (22890, 0.96),
             "attested": (False, 0.95)}),
         "p6": {**_fields(A.SAP_GPF_RECALC_REPORT.value, {

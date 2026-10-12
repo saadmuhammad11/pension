@@ -1,16 +1,16 @@
-/* Non-Refundable Advance: Mrs Rubina Tariq, PST, School Education Department */
+/* Non-Refundable Advance: Mrs Subscriber G. Test, PST, School Education Department */
 defCase('non-refundable', {
   label:'Non-Refundable Advance', kind:'nonrefundable', family:'ADVANCE',
   sub:'Non-refundable advance at age 50 or over, Rule 1.16',
-  subject:'Rubina Tariq, PST (BS-14)', dept:'School Education Department, GGHS R.A. Bazar, Lahore Cantt',
+  subject:'Subscriber G. Test, PST (BS-14)', dept:'School Education Department, GGHS R.A. Bazar, Lahore Cantt',
   personnelNo:'90000216', pages:7, diary:'987752 / 212877, 23-07-2026', gazetted:'non-gazetted',
-  note:'Mrs Rubina Tariq, PST. Rs 490,955 under Rule 1.16. QR-coded sanction and smart CNIC both scan and agree. CNIC digits transposed on Form 6-B.',
+  note:'Mrs Subscriber G. Test, PST. Rs 490,955 under Rule 1.16. QR-coded sanction and smart CNIC both scan and agree. CNIC digits transposed on Form 6-B.',
   persNos:[{doc:'Sanction order',page:1,value:'90000216'},{doc:'FORM PAY 06',page:4,value:'90000216'},{doc:'SAP pay slip, August 2026',page:5,value:'90000216'},{doc:'GPF Final Re-calculation Report',page:7,value:'90000216'}],
   record:[
-    ['Subscriber','Mrs Rubina Tariq w/o Tariq Ur Rehman, Primary School Teacher','Sanction · CNIC · SAP pay slip',0.97,1],
+    ['Subscriber','Mrs Subscriber G. Test w/o Husband G. Test, Primary School Teacher','Sanction · CNIC · SAP pay slip',0.97,1],
     ['Personnel no.','90000216','Sanction · Form 06 · pay slip · report',0.99,4],
     ['CNIC','00001-0000104-4 (smart card); Form 06 writes 00010-0000104-4','Card · QR codes · pay slip · Form 06',0.97,2],
-    ['Date of birth, age at sanction','05-11-1974; 51 years 8 months on 14-07-2026','Sanction · CNIC · pay slip',0.98,1],
+    ['Date of birth, age at sanction','05-11-1971; 54 years 8 months on 14-07-2026','Sanction · CNIC · pay slip',0.98,1],
     ['Sanction','No. 113909/LHR/2026 dated 14-07-2026, Rs 490,955','Sanction order',0.98,1],
     ['Rule quoted','1.16, with FD notification FD-SR-1-2-1/2000 of 12-12-2002','Sanction order',0.96,1],
     ['Balance stated on sanction','Rs 613,694 (Rs 490,955 is exactly 80% of it)','Sanction order',0.95,1],
@@ -20,18 +20,18 @@ defCase('non-refundable', {
   ],
   docs:{
     sanction:{ present:true, page:1, dept:'School Education Department', printedAuthority:'Chief Executive Officer (DEA) Lahore',
-      orderNo:'113909/LHR/2026', date:'14-07-2026', rule:'Rule 1.16 of the Punjab GP Fund Rules 1978, with FD notification FD-SR-1-2-1/2000 of 12-12-2002', reason:'Age over 45 (born 05-11-1974)',
+      orderNo:'113909/LHR/2026', date:'14-07-2026', rule:'Rule 1.16 of the Punjab GP Fund Rules 1978, with FD notification FD-SR-1-2-1/2000 of 12-12-2002', reason:'Age over 45 (born 05-11-1971)',
       amount:490955, balanceStated:613694, limitClause:'1.16', ageAtSanction:{y:51, m:8}, qrId:'sanction', crop:'non-refundable_p001_sanction_signatory_stamp.png' },
-    changeForm:{ present:true, label:'FORM PAY 06', page:4, personalNo:'90000216', name:'Mrs. Rubina Tariq', cnic:'00010-0000104-4', cnicCrop:'non-refundable_p004_personal_no_and_cnic.png',
+    changeForm:{ present:true, label:'FORM PAY 06', page:4, personalNo:'90000216', name:'Mrs. Subscriber G. Test', cnic:'00010-0000104-4', cnicCrop:'non-refundable_p004_personal_no_and_cnic.png',
       sigKind:'signature', sigCrop:'non-refundable_p004_employee_specimen_signatures.png',
       ddoSigned:true, ddoStamp:'Senior Headmistress, Govt. Girls High School R.A. Bazar Lahore', ddoCrop:'non-refundable_p004_ddo_signature_stamp.png' },
-    cnics:[ { page:2, whose:'subscriber', type:'smart', number:'00001-0000104-4', name:'Rubina Tariq', expiry:'08-08-2032', attested:true, attestedBy:'Senior Headmistress, GGHS R.A. Bazar',
+    cnics:[ { page:2, whose:'subscriber', type:'smart', number:'00001-0000104-4', name:'Subscriber G. Test', expiry:'08-08-2032', attested:true, attestedBy:'Senior Headmistress, GGHS R.A. Bazar',
       sigCrop:'non-refundable_p002_cnic_holder_signature.png', crop:'non-refundable_p002_cnic_number_issue.png' } ]
   },
   qr:[
     { id:'sanction', page:1, doc:'sanction order', symbology:'QR code', decoded:true, crop:'non-refundable_p001_sanction_qr.png',
-      payload:'Rubina Tariq CNIC# 0000100001044 posted as a PST (BS-14), posted at GGHS  R.A. BAZAR, Tehsil CANTT, District LAHORE',
-      compare:[ {field:'name', qrVal:'Rubina Tariq', docVal:'Mrs. Rubina Tariq', docLabel:'sanction', match:true},
+      payload:'Subscriber G. Test CNIC# 0000100001044 posted as a PST (BS-14), posted at GGHS  R.A. BAZAR, Tehsil CANTT, District LAHORE',
+      compare:[ {field:'name', qrVal:'Subscriber G. Test', docVal:'Mrs. Subscriber G. Test', docLabel:'sanction', match:true},
                 {field:'CNIC', qrVal:'0000100001044', docVal:'0000100001044', docLabel:'sanction', match:true},
                 {field:'post', qrVal:'PST (BS-14)', docVal:'PST (BS-14)', docLabel:'sanction', match:true},
                 {field:'school', qrVal:'GGHS R.A. Bazar, Lahore', docVal:'GGHS R.A. Bazar', docLabel:'sanction', match:true} ] },

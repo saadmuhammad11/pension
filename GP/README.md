@@ -102,14 +102,14 @@ working.* It does.
 
 | Case | Hard | Obs. | Verify | SAP |
 |---|---|---|---|---|
-| Final payment, non-gazetted (Fazal Din) | 0 | 3 | 5 | 0 |
-| Final payment, death (Yousaf Masih) | 4 | 4 | 7 | 0 |
-| Final payment, dismissal (Faizan Siddiqui) | 0 | 4 | 6 | 0 |
-| Missing credits (Dr Nauman Mushtaq) | 1 | 1 | 1 | 4 |
-| Residual payment (Shabnam) | 1 | 1 | 2 | 0 |
-| Refundable advance (Barkat Ali) | 0 | 2 | 4 | 0 |
-| Non-refundable advance (Rubina Tariq) | 0 | 2 | 4 | 0 |
-| Balance transfer (Rafaqat Ahmad) | 0 | 0 | 2 | 5 |
+| Final payment, non-gazetted (Subscriber A. Test) | 0 | 3 | 5 | 0 |
+| Final payment, death (Subscriber B. Test) | 4 | 4 | 7 | 0 |
+| Final payment, dismissal (Subscriber C. Test) | 0 | 4 | 6 | 0 |
+| Missing credits (Dr Subscriber D. Test) | 1 | 1 | 1 | 4 |
+| Residual payment (Subscriber E. Test) | 1 | 1 | 2 | 0 |
+| Refundable advance (Subscriber F. Test) | 0 | 2 | 4 | 0 |
+| Non-refundable advance (Subscriber G. Test) | 0 | 2 | 4 | 0 |
+| Balance transfer (Subscriber H. Test) | 0 | 0 | 2 | 5 |
 
 Pinned by result **id**, not only by count, so a compensating change cannot hide. Every case
 is also run with its SAP pages removed, and uploading the sample extract from

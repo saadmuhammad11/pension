@@ -11,7 +11,7 @@
    "ddoSigned": true,
    "ddoStamp": "SP Headquarters for DIG Operations, Lahore",
    "label": "FORM PAY 05",
-   "name": "Barkat Ali",
+   "name": "Subscriber F. Test",
    "page": 4,
    "personalNo": "90000227",
    "present": true,
@@ -23,7 +23,7 @@
     "attested": false,
     "crop": "refundable_p002_cnic_front_details.png",
     "expiry": "05-11-2030",
-    "name": "Barkit Ali",
+    "name": "Subscribar F. Test",
     "number": "00001-0000101-3",
     "page": 2,
     "sigCrop": "refundable_p002_cnic_holder_signature.png",
@@ -53,11 +53,11 @@
  "key": "refundable",
  "kind": "refundable",
  "label": "Refundable Advance",
- "nameNote": "The English spelling on the card is \"Barkit\"; the Urdu name is the same.",
+ "nameNote": "The English spelling on the card is \"Subscribar\"; the Urdu name is the same.",
  "nameVariants": [
-  "Barkit Ali"
+  "Subscribar F. Test"
  ],
- "note": "Constable Barkat Ali. Rs 58,000 for house repair, signed for the DIG Operations by SP Headquarters. Pay slip and re-calculation report already in the case.",
+ "note": "Constable Subscriber F. Test. Rs 58,000 for house repair, signed for the DIG Operations by SP Headquarters. Pay slip and re-calculation report already in the case.",
  "pages": 6,
  "persNos": [
   {
@@ -112,7 +112,7 @@
  "record": [
   [
    "Subscriber",
-   "Barkat Ali s/o Liaqat Ali, Constable No. 7156",
+   "Subscriber F. Test s/o Father F. Test, Constable No. 7156",
    "Sanction · CNIC · SAP pay slip",
    0.97,
    1
@@ -202,7 +202,7 @@
    "loanBalance": 56000,
    "loanInstalment": 2000,
    "month": "August 2026",
-   "name": "BARKAT ALI",
+   "name": "SUBSCRIBER F. TEST",
    "oldGpfNo": "",
    "osdPost": "",
    "page": 5,
@@ -277,7 +277,7 @@
   },
   "source": "case"
  },
- "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000227\nName: BARKAT ALI\nDesignation: CONSTABLE\nCNIC: 0000100001013\nMonth: August 2026\nBPS: 07\nDDO Code: LO0056 DIG Special Protection Unit\nGPF No: \nOld GPF No: \nGPF Balance: 19194\nGPF Subscription: 1500\nGPF Loan Instalment: 2000\nGPF Loan Balance: 56000\nBasic Pay: 22890\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000227\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2022|30.06.2023|0|9000|919|0|0|0|384|10303\n01.07.2023|30.06.2024|10303|18000|0|0|0|0|2801|31104\n01.07.2024|30.06.2025|31104|18000|0|0|0|0|5090|54194\n01.07.2025|30.06.2026|54194|18000|0|0|0|0|7705|79899\n01.07.2026|30.06.2027|79899|3000|0|58000|2000|0|0|26899\n",
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000227\nName: SUBSCRIBER F. TEST\nDesignation: CONSTABLE\nCNIC: 0000100001013\nMonth: August 2026\nBPS: 07\nDDO Code: LO0056 DIG Special Protection Unit\nGPF No: \nOld GPF No: \nGPF Balance: 19194\nGPF Subscription: 1500\nGPF Loan Instalment: 2000\nGPF Loan Balance: 56000\nBasic Pay: 22890\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000227\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2022|30.06.2023|0|9000|919|0|0|0|384|10303\n01.07.2023|30.06.2024|10303|18000|0|0|0|0|2801|31104\n01.07.2024|30.06.2025|31104|18000|0|0|0|0|5090|54194\n01.07.2025|30.06.2026|54194|18000|0|0|0|0|7705|79899\n01.07.2026|30.06.2027|79899|3000|0|58000|2000|0|0|26899\n",
  "signatures": [
   {
    "authority": "Deputy Inspector General of Police, Operations, Lahore",
@@ -310,7 +310,7 @@
  ],
  "slug": "refundable",
  "sub": "Refundable advance for house repair, Rule 1.14(1)(a)(iv)",
- "subject": "Barkat Ali, Constable (BS-07)",
+ "subject": "Subscriber F. Test, Constable (BS-07)",
  "thumbs": [],
  "verifications": {}
 }

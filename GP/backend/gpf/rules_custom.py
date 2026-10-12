@@ -260,15 +260,15 @@ def _mc_name(F):
     p = F.get("sap") and F["sap"].get("payslip")
     if not p or not p.get("name"):
         return {"status": "sap",
-                "finding": ("The schedule spells the name \"Dr. Numan Mushtaq, AP\"; all six challans spell it \"Dr. Nauman "
-                            "Mushtaq, AP-II\". The personnel number is the same throughout. Match against the SAP master name."),
+                "finding": ("The schedule spells the name \"Dr. Subscribar D. Test, AP\"; all six challans spell it \"Dr. Subscriber "
+                            "D. Test, AP-II\". The personnel number is the same throughout. Match against the SAP master name."),
                 "cure": {"kind": "sap"}}
-    ok = bool(re.search(r"n(a|ou)?u?man\s*mushtaq", p["name"], re.I))
+    ok = bool(re.search(r"subscrib[ae]r\s*d\.?\s*test", p["name"], re.I))
     if ok:
         return {"status": "ok",
                 "finding": "SAP names personnel no. " + str(p["persNo"]) + " as " + p["name"] + ". Both spellings refer to this subscriber."}
     return {"status": "hard",
-            "finding": "SAP names personnel no. " + str(p["persNo"]) + " as " + p["name"] + ", not Nauman Mushtaq.",
+            "finding": "SAP names personnel no. " + str(p["persNo"]) + " as " + p["name"] + ", not Subscriber D. Test.",
             "remedy": "Department to confirm the identity of the subscriber."}
 
 

@@ -1,15 +1,15 @@
-/* Refundable Advance: Constable Barkat Ali, Punjab Police */
+/* Refundable Advance: Constable Subscriber F. Test, Punjab Police */
 defCase('refundable', {
   label:'Refundable Advance', kind:'refundable', family:'ADVANCE',
   sub:'Refundable advance for house repair, Rule 1.14(1)(a)(iv)',
-  subject:'Barkat Ali, Constable (BS-07)', dept:'Punjab Police, Office of the DIG Operations, Lahore',
+  subject:'Subscriber F. Test, Constable (BS-07)', dept:'Punjab Police, Office of the DIG Operations, Lahore',
   personnelNo:'90000227', pages:6, diary:'214253 / 988890, 10-08-2026', gazetted:'non-gazetted',
-  note:'Constable Barkat Ali. Rs 58,000 for house repair, signed for the DIG Operations by SP Headquarters. Pay slip and re-calculation report already in the case.',
-  nameNote:'The English spelling on the card is "Barkit"; the Urdu name is the same.',
-  nameVariants:['Barkit Ali'],
+  note:'Constable Subscriber F. Test. Rs 58,000 for house repair, signed for the DIG Operations by SP Headquarters. Pay slip and re-calculation report already in the case.',
+  nameNote:'The English spelling on the card is "Subscribar"; the Urdu name is the same.',
+  nameVariants:['Subscribar F. Test'],
   persNos:[{doc:'Sanction order',page:1,value:'90000227'},{doc:'FORM PAY 05',page:4,value:'90000227'},{doc:'SAP pay slip, August 2026',page:5,value:'90000227'},{doc:'GPF Final Re-calculation Report',page:6,value:'90000227'}],
   record:[
-    ['Subscriber','Barkat Ali s/o Liaqat Ali, Constable No. 7156','Sanction · CNIC · SAP pay slip',0.97,1],
+    ['Subscriber','Subscriber F. Test s/o Father F. Test, Constable No. 7156','Sanction · CNIC · SAP pay slip',0.97,1],
     ['Personnel no.','90000227','Sanction · Form 05 · pay slip · report',0.99,4],
     ['CNIC','00001-0000101-3 (smart card, valid to 05-11-2030)','CNIC front and back · QR · pay slip',0.98,2],
     ['Sanction','No. 1463/GPF-Ops dated 07-08-2026, Rs 58,000','Sanction order',0.98,1],
@@ -25,10 +25,10 @@ defCase('refundable', {
     sanction:{ present:true, page:1, dept:'Punjab Police', printedAuthority:'Deputy Inspector General of Police, Operations, Lahore',
       orderNo:'1463/GPF-Ops', date:'07-08-2026', rule:'Rule 1.14(1)(a)(iv)(d)(i) of the Punjab GP Fund Rules 1978', reason:'Repair of house',
       amount:58000, balanceStated:null, basicPay:19040, limitClause:'1.14(1)(d)(i)', qrId:null, crop:'refundable_p001_sanction_order_text.png' },
-    changeForm:{ present:true, label:'FORM PAY 05', page:4, personalNo:'90000227', name:'Barkat Ali', cnic:'',
+    changeForm:{ present:true, label:'FORM PAY 05', page:4, personalNo:'90000227', name:'Subscriber F. Test', cnic:'',
       sigKind:'signature', sigCrop:'refundable_p004_form05_employee_specimen_signatures.png',
       ddoSigned:true, ddoStamp:'SP Headquarters for DIG Operations, Lahore', ddoCrop:'refundable_p004_form05_ddo_signatory_stamp.png' },
-    cnics:[ { page:2, whose:'subscriber', type:'smart', number:'00001-0000101-3', name:'Barkit Ali', expiry:'05-11-2030', attested:false,
+    cnics:[ { page:2, whose:'subscriber', type:'smart', number:'00001-0000101-3', name:'Subscribar F. Test', expiry:'05-11-2030', attested:false,
       sigCrop:'refundable_p002_cnic_holder_signature.png', crop:'refundable_p002_cnic_front_details.png' } ]
   },
   qr:[ { id:'cnic-back', page:3, doc:'smart CNIC back', symbology:'QR code', decoded:true, payload:'10826129086900001000010131', crop:'refundable_p003_cnic_back_qr.png',

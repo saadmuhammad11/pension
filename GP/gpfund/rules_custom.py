@@ -317,25 +317,25 @@ custom_check(
 def _mc_name(facts: Facts) -> dict[str, Any]:
     """Two spellings, one personnel number. Matched against the SAP master name.
 
-    The schedule spells "Numan Mushtaq, AP" and all six challans "Nauman Mushtaq, AP-II". The
+    The schedule spells "Subscribar D. Test, AP" and all six challans "Subscriber D. Test, AP-II". The
     personnel number is the same throughout, so this is a spelling question SAP settles, not
     a defect for the department to cure.
     """
     payslip = facts.sap_payslip
     if not payslip or not payslip.get("name"):
         return {"status": SAP,
-                "finding": ("The schedule spells the name \"Dr. Numan Mushtaq, AP\"; all six "
-                            "challans spell it \"Dr. Nauman Mushtaq, AP-II\". The personnel number "
+                "finding": ("The schedule spells the name \"Dr. Subscribar D. Test, AP\"; all six "
+                            "challans spell it \"Dr. Subscriber D. Test, AP-II\". The personnel number "
                             "is the same throughout. Match against the SAP master name."),
                 "cure": {"kind": "sap"}}
     import re
-    if re.search(r"n(a|ou)?u?man\s*mushtaq", str(payslip.get("name")), re.I):
+    if re.search(r"subscrib[ae]r\s*d\.?\s*test", str(payslip.get("name")), re.I):
         return {"status": OK,
                 "finding": (f"SAP names personnel no. {payslip.get('persNo')} as "
                             f"{payslip.get('name')}. Both spellings refer to this subscriber.")}
     return {"status": HARD,
             "finding": (f"SAP names personnel no. {payslip.get('persNo')} as "
-                        f"{payslip.get('name')}, not Nauman Mushtaq."),
+                        f"{payslip.get('name')}, not Subscriber D. Test."),
             "remedy": "Department to confirm the identity of the subscriber."}
 
 

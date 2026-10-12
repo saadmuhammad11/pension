@@ -21,8 +21,8 @@
    "ddoSigned": true,
    "ddoStamp": "Principal, Govt. Associate College (W) Mustafabad",
    "label": "FORM PAY 06",
-   "name": "Yousaf Masih",
-   "note": "Payee noted as the widow, Mst Zubaida Bibi; amount Rs 92,482; annotated \"(Death case) OSD post created\".",
+   "name": "Subscriber B. Test",
+   "note": "Payee noted as the widow, Mst Claimant B. Test; amount Rs 92,482; annotated \"(Death case) OSD post created\".",
    "oldGpfNo": "",
    "oldGpfNoState": "written as what seems to read \"-nil-\"",
    "page": 12,
@@ -35,7 +35,7 @@
     "attested": true,
     "attestedBy": "Principal, GAC (W) Mustafabad",
     "crop": "fp-death_p005_cnic_subscriber_front.png",
-    "name": "Yousaf Masih",
+    "name": "Subscriber B. Test",
     "number": "00001-0000107-1",
     "page": 5,
     "type": "old",
@@ -45,7 +45,7 @@
     "attested": true,
     "attestedBy": "Principal, GAC (W) Mustafabad",
     "crop": "fp-death_p006_cnic_widow_front.png",
-    "name": "Zubaida Bibi",
+    "name": "Claimant B. Test",
     "number": "00001-0000103-8",
     "page": 6,
     "sigCrop": "fp-death_p006_cnic_widow_holder_signature_box.png",
@@ -70,18 +70,18 @@
    "heirs": [
     {
      "cnicCopy": true,
-     "name": "Zubaida Bibi",
+     "name": "Claimant B. Test",
      "relation": "widow"
     },
     {
      "cnicCopy": false,
-     "name": "Javed Masih",
-     "relation": "son, born 17-08-2004"
+     "name": "Son B. Test",
+     "relation": "son, born 17-08-2002"
     },
     {
      "cnicCopy": false,
-     "name": "Hina Yousaf",
-     "relation": "daughter, born 28-09-2007, 18 since 28-09-2025"
+     "name": "Daughter B. Test",
+     "relation": "daughter, born 28-09-2005, 18 since 28-09-2023"
     }
    ],
    "osdAnnotation": {
@@ -120,7 +120,7 @@
  "key": "fp-death",
  "kind": "death",
  "label": "Final Payment, Death Case",
- "note": "Yousaf Masih, Sweeper, died 03-04-2024. The Rs 92,482 claim reconciles to SAP. The widow thumbs; no affidavit for lawful widow, no Service Book, CNIC copies missing for two heirs, and Form 06 carries a personnel number one digit off.",
+ "note": "Subscriber B. Test, Sweeper, died 03-04-2024. The Rs 92,482 claim reconciles to SAP. The widow thumbs; no affidavit for lawful widow, no Service Book, CNIC copies missing for two heirs, and Form 06 carries a personnel number one digit off.",
  "pages": 13,
  "persNos": [
   {
@@ -243,7 +243,7 @@
  "record": [
   [
    "Deceased subscriber",
-   "Yousaf Masih s/o Bota Masih, Sweeper (BS-02)",
+   "Subscriber B. Test s/o Father B. Test, Sweeper (BS-02)",
    "GPF-10 · obituary · NADRA · SAP",
    0.98,
    1
@@ -271,14 +271,14 @@
   ],
   [
    "Claimant",
-   "Mst Zubaida Bibi, widow, 00001-0000103-8 (smart card)",
+   "Mst Claimant B. Test, widow, 00001-0000103-8 (smart card)",
    "CNIC · FRC · Form 06",
    0.96,
    6
   ],
   [
    "Legal heirs (NADRA FRC)",
-   "Widow; son Javed Masih (born 17-08-2004); daughter Hina Yousaf (born 28-09-2007, 18 since 28-09-2025)",
+   "Widow; son Son B. Test (born 17-08-2002); daughter Daughter B. Test (born 28-09-2005, 18 since 28-09-2023)",
    "FRC · decline certificate · court application",
    0.95,
    4
@@ -340,7 +340,7 @@
    "loanBalance": 72000,
    "loanInstalment": 3000,
    "month": "November 2023",
-   "name": "YOUSAF MASIH",
+   "name": "SUBSCRIBER B. TEST",
    "oldGpfNo": "",
    "osdPost": "",
    "page": 11,
@@ -571,7 +571,7 @@
   },
   "source": "case"
  },
- "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000417\nName: YOUSAF MASIH\nDesignation: SWEEPER\nCNIC: 0000100001071\nMonth: November 2023\nBPS: 02\nDDO Code: L04734 Principal, Govt. Associate College (W) Mustafabad\nGPF No: \nOld GPF No: \nGPF Balance: 50791\nGPF Subscription: 1060\nGPF Loan Instalment: 3000\nGPF Loan Balance: 72000\nBasic Pay: 20190\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000417\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2009|30.06.2010|0|650|0|0|0|0|23|673\n01.07.2010|30.06.2011|673|1560|0|0|0|0|216|2449\n01.07.2011|30.06.2012|2449|2462|0|0|0|0|513|5424\n01.07.2012|30.06.2013|5424|2544|0|0|0|0|816|8784\n01.07.2013|30.06.2014|8784|2544|0|0|0|0|1372|12700\n01.07.2014|30.06.2015|12700|2544|0|0|0|0|1654|16898\n01.07.2015|30.06.2016|16898|2544|0|0|0|0|2029|21471\n01.07.2016|30.06.2017|21471|3730|0|0|0|0|2642|27843\n01.07.2017|30.06.2018|27843|4737|0|0|0|0|3554|36134\n01.07.2018|30.06.2019|36134|8210|0|0|0|0|5803|50147\n01.07.2019|30.06.2020|50147|8520|0|36000|9000|0|3781|35448\n01.07.2020|30.06.2021|35448|8520|0|0|12000|0|3678|59646\n01.07.2021|30.06.2022|59646|8520|0|0|12000|0|8774|88940\n01.07.2022|30.06.2023|88940|11670|0|0|3000|0|13881|117491\n01.07.2023|30.06.2024|117491|9540|0|78000|18000|0|10492|77523\n01.07.2024|30.06.2025|77523|0|0|0|0|0|9659|87182\n01.07.2025|30.06.2026|87182|6360|0|0|0|92482|8071|9131\n01.07.2026|30.06.2027|9131|0|0|0|0|0|0|9131\n",
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000417\nName: SUBSCRIBER B. TEST\nDesignation: SWEEPER\nCNIC: 0000100001071\nMonth: November 2023\nBPS: 02\nDDO Code: L04734 Principal, Govt. Associate College (W) Mustafabad\nGPF No: \nOld GPF No: \nGPF Balance: 50791\nGPF Subscription: 1060\nGPF Loan Instalment: 3000\nGPF Loan Balance: 72000\nBasic Pay: 20190\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000417\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2009|30.06.2010|0|650|0|0|0|0|23|673\n01.07.2010|30.06.2011|673|1560|0|0|0|0|216|2449\n01.07.2011|30.06.2012|2449|2462|0|0|0|0|513|5424\n01.07.2012|30.06.2013|5424|2544|0|0|0|0|816|8784\n01.07.2013|30.06.2014|8784|2544|0|0|0|0|1372|12700\n01.07.2014|30.06.2015|12700|2544|0|0|0|0|1654|16898\n01.07.2015|30.06.2016|16898|2544|0|0|0|0|2029|21471\n01.07.2016|30.06.2017|21471|3730|0|0|0|0|2642|27843\n01.07.2017|30.06.2018|27843|4737|0|0|0|0|3554|36134\n01.07.2018|30.06.2019|36134|8210|0|0|0|0|5803|50147\n01.07.2019|30.06.2020|50147|8520|0|36000|9000|0|3781|35448\n01.07.2020|30.06.2021|35448|8520|0|0|12000|0|3678|59646\n01.07.2021|30.06.2022|59646|8520|0|0|12000|0|8774|88940\n01.07.2022|30.06.2023|88940|11670|0|0|3000|0|13881|117491\n01.07.2023|30.06.2024|117491|9540|0|78000|18000|0|10492|77523\n01.07.2024|30.06.2025|77523|0|0|0|0|0|9659|87182\n01.07.2025|30.06.2026|87182|6360|0|0|0|92482|8071|9131\n01.07.2026|30.06.2027|9131|0|0|0|0|0|0|9131\n",
  "signatures": [
   {
    "authority": "Principal, Govt. Associate College (W) Mustafabad, Lahore",
@@ -587,7 +587,7 @@
  ],
  "slug": "fp-death",
  "sub": "Final payment on death in service, claim by the widow",
- "subject": "Yousaf Masih (deceased), Sweeper (BS-02)",
+ "subject": "Subscriber B. Test (deceased), Sweeper (BS-02)",
  "thumbs": [
   {
    "crop": "fp-death_p001_thumb_gpf10.png",

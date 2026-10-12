@@ -1,13 +1,13 @@
-/* Missing Credits: Dr Nauman Mushtaq, AP-II, on deputation at Government Engineering Academy Punjab */
+/* Missing Credits: Dr Subscriber D. Test, AP-II, on deputation at Government Engineering Academy Punjab */
 defCase('missing-credits', {
   label:'Missing Credits, Challans', kind:'missing_credits', family:'MISSING_CREDITS',
   sub:'Missing credits for a deputation period, paid by challan',
-  subject:'Dr Nauman Mushtaq, AP-II (on deputation)', dept:'Government Engineering Academy Punjab, Niaz Beg, Lahore',
+  subject:'Dr Subscriber D. Test, AP-II (on deputation)', dept:'Government Engineering Academy Punjab, Niaz Beg, Lahore',
   personnelNo:'90000043', pages:7, diary:'Fd-2/K-851, 13-08-2026', gazetted:'unknown', gazettedEvidence:'designation "AP-II" and "Officers on Deputation" only',
-  note:'Dr Nauman Mushtaq, deputation 07-2025 to 04-2026. Seven challans scheduled and Treasury-verified for Rs 79,600; six attached. No SAP extracts in the case.',
+  note:'Dr Subscriber D. Test, deputation 07-2025 to 04-2026. Seven challans scheduled and Treasury-verified for Rs 79,600; six attached. No SAP extracts in the case.',
   persNos:[{doc:'Covering letter schedule',page:1,value:'90000043'},{doc:'Challans Sr. 1 to 7 (six attached)',page:2,value:'90000043'}],
   record:[
-    ['Subscriber','Dr Nauman Mushtaq, AP-II (schedule spells "Numan Mushtaq, AP")','Schedule · challans',0.95,1],
+    ['Subscriber','Dr Subscriber D. Test, AP-II (schedule spells "Subscribar D. Test, AP")','Schedule · challans',0.95,1],
     ['Personnel no.','90000043','Schedule · all six challans',0.98,2],
     ['Deputation period','01-07-2025 to 30-04-2026, 10 months at Rs 7,960','Covering letter',0.97,1],
     ['Covering letter','Administrative Officer GEA to Treasury Officer Lahore, 21-07-2026, "Verification of challans"','Covering letter',0.97,1],
@@ -50,8 +50,8 @@ CUSTOM_CHECKS['MC-NAME'] = { id:'MC-NAME', group:'identity', ref:'R1', title:'Na
   applies: F => true,
   run: F => {
     const p = F.sap && F.sap.payslip;
-    if (!p || !p.name) return { status:'sap', finding:'The schedule spells the name "Dr. Numan Mushtaq, AP"; all six challans spell it "Dr. Nauman Mushtaq, AP-II". The personnel number is the same throughout. Match against the SAP master name.', cure:{ kind:'sap' } };
-    const ok = /n(a|ou)?u?man\s*mushtaq/i.test(p.name);
+    if (!p || !p.name) return { status:'sap', finding:'The schedule spells the name "Dr. Subscribar D. Test, AP"; all six challans spell it "Dr. Subscriber D. Test, AP-II". The personnel number is the same throughout. Match against the SAP master name.', cure:{ kind:'sap' } };
+    const ok = /subscrib[ae]r\s*d\.?\s*test/i.test(p.name);
     return ok ? { status:'ok', finding:'SAP names personnel no. ' + p.persNo + ' as ' + p.name + '. Both spellings refer to this subscriber.' }
-              : { status:'hard', finding:'SAP names personnel no. ' + p.persNo + ' as ' + p.name + ', not Nauman Mushtaq.', remedy:'Department to confirm the identity of the subscriber.' };
+              : { status:'hard', finding:'SAP names personnel no. ' + p.persNo + ' as ' + p.name + ', not Subscriber D. Test.', remedy:'Department to confirm the identity of the subscriber.' };
   }};

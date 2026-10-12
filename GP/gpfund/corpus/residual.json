@@ -11,7 +11,7 @@
    "ddoSigned": true,
    "ddoStamp": "Executive Director, Punjab Institute of Mental Health",
    "label": "FORM PAY 06",
-   "name": "Shabnam",
+   "name": "Subscriber E. Test",
    "note": "The printed form number is under a blank pink note; the heading \"Permanent Loan Details\" identifies Form 06.",
    "oldGpfNo": "",
    "oldGpfNoState": "blank",
@@ -27,7 +27,7 @@
     "attestedBy": "Office Superintendent, PIMH",
     "crop": "residual_p004_cnic_front_only.png",
     "expiry": "lifetime",
-    "name": "Shabnam",
+    "name": "Subscriber E. Test",
     "number": "00001-0000106-4",
     "page": 4,
     "sigCrop": "residual_p004_cnic_holder_signature.png",
@@ -58,7 +58,7 @@
  "key": "residual",
  "kind": "residual",
  "label": "Residual Payment",
- "note": "Mst Shabnam, retired 07-11-2024. Rs 31,408 residual. The SAP report now in the case shows a debit balance and a possible double posting. No Form 10.",
+ "note": "Mst Subscriber E. Test, retired 07-11-2024. Rs 31,408 residual. The SAP report now in the case shows a debit balance and a possible double posting. No Form 10.",
  "pages": 6,
  "persNos": [
   {
@@ -107,7 +107,7 @@
  "record": [
   [
    "Subscriber",
-   "Mst Shabnam w/o Abid Javed, Head Nurse (BS-17), gazetted",
+   "Mst Subscriber E. Test w/o Husband E. Test, Head Nurse (BS-17), gazetted",
    "Form 06 · CNIC · SAP register",
    0.97,
    1
@@ -183,7 +183,7 @@
    "loanBalance": null,
    "loanInstalment": null,
    "month": "October 2024",
-   "name": "SHABNAM",
+   "name": "SUBSCRIBER E. TEST",
    "oldGpfNo": "",
    "osdPost": "",
    "page": 5,
@@ -414,7 +414,7 @@
   },
   "source": "case"
  },
- "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000687\nName: SHABNAM\nDesignation: HEAD NURSE\nCNIC: \nMonth: October 2024\nBPS: 17\nDDO Code: L04578 Punjab Institute of Mental Health\nGPF No: \nOld GPF No: \nGPF Balance: 340330\nGPF Subscription: 6350\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 110050\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000687\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2007|30.06.2008|0|2280|0|0|0|0|48|2328\n01.07.2008|30.06.2009|2328|12020|0|0|0|0|1290|15638\n01.07.2009|30.06.2010|15638|12600|0|0|0|0|3145|31383\n01.07.2010|30.06.2011|31383|12600|0|0|0|0|5426|49409\n01.07.2011|30.06.2012|49409|20410|0|45000|7500|0|5927|38246\n01.07.2012|30.06.2013|38246|21120|0|0|18000|0|7132|84498\n01.07.2013|30.06.2014|84498|21120|0|0|19500|80000|10837|55955\n01.07.2014|30.06.2015|55955|21120|0|50000|6000|0|6078|39153\n01.07.2015|30.06.2016|39153|25920|0|0|24000|0|7303|96376\n01.07.2016|30.06.2017|96376|39566|0|0|20000|0|14588|170530\n01.07.2017|30.06.2018|170530|50549|0|0|0|0|23118|244197\n01.07.2018|30.06.2019|244197|51240|0|0|0|200000|19892|115329\n01.07.2019|30.06.2020|115329|51240|0|0|0|100000|13170|79739\n01.07.2020|30.06.2021|79739|51240|0|0|0|77000|5451|59430\n01.07.2021|30.06.2022|59430|51240|0|0|0|0|10811|121481\n01.07.2022|30.06.2023|121481|69960|0|100000|27780|0|17393|136614\n01.07.2023|30.06.2024|136614|76200|0|0|66672|0|29896|309382\n01.07.2024|30.06.2025|309382|25400|31408|0|5548|712068|20807|-340330\n",
+ "sapSample": "SAP EXTRACT: PAY SLIP\nPersonnel No: 90000687\nName: SUBSCRIBER E. TEST\nDesignation: HEAD NURSE\nCNIC: \nMonth: October 2024\nBPS: 17\nDDO Code: L04578 Punjab Institute of Mental Health\nGPF No: \nOld GPF No: \nGPF Balance: 340330\nGPF Subscription: 6350\nGPF Loan Instalment: \nGPF Loan Balance: \nBasic Pay: 110050\nOSD Post: \n\nSAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\nPersonnel No: 90000687\nReport Date: 10.09.2026\nStart Date|End Date|Opening Balance|Monthly Subscription|Adjustments|Temp Advance|Rec of Temp Advance|Permanent Advance|Interest Applied|Closing Balance\n01.07.2007|30.06.2008|0|2280|0|0|0|0|48|2328\n01.07.2008|30.06.2009|2328|12020|0|0|0|0|1290|15638\n01.07.2009|30.06.2010|15638|12600|0|0|0|0|3145|31383\n01.07.2010|30.06.2011|31383|12600|0|0|0|0|5426|49409\n01.07.2011|30.06.2012|49409|20410|0|45000|7500|0|5927|38246\n01.07.2012|30.06.2013|38246|21120|0|0|18000|0|7132|84498\n01.07.2013|30.06.2014|84498|21120|0|0|19500|80000|10837|55955\n01.07.2014|30.06.2015|55955|21120|0|50000|6000|0|6078|39153\n01.07.2015|30.06.2016|39153|25920|0|0|24000|0|7303|96376\n01.07.2016|30.06.2017|96376|39566|0|0|20000|0|14588|170530\n01.07.2017|30.06.2018|170530|50549|0|0|0|0|23118|244197\n01.07.2018|30.06.2019|244197|51240|0|0|0|200000|19892|115329\n01.07.2019|30.06.2020|115329|51240|0|0|0|100000|13170|79739\n01.07.2020|30.06.2021|79739|51240|0|0|0|77000|5451|59430\n01.07.2021|30.06.2022|59430|51240|0|0|0|0|10811|121481\n01.07.2022|30.06.2023|121481|69960|0|100000|27780|0|17393|136614\n01.07.2023|30.06.2024|136614|76200|0|0|66672|0|29896|309382\n01.07.2024|30.06.2025|309382|25400|31408|0|5548|712068|20807|-340330\n",
  "signatures": [
   {
    "authority": "Executive Director, Punjab Institute of Mental Health, Lahore",
@@ -436,7 +436,7 @@
  ],
  "slug": "residual",
  "sub": "Residual GP Fund payment after final payment drawn",
- "subject": "Shabnam, Head Nurse (BS-17)",
+ "subject": "Subscriber E. Test, Head Nurse (BS-17)",
  "thumbs": [],
  "verifications": {}
 }

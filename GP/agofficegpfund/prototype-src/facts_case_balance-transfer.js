@@ -1,13 +1,13 @@
-/* Balance Transfer: Rafaqat Ahmad, Director Public Relations Faisalabad */
+/* Balance Transfer: Subscriber H. Test, Director Public Relations Faisalabad */
 defCase('balance-transfer', {
   label:'Balance Transfer', kind:'balance_transfer', family:'BALANCE_TRANSFER',
   sub:'Transfer of GP Fund balances, Lahore postings to DAO Faisalabad',
-  subject:'Rafaqat Ahmad, Director', dept:'Office of the Director Public Relations, Faisalabad',
+  subject:'Subscriber H. Test, Director', dept:'Office of the Director Public Relations, Faisalabad',
   personnelNo:'90000847', pages:1, diary:'14580 / 243780 / 988477, 03-08-2026', gazetted:'unknown',
-  note:'Rafaqat Ahmad, Director PR Faisalabad. One-page proforma. The DAO has confirmed P# 90000847 as the GP Fund account; old account and last deduction to come from SAP.',
+  note:'Subscriber H. Test, Director PR Faisalabad. One-page proforma. The DAO has confirmed P# 90000847 as the GP Fund account; old account and last deduction to come from SAP.',
   persNos:[{doc:'Proforma column 4',page:1,value:'90000847'},{doc:'Proforma column 5',page:1,value:'90000847'},{doc:'DAO Faisalabad endorsement',page:1,value:'90000847'}],
   record:[
-    ['Subscriber','Rafaqat Ahmad s/o Mian Nawab, Director','Proforma columns 1 to 3',0.97,1],
+    ['Subscriber','Subscriber H. Test s/o Father H. Test, Director','Proforma columns 1 to 3',0.97,1],
     ['Office','Office of the Director Public Relations, Faisalabad','Proforma header',0.97,1],
     ['Old A/c no. (column 4)','"Personal No:- 90000847", the personnel number','Proforma',0.99,1],
     ['New A/c no. in DAO (column 5)','"Personal No:- 90000847", confirmed by DAO Faisalabad','Proforma · DAO endorsement',0.98,1],
@@ -19,7 +19,7 @@ defCase('balance-transfer', {
   ],
   docs:{
     covering:{ present:true, page:1, author:'the Director Public Relations Faisalabad and the DAO Faisalabad', nature:'Handwritten forwarding on the proforma and DAO endorsement', crop:'balance-transfer_p001_hod_forwarding_note.png' },
-    proforma:{ page:1, name:'Rafaqat Ahmad', father:'Mian Nawab', designation:'Director', oldAc:'Personal No:- 90000847', newAc:'Personal No:- 90000847',
+    proforma:{ page:1, name:'Subscriber H. Test', father:'Father H. Test', designation:'Director', oldAc:'Personal No:- 90000847', newAc:'Personal No:- 90000847',
       daoConfirmed:'The GP Fund A/C No: P# 90000847 Is Hereby Confirmed', lastDeduction:'',
       periods:'Lahore 24-04-1999 to March 2009, March 2011 to March 2013, October 2018 to August 2019, March 2021 to March 2025',
       crop:'balance-transfer_p001_particulars_name_father_designation.png', periodsCrop:'balance-transfer_p001_col7_period_of_posting.png', daoCrop:'balance-transfer_p001_dao_endorsement_stamp_signature.png' }

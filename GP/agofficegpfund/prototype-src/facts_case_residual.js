@@ -1,13 +1,13 @@
-/* Residual Payment: Mst Shabnam, Head Nurse (BS-17), Punjab Institute of Mental Health */
+/* Residual Payment: Mst Subscriber E. Test, Head Nurse (BS-17), Punjab Institute of Mental Health */
 defCase('residual', {
   label:'Residual Payment', kind:'residual', family:'FINAL_PAYMENT',
   sub:'Residual GP Fund payment after final payment drawn',
-  subject:'Shabnam, Head Nurse (BS-17)', dept:'Punjab Institute of Mental Health, Lahore',
+  subject:'Subscriber E. Test, Head Nurse (BS-17)', dept:'Punjab Institute of Mental Health, Lahore',
   personnelNo:'90000687', pages:6, diary:'206984 / 982288', gazetted:'gazetted',
-  note:'Mst Shabnam, retired 07-11-2024. Rs 31,408 residual. The SAP report now in the case shows a debit balance and a possible double posting. No Form 10.',
+  note:'Mst Subscriber E. Test, retired 07-11-2024. Rs 31,408 residual. The SAP report now in the case shows a debit balance and a possible double posting. No Form 10.',
   persNos:[{doc:'FORM PAY 06',page:1,value:'90000687'},{doc:'Application',page:2,value:'90000687'},{doc:'SAP payroll register, October 2024',page:5,value:'90000687'},{doc:'GPF Final Re-calculation Report',page:6,value:'90000687'}],
   record:[
-    ['Subscriber','Mst Shabnam w/o Abid Javed, Head Nurse (BS-17), gazetted','Form 06 · CNIC · SAP register',0.97,1],
+    ['Subscriber','Mst Subscriber E. Test w/o Husband E. Test, Head Nurse (BS-17), gazetted','Form 06 · CNIC · SAP register',0.97,1],
     ['Personnel no.','90000687','Form 06 · application · SAP',0.99,1],
     ['CNIC','00001-0000106-4 (smart card, lifetime); front only','Form 06 · CNIC · notification',0.97,4],
     ['Retirement','07-11-2024 on superannuation, Notification SO(NC)10-1/15 of 03-09-2024','Notification',0.97,3],
@@ -21,9 +21,9 @@ defCase('residual', {
     covering:{ present:true, page:2, author:'the subscriber', nature:'Subscriber’s application to the AG for residual payment' },
     gpf10:{ present:false },
     notification:{ present:true, page:3, label:'Retirement notification', no:'SO(NC)10-1/15', date:'03-09-2024', note:'Retirement w.e.f. 07-11-2024 on superannuation. Attested by the Office Superintendent, PIMH.' },
-    cnics:[ { page:4, whose:'subscriber', type:'smart', number:'00001-0000106-4', name:'Shabnam', expiry:'lifetime', attested:true, attestedBy:'Office Superintendent, PIMH',
+    cnics:[ { page:4, whose:'subscriber', type:'smart', number:'00001-0000106-4', name:'Subscriber E. Test', expiry:'lifetime', attested:true, attestedBy:'Office Superintendent, PIMH',
       sigCrop:'residual_p004_cnic_holder_signature.png', crop:'residual_p004_cnic_front_only.png' } ],
-    changeForm:{ present:true, label:'FORM PAY 06', page:1, personalNo:'90000687', name:'Shabnam', cnic:'00001-0000106-4',
+    changeForm:{ present:true, label:'FORM PAY 06', page:1, personalNo:'90000687', name:'Subscriber E. Test', cnic:'00001-0000106-4',
       sigKind:'signature', sigCrop:'residual_p001_employee_specimen_signatures.png', ddoSigned:true, ddoStamp:'Executive Director, Punjab Institute of Mental Health', ddoCrop:'residual_p001_ddo_signature_stamp.png',
       oldGpfNo:'', oldGpfNoState:'blank', note:'The printed form number is under a blank pink note; the heading "Permanent Loan Details" identifies Form 06.' }
   },

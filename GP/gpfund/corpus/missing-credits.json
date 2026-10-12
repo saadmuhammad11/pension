@@ -126,7 +126,7 @@
  "key": "missing-credits",
  "kind": "missing_credits",
  "label": "Missing Credits, Challans",
- "note": "Dr Nauman Mushtaq, deputation 07-2025 to 04-2026. Seven challans scheduled and Treasury-verified for Rs 79,600; six attached. No SAP extracts in the case.",
+ "note": "Dr Subscriber D. Test, deputation 07-2025 to 04-2026. Seven challans scheduled and Treasury-verified for Rs 79,600; six attached. No SAP extracts in the case.",
  "pages": 7,
  "persNos": [
   {
@@ -145,7 +145,7 @@
  "record": [
   [
    "Subscriber",
-   "Dr Nauman Mushtaq, AP-II (schedule spells \"Numan Mushtaq, AP\")",
+   "Dr Subscriber D. Test, AP-II (schedule spells \"Subscribar D. Test, AP\")",
    "Schedule · challans",
    0.95,
    1
@@ -237,7 +237,7 @@
  ],
  "slug": "missing-credits",
  "sub": "Missing credits for a deputation period, paid by challan",
- "subject": "Dr Nauman Mushtaq, AP-II (on deputation)",
+ "subject": "Dr Subscriber D. Test, AP-II (on deputation)",
  "thumbs": [],
  "verifications": {}
 }

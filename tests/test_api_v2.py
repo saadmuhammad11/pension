@@ -558,7 +558,7 @@ class V2Test(unittest.TestCase):
         r = self.client.post("/api/v2/cases", headers=police, data={"product": "GPF"},
                              files=[("files", ("case.pdf", io.BytesIO(PDF), "application/pdf"))])
         self.assertEqual(r.status_code, 422)                          # the kind of claim is required
-        made = self.create(police, product="GPF", gpf_kind="refundable", claimant_name="Barkat Ali")
+        made = self.create(police, product="GPF", gpf_kind="refundable", claimant_name="Subscriber F. Test")
         self.assertEqual((made["case"]["product"], made["case"]["status"]), ("GPF", "FORWARDED"))
         self.assertEqual(made["case"]["intake"]["gpf_kind"], "refundable")
         self.assertEqual(len(self.client.get("/api/v2/cases?product=GPF", headers=police).json()), 1)

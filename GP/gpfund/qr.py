@@ -244,8 +244,8 @@ def _sanction(text: str) -> Payload | None:
     """The QR-coded sanction: name, CNIC, post and scale, school, tehsil, district.
 
     §9.2 checks "every field against the printed sanction and the case". The values come out
-    as the code wrote them -- the corpus sanction says ``Rubina Tariq`` where the order says
-    ``Mrs. Rubina Tariq`` and ``GGHS  R.A. BAZAR`` where the order says ``GGHS R.A. Bazar``.
+    as the code wrote them -- the corpus sanction says ``Subscriber G. Test`` where the order says
+    ``Mrs. Subscriber G. Test`` and ``GGHS  R.A. BAZAR`` where the order says ``GGHS R.A. Bazar``.
     Whether that difference matters is the rule layer's business, not this module's; runs of
     whitespace are collapsed and nothing else is touched.
     """

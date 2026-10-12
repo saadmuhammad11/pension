@@ -242,7 +242,7 @@ check(
 def _adv_applicant(facts: Facts) -> dict[str, Any]:
     """The name, against SAP and the card, with transliteration variants allowed.
 
-    The corpus card spells "Barkit" where every other paper spells "Barkat", and the Urdu
+    The corpus card spells "Subscribar" where every other paper spells "Subscriber", and the Urdu
     name is the same. A strict comparison would raise a defect about a transliteration on a
     subscriber the personnel number already identifies, so the reading stage records the
     variants it saw and they are accepted here.
