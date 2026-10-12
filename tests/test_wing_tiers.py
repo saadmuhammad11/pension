@@ -47,17 +47,18 @@ class Tiers(unittest.TestCase):
         c = self._status(case_id, sa)
         self.assertEqual((c["status"], c["holder_tier"], c["holder_label"]), ("FORWARDED", "SENIOR_AUDITOR", "With Senior Auditor, Pension-V"))
         self.assertIn("RUN_CHECK", c["allowed_actions"])
-        self.assertNotIn("RUN_CHECK", self._status(case_id, aao)["allowed_actions"])   # the verification is the SA's alone
+        # The AAO does not even see the case until the SA forwards it (12 Oct 2026), so cannot verify it.
+        self.assertEqual(self.client.get(f"/api/v2/cases/{case_id}", headers=aao).status_code, 403)
         self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/check", headers=aao).status_code, 403)
         self.verify(sa, case_id)
         c = self._status(case_id, sa)
         self.assertEqual(c["status"], "UNDER_REVIEW")
         self.assertEqual(sorted(c["allowed_actions"]), ["FORWARD_TIER", "REQUEST_DOCS", "RETURN", "RUN_CHECK"])
         self.assertNotIn("APPROVE", c["allowed_actions"])                            # the SA decides nothing
-        # The AO cannot act while the SA holds it.
+        # The AO cannot act while the SA holds it: the case has not reached the AO's desk at all.
         r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=ao, json={"remark": "x" * 20})
-        self.assertEqual(r.status_code, 409, r.text)
-        self.assertIn("with the Senior Auditor", r.json()["detail"])
+        self.assertEqual(r.status_code, 403, r.text)
+        self.assertIn("not been sent to your desk", r.json()["detail"])
         # SA -> AAO
         r = self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=sa, json={"remark": "Papers complete; no finding."})
         self.assertEqual(r.status_code, 200, r.text)
@@ -82,6 +83,88 @@ class Tiers(unittest.TestCase):
         self.assertEqual([e["action"] for e in c["events"]],
                          ["CREATE", "FORWARD", "RUN_CHECK", "CHECK_DONE", "FORWARD_TIER", "FORWARD_TIER", "APPROVE"])
         self.assertEqual(c["events"][-1]["actor_role"], "AG_AO")
+
+    # -- a case is shown to a tier only once it has been sent there (12 Oct 2026) ----------------
+    def _visible(self, case_id: str, headers: dict) -> dict:
+        """Whether every view agrees the case is (or is not) on this officer's screens."""
+        one = self.client.get(f"/api/v2/cases/{case_id}", headers=headers).status_code == 200
+        listed = case_id in {c["id"] for c in self.client.get("/api/v2/cases", headers=headers).json()}
+        inv = self.client.get("/api/v2/inventory?product=PENSION", headers=headers).json()
+        in_inventory = case_id in {r["id"] for r in inv["rows"]}
+        total = self.client.get("/api/v2/stats?product=PENSION", headers=headers).json()["total"]
+        return {"case": one, "list": listed, "inventory": in_inventory, "counted": total > 0}
+
+    def test_each_tier_sees_the_case_only_once_the_tier_below_sends_it(self) -> None:
+        case_id, ddo = self._case()
+        sa, aao, ao = self.sa(), self.aao(), self.ao()
+        yes = {"case": True, "list": True, "inventory": True, "counted": True}
+        no = {"case": False, "list": False, "inventory": False, "counted": False}
+        # Filed: with the Senior Auditor alone.
+        self.assertEqual(self._visible(case_id, sa), yes)
+        self.assertEqual(self._visible(case_id, aao), no)
+        self.assertEqual(self._visible(case_id, ao), no)
+        r = self.client.get(f"/api/v2/cases/{case_id}", headers=aao)
+        self.assertIn("not been sent to your desk", r.json()["detail"])
+        self.verify(sa, case_id)
+        self.assertEqual(self._visible(case_id, aao), no)                          # verified is not forwarded
+        # SA -> AAO: now the AAO sees it; the AO still does not.
+        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=sa, json={}).status_code, 200)
+        self.assertEqual(self._visible(case_id, aao), yes)
+        self.assertEqual(self._visible(case_id, ao), no)
+        self.assertEqual(self._visible(case_id, sa), yes)                          # the SA keeps sight of what they sent
+        # AAO -> AO.
+        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=aao, json={}).status_code, 200)
+        self.assertEqual(self._visible(case_id, ao), yes)
+        # A return down the chain does not hide it from the AO who returned it.
+        r = self.client.post(f"/api/v2/cases/{case_id}/return-tier", headers=ao, json={"remark": "Check the FRC date again."})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self._visible(case_id, ao)["case"], True)
+        self.assertEqual(self._visible(case_id, aao)["case"], True)
+
+    def test_a_fresh_filing_after_a_return_starts_the_climb_again(self) -> None:
+        case_id, ddo = self._case()
+        sa, aao = self.sa(), self.aao()
+        self.verify(sa, case_id)
+        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=sa, json={}).status_code, 200)
+        self.assertTrue(self._visible(case_id, aao)["case"])
+        r = self.client.post(f"/api/v2/cases/{case_id}/return-tier", headers=aao, json={"remark": "Please re-examine the FRC."})
+        self.assertEqual(r.status_code, 200, r.text)
+        r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=sa,
+                             json={"remark": "FRC illegible; attach a legible copy.", "items": [{"label": "Legible FRC copy"}]})
+        self.assertEqual(r.status_code, 200, r.text)
+        # The department files again: the case is the Senior Auditor's alone until forwarded again.
+        r = self.client.post(f"/api/v2/cases/{case_id}/forward", headers=ddo, json={})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(self._visible(case_id, sa)["case"])
+        self.assertEqual(self._visible(case_id, aao), {"case": False, "list": False, "inventory": False, "counted": False})
+
+    def test_the_migration_backfills_how_far_each_case_has_climbed(self) -> None:
+        held_by_aao, _ = self._case()
+        decided, _ = self._case()
+        filed, _ = self._case()
+        sa = self.sa()
+        for c in (held_by_aao, decided):
+            self.verify(sa, c)
+        self.assertEqual(self.client.post(f"/api/v2/cases/{held_by_aao}/forward-tier", headers=sa, json={}).status_code, 200)
+        ao = self.escalate(decided)
+        self.assertEqual(self.client.post(f"/api/v2/cases/{decided}/approve", headers=ao,
+                                          json={"remark": "Approved; every paper in order."}).status_code, 200)
+        # Forget what the moves recorded and re-run the migration's own SQL over the history.
+        sql = (Path(__file__).resolve().parents[1] / "api" / "migrations" / "0016_reached_tier.sql").read_text()
+        backfill = sql.split("ALTER TABLE cases ADD COLUMN reached_tier TEXT;", 1)[1]
+        conn = db.connect()
+        try:
+            conn.execute("UPDATE cases SET reached_tier = NULL")
+            for stmt in (s.strip() for s in backfill.split(";")):
+                if stmt and not all(l.lstrip().startswith("--") for l in stmt.splitlines() if l.strip()):
+                    conn.execute(stmt)
+            conn.commit()
+            got = {r["id"]: r["reached_tier"] for r in conn.execute("SELECT id, reached_tier FROM cases")}
+        finally:
+            conn.close()
+        self.assertEqual(got[held_by_aao], "ASSISTANT_AO")
+        self.assertEqual(got[decided], "AO")
+        self.assertIn(got[filed], (None, "SENIOR_AUDITOR"))
 
     # -- each return step -------------------------------------------------------------------------
     def test_returns_go_one_tier_down_at_a_time_and_need_a_remark(self) -> None:

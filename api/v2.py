@@ -572,6 +572,8 @@ def _case_or_404(conn: db.Connection, case_id: str, user: User) -> db.Row:
     if row is None:
         raise HTTPException(404, f"no case {case_id}")
     if not workflow.may_see_user(user, row):
+        if user.role in TIER_ROLES and workflow.wing_of_case(row) == user.pension_wing:
+            raise HTTPException(403, "this case has not been sent to your desk")
         raise HTTPException(403, "this case belongs to another department")
     return row
 

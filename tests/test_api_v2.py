@@ -699,7 +699,8 @@ class V2Test(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/forward", headers=police, json={"remark": "attached"}).status_code, 200)
         case = self.client.get(f"/api/v2/cases/{case_id}", headers=reviewer).json()
         self.assertNotIn("FORWARD_TIER", case["allowed_actions"]); self.assertNotIn("RETURN", case["allowed_actions"])
-        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/reject", headers=self.ao(), json={"remark": "still wrong papers"}).status_code, 409)
+        # The AO is refused: the new filing has not been sent up to the AO's desk (12 Oct 2026).
+        self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/reject", headers=self.ao(), json={"remark": "still wrong papers"}).status_code, 403)
         self.assertEqual(self.client.post(f"/api/v2/cases/{case_id}/return", headers=reviewer, json={"remark": "still wrong papers"}).status_code, 409)
 
     def test_admin_override_is_audited(self) -> None:
@@ -708,7 +709,7 @@ class V2Test(unittest.TestCase):
         case_id = self.create(police)["case"]["id"]
         reviewer = self.sa()
         r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=self.ao(), json={"remark": "Verified by hand; in order."})
-        self.assertEqual(r.status_code, 409)                         # no decision before the AI examination (and the SA holds it)
+        self.assertEqual(r.status_code, 403)                         # the SA holds it: not yet sent to the AO's desk
         self.verify(reviewer, case_id)
         ao = self.escalate(case_id)
         r = self.client.post(f"/api/v2/cases/{case_id}/approve", headers=ao, json={"remark": "In order."})

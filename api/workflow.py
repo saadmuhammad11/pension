@@ -81,6 +81,12 @@ ROLE_OF_TIER = {t: r for r, t in TIER_OF_ROLE.items()}
 TIER_ROLES = tuple(TIER_OF_ROLE)
 NEXT_TIER = {SENIOR_AUDITOR: ASSISTANT_AO, ASSISTANT_AO: AO}
 PREVIOUS_TIER = {AO: ASSISTANT_AO, ASSISTANT_AO: SENIOR_AUDITOR}
+#: How far up the chain each tier sits. A pension case reaches the Assistant AO only when the Senior
+#: Auditor forwards it, and the AO only when the Assistant AO does; until then it is not on their
+#: screens at all (12 Oct 2026). Once it has reached a tier it stays visible there for the rest of
+#: that filing, a return down the chain included, so the officer can follow what became of it; a
+#: fresh filing by the department starts the climb again. ``cases.reached_tier`` (migration 0016).
+TIER_RANK = {SENIOR_AUDITOR: 0, ASSISTANT_AO: 1, AO: 2}
 
 #: Who acts on each side of a case. The administrator is on neither (business decision G6, 7 Oct
 #: 2026): the IT administrator manages users and reads the audit log, and takes no case action in
@@ -210,8 +216,34 @@ def may_see(user_role: str, user_department: str | None, case: db.Row | dict, us
         return True
     if user_role in TIER_ROLES:
         wing = wing_of_case(case)
-        return wing is not None and wing == user_wing
+        return wing is not None and wing == user_wing and has_reached(case, TIER_OF_ROLE[user_role])
     return owns_side(user_role, user_department, case)
+
+
+def reached_tier(case: db.Row | dict) -> str:
+    """The highest tier this filing of the case has been sent to; the Senior Auditor's until forwarded."""
+    keys = case.keys()
+    return (case["reached_tier"] if "reached_tier" in keys else None) or SENIOR_AUDITOR
+
+
+def has_reached(case: db.Row | dict, tier: str) -> bool:
+    """Whether the case has been sent up to ``tier``. The tiers are pension's alone (Q3): a GP Fund
+    case is seen by its wing's officers as before."""
+    if "product" in case.keys() and (case["product"] or "PENSION") != "PENSION":
+        return True
+    return TIER_RANK[reached_tier(case)] >= TIER_RANK[tier]
+
+
+def next_reached(action: str, case: db.Row | dict, holder: str | None | object) -> str | object:
+    """The case's ``reached_tier`` after ``action``; ``KEEP`` when the move does not change it.
+
+    A filing by the department starts the climb again at the Senior Auditor; any move that hands
+    the case to a higher tier (a forward, or the Deputy AG's override) raises it; nothing lowers it."""
+    if action == "FORWARD":
+        return SENIOR_AUDITOR
+    if holder in TIER_RANK and TIER_RANK[holder] > TIER_RANK[reached_tier(case)]:      # type: ignore[index]
+        return holder                                                                   # type: ignore[return-value]
+    return KEEP
 
 
 def may_see_user(user: Any, case: db.Row | dict) -> bool:
@@ -354,8 +386,11 @@ def transition(conn: db.Connection, case: db.Row, action: str, actor: Any, *,
         forget_run = ", current_run_id = NULL" if action == "RUN_CHECK" else ""
         set_holder = "" if holder is KEEP else ", holder_tier = ?"
         holder_args: tuple = () if holder is KEEP else (holder,)
-        cur = conn.execute(f"UPDATE cases SET status = ?, updated_at = ?{forget_run}{set_holder} WHERE id = ? AND status = ?",
-                           (new_status, db.now(), *holder_args, case["id"], case["status"]))
+        reached = next_reached(action, case, holder)
+        set_reached = "" if reached is KEEP else ", reached_tier = ?"
+        reached_args: tuple = () if reached is KEEP else (reached,)
+        cur = conn.execute(f"UPDATE cases SET status = ?, updated_at = ?{forget_run}{set_holder}{set_reached} WHERE id = ? AND status = ?",
+                           (new_status, db.now(), *holder_args, *reached_args, case["id"], case["status"]))
         if cur.rowcount != 1:
             raise WorkflowError(409, "the case changed while you were working on it; reload and try again")
         entry = record_event(conn, case["id"], action=action, from_status=case["status"],

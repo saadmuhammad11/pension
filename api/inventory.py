@@ -71,6 +71,13 @@ def scope(conn: db.Connection, user: Any, *, product: str | None = None, departm
         # A tier officer's view is their own pension wing (C3, 9 Oct 2026); no wing, no cases.
         codes = section_codes(conn, getattr(user, "pension_wing", None) or "") if getattr(user, "pension_wing", None) else []
         where.append(f"{alias}.department_code IN ({','.join('?' * len(codes)) or 'NULL'})"); args.extend(codes)
+        # Above the Senior Auditor, a pension case appears only once it has been sent up to this
+        # tier (12 Oct 2026; workflow.has_reached is the same rule for one case).
+        tier = workflow.TIER_OF_ROLE[role]
+        if tier != workflow.SENIOR_AUDITOR:
+            seen = [t for t in workflow.TIERS if workflow.TIER_RANK[t] >= workflow.TIER_RANK[tier]]
+            where.append(f"({alias}.product <> 'PENSION' OR {alias}.reached_tier IN ({','.join('?' * len(seen))}))")
+            args.extend(seen)
     if product:
         where.append(f"{alias}.product = ?"); args.append(product)
     if department:
