@@ -34,6 +34,7 @@ const DOCUMENTS: Record<string, string> = {
   SALARY_STATEMENT: 'Salary statement',
   SERVICE_STATEMENT: 'Service statement',
   SERVICE_BOOK: 'Service book',
+  QUALIFYING_SERVICE_PROFORMA: 'Proforma for qualifying service',
   POSTING_ORDER: 'Posting or service order',
   DEPUTATION_CHALLANS: 'Deputation contribution challans',
   PPO: 'Pension Payment Order',

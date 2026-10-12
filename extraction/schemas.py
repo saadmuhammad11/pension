@@ -603,6 +603,10 @@ DOCUMENT_TYPES = (
     "LIFE_CERTIFICATE", "PENSION_SLIP",
     # found unclassified in real bundles: both are service-record papers the office files
     "CHARGE_REPORT", "CHARACTER_SERVICE_ROLL",
+    # The AG office's proforma for qualifying service (scope change C2, 12 Oct 2026): a one-page
+    # summary of the service record, certified by the office and verified by the AG/DAO, that
+    # stands in for the service book on the checklist (decision S3).
+    "QUALIFYING_SERVICE_PROFORMA",
     "PENSION_APPLICATION", "DEPARTMENTAL_CHECKLIST",
     # structural
     "FILE_COVER", "OTHER",
@@ -715,6 +719,13 @@ DOCUMENT_TYPE_GLOSS = {
     "CHARGE_REPORT":
         "'Charge Report' - the form on which an officer reports assuming or handing over "
         "charge of a post, giving the post, the office and the date",
+    "QUALIFYING_SERVICE_PROFORMA":
+        "the one-page proforma headed 'PERFORMA FOR QUALIFYING SERVICE FOR PENSION' (often "
+        "'PROPOSED PERFORMA ...', sometimes spelt 'PROFORMA'), with the sections 'PARTICULARS OF "
+        "EMPLOYEE', 'SERVICE RECORD SUMMARY' and 'PAY FIXATION', and at the foot a block 'For Use "
+        "in the Accountant General/District Accounts Office' signed by an Accounts Officer. It "
+        "says '(As Per Service Book)' and mentions the service book, but it is NOT a page of the "
+        "service book: it is a printed form filled in by the office",
     "CHARACTER_SERVICE_ROLL":
         "'Character and Service Roll' / 'Character Roll' - the departmental service record of "
         "a non-gazetted servant, carrying a photograph, personal particulars, the posting "
@@ -908,7 +919,53 @@ PSA_SIGNATURE_BLOCK = {
 }
 
 
+#: The proforma for qualifying service (scope change C2, 12 Oct 2026). Only the facts the
+#: cross-document checks compare are asked for -- the particulars that identify the servant and
+#: the dates that bound the service -- read with the confirming double read like every other
+#: identifier page. The service-record summary is read as the office states it and compared with
+#: nothing: no qualifying service is computed (rules/scope.py).
+QUALIFYING_SERVICE_PROFORMA = _envelope(
+    {
+        "employee_name": _value("I. Name of Employee, as written"),
+        "father_or_husband_name": _value("II. Father's Name / Husband's Name, as written"),
+        "cnic": _value("III. CNIC Number exactly as written, 00000-0000000-0. null if any digit "
+                       "is illegible -- never complete it"),
+        "designation_at_retirement": _value("V. Designation (at retirement), as written"),
+        "personnel_no": _value("VIII. Personnel Number, digits only as written; null where blank"),
+        "date_of_birth": _value("IX. Date of Birth, YYYY-MM-DD"),
+        "date_of_appointment": _value("X. Date of Appointment, YYYY-MM-DD"),
+        "date_of_superannuation": _value("XI. Date of Superannuation, YYYY-MM-DD"),
+        "date_of_retirement_or_death": _value(
+            "XII. Date of Retirement / Death, YYYY-MM-DD"),
+        "type_of_retirement_ticked": _value(
+            "XIII. The box TICKED in 'Type of Retirement': Superannuation, Retiring, "
+            "Invalid/Medical, Death or Other, exactly one word. null if none is ticked"),
+        "total_length_of_service": _value(
+            "SERVICE RECORD SUMMARY I. Total Length of Service, as written (e.g. '37 years 17 days')"),
+        "net_qualifying_service": _value(
+            "SERVICE RECORD SUMMARY VIII. Net Qualifying Service, as written; null where blank"),
+        "office_certificate_signed": {
+            "type": ["boolean", "null"],
+            "description": "Whether the PAY FIXATION certificate ('It is certified that pay "
+                           "fixation ... is complete in all respect') carries a signature or "
+                           "stamp of the office. null if the page is cut off there.",
+        },
+        "ag_verification_signed": {
+            "type": ["boolean", "null"],
+            "description": "Whether the block 'For Use in the Accountant General/District "
+                           "Accounts Office' is filled in and signed by the Accounts Officer / "
+                           "District Accounts Officer. false where it is blank.",
+        },
+    },
+    ["employee_name", "father_or_husband_name", "cnic", "designation_at_retirement", "personnel_no",
+     "date_of_birth", "date_of_appointment", "date_of_superannuation", "date_of_retirement_or_death",
+     "type_of_retirement_ticked", "total_length_of_service", "net_qualifying_service",
+     "office_certificate_signed", "ag_verification_signed"],
+)
+
+
 SCHEMAS: dict[str, dict[str, Any]] = {
+    "QUALIFYING_SERVICE_PROFORMA": QUALIFYING_SERVICE_PROFORMA,
     "PSA_SIGNATURE_BLOCK": PSA_SIGNATURE_BLOCK,
     "PAGE_IDENTITY": PAGE_IDENTITY,
     "CNIC_CARD": CNIC_CARD,

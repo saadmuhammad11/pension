@@ -394,8 +394,12 @@ FAMILY_IN_SERVICE_DEATH = (
     # posting orders. Accepting only SERVICE_STATEMENT/SERVICE_BOOK reported a complete case
     # as missing a document, which would have sent a department a letter asking for papers
     # it had already filed.
-    Requirement("CL-09", "Service record: service book, AG service statement, or the posting-order history",
-                ("SERVICE_STATEMENT", "SERVICE_BOOK", "POSTING_ORDER"), derives_from="U-03/U-06"),
+    # The proforma for qualifying service is a service record for gazetted and non-gazetted
+    # servants alike (C2, 12 Oct 2026, S3).
+    Requirement("CL-09", "Service record: service book, AG service statement, the posting-order history, "
+                "or the proforma for qualifying service",
+                ("SERVICE_STATEMENT", "SERVICE_BOOK", "POSTING_ORDER", "QUALIFYING_SERVICE_PROFORMA"),
+                derives_from="U-03/U-06"),
     Requirement("CL-10", "Forwarding letter from the administrative department",
                 ("FORWARDING_LETTER",)),
     Requirement("CL-11", "Obituary / death office order", ("DEATH_OFFICE_ORDER", "OBITUARY")),
@@ -712,12 +716,17 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
     ),
     Requirement(
         "AG-10",
-        "Original service book with photocopies attested by the DDO (non-gazetted)",
+        "Original service book with photocopies attested by the DDO, or the proforma for "
+        "qualifying service (non-gazetted)",
         # A "Character and Service Roll" is the same record under the name the police and
         # several other departments use for it: photograph, particulars, posting history,
         # declaration. Accepting only the words "service book" returned a case for a document
         # that was in the bundle under its other name.
-        ("SERVICE_BOOK", "CHARACTER_SERVICE_ROLL"),
+        #
+        # The proforma for qualifying service satisfies the line too (scope change C2, decided
+        # by the user 12 Oct 2026, S3): either paper, from now on, with no cut-off date while the
+        # proforma is still "proposed". A cut-off, if the office notifies one, goes here.
+        ("SERVICE_BOOK", "CHARACTER_SERVICE_ROLL", "QUALIFYING_SERVICE_PROFORMA"),
         not_applicable_when=_service_book_not_kept,
         applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "REVISED", "DEATH_IN_SERVICE"}),
     ),

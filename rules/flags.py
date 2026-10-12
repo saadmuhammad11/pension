@@ -54,6 +54,7 @@ _DOC_WORDS = {
     "FORM_B_I": "Form B-I", "FORM_D_I": "Form D-I", "FORM_D_II": "Form D-II",
     "SUCCESSION_CERTIFICATE": "succession certificate", "LPC": "last pay certificate",
     "PPO": "PPO", "SERVICE_BOOK": "service book", "BANK_OPTION_FORM": "bank option form",
+    "QUALIFYING_SERVICE_PROFORMA": "proforma for qualifying service",
     "DESCRIPTIVE_ROLL": "descriptive roll", "PENSION_SLIP": "pension slip",
 }
 
@@ -127,7 +128,7 @@ PRECEDENCE: dict[str, tuple[str, ...]] = {
     "personnel_no": ("SAP_PAYROLL", "LPC", "SALARY_STATEMENT", "SERVICE_STATEMENT",
                      "BANK_OPTION_FORM", "NDC"),
     "pay": ("SAP_PAYROLL", "LPC", "SALARY_STATEMENT"),
-    "service_history": ("SERVICE_BOOK", "SERVICE_STATEMENT"),
+    "service_history": ("SERVICE_BOOK", "SERVICE_STATEMENT", "QUALIFYING_SERVICE_PROFORMA"),
     "recovery": ("LPC",),
     "pension_in_payment": ("PPO", "FPPO"),
 }
@@ -2154,12 +2155,60 @@ def check_declared_case_type(record: CaseRecord, pack: RulePack) -> list[Flag]:
     )]
 
 
+#: The service dates the proforma for qualifying service states, by the names stage 6 files
+#: them under (pipeline.extract.proforma_assertions).
+_PROFORMA = "QUALIFYING_SERVICE_PROFORMA"
+_PROFORMA_SERVICE_DATES = {"date_first_entry": "date of appointment", "date_of_retirement": "date of retirement"}
+
+
+def check_proforma_service_dates(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """The proforma's service dates against every other paper stating them. ``CONTRA-SERVICE``.
+
+    Scope change C2 (12 Oct 2026, S3). The proforma's date of birth and personnel number are
+    compared by check_identity_consistency like any other document's; the dates that bound the
+    service are compared here, and only where the proforma is one side of the disagreement, so
+    a bundle without one is checked exactly as before. MEDIUM, not HIGH: a payroll statement's
+    "entry into service" can rightly precede the appointment the proforma records where there
+    was earlier service, so the officer settles it rather than the PPO being blocked outright.
+    """
+    flags: list[Flag] = []
+    for field_name, label in _PROFORMA_SERVICE_DATES.items():
+        values = record.distinct_values(field_name)
+        stated = {v: srcs for v, srcs in values.items() if any(s.document == _PROFORMA for s in srcs)}
+        others = {v: srcs for v, srcs in values.items() if v not in stated}
+        if not stated or not others:
+            continue
+        on_proforma = " / ".join(stated)
+        elsewhere = " / ".join(others)
+        proforma_sources = tuple(s for srcs in stated.values() for s in srcs if s.document == _PROFORMA)
+        other_sources = tuple(s for srcs in others.values() for s in srcs)
+        flags.append(Flag(
+            id="",
+            severity=MEDIUM,
+            flag_class=CONTRA_SERVICE,
+            title=f"The proforma's {label} ({on_proforma}) differs from {elsewhere}",
+            finding=(
+                f"The proforma for qualifying service gives the {label} as {on_proforma} at "
+                f"{_pages(proforma_sources)}, but {elsewhere} at {_pages(other_sources)}."
+            ),
+            asserted=proforma_sources,
+            contradicted_by=other_sources,
+            required_action=(
+                f"Check the {label} against the service book and correct the proforma or the "
+                f"other paper before the case goes forward."
+            ),
+            owner="DEPARTMENT",
+        ))
+    return flags
+
+
 BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_prescribed_form_is_complete,
     check_more_than_one_widow,
     check_pay_lines_against_lpc,
     check_emoluments_reconciliation,
     check_identity_consistency,
+    check_proforma_service_dates,
     check_family_consistency,
     check_undeclared_recoveries,
     check_cnic_consistency,

@@ -318,6 +318,30 @@ def _deny_pay_claim_on_a_card(ident: PageIdentity, image: str | Path) -> PageIde
     )
 
 
+def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdentity:
+    """Keep a proforma claim only where OCR reads the proforma's title on the page.
+
+    A denied page is asked again, told what it is not, exactly as a denied form is; an OCR
+    failure keeps the claim, as ``_deny_pay_claim_on_a_card`` does, because no second reading
+    is not evidence against the first."""
+    from .ocr import ocr_page
+    try:
+        text = ocr_page(image, ident.page)
+    except Exception:                                   # noqa: BLE001
+        return ident
+    flat = re.sub(r"\s+", " ", text.text or "").lower()
+    if re.search(PROFORMA_TITLE, flat):
+        return ident
+    denied = PageIdentity(
+        page=ident.page, document_type="OTHER", confidence=ident.confidence,
+        evidence=ident.evidence, is_first_page=ident.is_first_page,
+        signed_by_psa=ident.signed_by_psa, attested=ident.attested,
+        printed_form_number=ident.printed_form_number,
+        downgraded_from=ident.document_type, also_on_page=ident.also_on_page,
+    )
+    return _reclassify_after_denial(denied, image, (text.text or "")[:1200])
+
+
 def verify_with_ocr(
     identities: Sequence[PageIdentity],
     image_for: Callable[[int], str | Path],
@@ -339,6 +363,13 @@ def verify_with_ocr(
         # CNIC filed as one puts an identity card into the determination path.
         if ident.document_type in _PAY_DOCUMENT_TYPES:
             out.append(_deny_pay_claim_on_a_card(ident, image_for(ident.page)))
+            continue
+        # The proforma decides a checklist line on its own (AG-10, decision S3), so the vision
+        # model's word is not enough for it either: OCR must find its printed title. It prints
+        # no form number, so it is not one of the prescribed forms below and never takes part
+        # in deciding the case type.
+        if ident.document_type == "QUALIFYING_SERVICE_PROFORMA":
+            out.append(_verify_proforma_claim(ident, image_for(ident.page)))
             continue
         if ident.document_type not in _FORM_NUMBER:
             out.append(ident)
@@ -387,7 +418,16 @@ NO_INCOME_STATEMENT = (
     r"|کوئی\s*ذریعہ\s*آمدن\s*نہیں|ذریعہ\s*آمدن\s*نہ"
 )
 
+#: The proforma for qualifying service (scope change C2, 12 Oct 2026), by its printed title. The
+#: word before "for qualifying" is required: Form B-I's clause 3 reads "Total length of
+#: qualifying service for pension", and a title test on that phrase alone would confirm a B-I
+#: page as the proforma. The office's own sample prints "PERFORMA" and "SEVICE", and OCR read
+#: that heading back as "PERFORMANCE ... SERVICE" (12 Oct 2026), so the form's name and the word
+#: "service" are both matched loosely.
+PROFORMA_TITLE = r"(?:pro|per|pre)\s*form\w{0,5}\s+for\s+qualifying\s+se\w{0,6}\s+for\s+pension"
+
 DOCUMENT_TITLES: tuple[tuple[str, str], ...] = (
+    (PROFORMA_TITLE, "QUALIFYING_SERVICE_PROFORMA"),
     (r"list\s+of\s+family\s+members|descriptive\s+roll", "ANNEX_A"),
     (r"sole\s+(?:family|widow)\s+certificate|sole\s+and\s+lawful\s+widow"
      r"|lawful\s+widow\s+certificate", "SOLE_WIDOW_CERTIFICATE"),

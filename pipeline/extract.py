@@ -1415,6 +1415,9 @@ _IDENTIFIER_DOCS = (
     # D-I's own signature block is undated, so without this page the 15-day sanction SLA has
     # no printed end date at all and F-5 cannot be raised from evidence.
     "FORWARDING_LETTER",
+    # The proforma for qualifying service (C2, 12 Oct 2026): its particulars and dates are
+    # compared with every other paper that states them (decision S3).
+    "QUALIFYING_SERVICE_PROFORMA",
 )
 
 #: Schema to read each document under. GENERIC_PAGE still carries the identifier envelope.
@@ -1434,7 +1437,53 @@ _SCHEMA_FOR = {
     "SALARY_STATEMENT": "AG_PAY_CERTIFICATE",
     "ANNEX_A": "DESCRIPTIVE_ROLL",
     "NADRA_FRC": "NADRA_FRC",
+    "QUALIFYING_SERVICE_PROFORMA": "QUALIFYING_SERVICE_PROFORMA",
 }
+
+
+#: The proforma's fields that become per-document assertions, under the names the checks
+#: compare them by (rules.flags), with the label each is printed beside: date of birth and
+#: personnel number join the identity check, the service dates the proforma check.
+_PROFORMA_DATES = (
+    ("date_of_birth", "date_of_birth", r"date\s+of\s+birth"),
+    ("date_of_appointment", "date_first_entry", r"date\s+of\s+appointm\w*"),
+    ("date_of_retirement_or_death", "date_of_retirement", r"date\s+of\s+retirement\s*/?\s*death"),
+)
+_OCR_DATE = r"[^\n\d]{0,12}(\d{1,2}[-./]\d{1,2}[-./]\d{4})"
+
+
+def proforma_assertions(data: dict, page: int, ocr_text: str | None) -> list[dict]:
+    """What the proforma for qualifying service states, as assertions (scope change C2).
+
+    A fact is kept only where two readers agree: the vision model's confirming double read and
+    PaddleOCR's transcription of the same labelled line. Neither is a witness on its own. On the
+    office's own sample the vision model read the date of birth as 1968, twice, where the page
+    and OCR say 1966, and OCR read the superannuation date as "130-06-2026", taking a handwritten
+    bracket for a digit. Either misread, kept, would have told a department its papers
+    contradict each other -- a HIGH finding over a date that is right. A fact the two readers do
+    not agree on is left out, so it raises nothing; the officer still reads the page.
+    """
+    def value(key: str) -> str:
+        node = data.get(key)
+        return str(node.get("value") or "").strip() if isinstance(node, dict) else ""
+
+    text = re.sub(r"[ \t]+", " ", ocr_text or "")
+    doc = "QUALIFYING_SERVICE_PROFORMA"
+    out: list[dict] = []
+    for key, field, label in _PROFORMA_DATES:
+        seen = _as_iso_date(value(key))
+        printed = re.search(label + _OCR_DATE, text, re.I)
+        if seen is not None and printed and _as_iso_date(printed.group(1)) == seen:
+            out.append({"field": field, "value": seen.isoformat(), "page": page, "document": doc})
+    flat_digits = re.sub(r"\D", "", text)
+    digits = "".join(c for c in value("personnel_no") if c.isdigit())
+    if 6 <= len(digits) <= 10 and re.search(r"personnel\s+n(?:o|umber)[^\n]{0,30}?" + digits, text, re.I):
+        out.append({"field": "personnel_no", "value": digits, "page": page, "document": doc})
+    cnic = "".join(c for c in value("cnic") if c.isdigit())
+    if len(cnic) == 13 and not looks_fabricated(cnic) and cnic in flat_digits:
+        out.append({"field": "cnic", "value": cnic, "person": value("employee_name") or None,
+                    "role": "employee", "page": page, "document": doc})
+    return out
 
 
 
@@ -1835,6 +1884,12 @@ def stage_assertions(
                             })
 
             idents = data.get("identifiers") or {}
+            if doc["type"] == "QUALIFYING_SERVICE_PROFORMA":
+                result["assertions"].extend(proforma_assertions(data, page, page_ocr_text(run, page)))
+                # Its CNIC and personnel number come only from proforma_assertions, where OCR must
+                # agree with the vision read. The sweep below takes the vision read alone, and on
+                # the office's sample that read was wrong where OCR was right (12 Oct 2026).
+                idents = {}
             # A CNIC is 13 digits, printed as 00000-0000000-0. Every page that quotes one is
             # kept, because the check that matters is whether the SAME person's number is the
             # same everywhere -- and because a CNIC card whose number is quoted nowhere else

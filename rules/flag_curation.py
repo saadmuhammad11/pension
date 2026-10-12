@@ -31,7 +31,7 @@ MAX_WORDS = 15
 
 #: Mismatches in name, CNIC, dates, amounts and eligibility come first (office rule).
 _CLASS_ORDER = [
-    "CONTRA-IDENTITY", "CNIC-UNCORROBORATED", "CONTRA-FAMILY", "CONTRA-DATE", "CONTRA-SERVICE-DATES", "CONTRA-MONEY",
+    "CONTRA-IDENTITY", "CNIC-UNCORROBORATED", "CONTRA-FAMILY", "CONTRA-DATE", "CONTRA-SERVICE-DATES", "CONTRA-SERVICE", "CONTRA-MONEY",
     "RULE-UNDECLARED", "DECLARED-TYPE-MISMATCH", "RELATION-INELIGIBLE", "RELATIONSHIP-UNPROVED", "AUTH-DEFECT", "DOC-STALE",
     "DOC-EXPIRED", "EXTRACT-DISAGREE", "DATE-AMBIGUOUS", "EXTRACT-LOWCONF", "ATTEST-MISSING", "RULE-CAP", "SCOPE-CONFUSION",
 ]
@@ -120,6 +120,9 @@ def summary(f: Flag, merged: int = 1) -> str:
         return _clip(f"{f.title}; reviewer to apply QS-02 — {where}" if where else f.title)
     if c == "CONTRA-SERVICE-DATES":
         return _clip(f"Service dates differ between {' and '.join(both[:2]) or 'documents'}")
+    if c == "CONTRA-SERVICE" and "proforma" in t:
+        what = "Appointment date" if "appointment" in t else "Retirement date"
+        return _clip(f"{what} on the service proforma differs from {' and '.join(b[:2]) or 'other papers'}")
     if c == "DECLARED-TYPE-MISMATCH":
         return _clip("Declared case type does not match the sanction form")
     if c == "AUTH-DEFECT":
