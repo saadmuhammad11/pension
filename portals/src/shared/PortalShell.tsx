@@ -7,9 +7,11 @@
  *  to draw.
  *
  *  Routes (hash):  #/                     the chooser: pension or GP Fund
- *                  #/pension  #/gpf       a product's home: the dashboard (a department's register,
- *                                         the AG's review queue, the admin overview)
+ *                  #/pension  #/gpf       a product's home: the AG's review dashboard or the admin
+ *                                         overview; for a department it is its cases (12 Oct 2026),
+ *                                         and the address moves to #/{slug}/cases
  *                  #/pension/cases  #/gpf/cases    the cases of that home
+ *                  #/pension/dashboard  #/gpf/dashboard   a department's dashboard, on its own tab
  *                  #/pension/new    #/gpf/new      a new case (where the role may create one)
  *                  #/pension/cases/:id  ·  #/gpf/cases/:id   one case, under its product (…/analysis: on the findings)
  *                  #/cases/:id            the older address; opens, then moves to the product's own
@@ -27,6 +29,7 @@ import { CaseDetail } from './screens/CaseDetail'
 import { RegisterHome } from './screens/RegisterHome'
 import { ReviewHome } from './screens/ReviewHome'
 import { ProductChooser } from './screens/ProductChooser'
+import { pageHasOwnNewCaseButton, registerView } from './screens/registerView'
 import { AdminHome } from './screens/admin/AdminHome'
 import { Users } from './screens/admin/Users'
 import { AuditLog } from './screens/admin/AuditLog'
@@ -102,6 +105,9 @@ function Shell({ config }: { config: PortalConfig }) {
     // The Accountant General's desk and the administrator open on the pension register (29 Sep
     // 2026): the product chooser is a department's screen. GP Fund stays one press away in the header.
     if ((cleanPath === '/' || cleanPath === '') && homeFor(user) !== 'register') { navigate('/pension', { replace: true }); return }
+    // A department's bare product address is its cases, and the cases have one address (12 Oct
+    // 2026): the bare one moves there. Replaced, not pushed, so Back is not trapped on it (F17).
+    if (pr?.view === 'home' && homeFor(user) === 'register') { navigate(`/${PRODUCT_SLUG[pr.product]}/cases`, { replace: true }); return }
     const known = cleanPath === '/' || !!pr || cleanPath === '/users' || cleanPath === '/audit' || cleanPath === '/signatories'
       || !!match('/cases/:id', cleanPath) || !!match('/cases/:id/analysis', cleanPath)
     const allowed = (pr?.view !== 'new' || can.create_case) && (cleanPath !== '/users' || can.manage_users)
@@ -145,7 +151,8 @@ function Shell({ config }: { config: PortalConfig }) {
       <a href="#/gpf/cases" className={product === 'GPF' ? 'is-active' : ''}>GP Fund</a>
       {slug && home === 'register' && <>
         <span className="nav-sep" aria-hidden="true" />
-        <a href={`#/${slug}`} className={pr?.view === 'home' || pr?.view === 'cases' ? 'is-active' : ''}>Cases</a>
+        {/* The cases have one address (12 Oct 2026); a bare #/{slug} still counts as this tab while it moves. */}
+        <a href={`#/${slug}/cases`} className={pr?.view === 'home' || pr?.view === 'cases' ? 'is-active' : ''}>Cases</a>
         <a href={`#/${slug}/dashboard`} className={pr?.view === 'dashboard' ? 'is-active' : ''}>Dashboard</a>
       </>}
       {slug && home !== 'register' && <>
@@ -162,13 +169,12 @@ function Shell({ config }: { config: PortalConfig }) {
     </nav>
   )
   // The AG and the administrator open a product on its dashboard; a department opens on its
-  // register, every case with its timeline, the charts below (29 Sep 2026).
-  const view: 'dashboard' | 'cases' | undefined = pr?.view === 'cases' ? 'cases'
-    : pr?.view === 'home' && home === 'register' ? undefined : 'dashboard'
+  // cases, with the dashboard on its own tab (screens/registerView.ts, 12 Oct 2026). Never both.
+  const view = registerView(pr?.view, home)
 
-  // The department's register and the form itself carry their own new-case button; the header's
+  // The department's dashboard and the form itself carry their own new-case button; the header's
   // shortcut is for every other screen of a product, so the same action never shows twice.
-  const pageHasOwnButton = !product || pr?.view === 'new' || (home === 'register' && (pr?.view === 'home' || pr?.view === 'dashboard'))
+  const pageHasOwnButton = !product || pageHasOwnNewCaseButton(pr?.view, home)
   const newCase = can.create_case && product && !pageHasOwnButton ? (
     <button className="header-cta" onClick={() => navigate(`/${slug}/new`)}>{PRODUCT_WORDS[product].file}</button>
   ) : null
@@ -214,7 +220,7 @@ function Shell({ config }: { config: PortalConfig }) {
                          lead={pr.product === 'PENSION'
                            ? 'Cases filed by this department, and the status of each at the Office of the Accountant General.'
                            : 'GP Fund claims filed by this department, and the status of each at the Office of the Accountant General.'}
-                         waitingOn={DEPT_WAITING} newLabel={pr.product === 'PENSION' ? 'New pension case' : 'New GP Fund case'} view={view} casesFirst
+                         waitingOn={DEPT_WAITING} newLabel={pr.product === 'PENSION' ? 'New pension case' : 'New GP Fund case'} view={view}
                          onNew={can.create_case ? () => navigate(`/${slug}/new`) : undefined} />
   } else {
     body = <ProductChooser />

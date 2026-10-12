@@ -7,14 +7,12 @@ import { CaseRegister } from './CaseRegister'
 import { Dashboard, useStats } from './Dashboard'
 
 export function RegisterHome(
-  { product, title, lead, waitingOn, newLabel, showDepartment, onNew, department, section, charts = 'department', view, casesFirst }:
+  { product, title, lead, waitingOn, newLabel, showDepartment, onNew, department, section, charts = 'department', view }:
   { product: Product; title: string; lead: string; waitingOn: CaseStatus[]; newLabel?: string; showDepartment?: boolean
     onNew?: () => void; department?: string | null
     /** A Pension section (Pension-I .. V, or LEGACY): the cases of all its departments. */
     section?: string | null
-    charts?: 'department' | 'review' | 'admin' | null; view?: 'dashboard' | 'cases'
-    /** The table above the charts: a department's home. */
-    casesFirst?: boolean },
+    charts?: 'department' | 'review' | 'admin' | null; view?: 'dashboard' | 'cases' },
 ) {
   const { user } = useSession()
   // The shared inventory (shared/data/inventory.ts): the same rows and server-side counts every
@@ -32,7 +30,7 @@ export function RegisterHome(
     <CaseRegister product={product} rows={rows} title={title} lead={lead} waitingOn={waitingOn} newLabel={newLabel}
                   showDepartment={showDepartment} onOpen={id => navigate(caseHref(product, id))} onNew={onNew}
                   statusCounts={inv.data?.counts.by_status} total={inv.data?.counts.total}
-                  error={error} stale={stale} loading={loading} role={user?.role ?? ''} view={view} casesFirst={casesFirst}
+                  error={error} stale={stale} loading={loading} role={user?.role ?? ''} view={view}
                   charts={charts ? <Dashboard stats={stats} error={statsError} variant={charts} department={department} /> : null} />
   )
 }

@@ -85,10 +85,9 @@ export const PAGE_WIDE = 50
 const BUCKETS: Bucket[] = ['mine', 'theirs', 'done', 'all']
 
 export function CaseRegister(
-  { product, rows, title, lead, waitingOn, onOpen, onNew, newLabel, showDepartment, error, stale, loading, role, charts, view, casesFirst,
+  { product, rows, title, lead, waitingOn, onOpen, onNew, newLabel, showDepartment, error, stale, loading, role, charts, view,
     statusCounts, total }:
   { product: Product
-    casesFirst?: boolean
     rows: CaseSummary[]
     /** Counts by status from the server (api/inventory.py): the tiles never count a partial list. */
     statusCounts?: Partial<Record<CaseStatus, number>>
@@ -160,6 +159,8 @@ export function CaseRegister(
   const narrowTo = (set: () => void) => { set(); setBucket('all'); setPage(1) }
   const clear = () => { setGroup(''); setKind(''); setDept(''); setSection(''); setPage(1) }
   const pickBucket = (b: Bucket) => { setBucket(b); setPage(1); if (view) navigate(`/${PRODUCT_SLUG[product]}/cases`) }
+  // One face or the other (screens/registerView.ts): the dashboard, or the cases. Until 12 Oct
+  // 2026 a department's home drew the cases and then the dashboard below them.
   const showDash = view !== 'cases'
   const showCases = view !== 'dashboard'
 
@@ -212,7 +213,7 @@ export function CaseRegister(
         </button>
       </div>
 
-      {!casesFirst && charts}
+      {charts}
       </>}
       {showCases && <>
       {view === 'cases' ? <h1>Cases</h1> : <h2 style={{ margin: 'var(--s5) 0 0' }}>Cases</h2>}
@@ -367,8 +368,6 @@ export function CaseRegister(
         </nav>
       )}
       </>}
-      {casesFirst && showDash && charts}
-
     </div>
   )
 }
