@@ -260,12 +260,20 @@ def _reclassify_after_denial(
     # denied as Form B-I, came back as Form B-III, was accepted -- and the bundle then held
     # two prescribed forms, so §4.1 refused to type the case at all.
     if again.document_type in _FORM_NUMBER:
-        from .ocr import form_titles_on, forms_printed_on
+        from .ocr import form_titles_on, forms_printed_on, ocr_page
         corroborating = PageIdentity(
             page=ident.page, document_type=again.document_type, confidence=again.confidence,
             evidence=again.evidence, is_first_page=again.is_first_page,
         )
-        text = ocr_page(image, ident.page)
+        # The corroborating read is the OCR reader's, so it must be imported and it must be
+        # allowed to fail. Until 12 Oct 2026 ``ocr_page`` was not imported here at all, so every
+        # denied form that came back as another form raised NameError and failed the whole run
+        # after the vision stage; and an OCR failure is no corroboration either way, so the
+        # page keeps what the denial left rather than taking the re-read on the model's word.
+        try:
+            text = ocr_page(image, ident.page)
+        except Exception:                               # noqa: BLE001
+            return ident
         checked = _verify_form_claim(
             corroborating, forms_printed_on(text), form_titles_on(text),
         )

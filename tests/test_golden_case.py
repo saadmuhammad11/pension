@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import unittest
+from unittest import mock
 from datetime import datetime
 from decimal import Decimal
 
@@ -1261,6 +1262,49 @@ class DeniedFormPagesAreReRead(unittest.TestCase):
         # must stand rather than the page being invented into something.
         out = _reclassify_after_denial(stuck, "/nonexistent.png", "")
         self.assertEqual(out.document_type, "OTHER")
+        self.assertFalse(out.reclassified)
+
+    #: The re-read's answer: the denied Form B-I page is, it says, Form B-III.
+    _RE_READ_AS_B_III = {
+        "document_type": "FORM_B_III", "document_type_confidence": 0.9,
+        "evidence": "headed FINAL PENSION PAYMENT ORDER", "is_first_page_of_document": True,
+    }
+
+    def _re_read(self):
+        from extraction.client import Extraction
+        return mock.patch("extraction.identify.extract_page", return_value=Extraction(
+            data=dict(self._RE_READ_AS_B_III), doc_type="PAGE_IDENTITY", schema_name="PAGE_IDENTITY",
+            source="p.pdf", model="m", prompt_version="v", latency_s=0.0, prompt_tokens=0,
+            completion_tokens=0))
+
+    def test_a_re_read_that_names_another_form_is_taken_when_ocr_prints_it(self):
+        """The corroborating OCR read raised NameError until 12 Oct 2026: ``ocr_page`` was never
+        imported into ``_reclassify_after_denial``, so a denied form that came back as another
+        form failed the whole run after the vision stage rather than being checked."""
+        from extraction.identify import PageIdentity, _reclassify_after_denial
+        from extraction.ocr import PageText
+        denied = PageIdentity(page=9, document_type="OTHER", confidence=0.95, evidence="",
+                              is_first_page=True, downgraded_from="FORM_B_I")
+        printed = PageText(9, "FORM B-III FINAL PENSION PAYMENT ORDER in respect of Mr Test", "t")
+        with self._re_read(), mock.patch("extraction.ocr.ocr_page", return_value=printed):
+            out = _reclassify_after_denial(denied, "/page-9.png", "")
+        self.assertEqual(out.document_type, "FORM_B_III")
+        self.assertTrue(out.reclassified)
+        self.assertEqual(out.downgraded_from, "FORM_B_I")
+
+    def test_a_re_read_whose_ocr_check_fails_keeps_the_denial(self):
+        """No second reading is no corroboration: the page keeps what the denial left it, and
+        the run goes on, rather than the re-read being accepted on the model's word or the
+        OCR failure taking the run down."""
+        from extraction.identify import PageIdentity, _reclassify_after_denial
+        from extraction.ocr import OcrError
+        denied = PageIdentity(page=9, document_type="OTHER", confidence=0.95, evidence="",
+                              is_first_page=True, downgraded_from="FORM_B_I")
+        with self._re_read(), mock.patch("extraction.ocr.ocr_page",
+                                         side_effect=OcrError("reader returned nothing")):
+            out = _reclassify_after_denial(denied, "/page-9.png", "")
+        self.assertEqual(out.document_type, "OTHER")
+        self.assertEqual(out.downgraded_from, "FORM_B_I")
         self.assertFalse(out.reclassified)
 
 
