@@ -348,7 +348,9 @@ class F7AndF9PortalServer(unittest.TestCase):
         def fake_request(method, url, headers=None, **kw):
             seen.update(url=url, headers=headers)
             return FakeUpstream()
-        with mock.patch.object(self.app, "gpf_signed_in", yes):
+        async def may_read(_request, _sub):
+            return None                                              # the API said yes (its own tests cover the no)
+        with mock.patch.object(self.app, "gpf_signed_in", yes), mock.patch.object(self.app, "gpf_read_refused", may_read):
             with self.client as c:                                   # lifespan: the client session exists
                 with mock.patch.object(self.app.session, "request", fake_request):
                     c.cookies.set("pension_gpf", "t")

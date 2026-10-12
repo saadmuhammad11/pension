@@ -76,11 +76,57 @@ class FrameCheck(_Fixture):
         self.assertEqual(r.status_code, 200, r.text)
         return r.cookies.get("pension_gpf")
 
-    def _check(self, token: str | None, path: str):
-        headers = {"X-GPF-Path": path}
+    def _check(self, token: str | None, path: str, method: str = "POST"):
+        headers = {"X-GPF-Path": path, "X-GPF-Method": method}
         if token:
             headers["X-GPF-Session"] = token
         return self.client.get("/api/v2/auth/gpf-act-check", headers=headers)
+
+    def test_the_frame_opens_the_portal_s_own_cases_only_and_within_the_wing_and_tier(self) -> None:
+        """Audit of 12 Oct 2026: the frame cookie opened the whole module. Now the register and
+        the intake are the portal's, the signing register is read-only through the frame, and a
+        case is opened on the case system's own visibility and holder rules."""
+        token = self._frame_token()                                   # the Senior Auditor of Pension-I
+        self.assertEqual(self._check(token, "/api/cases", "GET").status_code, 403)            # the register
+        self.assertEqual(self._check(token, "/api/cases", "POST").status_code, 403)           # filing
+        self.assertEqual(self._check(token, "/api/cases/from-scans", "POST").status_code, 403)
+        self.assertEqual(self._check(token, "/api/cases/from-scans/start", "POST").status_code, 403)
+        self.assertEqual(self._check(token, "/api/doa/finalize", "POST").status_code, 403)    # the signing register
+        self.assertEqual(self._check(token, "/api/doa/specimens", "POST").status_code, 403)
+        self.assertEqual(self._check(token, "/api/doa", "GET").status_code, 200)
+        self.assertEqual(self._check(token, "/api/health", "GET").status_code, 200)
+        self.assertEqual(self._check(token, "/api/reading/jobs/job-1", "GET").status_code, 200)
+        self.assertEqual(self._check(token, "/api/anything-else", "POST").status_code, 403)
+        # The wing's own case: read and, while the Senior Auditor holds it, acted on.
+        case_id = self._gpf_case("UNDER_REVIEW")
+        conn = db.connect()                                              # an examination that completed
+        try:
+            row = conn.execute("SELECT submission_no, created_by FROM cases WHERE id = ?", (case_id,)).fetchone()
+            conn.execute("INSERT INTO case_runs (id, case_id, run_id, submission_no, started_by, started_at, state) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?)", (db.new_id(), case_id, "gpf-job-done", row["submission_no"],
+                                                           row["created_by"], "2026-10-12T10:00:00", "done"))
+            conn.execute("UPDATE cases SET current_run_id = 'gpf-job-done' WHERE id = ?", (case_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        self.assertEqual(self._check(token, f"/api/cases/{GPF_ID}", "GET").status_code, 200)
+        self.assertEqual(self._check(token, f"/api/cases/{GPF_ID}/pages/3", "GET").status_code, 200)
+        self.assertEqual(self._check(token, f"/api/cases/{GPF_ID}/dispose", "POST").status_code, 200)
+        # Forwarded to the Assistant AO: the Senior Auditor still reads it, but no longer acts.
+        r = self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=self.sa(), json={})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self._check(token, f"/api/cases/{GPF_ID}", "GET").status_code, 200)
+        r = self._check(token, f"/api/cases/{GPF_ID}/dispose", "POST")
+        self.assertEqual(r.status_code, 409, r.text)
+        self.assertIn("Assistant", r.json()["detail"])
+        # Another wing's officer: neither reads nor acts.
+        other = self.client.post("/api/v2/auth/gpf-session", headers=self.sa("school-education")).cookies.get("pension_gpf")
+        self.assertEqual(self._check(other, f"/api/cases/{GPF_ID}", "GET").status_code, 403)
+        self.assertEqual(self._check(other, f"/api/cases/{GPF_ID}/dispose", "POST").status_code, 403)
+        # The AG's desk reads and acts everywhere.
+        desk = self.client.post("/api/v2/auth/gpf-session", headers=self.login("ag.reviewer", "ag")).cookies.get("pension_gpf")
+        self.assertEqual(self._check(desk, f"/api/cases/{GPF_ID}", "GET").status_code, 200)
+        self.assertEqual(self._check(desk, f"/api/cases/{GPF_ID}/dispose", "POST").status_code, 200)
 
     def test_the_proxy_question_follows_the_case_status(self) -> None:
         token = self._frame_token()
@@ -89,8 +135,9 @@ class FrameCheck(_Fixture):
         self.assertEqual(r.status_code, 409, r.text)
         self._set_status(case_id, "UNDER_REVIEW")
         self.assertEqual(self._check(token, f"/api/cases/{GPF_ID}/dispose").status_code, 200)
-        # A module case the portal never filed (a template) is not the portal's to judge.
-        self.assertEqual(self._check(token, "/api/cases/refundable-template/dispose").status_code, 200)
+        # A module case the portal never filed (a template) is not opened through the frame at
+        # all (audit of 12 Oct 2026): the frame is for the portal's own cases.
+        self.assertEqual(self._check(token, "/api/cases/refundable-template/dispose").status_code, 403)
         # And the question needs the frame sign-in like every other.
         self.assertEqual(self._check(None, f"/api/cases/{GPF_ID}/dispose").status_code, 401)
 
@@ -133,6 +180,8 @@ class ProxyAsksBeforeWrites(unittest.TestCase):
 
         def fake_get(url, headers=None, **kw):
             asked.append(headers.get("X-GPF-Path"))
+            if headers.get("X-GPF-Method") == "GET":
+                return Reply(200, {"ok": True})                      # the officer may see the case
             return Reply(409, {"detail": "case PC-2026-000001 is REJECTED"})
 
         def fake_request(method, url, **kw):
@@ -149,11 +198,16 @@ class ProxyAsksBeforeWrites(unittest.TestCase):
                     self.assertIn("REJECTED", r.json()["detail"])
                     self.assertEqual(forwarded, [])
                     self.assertEqual(asked, [f"/api/cases/{GPF_ID}/dispose"])
-                    # Reading is not acting: no question asked, passed straight on.
+                    # A read of one examination is asked about too (may this officer see the
+                    # case?), and passed on when the answer is yes; the yes is remembered, so the
+                    # page's many scans cost one question.
                     r = c.get(f"/gpf/api/cases/{GPF_ID}")
                     self.assertEqual(r.status_code, 200)
-                    self.assertEqual(len(asked), 1)
+                    self.assertEqual(len(asked), 2)
                     self.assertEqual(len(forwarded), 1)
+                    c.get(f"/gpf/api/cases/{GPF_ID}/pages/1")
+                    self.assertEqual(len(asked), 2)
+                    self.assertEqual(len(forwarded), 2)
 
 
 if __name__ == "__main__":

@@ -38,6 +38,7 @@ from urllib.parse import quote
 import contextlib
 import json
 import os
+import re
 import secrets
 import socket
 import sys
@@ -65,6 +66,9 @@ API = os.environ.get("PENSION_API_URL") or "http://127.0.0.1:8110"
 
 #: The GP Fund frame's sign-in cookie (api.v2.GPF_COOKIE).
 GPF_COOKIE = "pension_gpf"
+#: The module's reads that are judged per examination: the register of cases and anything under
+#: one case (the case, its pages, specimens, issue pack, SAP template).
+_GPF_READ_ROUTE = re.compile(r"^/api/cases(?:/([^/]+))?(?:/|$)")
 #: How long a frame cookie's "yes" from the API is remembered. Long enough that a page's dozens of
 #: asset requests cost one check; short enough that a sign-out or a disabled account is felt
 #: within seconds, and sign-out itself forgets the entry at once (audit 6 Oct 2026, L11).
@@ -189,6 +193,7 @@ class PortalApp:
         self.bound: list[int] = []
         self.session: aiohttp.ClientSession | None = None
         self._gpf_ok: dict[str, tuple[float, str]] = {}        # frame cookie -> (checked-until, officer)
+        self._gpf_read_ok: dict[tuple[str, str], float] = {}   # (frame cookie, examination) -> checked-until
         routes = [
             Route("/__portals", self.portals),
             Route("/start.html", self.start_sheet),
@@ -327,14 +332,36 @@ class PortalApp:
         if token:
             self._gpf_ok.pop(token, None)
 
+    async def gpf_read_refused(self, request: Request, sub: str) -> Response | None:
+        """A read of the module's register or of one examination is passed on only if the API
+        agrees this officer may see it (the case system's wing and tier visibility). Other reads
+        (health, the rules, a reading job's progress) pass. A yes is remembered per examination
+        for GPF_CHECK_TTL_S seconds; a no is never remembered."""
+        m = _GPF_READ_ROUTE.match(sub)
+        if m is None:
+            return None
+        token = request.cookies.get(GPF_COOKIE, "")
+        key = (token, m.group(1) or "")
+        now = asyncio.get_running_loop().time()
+        cached = self._gpf_read_ok.get(key)
+        if cached and cached > now:
+            return None
+        refused = await self.gpf_act_refused(request, sub)
+        if refused is None:
+            if len(self._gpf_read_ok) > 1000:
+                self._gpf_read_ok.clear()
+            self._gpf_read_ok[key] = now + GPF_CHECK_TTL_S
+        return refused
+
     async def gpf_act_refused(self, request: Request, sub: str) -> Response | None:
         """A change sent from the frame is passed on only if the API agrees this officer may act on
-        that examination now: never from the 30-second cache, because what decides it is the
-        portal case's status, which moves (audit 6 Oct 2026). Fails closed."""
+        that examination now: never from the sign-in cache, because what decides it is the
+        portal case's status and holder, which move (audit 6 Oct 2026). Fails closed. The method
+        travels with the path, so the API knows a read from a change."""
         try:
             async with self.session.get(f"{self.api}/api/v2/auth/gpf-act-check",
                                         headers={"X-GPF-Session": request.cookies.get(GPF_COOKIE, ""),
-                                                 "X-GPF-Path": sub}) as r:
+                                                 "X-GPF-Path": sub, "X-GPF-Method": request.method}) as r:
                 if r.status == 200:
                     return None
                 detail = str((await r.json(content_type=None) or {}).get("detail") or "not allowed")
@@ -362,8 +389,15 @@ class PortalApp:
         sub = gpf_subpath(request.path_params.get("path", ""))
         if sub is None:
             return JSONResponse({"detail": "not a valid GP Fund path"}, status_code=400)
-        if request.method not in ("GET", "HEAD", "OPTIONS") and not self.gpf_open():
-            refused = await self.gpf_act_refused(request, sub)
+        # Every change is asked about, and every read of the module's register or of one
+        # examination too: until 12 Oct 2026 a GET through the frame listed every GP Fund claim
+        # and opened any wing's scans on the cookie alone (audit of 12 Oct 2026). A read answered
+        # yes is remembered for a few seconds per examination, since a page's scans are dozens
+        # of requests.
+        reading = request.method in ("GET", "HEAD", "OPTIONS")
+        if not self.gpf_open():
+            refused = (await self.gpf_read_refused(request, sub) if reading
+                       else await self.gpf_act_refused(request, sub))
             if refused is not None:
                 return refused
         url = f"{self.gpf}{quote(sub, safe='/-_.~:@!$&()*+,;=')}" + (f"?{request.url.query}" if request.url.query else "")

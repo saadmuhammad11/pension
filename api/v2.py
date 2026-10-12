@@ -272,16 +272,49 @@ def _gpf_frame_user(token: str | None, conn: db.Connection) -> User:
 @router.get("/auth/gpf-act-check")
 def gpf_act_check(x_gpf_session: str | None = Header(default=None),
                   x_gpf_path: str = Header(default=""),
+                  x_gpf_method: str = Header(default="POST"),
                   conn: db.Connection = Depends(get_conn)) -> dict:
-    """The portal server's question before passing a CHANGE to the module from the frame: may
-    this signed-in officer act on the examination that path names? 409 when its portal case is
-    not under review (_gpf_may_act). Module cases the portal never filed are not its to judge."""
-    _gpf_frame_user(x_gpf_session, conn)
-    match = _GPF_CASE_ROUTE.match(x_gpf_path or "")
+    """The portal server's question before passing a request to the module from the frame: may
+    this signed-in officer read, or act on, what that path names?
+
+    Until 12 Oct 2026 the frame cookie opened the whole module: any AG-side account could list
+    every GP Fund claim across the wings and read its scans, act on a case another wing or
+    another tier held, file cases and start reading jobs through the frame, and add to or
+    finalise the signing register the module verifies sanctions against (audit of 12 Oct 2026).
+    Now:
+      - the register of cases and the intake routes are the portal's (403 through the frame);
+      - the signing register is read here and managed by the administrator in the portal;
+      - a case route is judged on the portal case it belongs to: not filed by the portal -> 403;
+        the wing and tier visibility of the case system (may_see); and for a change, under
+        review (_gpf_may_act), held by this officer's tier, and the one-tier rule;
+      - any other read passes; any other change does not.
+    """
+    user = _gpf_frame_user(x_gpf_session, conn)
+    path = x_gpf_path or ""
+    reading = (x_gpf_method or "POST").upper() in ("GET", "HEAD", "OPTIONS")
+    if path == "/api/cases" or path.startswith("/api/cases/from-scans"):
+        raise HTTPException(403, "GP Fund cases are filed and listed in the portal, not through the module's frame")
+    if path.startswith("/api/doa") and not reading:
+        raise HTTPException(403, "the signing register is managed by the administrator in the portal")
+    match = _GPF_CASE_ROUTE.match(path)
     if match:
-        row = conn.execute("SELECT case_no, status FROM cases WHERE gpf_case_id = ?", (match.group(1),)).fetchone()
-        if row is not None:
+        row = conn.execute("SELECT * FROM cases WHERE gpf_case_id = ?", (match.group(1),)).fetchone()
+        if row is None:
+            raise HTTPException(403, "this examination was not filed through the portal; it is not yours to open here")
+        if not workflow.may_see_user(user, row):
+            if user.role in TIER_ROLES and workflow.wing_of_case(row) == user.pension_wing:
+                raise HTTPException(403, "this case has not been sent to your desk")
+            raise HTTPException(403, "this case belongs to another pension wing")
+        if not reading:
             _gpf_may_act(row)
+            try:
+                workflow.check_holder(user, row, "DISPOSE")
+                workflow.check_one_tier_per_case(conn, user, row)
+            except workflow.WorkflowError as exc:
+                _raise(exc)
+        return {"ok": True}
+    if not reading:
+        raise HTTPException(403, "not an action the module's frame may take")
     return {"ok": True}
 
 
@@ -1685,8 +1718,8 @@ def _gpf_may_act(row: db.Row) -> None:
                                  f"acted on only while the case is under the AG's review")
 
 
-#: A module route that changes one examination: /api/cases/<module case id>/<action>.
-_GPF_CASE_ROUTE = re.compile(r"^/api/cases/([^/]+)/")
+#: A module route about one examination: /api/cases/<module case id>[/<action or artefact>].
+_GPF_CASE_ROUTE = re.compile(r"^/api/cases/([^/]+)(?:/|$)")
 
 
 def _gpf_after(conn: db.Connection, row: db.Row, user: User, what: str, detail: dict) -> dict:
