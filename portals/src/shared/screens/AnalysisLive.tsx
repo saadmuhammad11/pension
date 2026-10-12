@@ -6,33 +6,16 @@
  *
  * The bar never jumps. It is driven by real progress -- page 7 of 15 is 7/15 of the reading
  * stage, document 3 of 8 of the cross-checking -- eases forward between two events, never past
- * the start of a stage that has not started, and never goes backwards. It moves at most 3% a
- * second, so a stage that ends early is caught up over seconds, not in one leap.
+ * the start of a stage that has not started, and never goes backwards. It moves a bounded step
+ * a second, so a stage that ends early is caught up over seconds, not in one leap, and once the
+ * run is done it climbs to the end before the findings open. The arithmetic is analysisBar.ts.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { pageImageUrl, runStatus, subscribe, type RunEvent } from '../api'
 import { ScanViewer } from '../scan/ScanViewer'
 import { documentLabel } from '../labels'
 import { useMediaTokenVersion } from '../auth/useMediaToken'
-
-/** The stages as the officer knows them (BUILD §5), and the pipeline ids each covers. */
-const STAGES: [string, string, string[]][] = [
-  ['Ingest & page triage', 'Separating and checking the scanned pages', ['bundle', 'ingest']],
-  ['Document classification', 'Identifying every document in the bundle', ['identify']],
-  ['OCR & layout parsing', 'Reading each prescribed form a second time', ['verify', 'assemble', 'classify']],
-  ['Field extraction', 'Reading the details off each document', ['extract']],
-  ['Checklist & consistency', 'Checking every document against the others', ['assertions']],
-  ['Identity', 'The sanctioning signature against the specimen', ['signatures']],
-  ['Findings & recommendation', 'Writing up what was found', ['determine', 'report']],
-]
-
-/** Where each stage sits on the bar, [from, to] percent, sized to how long it really takes
- *  on this machine: reading the pages is most of the wait, cross-checking the next. */
-const SPAN: Record<number, [number, number]> = {
-  0: [0, 5], 1: [5, 47], 2: [47, 53], 3: [53, 65], 4: [65, 89], 5: [89, 93], 6: [93, 99.5],
-}
-/** Seconds a stage with no page count usually takes -- how fast the bar creeps inside it. */
-const TAU: Record<number, number> = { 0: 12, 1: 60, 2: 20, 3: 70, 4: 160, 5: 25, 6: 18 }
+import { FULL, STAGES, barTarget, nextShown, stageOf } from './analysisBar'
 
 /** In words, what each stage is doing -- rotated while it runs. Each line is true of the stage. */
 const NOW: Record<number, string[]> = {
@@ -70,10 +53,6 @@ const LOG_LINES = 300
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 const shortName = (t: string) => documentLabel(t).split(' — ')[0]
 
-function stageOf(id: string): number {
-  return STAGES.findIndex(([, , keys]) => keys.includes(id))
-}
-
 export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => void }) {
   const [events, setEvents] = useState<RunEvent[]>([])
   const [finished, setFinished] = useState<string | null>(null)
@@ -108,17 +87,20 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
     return stop
   }, [runId, onDone])
 
-  // The clock, while the run is live: once a second (F16; it was four times a second, and every
-  // tick re-rendered the whole screen for ten to twenty minutes on an old office PC).
+  // The clock: once a second (F16; it was four times a second, and every tick re-rendered the
+  // whole screen for ten to twenty minutes on an old office PC). It keeps ticking after the run
+  // is done until the bar has reached the end: the bar moves a bounded step per tick, and when
+  // the clock stopped with the run, the bar froze wherever it was -- in the seventies, after
+  // the long cross-checking stage -- and the findings appeared out of nowhere 12 s later.
+  const barFull = shown >= FULL
   useEffect(() => {
-    if (finished) return
+    if (finished && (barFull || finished !== 'done')) return
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
-  }, [finished])
+  }, [finished, barFull])
 
   // On to the findings only once the bar has visibly reached the end (or, at the latest, 12 s
   // after the run did): leaving at 90% reads as the screen giving up, not the work finishing.
-  const barFull = shown >= 99.5
   useEffect(() => {
     if (!finished) return
     const t = setTimeout(onDone, finished !== 'done' ? 1500 : barFull ? 900 : 12000)
@@ -161,47 +143,22 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
   }, [events])
 
   // -- where the bar should be now ------------------------------------------------------------
-  const target = useMemo(() => {
-    if (finished) return 100
-    const [from, to] = SPAN[facts.stage]
-    const range = to - from
-    const since = (now - facts.stageAt) / 1000
-    let frac: number
-    if (facts.stage === 1 && facts.totalPages > 0) {
-      const read = Object.keys(facts.placed).length
-      const perPage = read > 1 ? Math.max(2, (facts.lastPageAt - facts.stageAt) / 1000 / read) : 12
-      const between = 1 - Math.exp(-((now - facts.lastPageAt) / 1000) / perPage)
-      frac = Math.min(0.985, (read + 0.85 * between) / facts.totalPages)
-    } else if ((facts.stage === 4 && facts.docs > 0) || (facts.stage === 3 && facts.extracts > 0)) {
-      // One document at a time, like the pages: n of the file's documents started, and between
-      // two of them, forward at the pace this case has shown so far.
-      const n = facts.stage === 4 ? facts.facts6 : facts.extracts
-      const of = facts.stage === 4 ? Math.max(facts.docs, n + 1) : Math.max(3, n + 1)
-      const perDoc = n > 1 ? Math.max(8, (facts.stageStepAt - facts.stageAt) / 1000 / (n - 1)) : TAU[facts.stage] / 3
-      const onThis = (now - facts.stageStepAt) / 1000
-      const between = onThis / (onThis + perDoc)          // never reaches 1, never stops
-      frac = Math.min(0.985, (Math.max(0, n - 1) + between) / of)
-    } else {
-      // No count to go by: forward on a curve that slows but never stops.
-      frac = 1 - 1 / (1 + since / TAU[facts.stage])
-    }
-    return from + range * Math.min(frac, 0.985)
-  }, [facts, now, finished])
+  const target = useMemo(() => barTarget(facts, now, finished), [facts, now, finished])
 
-  // Toward the target: never backwards, and at most 3% a second -- when a stage ends sooner than
+  // Toward the target: never backwards, a bounded step a second -- when a stage ends sooner than
   // its share of the bar, the bar catches up over several seconds instead of leaping 20% at once.
   // The glide between two values is the CSS transition on the fill (F16), not a frame loop: one
   // state change a second, no requestAnimationFrame re-rendering the screen. On opening, a screen
-  // opened mid-run takes the run's real position at once rather than climbing from zero.
+  // opened mid-run takes the run's real position at once rather than climbing from zero. The
+  // step is taken on every tick of the clock, not only when the target moves: once the run is
+  // done the target is 100 and stays there, and the bar still has to get there.
   const hasEvents = events.length > 0
   useEffect(() => {
     setShown(v => {
-      const gap = target - v
-      if (gap <= 0.01) return v
-      if (Date.now() - mountedAt.current < 2500 && hasEvents) return target
-      return v + Math.min(gap, 3)
+      if (target - v > 0.01 && Date.now() - mountedAt.current < 2500 && hasEvents) return target
+      return nextShown(v, target, finished)
     })
-  }, [target, hasEvents])
+  }, [target, hasEvents, finished, now])
 
   const elapsed = (now - startedAt.current) / 1000
   const pct = Math.floor(shown)
