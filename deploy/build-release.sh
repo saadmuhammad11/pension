@@ -41,7 +41,11 @@ copy "$ROOT/portals/dist" "$REL/portals/"
 copy --exclude 'data/' --exclude 'page_cache/' --exclude 'uploads/' --exclude '*.jsonl' \
      "$ROOT/GP/backend/gpf" "$ROOT/GP/backend/web" "$ROOT/GP/backend/pyproject.toml" \
      "$ROOT/GP/backend/requirements.txt" "$REL/GP/backend/"
-copy "$ROOT/deploy" "$REL/"
+# The deploy folder ships its examples, never a filled-in env file: deploy/postgres.env is the
+# live database password (untracked, mode 600) and sat beside them, and an unfiltered copy of the
+# folder packed it into the tarball (audit 12 Oct 2026). rsync takes the first matching rule, so
+# the include for the examples must come before the exclude.
+copy --include '*.env.example' --exclude '*.env' "$ROOT/deploy" "$REL/"
 # The model services' launchers and units, so systemd runs them from this release (root-owned
 # /opt/pension/current/infra) rather than from anyone's working tree (audit 6 Oct 2026, item 7).
 mkdir -p "$REL/infra"
@@ -57,8 +61,8 @@ echo "$VERSION" > "$REL/VERSION"
 
 echo "== checking for trial files"
 bad=$(cd "$REL" && find . \( -iname 'credentials*' -o -name '*.sqlite3*' -o -name '.jwt_secret' -o -iname '*.pdf' \
-        -o -name '*.rar' -o -name '*.zip' -o \( -name '*.sql' -not -path './api/migrations/*' \) -o -name '.env' \
-        -o -name 'node_modules' \) -print)
+        -o -name '*.rar' -o -name '*.zip' -o \( -name '*.sql' -not -path './api/migrations/*' \) \
+        -o \( -name '*.env' ! -name '*.env.example' \) -o -name 'node_modules' \) -print)
 if [[ -n "$bad" ]]; then
   echo "refusing: the release would carry trial files:" >&2; echo "$bad" >&2; exit 1
 fi
