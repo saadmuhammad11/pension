@@ -198,6 +198,66 @@ class WhatIsNeverWrittenToDisk(_Fixture):
         self.assertEqual(list(self.entries()), ["1|good"])
 
 
+class TheIndexMayBeAbsent(unittest.TestCase):
+    """No index on disk is a retrieval failure like any other: the report is built without
+    citations and says so (12 Oct 2026).
+
+    ``cite_many`` degrades per query, but it reads the index fingerprint and loads the index
+    BEFORE any query, and both raise ``RagError`` when artifacts/rag/index.json is missing.
+    ``_cite_all`` caught only ImportError, so ``build_report`` raised and the whole run was
+    marked failed after every model stage had finished.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        missing = Path(self.tmp.name) / "no-such-index.json"
+        for p in (mock.patch.object(store, "INDEX_PATH", missing),
+                  mock.patch.object(store, "CITATIONS_PATH", Path(self.tmp.name) / "c.json"),
+                  mock.patch.object(store, "_FINGERPRINT", None),
+                  mock.patch.object(store, "_CITATIONS", None),
+                  mock.patch.object(store, "_INDEX", None)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_the_store_itself_still_raises(self):
+        """The contract of the store has not moved: it is the report that degrades."""
+        with self.assertRaises(store.RagError):
+            store.cite_many(["q"], cacheable=["q"])
+
+    def test_the_report_is_built_with_the_unavailable_note_on_every_entry(self):
+        from pipeline.report import _cite_all
+
+        report = {
+            "determination": {
+                "steps": [{"rule_id": "GROSS-PENSION", "description": "gross pension"}],
+                "ambiguities": [{"question": "which rule applies?"}],
+            },
+            "flags": [{"class": "CONTRA-IDENTITY", "title": "two personnel numbers"}],
+        }
+        out = _cite_all(report)
+        self.assertIs(out, report)
+        entries = (out["determination"]["steps"] + out["determination"]["ambiguities"]
+                   + out["flags"])
+        self.assertEqual(len(entries), 3)
+        for entry in entries:
+            cite = entry["corpus_citation"][0]
+            self.assertEqual(cite["scored_by"], "none", entry)
+            self.assertIn("retrieval unavailable", cite["citation"])
+            self.assertIn("RagError", cite["citation"])
+            self.assertEqual(cite["score"], 0.0)
+
+    def test_each_entry_gets_its_own_copy(self):
+        from pipeline.report import _cite_all
+
+        report = {"determination": {"steps": [], "ambiguities": []},
+                  "flags": [{"class": "A", "title": "same"}, {"class": "B", "title": "same"}]}
+        _cite_all(report)
+        a, b = (f["corpus_citation"] for f in report["flags"])
+        self.assertEqual(a, b)
+        self.assertIsNot(a, b)
+
+
 class EveryRuleAndFlagHasAQuestionOfItsOwn(unittest.TestCase):
     """The guard that keeps case facts out of the retrieval query in the first place.
 

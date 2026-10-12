@@ -462,7 +462,7 @@ def _cite_all(report: dict) -> dict:
     rebuild returns the byte-identical passage (SOP §8.5.1) and costs nothing.
     """
     try:
-        from rag.store import cite_many
+        from rag.store import RagError, cite_many, unavailable
     except ImportError:
         return report
 
@@ -500,7 +500,15 @@ def _cite_all(report: dict) -> dict:
     if not wants:
         return report
 
-    citations = cite_many([query for _, query in wants], top_n=1, cacheable=rules_only)
+    # ``cite_many`` degrades one query at a time, but it opens the index and its fingerprint
+    # BEFORE any query, and that raised when artifacts/rag/index.json was absent: build_report
+    # failed, and the whole run with it, after all the model work was done (12 Oct 2026). The
+    # same answer the per-query path gives, attached to every entry, so the report is built and
+    # says on each line why it carries no passage.
+    try:
+        citations = cite_many([query for _, query in wants], top_n=1, cacheable=rules_only)
+    except (RagError, OSError) as exc:
+        citations = {query: unavailable(exc) for _, query in wants}
     for entry, query in wants:
         # A copy each. Two steps can share a query, and a report is a mutable structure that
         # later passes through _redact and the API -- one shared list would let an edit to
