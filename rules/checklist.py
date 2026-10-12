@@ -29,13 +29,15 @@ MISSING = "MISSING"
 DEFECTIVE = "DEFECTIVE"
 NOT_APPLICABLE = "NOT_APPLICABLE"
 #: Office rule of 30 Sep 2026: lines the office never requires (AG-19, AG-23, AG-24 in every
-#: case type; AG-16 for an unmarried daughter / son). Absent -> NOT_REQUIRED; present ->
-#: FOUND_NOT_REQUIRED, cited. Neither is ever a deficiency, and neither counts as missing.
+#: case type; AG-16 for an unmarried daughter / son), joined on 12 Oct 2026 by AG-09 (the AG
+#: service statement) and AG-12 (the autonomous-body payslip) in every case type (user, S16).
+#: Absent -> NOT_REQUIRED; present -> FOUND_NOT_REQUIRED, cited. Neither is ever a deficiency,
+#: and neither counts as missing.
 NOT_REQUIRED = "NOT_REQUIRED"
 FOUND_NOT_REQUIRED = "FOUND_NOT_REQUIRED"
 
 #: The lines not required in any case type, and those not required in particular columns.
-NOT_REQUIRED_ANYWHERE = frozenset({"AG-19", "AG-23", "AG-24"})
+NOT_REQUIRED_ANYWHERE = frozenset({"AG-09", "AG-12", "AG-19", "AG-23", "AG-24"})
 NOT_REQUIRED_FOR: dict[str, frozenset[str]] = {
     # Unmarried daughter / son: there is no widow, so there is no sole-widow certificate to ask for.
     "AG-16": frozenset({"UNMARRIED_CHILD"}),
@@ -253,17 +255,6 @@ def _service_book_not_kept(record: CaseRecord) -> str | None:
         return (
             f"the servant is gazetted ({basis}); the manual service book is the non-gazetted "
             f"record, and the AG service statement stands in its place"
-        )
-    return None
-
-
-def _service_statement_not_issued(record: CaseRecord) -> str | None:
-    """AG-09 does not apply to a non-gazetted servant: the AG issues no statement for them."""
-    gazetted, basis = _service_record_pair(record)
-    if gazetted is False:
-        return (
-            f"the servant is non-gazetted ({basis}); the AG issues a service statement only "
-            f"for gazetted officers, and the service book is the record instead"
         )
     return None
 
@@ -736,7 +727,9 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-09",
         "Service statement, gazetted by Audit (Payrolls)",
         ("SERVICE_STATEMENT",),
-        not_applicable_when=_service_statement_not_issued,
+        # Not required in any case type since 12 Oct 2026 (NOT_REQUIRED_ANYWHERE, S16): cited
+        # when filed, "not required" when not. The statement still tells a gazetted officer
+        # from a non-gazetted servant for AG-10 (_service_record_pair).
         applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "DEATH_IN_SERVICE"}),
     ),
     Requirement(
@@ -765,6 +758,7 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-12",
         "Last computerised payslip (autonomous bodies), attested by the DDO",
         ("SALARY_STATEMENT",),
+        # Not required in any case type since 12 Oct 2026 (NOT_REQUIRED_ANYWHERE, S16).
         applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "DEATH_IN_SERVICE"}),
     ),
     Requirement(

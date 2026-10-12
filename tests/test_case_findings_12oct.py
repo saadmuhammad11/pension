@@ -178,5 +178,39 @@ class LpcOnASelfPension(unittest.TestCase):
         self.assertEqual(_item(_record(("FORM_B_I",), "FRESH_SELF", bps=None), "AG-08").status, MISSING)
 
 
+class ServiceStatementAndAutonomousPayslip(unittest.TestCase):
+    """AG-09 (service statement, gazetted by Audit) and AG-12 (autonomous-body payslip) are not
+    required in any case type (user, 12 Oct 2026, S16): "not required" when absent, cited when
+    filed, never "not found"."""
+
+    def test_absent_they_read_not_required_on_every_column(self) -> None:
+        from rules.checklist import ALL_VARIANTS, NOT_REQUIRED, requirements_for, run_checklist
+        from rules import CaseRecord
+        for variant in ALL_VARIANTS:
+            ids = {r.id for r in requirements_for(variant)}
+            cl = run_checklist(CaseRecord(case_ref="T", case_type="", pay_scale_bps=4, case_variant=variant),
+                               variant=variant)
+            for item_id in ("AG-09", "AG-12"):
+                if item_id not in ids:
+                    continue                                   # the sheet has no such line on this column
+                item = cl.item(item_id)
+                self.assertEqual(item.status, NOT_REQUIRED, (variant, item_id))
+                self.assertIn("not required in any case type", item.reason)
+            self.assertNotIn("AG-09", [i.id for i in cl.items if i.status == "MISSING"], variant)
+        self.assertIn("AG-09", {r.id for r in requirements_for("FRESH_SELF")})
+        self.assertIn("AG-12", {r.id for r in requirements_for("FRESH_SELF")})
+
+    def test_filed_they_are_cited_as_found_not_required(self) -> None:
+        from rules.checklist import FOUND_NOT_REQUIRED
+        for item_id, doc in (("AG-09", "SERVICE_STATEMENT"), ("AG-12", "SALARY_STATEMENT")):
+            item = _item(_record(("FORM_B_I", doc), "FRESH_SELF", bps=4), item_id)
+            self.assertEqual((item.status, item.located), (FOUND_NOT_REQUIRED, (2,)), item_id)
+
+    def test_the_statement_still_tells_a_gazetted_officer_for_the_service_book_line(self) -> None:
+        from rules.checklist import NOT_APPLICABLE
+        item = _item(_record(("FORM_B_I", "SERVICE_STATEMENT"), "FRESH_SELF"), "AG-10")
+        self.assertEqual(item.status, NOT_APPLICABLE)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -923,13 +923,14 @@ class ConditionalRequirements(unittest.TestCase):
         cl = run_checklist(rec, variant="DEATH_IN_SERVICE")
         self.assertEqual(cl.item("AG-10").status, "NOT_APPLICABLE")
         self.assertIn("gazetted (BS-19)", cl.item("AG-10").reason)
-        self.assertEqual(cl.item("AG-09").status, "MISSING")
+        # AG-09 itself is a not-required line in every case type (user, 12 Oct 2026, S16).
+        self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
 
     def test_a_non_gazetted_servant_is_not_asked_for_a_service_statement(self):
         from rules import run_checklist
         rec = CaseRecord(case_ref="t", case_type="", pay_scale_bps=15)
         cl = run_checklist(rec, variant="FRESH_SELF")
-        self.assertEqual(cl.item("AG-09").status, "NOT_APPLICABLE")
+        self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
         self.assertEqual(cl.item("AG-10").status, "MISSING")
 
     def test_bps_16_is_gazetted(self):
@@ -947,14 +948,15 @@ class ConditionalRequirements(unittest.TestCase):
         rec = CaseRecord(case_ref="t", case_type="",
                          documents=(Document(type="SERVICE_STATEMENT", pages=(9,)),))
         cl = run_checklist(rec, variant="FRESH_SELF")
-        self.assertEqual(cl.item("AG-09").status, "PRESENT")
+        self.assertEqual((cl.item("AG-09").status, cl.item("AG-09").located), ("FOUND_NOT_REQUIRED", (9,)))
         self.assertEqual(cl.item("AG-10").status, "NOT_APPLICABLE")
 
-    def test_with_neither_grade_nor_document_both_stay_required(self):
-        """Nothing establishes which record applies, so neither line may be excused."""
+    def test_with_neither_grade_nor_document_the_service_book_stays_required(self):
+        """Nothing establishes which record applies, so the service book may not be excused;
+        the statement is a not-required line regardless (S16)."""
         from rules import run_checklist
         cl = run_checklist(CaseRecord(case_ref="t", case_type=""), variant="FRESH_SELF")
-        self.assertEqual(cl.item("AG-09").status, "MISSING")
+        self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
         self.assertEqual(cl.item("AG-10").status, "MISSING")
 
     def test_the_ppo_book_and_bank_file_are_never_required(self):
