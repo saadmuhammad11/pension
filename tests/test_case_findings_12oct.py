@@ -2,14 +2,14 @@
 
     /home/tmc/vllm_env/bin/python3 -m unittest tests.test_case_findings_12oct -v
 
-Run ``artifacts/run-a825399965b6`` (PC-2026-000100, FRESH_SELF): the department's Form B-I, headed
+Run ``artifacts/run-a825399965b6`` (PC-2026-000100, FRESH_SELF): the FRC in the bundle read "not
+found" because AG-06 never ran on a self-pension column; the department's Form B-I, headed
 "Annex-B-1", was filed as Annex-A, so the case had no prescribed form and fell to manual routing;
 and the Last Pay Certificate was required of gazetted self-pensioners too. The user's decisions of
-12 Oct 2026: follow the printed checklist for the FRC -- it is ticked on the family-pension columns
-only, so it is not a line on a self pension at all (the earlier "acknowledged, not required on self"
-reading was withdrawn, "follow the checklist"); the LPC is required for non-gazetted and not for
-gazetted (BPS-16) self-pensioners. The OCR text here is the real run's wording with the servant's
-particulars replaced.
+12 Oct 2026: the FRC is required on a self pension too, "either found or not found" (an earlier
+"acknowledged, not required" reading the same day was withdrawn); the LPC is required for
+non-gazetted and not for gazetted (BPS-16) self-pensioners. The OCR text here is the real run's
+wording with the servant's particulars replaced.
 """
 from __future__ import annotations
 
@@ -136,16 +136,17 @@ def _item(record, item_id: str):
 
 
 class FrcOnASelfPension(unittest.TestCase):
-    """Change 1, corrected: follow the printed checklist. The sheet ticks the FRC on the
-    family-pension columns only, so it is not a self-pension line at all -- present or absent, it
-    never appears on a self-pension case ("follow the checklist", user, 12 Oct 2026)."""
+    """Change 1: the FRC is required on a self pension too, "either found or not found" (user,
+    12 Oct 2026, decision S14) -- PRESENT with its page, MISSING when not filed, as on the
+    family-pension columns."""
 
-    def test_the_frc_is_not_a_line_on_a_self_pension(self) -> None:
+    def test_the_frc_is_found_or_not_found_on_a_self_pension(self) -> None:
+        from rules.checklist import MISSING, PRESENT
         for variant in ("FRESH_SELF", "FRESH_INVALID", "REVISED"):
             with_frc = _item(_record(("FORM_B_I", "NADRA_FRC"), variant, bps=4), "AG-06")
-            self.assertIsNone(with_frc, variant)                 # not on the self-pension checklist
+            self.assertEqual((with_frc.status, with_frc.located), (PRESENT, (2,)), variant)
             without = _item(_record(("FORM_B_I",), variant, bps=4), "AG-06")
-            self.assertIsNone(without, variant)
+            self.assertEqual(without.status, MISSING, variant)
 
     def test_family_pension_columns_still_require_it(self) -> None:
         from rules.checklist import MISSING, PRESENT

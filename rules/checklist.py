@@ -713,10 +713,11 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "NADRA Family Registration Certificate/s, attested by the DDO",
         ("NADRA_FRC",),
         defective_when=_frc_stale,
-        # The sheet ticks the family-pension columns only, and applies_to mirrors the sheet
-        # (tests.test_checklist_fidelity). On a self pension the pensioner is alive and claims
-        # their own pension, so the FRC is not a line on that column at all.
-        applies_to=frozenset({"DEATH_IN_SERVICE", "WIDOW", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER", "DISABLED_CHILD_SIBLING", "PARENT", "SISTER"}),
+        # The printed sheet ticks the family-pension columns only. The user's decision of
+        # 12 Oct 2026 (S14) adds the three self-pension columns: the certificate is required
+        # there too, found or not found. tests.test_checklist_fidelity carries the same
+        # addition as a decision made after the sheet was printed.
+        applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "REVISED", "DEATH_IN_SERVICE", "WIDOW", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER", "DISABLED_CHILD_SIBLING", "PARENT", "SISTER"}),
     ),
     Requirement(
         "AG-07",

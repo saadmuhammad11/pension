@@ -102,15 +102,14 @@ class WhatTheOfficerSees(unittest.TestCase):
         self.assertIn("fresh NADRA FRC", f.required_action)
         self.assertEqual([s.page for s in f.asserted], [8])
 
-    def test_a_self_pension_bundle_is_not_flagged_for_a_certificate_it_need_not_carry(self):
+    def test_a_self_pension_bundle_is_judged_like_any_other(self):
         from rules.flags import check_frc_currency
-        # The Revised Pension bundle: FRC of 12-08-2024 in a FRESH_SELF case. AG-06 does not
-        # apply to that column, so its age is not a defect.
-        rec = _record({15: date(2024, 8, 12)}, date(2026, 6, 10), variant="FRESH_SELF")
-        self.assertEqual(check_frc_currency(rec, _pack()), [])
-        # ...but with the column unknown it is judged, and a widow's case certainly is.
-        self.assertEqual(len(check_frc_currency(
-            _record({15: date(2024, 8, 12)}, date(2026, 6, 10), variant=None), _pack())), 1)
+        # The Revised Pension bundle: FRC of 12-08-2024 in a FRESH_SELF case. AG-06 applies to
+        # the self-pension columns since the user's decision of 12 Oct 2026 (S14), so a stale
+        # certificate is the same defect there as on a widow's case or with the column unknown.
+        for variant in ("FRESH_SELF", "FRESH_INVALID", "REVISED", None):
+            rec = _record({15: date(2024, 8, 12)}, date(2026, 6, 10), variant=variant)
+            self.assertEqual(len(check_frc_currency(rec, _pack())), 1, variant)
 
     def test_the_flag_is_in_the_battery_and_a_fresh_certificate_raises_nothing(self):
         from rules.flags import BATTERY, check_frc_currency, run_battery

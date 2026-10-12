@@ -41,6 +41,14 @@ COLUMN_VARIANT = (
     "PARENT", "SISTER",
 )
 
+#: Ticks the office decided after the sheet was printed (docs/pension-rules-decisions.md),
+#: item number -> the columns added. The sheet itself is unchanged, so they are added to what
+#: is read off it rather than silently expected of the glyphs.
+#: S14 (user, 12 Oct 2026): the NADRA FRC is required on a self pension too, found or not found.
+DECIDED_AFTER_THE_SHEET: dict[int, set[str]] = {
+    6: {"FRESH_SELF", "FRESH_INVALID", "REVISED"},
+}
+
 _WORD = re.compile(
     r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">(.*?)</word>'
 )
@@ -91,6 +99,8 @@ class ChecklistMatchesTheOfficersSheet(unittest.TestCase):
         # decision, 24 Sep 2026). Its ticks are checked against the finding's scope below; the
         # rest of the sheet is still matched cell by cell.
         cls.item_22 = cls.matrix.pop(22, set())
+        for item, columns in DECIDED_AFTER_THE_SHEET.items():
+            cls.matrix[item] = cls.matrix.get(item, set()) | columns
 
     def test_item_22_lives_on_as_a_finding_on_the_same_columns(self):
         from rules.flags import NIKAH_NAMA_VARIANTS

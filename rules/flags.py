@@ -1834,16 +1834,11 @@ def check_frc_currency(record: CaseRecord, pack: RulePack) -> list[Flag]:
     flag is what blocks the PPO and what the officer verifies against the page (SOP §4.4(4)).
     One flag per certificate page, so the letter can name the page.
     """
-    from .checklist import FRC_MAX_AGE_MONTHS, SELF_PENSION_VARIANTS, stale_frcs
+    from .checklist import FRC_MAX_AGE_MONTHS, stale_frcs
 
-    # AG-06 requires an FRC on the family-pension columns only. A self pension carries no such
-    # requirement, so a certificate that happens to be in the bundle, however old, is not a
-    # defect the department must cure -- and a HIGH flag here would block a PPO over a paper
-    # the checklist never asked for. An unknown column is judged: the FRC is required on
-    # eight of the eleven columns, and the officer can lower a flag more easily than find one.
-    if record.case_variant in SELF_PENSION_VARIANTS:
-        return []
-
+    # AG-06 requires the certificate on every column, the self-pension ones since the user's
+    # decision of 12 Oct 2026 (S14), so a stale one is a defect wherever it is filed: the same
+    # test marks the checklist line DEFECTIVE, and the flag must not say less than the line.
     flags: list[Flag] = []
     for x in stale_frcs(record):
         flags.append(
