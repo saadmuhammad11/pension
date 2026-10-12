@@ -151,13 +151,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (t - last > 1000) { last = t; deadline.current = t + IDLE_MINUTES * 60_000 }
     }
     ACTIVITY.forEach(ev => window.addEventListener(ev, onActivity, { passive: true }))
-    // The GP Fund frame's word (auth/frameActivity.ts): activity, or an expired frame sign-in.
-    const onMessage = (e: MessageEvent) => {
-      const m = readFrameMessage(e)
-      if (m?.kind === 'activity') onActivity()
-      else if (m?.kind === 'expired') gpfExpired()
-    }
-    window.addEventListener('message', onMessage)
     const tick = window.setInterval(() => {
       if (requestsInFlight() > 0 && warningRef.current === null) deadline.current = Date.now() + IDLE_MINUTES * 60_000
       const left = Math.round((deadline.current - Date.now()) / 1000)
@@ -169,10 +162,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 1000)
     return () => {
       ACTIVITY.forEach(ev => window.removeEventListener(ev, onActivity))
-      window.removeEventListener('message', onMessage)
       window.clearInterval(tick)
     }
   }, [user, end])
+
+  // The GP Fund frame's word (auth/frameActivity.ts) is heard for as long as someone is signed
+  // in, whether or not idle sign-out is on. Until 12 Oct 2026 this listener lived inside the
+  // idle effect above, which returns at once while IDLE_MINUTES is 0 (session.ts, since 9 Oct):
+  // the frame's {gpfExpired: 1}, posted when its own two-hour sign-in cookie was refused, never
+  // reached the case screen's handler, so the frame stayed dead until the page was reloaded
+  // (audit of 12 Oct 2026). Activity in the frame still pushes the idle deadline when there is
+  // one; with no idle sign-out there is nothing to push and the message is simply heard.
+  useEffect(() => {
+    if (!user) return
+    const onMessage = (e: MessageEvent) => {
+      const m = readFrameMessage(e)
+      if (m?.kind === 'expired') gpfExpired()
+      else if (m?.kind === 'activity' && IDLE_MINUTES && warningRef.current === null) deadline.current = Date.now() + IDLE_MINUTES * 60_000
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [user])
 
   const value = useMemo(() => ({ user, can: can ?? (user ? EMPTY : null), loading, login, logout, changePassword, notice, passwordMinLength }),
                         [user, can, loading, login, logout, changePassword, notice, passwordMinLength])
