@@ -141,6 +141,11 @@ class GpfProxyPaths(PortalServer):
         # Starlette hands the route the path decoded once, so what reaches gpf_subpath for
         # "a%252e" is "a%2e" -- an escape left over, refused.
         self.assertEqual(g("api/cases/abc/dispose"), "/api/cases/abc/dispose")
+        # /gpf/ itself is the module's page the case screen frames (/gpf/?embed=1...): the root,
+        # not an empty segment. Refused from 9 to 12 Oct 2026, every GP Fund case screen read
+        # "not a valid GP Fund path".
+        self.assertEqual(g(""), "/")
+        self.assertIsNone(g("/"))                                 # a leading slash is an empty first segment
         # Through the server: an escape the browser would not collapse reaches the route and is refused
         # before the action check or any request upstream (the fake session would answer 502).
         self._signed_in()
@@ -150,6 +155,8 @@ class GpfProxyPaths(PortalServer):
             self.assertEqual(r.status_code, 400, bad)
             self.assertIn("not a valid GP Fund path", r.text)
         self.assertEqual(seen_checks, [])                         # refused before the action check
+        r = self.client.get("/gpf/?embed=1&officer=dag")
+        self.assertNotEqual(r.status_code, 400, r.text)           # the framed page is passed upstream
 
     def test_the_normalised_path_is_what_the_check_and_the_upstream_see(self) -> None:
         self._signed_in()

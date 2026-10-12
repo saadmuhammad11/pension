@@ -161,6 +161,11 @@ def gpf_subpath(raw: str) -> str | None:
     path = raw or ""
     if "%" in path or "\\" in path or any(ord(c) < 32 or c == "\x7f" for c in path):
         return None
+    # /gpf/ itself is the module's own page, the one the case screen frames (``/gpf/?embed=1``):
+    # an empty path is the root, not an empty segment. (Refused from 9 Oct to 12 Oct 2026: every
+    # GP Fund case screen read "not a valid GP Fund path".)
+    if path == "":
+        return "/"
     if any(seg in ("", ".", "..") for seg in path.split("/")):
         return None
     return "/" + path
