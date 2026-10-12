@@ -82,18 +82,65 @@ warn() { printf "  ${C_WARN}%-7s${C_OFF} %s\n" "WARN" "$1"; }
 up() { curl -sf -m 3 "$1" >/dev/null 2>&1; }
 
 # Only ever touches processes whose working directory is inside this project. `pkill -f uvicorn`
-# would take down the AG pension portal's API on :8100 along with ours.
+# would take down the AG pension portal's API on :8100 along with ours. The directory is compared
+# whole: "$ROOT"* would also accept a sibling tree whose name merely starts with ours.
 ours() {
   local pid=$1 cwd
   cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || return 1
-  [[ "$cwd" == "$ROOT"* ]]
+  [[ "$cwd" == "$ROOT" || "$cwd" == "$ROOT/"* ]]
 }
 
-find_ours() {                      # find_ours <pattern>
-  local pid
-  for pid in $(pgrep -f "$1" 2>/dev/null); do
-    ours "$pid" && echo "$pid"
+# `pgrep -f gpf.api` matches ANY command line containing that text, including a shell that merely
+# mentions it: a `bash -c '... gpf.api ...'` run from inside this tree would be killed along with
+# the server (the pension run.sh next door did exactly that twice on 12 Oct 2026). So pgrep only
+# nominates candidates, and each one is confirmed from /proc to be the process start_app launched:
+# a python interpreter whose arguments begin `-m uvicorn gpf.api:app` and carry `--port $PORT`.
+# A wrapper shell has argv[0] = bash and fails the first check.
+#   is_our_server <pid>
+is_our_server() {
+  local pid=$1 i
+  local -a argv
+  [[ "$(basename "$(readlink -f "/proc/$pid/exe" 2>/dev/null)")" == python* ]] || return 1
+  mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null || return 1
+  [[ ${#argv[@]} -ge 6 && "${argv[1]}" == "-m" && "${argv[2]}" == "uvicorn" && "${argv[3]}" == "gpf.api:app" ]] || return 1
+  for ((i = 4; i < ${#argv[@]} - 1; i++)); do
+    [[ "${argv[i]}" == "--port" && "${argv[i+1]}" == "$PORT" ]] && return 0
   done
+  return 1
+}
+
+# The pids of our server, confirmed as above and inside this tree. pgrep narrows the field
+# cheaply; it never decides.
+find_server() {
+  local pid
+  for pid in $(pgrep -f "gpf\.api" 2>/dev/null); do
+    ours "$pid" && is_our_server "$pid" && echo "$pid"
+  done
+}
+
+# Sending SIGTERM and moving on leaves a window: a restart's start_app can run while the old
+# server is still shutting down, see it answer /api/health, print "already serving", and then
+# the old process exits and nothing is listening (12 Oct 2026). So a stop waits for the pids to
+# be gone, up to 15 s, and only then SIGKILLs whatever is left.
+#   wait_gone <pid>...
+wait_gone() {
+  local deadline=$((SECONDS + 15)) pid alive
+  while :; do
+    alive=""
+    for pid in "$@"; do kill -0 "$pid" 2>/dev/null && alive="$alive $pid"; done
+    [[ -z "$alive" ]] && return 0
+    (( SECONDS >= deadline )) && break
+    sleep 0.5
+  done
+  warn "still running after 15 s, killing:$alive"
+  kill -9 $alive 2>/dev/null
+  for _ in 1 2 3 4 5 6; do
+    alive=""
+    for pid in "$@"; do kill -0 "$pid" 2>/dev/null && alive="$alive $pid"; done
+    [[ -z "$alive" ]] && return 0
+    sleep 0.5
+  done
+  bad "could not stop:$alive"; return 1
 }
 
 # ------------------------------------------------------------------------------------------
@@ -115,8 +162,8 @@ start_app() {
 
 stop_all() {
   local pids
-  pids=$(find_ours "gpf.api")
-  [[ -n "$pids" ]] && { kill $pids 2>/dev/null; ok "stopped GP Fund ($pids)"; } || warn "GP Fund was not running"
+  pids=$(find_server | xargs)
+  if [[ -n "$pids" ]]; then kill $pids 2>/dev/null; wait_gone $pids && ok "stopped GP Fund ($pids)"; else warn "GP Fund was not running"; fi
   echo "  (:8200, :8110/:5184 and :8100/:5174 belong to other deployments and were left alone)"
 }
 
@@ -189,7 +236,8 @@ tests() {
 case "${1:-start}" in
   start)   start_app; echo; status ;;
   stop)    stop_all ;;
-  restart) stop_all; sleep 2; start_app; echo; status ;;
+  # stop_all already waited for the old pid to exit, so start_app cannot see the old server.
+  restart) stop_all; start_app; echo; status ;;
   status)  status ;;
   test)    shift; tests "$@" ;;
   *) echo "usage: $0 [start|stop|restart|status|test]" >&2; exit 2 ;;

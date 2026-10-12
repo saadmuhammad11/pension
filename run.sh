@@ -6,6 +6,7 @@
 #   ./run.sh stop       stop them (only ours -- see the note on port 5173)
 #   ./run.sh status     what is up, including the model services
 #   ./run.sh restart
+#   ./run.sh stop|restart --force   even while verification runs are in flight (they are lost)
 #
 # There is no project-local virtualenv, deliberately. FastAPI, uvicorn and Pillow already live
 # in /home/tmc/vllm_env alongside the CUDA stack, so the API runs on that interpreter directly
@@ -57,18 +58,103 @@ up() { curl -sf -m 3 "$1" >/dev/null 2>&1; }
 
 # Only ever touches processes whose working directory is inside this project. Port 5173 on this
 # machine belongs to a colleague's portal, and an earlier `pkill -f vite` would have taken it
-# down along with ours.
+# down along with ours. The directory is compared whole: "$ROOT"* would also accept a sibling
+# tree whose name merely starts with ours.
 ours() {
   local pid=$1 cwd
   cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || return 1
-  [[ "$cwd" == "$ROOT"* ]]
+  [[ "$cwd" == "$ROOT" || "$cwd" == "$ROOT/"* ]]
 }
 
-find_ours() {                      # find_ours <pattern>
-  local pid
-  for pid in $(pgrep -f "$1" 2>/dev/null); do
-    ours "$pid" && echo "$pid"
+# `pgrep -f api.server` matches ANY command line containing that text, including a shell that
+# merely mentions it: a `bash -c '... api.server ...'` run from inside this tree was killed
+# twice on 12 Oct 2026 (exit 144), the caller along with the server. So pgrep only nominates
+# candidates, and each one is confirmed from /proc to be the process start_api or start_ui
+# launched: argv[0] must be an interpreter of the right kind, and the arguments after it must
+# be exactly the module and arguments we launch with. A wrapper shell has argv[0] = bash and
+# fails the first check; a python running something else fails the second.
+#   argv_after_exe <pid>   prints argv[1..] one per line (empty when the process is gone)
+argv_after_exe() {
+  local -a argv
+  mapfile -d '' -t argv < "/proc/$1/cmdline" 2>/dev/null || return 1
+  [[ ${#argv[@]} -gt 1 ]] || return 0
+  printf '%s\n' "${argv[@]:1}"
+}
+exe_is() {                         # exe_is <pid> <python|node>
+  [[ "$(basename "$(readlink -f "/proc/$1/exe" 2>/dev/null)")" == "$2"* ]]
+}
+#   is_python_running <pid> <arg>...   true when PID is a python whose argv[1..] is exactly <arg>...
+is_python_running() {
+  local pid=$1; shift
+  exe_is "$pid" python || return 1
+  [[ "$(argv_after_exe "$pid")" == "$(printf '%s\n' "$@")" ]]
+}
+#   is_vite_dev_server <pid>   true when PID is node running vite with `--port 5300` among its
+#   arguments (npx resolves to `node .../node_modules/.bin/vite --host ... --port 5300 ...`).
+is_vite_dev_server() {
+  local pid=$1 i
+  local -a argv
+  exe_is "$pid" node || return 1
+  mapfile -t argv < <(argv_after_exe "$pid")
+  [[ ${#argv[@]} -ge 3 && "$(basename "${argv[0]}")" == vite* ]] || return 1
+  for ((i = 1; i < ${#argv[@]} - 1; i++)); do
+    [[ "${argv[i]}" == "--port" && "${argv[i+1]}" == "5300" ]] && return 0
   done
+  return 1
+}
+
+# The pids of our servers, confirmed as above and inside this tree. pgrep narrows the field
+# cheaply; it never decides.
+find_api()    { local pid; for pid in $(pgrep -f "api\.server" 2>/dev/null); do
+                  ours "$pid" && is_python_running "$pid" -m api.server "$API_PORT" && echo "$pid"; done; }
+find_portal() { local pid; for pid in $(pgrep -f "api\.portal_server|vite" 2>/dev/null); do
+                  ours "$pid" || continue
+                  { is_python_running "$pid" -m api.portal_server || is_vite_dev_server "$pid"; } && echo "$pid"; done; }
+
+# Sending SIGTERM and moving on left a window (12 Oct 2026): start_api ran while the old server
+# was still shutting down, saw it answer /api/health, printed "already serving", and then the old
+# process exited and nothing was listening. So a stop waits for the pids to be gone, up to 15 s,
+# and only then SIGKILLs whatever is left.
+#   wait_gone <pid>...
+wait_gone() {
+  local deadline=$((SECONDS + 15)) pid alive
+  while :; do
+    alive=""
+    for pid in "$@"; do kill -0 "$pid" 2>/dev/null && alive="$alive $pid"; done
+    [[ -z "$alive" ]] && return 0
+    (( SECONDS >= deadline )) && break
+    sleep 0.5
+  done
+  warn "still running after 15 s, killing:$alive"
+  kill -9 $alive 2>/dev/null
+  for _ in 1 2 3 4 5 6; do
+    alive=""
+    for pid in "$@"; do kill -0 "$pid" 2>/dev/null && alive="$alive $pid"; done
+    [[ -z "$alive" ]] && return 0
+    sleep 0.5
+  done
+  bad "could not stop:$alive"; return 1
+}
+
+# A verification run is a daemon thread inside the API: stopping the process mid-run loses the
+# run and the officer's intake with it (12 Oct 2026, restarted twice during live runs). /api/health
+# reports `runs`, the queued-or-running count, so a stop refuses while it is above zero unless
+# `--force` is given. No answer from health means nothing to lose, and the stop proceeds.
+#   active_runs   prints the count, or nothing when health does not answer
+active_runs() {
+  curl -sf -m 3 "http://127.0.0.1:$API_PORT/api/health" 2>/dev/null \
+    | python3 -c "import json,sys; print(int(json.load(sys.stdin).get('runs') or 0))" 2>/dev/null
+}
+#   refuse_if_busy [--force]   returns 1 (after explaining) when runs are in flight and no --force
+refuse_if_busy() {
+  local n; n="$(active_runs)"
+  [[ -z "$n" || "$n" == 0 ]] && return 0
+  if [[ "${1:-}" == "--force" ]]; then
+    warn "$n verification run(s) in flight on :$API_PORT; stopping anyway (--force)"; return 0
+  fi
+  bad "$n verification run(s) in flight on :$API_PORT; not stopping the API"
+  echo "         wait for them to finish (./run.sh status, or /api/health \"runs\"), or: $0 ${ACTION:-stop} --force"
+  return 1
 }
 
 # ------------------------------------------------------------------------------------------
@@ -118,12 +204,14 @@ start_dev_ui() {
   up "http://127.0.0.1:5300/" && ok "dev portal http://localhost:5300/?portal=agriculture" || bad "dev server :5300 did not come up"
 }
 
+#   stop_all [--force]   returns 1 without touching anything when runs are in flight and no --force
 stop_all() {
   local pids
-  pids=$(find_ours "api.server")
-  [[ -n "$pids" ]] && { kill $pids 2>/dev/null; ok "stopped API ($pids)"; } || warn "API was not running"
-  pids=$(find_ours "api.portal_server|vite.*--port 5300")
-  [[ -n "$pids" ]] && { kill $pids 2>/dev/null; ok "stopped portal ($pids)"; } || warn "portal was not running"
+  refuse_if_busy "${1:-}" || return 1
+  pids=$(find_api | xargs)
+  if [[ -n "$pids" ]]; then kill $pids 2>/dev/null; wait_gone $pids && ok "stopped API ($pids)"; else warn "API was not running"; fi
+  pids=$(find_portal | xargs)
+  if [[ -n "$pids" ]]; then kill $pids 2>/dev/null; wait_gone $pids && ok "stopped portal ($pids)"; else warn "portal was not running"; fi
   echo "  (anything on :5173 is a different project and was left alone)"
 }
 
@@ -173,12 +261,17 @@ status() {
 start_gpf() { "$ROOT/GP/run.sh" start 2>&1 | grep -E "OK|DOWN|WARN" | sed 's/^/  /' | head -3; }
 stop_gpf()  { "$ROOT/GP/run.sh" stop 2>&1 | grep -E "OK|WARN" | sed 's/^/  /' | head -2; }
 
-case "${1:-start}" in
+ACTION="${1:-start}"
+# `stop --force` and `restart --force` stop the API even while verification runs are in flight.
+FORCE=""
+[[ "${2:-}" == "--force" ]] && FORCE="--force"
+case "$ACTION" in
   start)   start_api; start_ui; start_gpf; echo; status ;;
-  stop)    stop_all; stop_gpf ;;
-  restart) stop_all; stop_gpf; sleep 2; start_api; start_ui; start_gpf; echo; status ;;
+  stop)    stop_all "$FORCE" && stop_gpf ;;
+  # stop_all already waited for the old pids to exit, so start_api cannot see the old server.
+  restart) stop_all "$FORCE" && { stop_gpf; start_api; start_ui; start_gpf; echo; status; } ;;
   status)  status ;;
   dev)     start_dev_ui ;;
   build)   ( cd "$ROOT/portals" && npx tsc --noEmit -p . && npx vite build ) && ok "built portals/dist" ;;
-  *) echo "usage: $0 [start|stop|restart|status|dev|build]" >&2; exit 2 ;;
+  *) echo "usage: $0 [start|stop|restart|status|dev|build] [--force]" >&2; exit 2 ;;
 esac
