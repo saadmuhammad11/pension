@@ -212,13 +212,16 @@ def _signed_in(request: Request | None):
     return getattr(getattr(request, "state", None), "user", None) if request is not None else None
 
 
-def _refuse_recompute_behind_a_decision(run_id: str) -> None:
-    """A run that belongs to a case is rebuilt only while that case is still open on it.
+def _refuse_recompute_behind_a_decision(run_id: str, verb: str = "rebuilt") -> None:
+    """A run that belongs to a case is rebuilt, or otherwise changed, only while that case is
+    still open on it.
 
     The old route had no idea of the case: an administrator could rebuild the report behind an
     approved or rejected case, or behind a run the case had already moved on from, and the
-    register would show figures nobody had decided on (audit 6 Oct 2026, C3). A run with no case
-    (the old register's own uploads) is unaffected.
+    register would show figures nobody had decided on (audit 6 Oct 2026, C3). The same held for
+    the old dispositions, checklist actions and removal until 12 Oct 2026: the Deputy AG could
+    change the overlay a decision rested on, through a door the case system keeps shut. A run
+    with no case (the old register's own uploads) is unaffected.
     """
     from api import db as _db
     from api import workflow
@@ -233,10 +236,10 @@ def _refuse_recompute_behind_a_decision(run_id: str) -> None:
         return
     if link["status"] in (workflow.APPROVED, workflow.REJECTED):
         raise HTTPException(409, f"case {link['case_no']} is {link['status'].lower()}; the report it was decided on "
-                                 f"is part of that decision and is not rebuilt")
+                                 f"is part of that decision and is not {verb}")
     if link["current_run_id"] and link["current_run_id"] != run_id:
         raise HTTPException(409, f"case {link['case_no']} has moved on to a newer examination; "
-                                 f"this run's report is history and is not rebuilt")
+                                 f"this run's report is history and is not {verb}")
 
 
 def _officer(request: Request | None, typed: str) -> str:
@@ -424,6 +427,10 @@ def run_remove(request: Request, run_id: str, body: dict = Body(default={}),
     it says who removed it and when. A case still being read cannot be removed; one read again
     later comes back (``api.cases.is_removed``).
     """
+    # The case system's doors stay shut here too (audit of 12 Oct 2026): no legacy write in
+    # production, and none behind a decision or on a run the case has moved on from.
+    _legacy_writes_or_403()
+    _refuse_recompute_behind_a_decision(run_id, verb="changed")
     import re
     from api.cases import REMOVED
     from api.desks import DESKS
@@ -603,6 +610,10 @@ def make_disposition(request: Request, run_id: str, body: dict = Body(...)) -> d
     reason the case-level override does: waiving a HIGH finding is the one act here that
     lets money move past a check designed to stop it.
     """
+    # The case system's doors stay shut here too (audit of 12 Oct 2026): no legacy write in
+    # production, and none behind a decision or on a run the case has moved on from.
+    _legacy_writes_or_403()
+    _refuse_recompute_behind_a_decision(run_id, verb="changed")
     from api.dispositions import DispositionError, calculation_gate, current, record
     run = _get(run_id)
     report_path = run.run_dir / "case_report.json"
@@ -646,6 +657,10 @@ def read_checklist_actions(run_id: str) -> dict:
 def make_checklist_action(request: Request, run_id: str, body: dict = Body(...)) -> dict:
     """Name a document on its pages, name a page the checklist does not ask for, waive an item,
     or clear one of those. Append-only (api.checklist_actions)."""
+    # The case system's doors stay shut here too (audit of 12 Oct 2026): no legacy write in
+    # production, and none behind a decision or on a run the case has moved on from.
+    _legacy_writes_or_403()
+    _refuse_recompute_behind_a_decision(run_id, verb="changed")
     from api import checklist_actions
     from api.dispositions import calculation_gate
     run = _get(run_id)
@@ -886,10 +901,17 @@ async def _v1_requires_a_token(request: Request, call_next):
         # opens only the case system, which scopes every run to its case.
         # Writes on the old register are the Deputy AG's (G6: the administrator takes no case
         # action); the administrator and the reviewers read.
+        # The wing's tiers (C3) read nothing here either. The old register knows no wing and no
+        # tier: a Senior Auditor of one wing could list every run and open any wing's report
+        # and page scans, and an AO could read a case not yet sent up to the AO (audit of 12 Oct
+        # 2026). Their reads go through the case system, which scopes every run to its case.
         from api import workflow as _wf
-        allowed = user.role == "AG_DAG" or (user.role in _wf.AG_READERS and request.method in ("GET", "HEAD"))
+        allowed = user.role == "AG_DAG" or (user.role in ("AG_REVIEWER", "ADMIN") and request.method in ("GET", "HEAD"))
         if not allowed:
-            return JSONResponse({"detail": "this address is read-only for your role; case actions are taken in the case system"}, status_code=403)
+            detail = ("the old register is not for the wing's tiers; open the case in the case system"
+                      if user.role in _wf.TIER_ROLES
+                      else "this address is read-only for your role; case actions are taken in the case system")
+            return JSONResponse({"detail": detail}, status_code=403)
     return await call_next(request)
 
 

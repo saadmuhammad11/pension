@@ -433,11 +433,17 @@ class V2Test(unittest.TestCase):
         self.assertEqual(self.client.get("/api/health").status_code, 200)          # reference, open
         self.assertEqual(self.client.get("/api/cases").status_code, 401)           # the old register
         self.assertEqual(self.client.get("/api/runs").status_code, 401)
-        # The old routes know no departments, so a department's token opens none of them; the
-        # reviewer may read, and only the administrator may act there.
+        # The old routes know no departments, wings or tiers, so a department's token opens none
+        # of them and neither does a tier officer's (audit of 12 Oct 2026: a Senior Auditor could
+        # list every run and open any wing's report there); the AG's desk and the administrator
+        # read, and only the Deputy AG may act there.
         police = self.login("punjab-police", "punjab-police")
         self.assertEqual(self.client.get("/api/runs", headers=police).status_code, 403)
-        reviewer = self.sa()
+        senior_auditor = self.sa()
+        r = self.client.get("/api/runs", headers=senior_auditor)
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("case system", r.json()["detail"])
+        reviewer = self.login("ag.reviewer", "ag")
         self.assertEqual(self.client.get("/api/runs", headers=reviewer).status_code, 200)
         self.assertEqual(self.client.post("/api/runs", headers=reviewer).status_code, 403)
         admin = self.login("admin", "ag")
