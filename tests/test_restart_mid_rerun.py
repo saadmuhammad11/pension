@@ -46,6 +46,39 @@ class RestartMidRerun(unittest.TestCase):
                 self.assertEqual(state, "failed")
                 self.assertIn("restarted", error)
 
+    def test_the_old_determination_is_removed_before_the_rerun_starts(self) -> None:
+        """A re-run that refuses must not show the previous run's figures (audit 12 Oct 2026).
+
+        ``_execute`` removed the old gap and renamed the old report, but left determination.json
+        where it was. ``stage_determine`` raises without touching an old one, and ``build_report``
+        takes a determination on disk over the gap, so a re-run that hit an ExtractionGap was
+        reported with the earlier run's determination and the refusal was never seen.
+        """
+        from pipeline import timing
+
+        with tempfile.TemporaryDirectory() as d:
+            artifacts = Path(d)
+            run_id = "0123456789ab"
+            run_dir = artifacts / f"run-{run_id}"
+            run_dir.mkdir()
+            (run_dir / "manifest.json").write_text(json.dumps({"pages": []}))
+            (run_dir / "determination.json").write_text(json.dumps({"determination": {"gross": "1"}}))
+            (run_dir / "determination_gap.json").write_text(json.dumps({"stage": "determine"}))
+            with mock.patch.object(runs, "ARTIFACTS", artifacts), \
+                    mock.patch.object(runs, "UPLOADS", artifacts / "uploads"), \
+                    mock.patch.dict(runs.RUNS, clear=True), \
+                    mock.patch.object(timing, "record"):
+                # Driven exactly as the test above: the re-run starts, and fails at its first
+                # stage because the case file is not on disk. Nothing reaches a model. What
+                # matters is the state of the folder once the run has begun.
+                run = runs.Run(run_id=run_id, pdf_path=artifacts / "uploads" / "missing.pdf",
+                               bundle_path=None, source={}, run_dir=run_dir)
+                runs._execute(run)
+                self.assertEqual(run.state, "failed")
+                self.assertFalse((run_dir / "determination.json").exists(),
+                                 "the previous determination must not survive into the re-run")
+                self.assertFalse((run_dir / "determination_gap.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -522,7 +522,7 @@ def execute(run: Run) -> None:
 
 def _execute(run: Run) -> None:
     from pipeline import timing
-    from pipeline.extract import stage_assertions, stage_determine, stage_extract
+    from pipeline.extract import DETERMINATION, stage_assertions, stage_determine, stage_extract
     from pipeline.ingest import atomic_write_text, ingest
     from pipeline.report import build_report
     from pipeline.run import stage_assemble, stage_classify, stage_identify, stage_verify_forms
@@ -532,6 +532,11 @@ def _execute(run: Run) -> None:
     persist_intake(run)
     # A re-run that gets further than the last one must not carry the old refusal with it.
     (run.run_dir / DETERMINATION_GAP).unlink(missing_ok=True)
+    # Nor the old determination (audit 12 Oct 2026). The gap was removed but determination.json
+    # was not; stage_determine raises without touching an old one, and build_report prefers a
+    # determination on disk to the gap. So when the re-run refused, the officer was shown the
+    # PREVIOUS run's figures and never saw the refusal. ``recompute`` already removes both.
+    (run.run_dir / DETERMINATION).unlink(missing_ok=True)
     # Nor the old report. Unchanged papers re-run under the same run id, in the same folder, and a
     # restart mid-run then adopted the PREVIOUS case_report.json as this run's finished result --
     # which the reconciler approved or returned the case on (audit 6 Oct 2026). Kept, renamed.
