@@ -215,7 +215,7 @@ def logout(request: Request, authorization: str | None = Header(default=None),
     session, because the idle timeout and a refused token call it after the session is gone; an
     absent, expired or already-ended token is not an error here.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
     from fastapi.responses import JSONResponse
     from api.auth import _bearer, claims_of, user_for_token
     token = _bearer(authorization)
@@ -227,7 +227,11 @@ def logout(request: Request, authorization: str | None = Header(default=None),
         if user is not None:
             claims = claims_of(token)
             jti = claims.get("jti")
-            expires = datetime.fromtimestamp(int(claims.get("exp", 0)), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+            # The same clock the sweep below compares against. db.now() is naive LOCAL time, so
+            # a UTC stamp here read five hours early in Asia/Karachi: the revocation row was swept
+            # away while the token it revoked was still valid, and a signed-out session worked
+            # again (audit 13 Oct 2026). Both sides are now local, as every other *_at column is.
+            expires = datetime.fromtimestamp(int(claims.get("exp", 0))).isoformat(timespec="seconds")
             with db.transaction(conn):
                 if jti:
                     conn.execute("INSERT OR IGNORE INTO revoked_tokens(jti, user_id, expires_at, revoked_at) VALUES (?, ?, ?, ?)",

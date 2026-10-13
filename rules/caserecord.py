@@ -172,6 +172,11 @@ class PsaSignature:
 
     document: str
     page: int | None
+    #: Why the signature block could not be read, where no reader got through it. The block is
+    #: then blank rather than unsigned: "we could not read this page" must never reach the rules
+    #: as "the form carries no signature" and become a shortcoming letter to a department whose
+    #: form is signed (audit 13 Oct 2026) -- see rules.flags.check_psa_specimen.
+    unreadable: str | None = None
     signature_present: bool = False
     stamp_present: bool = False
     signer_name: str | None = None
@@ -251,6 +256,11 @@ class CaseRecord:
     #: Determination-critical documents no reader could get through. Surfaced as a finding,
     #: never left as an absence -- see rules.flags.check_unreadable_documents.
     unreadable: tuple[tuple[int, str, str], ...] = ()
+    #: Whether stage 6 produced the cross-document facts at all. False when the stage failed and
+    #: wrote no assertions.json: every check that needs two documents to disagree then has
+    #: nothing to compare, and silence from them means "not checked", never "nothing wrong"
+    #: (audit 13 Oct 2026) -- see rules.flags.check_cross_checks_ran.
+    cross_checks_ran: bool = True
     #: Pages whose two reads disagreed, ``(document, page, what differed)``. Nothing from such a
     #: page was used (extraction.client.extract_page_confirmed blanks it); the finding puts the
     #: page in front of the officer -- see rules.flags.check_disputed_reads (decision H1).

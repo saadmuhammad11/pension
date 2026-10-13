@@ -628,7 +628,14 @@ def _execute(run: Run) -> None:
                                  progress=lambda line: run.emit("assertions", line.strip()),
                                  carry=carry)
         except Exception as exc:                          # noqa: BLE001
+            # Recorded as a gap, exactly as the extract stage above does. Without this the run
+            # ended "done" with no assertions.json, the flag battery ran over an empty fact set
+            # and the case was reported CLEAN: no personnel-number mismatch, no undeclared
+            # recovery, no Annex-A/FRC contradiction, nothing. The warn line was in memory only
+            # and was dropped an hour later, so nothing survived to say the checks never ran
+            # (audit 13 Oct 2026). build_report raises a HIGH finding from the same absence.
             run.emit("assertions", f"cross-document checks incomplete — {exc}", level="warn")
+            _record_gap(run, "assertions", str(exc))
 
         # Stage 6b: who signed each prescribed form, and the specimen on file for that post
         # (pipeline.signatory, rules.specimens). One model call per form page; the signature

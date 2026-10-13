@@ -99,6 +99,8 @@ DOC_EXPIRED = "DOC-EXPIRED"
 DATE_AMBIGUOUS = "DATE-AMBIGUOUS"
 SELF_PENSION_REFUSED = "CONTRA-SERVICE-DATES"
 ATTEST_MISSING = "ATTEST-MISSING"
+#: Stage 6 did not run, so no check that needs two documents to disagree ran either (C-03).
+CROSS_CHECKS_NOT_RUN = "CROSS-CHECKS-NOT-RUN"
 #: A sanction signature an officer is asked to compare with the department's specimen by eye.
 SPECIMEN_CHECK = "SPECIMEN-CHECK"
 #: The relationship that entitles the claimant is proved by no document in the bundle.
@@ -1231,6 +1233,40 @@ def check_unreadable_documents(record: CaseRecord, pack: RulePack) -> list[Flag]
     ]
 
 
+def check_cross_checks_ran(record: CaseRecord, pack: RulePack) -> list[Flag]:
+    """Stage 6 produced no cross-document facts at all. ``CROSS-CHECKS-NOT-RUN``, HIGH.
+
+    Every check that needs two documents to disagree -- the personnel number stated twice, the
+    undeclared recovery, the Annex-A against the FRC, the CNIC cards against the form -- reads
+    its facts from stage 6. When that stage fails the battery runs over an empty fact set, each
+    of those checks finds nothing to compare, and the report comes out with no findings at all.
+    That is indistinguishable, on the screen, from a case where everything agrees.
+
+    So the absence is itself the finding. HIGH and blocking, for the same reason an unreadable
+    page is: silence from a check that never ran is not a clean result (audit 13 Oct 2026).
+    """
+    if record.cross_checks_ran:
+        return []
+    return [
+        Flag(
+            id="",
+            severity=HIGH,
+            flag_class=CROSS_CHECKS_NOT_RUN,
+            title="The cross-document checks did not run on this case",
+            finding=("The stage that collects the same fact from every document that states it "
+                     "did not complete, so nothing on this case was compared against anything "
+                     "else. No finding here means those checks did not run -- it does not mean "
+                     "the documents agree."),
+            asserted=(),
+            affects_determination=True,
+            required_action=("Verify the case again before it goes further. If it fails a second "
+                             "time, the reason is in the run's own record (determination_gap) and "
+                             "the case needs a person to compare the documents by hand."),
+            owner="AG",
+        )
+    ]
+
+
 def check_form_d_i_dates(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """Form D-I's dates against each other, and the service they imply. Business decision H3.
 
@@ -1991,6 +2027,27 @@ def check_psa_specimen(record: CaseRecord, pack: RulePack) -> list[Flag]:
         form = _doc_words(sig.document)
         signed = f"p.{sig.page} ({form})" if sig.page else form
 
+        if sig.unreadable:
+            # No reader got through the block, so every field below is blank by default rather
+            # than by observation. Falling through from here produced "there is no signature in
+            # the sanctioning authority's block" and returned the case to a department whose
+            # form is signed; where that department had no specimen on file the failure instead
+            # vanished entirely (audit 13 Oct 2026). Either way the officer was told something
+            # the readers never established. The page goes to the officer instead.
+            flags.append(Flag(
+                id="", severity=MEDIUM, flag_class=SPECIMEN_CHECK,
+                title=f"The sanctioning authority's block on {form} could not be read",
+                finding=(f"No reader got through the signature block on {signed}, so whether it "
+                         f"carries a signature, a stamp and a competent signatory is not "
+                         f"established either way. This is a failure of the reading, not a "
+                         f"finding about the department's form."),
+                asserted=where, owner="AG_OFFICE",
+                required_action=("Look at the page yourself and confirm the sanction is signed "
+                                 "and stamped by the competent authority before the case goes "
+                                 "further."),
+            ))
+            continue
+
         if sig.specimen is None:
             depts = specimens.for_department(" / ".join(t for t in (sig.department, sig.stamp_text, sig.stamp_ocr) if t))
             if not depts:
@@ -2245,6 +2302,7 @@ BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_aliases,
     check_scope_confusion,
     check_unreadable_documents,
+    check_cross_checks_ran,
     check_form_d_i_dates,
     check_disputed_reads,
     check_ambiguous_dates,

@@ -592,7 +592,7 @@ def pay_scale_from_ocr(run: Path, page: int) -> int:
     """
     from extraction.ocr import normalise
 
-    text = normalise(page_ocr_text(run, page))
+    text = normalise(page_ocr_text(run, page) or "")
     found = {int(m) for m in re.findall(r"\bB(?:P)?S[\s.\-]{0,2}(\d{1,2})\b", text)}
     found = {s for s in found if 1 <= s <= 22}
     if len(found) == 1:
@@ -768,7 +768,7 @@ def slip_figures_from_text(text: str) -> dict:
     return out
 
 
-def page_ocr_text(run: Path, page: int) -> str:
+def page_ocr_text(run: Path, page: int) -> str | None:
     """OCR text of one page, cached in ``ocr_text.json`` so a recompute never re-reads it."""
     cache_path = run / "ocr_text.json"
     cache: dict = {}
@@ -794,7 +794,14 @@ def page_ocr_text(run: Path, page: int) -> str:
         # answer forever, with nothing to say the page was never actually read. Same
         # discipline as the citation cache in rag.store: a degraded answer is returned once
         # and retried, never persisted.
-        return ""
+        #
+        # None, not "". A caller that cannot tell "the reader failed" from "the page is blank"
+        # draws a conclusion from the failure: stage 3b read no printed heading, so the filed
+        # document was never registered and the checklist reported it MISSING against the
+        # department, with no error recorded anywhere (audit 13 Oct 2026). Callers that only
+        # want text read whatever there is with `or ""`; the one that concludes something
+        # checks for None.
+        return None
     cache[key] = text
     atomic_write_text(cache_path, json.dumps(cache, ensure_ascii=False))
     return text
@@ -820,7 +827,7 @@ def ocr_witnesses(run: Path, already: set[int], limit: int = 8) -> list[dict]:
         pg = doc["pages"][0]
         if pg in already:
             continue
-        figures = slip_figures_from_text(page_ocr_text(run, pg))
+        figures = slip_figures_from_text(page_ocr_text(run, pg) or "")
         if "monthly_pension_rs" not in figures:
             continue
         out.append({"document": doc["type"], "page": pg, "source": "ocr",
@@ -1885,7 +1892,7 @@ def stage_assertions(
 
             idents = data.get("identifiers") or {}
             if doc["type"] == "QUALIFYING_SERVICE_PROFORMA":
-                result["assertions"].extend(proforma_assertions(data, page, page_ocr_text(run, page)))
+                result["assertions"].extend(proforma_assertions(data, page, page_ocr_text(run, page) or ""))
                 # Its CNIC and personnel number come only from proforma_assertions, where OCR must
                 # agree with the vision read. The sweep below takes the vision read alone, and on
                 # the office's sample that read was wrong where OCR was right (12 Oct 2026).

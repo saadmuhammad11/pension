@@ -357,6 +357,9 @@ _FLAG_QUERY = {
         "Does a succession certificate determine entitlement to monthly family pension?",
     "EXTRACT-LOWCONF":
         "What must happen when a determination-critical field cannot be read confidently?",
+    "CROSS-CHECKS-NOT-RUN":
+        "What must happen when the checks that compare one document in a pension case against "
+        "another could not be carried out at all?",
     "DOC-STALE":
         "How recent must the NADRA Family Registration Certificate be when a pension case "
         "is submitted?",
@@ -701,6 +704,7 @@ def _psa_signatures(run: Path) -> tuple:
         iso = f.get("date_signed_iso")
         out.append(PsaSignature(
             document=f["document"], page=f.get("page"),
+            unreadable=f.get("unreadable"),
             signature_present=bool(f.get("signature_present")),
             stamp_present=bool(f.get("stamp_present")),
             signer_name=f.get("signer_name"), designation=f.get("designation"),
@@ -741,19 +745,24 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
             prev = checked.get(c["page"])
             if prev is None or (c.get("marks") and not prev.get("marks")):
                 checked[c["page"]] = c
-    if checked:
-        def _attested(d: Document) -> Document:
-            if d.attested is not False:
-                return d
-            seen = [checked[p] for p in d.pages if p in checked]
-            if not seen:
-                return d
-            if any(c.get("marks") for c in seen):
-                return replace(d, attested=True)
-            if not all(c.get("read_the_foot") for c in seen):
-                return replace(d, attested=None)
+    def _attested(d: Document) -> Document:
+        if d.attested is not False:
             return d
-        documents = tuple(_attested(d) for d in documents)
+        seen = [checked[p] for p in d.pages if p in checked]
+        if not seen:
+            # The second reader never ran on this page -- OCR was down, or the attestation
+            # read raised and was skipped. The vision model's "not attested" flips between
+            # runs on the same page and on its own cannot accuse a department, which is why
+            # the second reader exists; with no second opinion the question is unjudged, not
+            # answered (audit 13 Oct 2026). check_attestation reports only an explicit False,
+            # so None leaves ATTEST-MISSING unraised.
+            return replace(d, attested=None)
+        if any(c.get("marks") for c in seen):
+            return replace(d, attested=True)
+        if not all(c.get("read_the_foot") for c in seen):
+            return replace(d, attested=None)
+        return d
+    documents = tuple(_attested(d) for d in documents)
     # Whose CNIC is whose is decided here, from the names on the cards against the names on
     # the form -- not by the vision model, which cannot know it from the card alone.
     names = {}
@@ -797,6 +806,32 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
     facts_path = run / "assertions.json"
     if facts_path.exists():
         facts = json.loads(facts_path.read_text())
+    # Did stage 6 fail on THIS run? Taken from the gap the run records when the stage raises
+    # (api.runs._record_gap), never from the absence of assertions.json: a curated fixture and a
+    # run from before the stage existed have no such file either, and neither of those is a
+    # failure. Every check that needs two documents to disagree reads its facts from that stage,
+    # so when it fails the battery runs over an empty fact set, says nothing, and the report
+    # reads exactly like a clean case. Carried into the record so the battery can say so
+    # instead (audit 13 Oct 2026, C-03).
+    cross_checks_ran = True
+    gap_file = run / "determination_gap.json"
+    if gap_file.exists():
+        try:
+            cross_checks_ran = "assertions" not in (json.loads(gap_file.read_text()) or {})
+        except ValueError:
+            cross_checks_ran = True
+    # Pages stage 3b could not OCR for their printed heading (pipeline.run). Read here rather
+    # than from assertions.json so the finding is raised even when stage 6 itself never ran.
+    ocr_unread: tuple[tuple[int, str, str], ...] = ()
+    ocr_unread_path = run / "ocr_unread.json"
+    if ocr_unread_path.exists():
+        try:
+            ocr_unread = tuple(
+                (int(u["page"]), str(u.get("document") or "OTHER"), str(u["reason"]))
+                for u in (json.loads(ocr_unread_path.read_text()) or [])
+            )
+        except (ValueError, KeyError, TypeError):
+            ocr_unread = ()
 
     # A personnel number is 6-10 digits. The sweep also picked up 0000100001083 from a bank
     # form -- that is the claimant's CNIC 00001-0000108-3 with its separators stripped, and
@@ -1146,7 +1181,8 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         succession_certificate=succession,
         unreadable=tuple(
             (u["page"], u["document"], u["reason"]) for u in facts.get("unreadable", [])
-        ),
+        ) + ocr_unread,
+        cross_checks_ran=cross_checks_ran,
         ambiguous_dates=two_digit_year_dates(run, facts),
         disputed_reads=disputed_reads_from_fields(_fields_document(fields_path)),
         # These four were literals of the golden case -- diary 41759, the School Education

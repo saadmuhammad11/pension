@@ -221,9 +221,18 @@ def stage_assemble(run_dir: str | Path) -> list[dict]:
     ]
     docs = assemble_documents(identities)
     docs = docs + documents_also_on_the_page(raw, docs)
-    docs = docs + documents_named_by_their_own_heading(run, raw, docs)
+    unread: list[dict] = []
+    docs = docs + documents_named_by_their_own_heading(run, raw, docs, unread)
     payload = [asdict(d) for d in docs]
     _write(run / DOCUMENTS, payload)
+    # Pages whose own heading no reader got through. build_report turns these into a HIGH
+    # finding rather than letting the checklist report the document absent (audit 13 Oct 2026).
+    # Written or removed on every assembly, never left behind: a re-run once OCR is back reads
+    # the page (the failure was deliberately not cached) and must not carry the old refusal.
+    if unread:
+        _write(run / "ocr_unread.json", unread)
+    else:
+        (run / "ocr_unread.json").unlink(missing_ok=True)
     return payload
 
 
@@ -254,7 +263,7 @@ def documents_also_on_the_page(rows: list[dict], docs: tuple) -> tuple:
 
 
 def documents_named_by_their_own_heading(run: Path, rows: list[dict],
-                                         docs: tuple) -> tuple:
+                                         docs: tuple, unread: list[dict] | None = None) -> tuple:
     """Documents a generically-labelled page proves it is, by the title printed on it.
 
     The identifier calls a page ``AFFIDAVIT`` when it is sworn before an oath commissioner and
@@ -283,13 +292,25 @@ def documents_named_by_their_own_heading(run: Path, rows: list[dict],
         if page is None:
             continue
         if label in GENERIC_LABELS:
-            found = titles_on_page(page_ocr_text(run, page))
+            text = page_ocr_text(run, page)
+            if text is None:
+                # The reader failed; the page was never read. Treating that as "no heading on
+                # this page" is what made AG-05 report a filed list of family members MISSING
+                # while OCR was down, with nothing anywhere to say why (audit 13 Oct 2026).
+                # The page is recorded as unread so build_report raises it as a finding, and
+                # no conclusion is drawn from it here.
+                if unread is not None:
+                    unread.append({"page": page, "document": label or "OTHER",
+                                   "reason": "the page's printed heading could not be read: "
+                                             "the OCR reader did not answer"})
+                continue
+            found = titles_on_page(text)
         elif label in STATEMENTS_ON_LABELLED_PAGES:
             # A specifically labelled page keeps its label; a statement it prints (the
             # commutation option on an Annexure-A) is added as the document it also is. The
             # identifier's own account of the page counts as a second reading, so a poor scan
             # whose OCR misses the line is still credited when the model quoted it.
-            text = page_ocr_text(run, page) + " " + str(row.get("evidence") or "")
+            text = (page_ocr_text(run, page) or "") + " " + str(row.get("evidence") or "")
             found = statements_on_page(label, text)
         else:
             continue
