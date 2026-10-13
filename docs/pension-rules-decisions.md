@@ -344,19 +344,19 @@ These were in the audit's High list, are technical, and are fixed in code on bra
 
 **Decision (7 Oct 2026):** settled by item 10 — a carried waiver stands only while the exact finding it was given against is unchanged in the new round; otherwise it lapses and the officer reviews afresh. No approval follows from carried waivers alone, since item 1 removed automatic approval.
 
-**Related, also policy — decided 7 Oct 2026.** Named logins for every reviewer; the shared `ag.reviewer` account is retired. Maker-checker: the user who submits a case cannot approve it, administrators included. The IT administrator manages users only and takes no case action in pension or GP Fund; every action is logged under the real user's name, never a role placeholder. In GP Fund only the DAG may clear a hard stop, and written grounds are mandatory. **Superseded in part on 13 Oct 2026 — see below.**
+**Related, also policy — decided 7 Oct 2026.** Named logins for every reviewer; the shared `ag.reviewer` account is retired. Maker-checker: the user who submits a case cannot approve it, administrators included. The IT administrator manages users only and takes no case action in pension or GP Fund; every action is logged under the real user's name, never a role placeholder. In GP Fund only the DAG may clear a hard stop, and written grounds are mandatory. **The first half was retired on 13 Oct 2026 — every examining tier now clears a hard stop, by waiver or by correction; see the decision below. The written grounds stand.**
 
-## Decision of 13 October 2026: who waives a GP Fund observation
+## Decision of 13 October 2026: who disposes of a GP Fund observation
 
-**The question.** On the trial box the Waive button failed for the Senior Auditor on every observation, and for the Assistant AO and the Accounts Officer on a hard stop: the screen offered it to all three, the module refused it, and it read as a broken button. The rule being enforced was the one recorded on 7 Oct 2026 — in GP Fund a hard stop is cleared by the Deputy AG alone.
+**The question.** On the trial box the Waive button failed for the Senior Auditor on every observation, and for the Assistant AO and the Accounts Officer on a hard stop: the screen offered it to all three, the module refused it, and it read as a broken button. The same was true of recording an observation corrected. The rule being enforced was the one recorded on 7 Oct 2026 — in GP Fund a hard stop is cleared by the Deputy AG alone.
 
-**Decision (13 Oct 2026):** ☒ **every examining tier may waive, hard stops included.** The Senior Auditor, the Assistant Accounts Officer and the Accounts Officer each record a waiver on any observation, as the Deputy AG does. This reverses the waiver half of the decision of 7 Oct 2026.
+**Decision (13 Oct 2026):** ☒ **every examining tier may clear an observation, hard stops included, by either route.** The Senior Auditor, the Assistant Accounts Officer and the Accounts Officer each record a waiver, or record the observation corrected, on any observation, as the Deputy AG does. This retires the decision of 7 Oct 2026 in full: both routes out of a hard stop were reserved to the Deputy AG, and both are now open.
 
 **What is NOT changed.**
 
 - Written grounds of at least 15 characters stay mandatory on every disposition, and a waiver still needs the authority relied on. Both are recorded against the officer's own name and designation.
-- A waiver lapses when the observation it was given against changes (`engine.reconcile_dispositions`), exactly as before.
-- Recording a hard stop **corrected** remains the Deputy AG's alone. Only the waiver was opened.
+- A disposition lapses when the observation it was given against changes (`engine.reconcile_dispositions`), exactly as before.
+- Two powers still follow the band: recording a **verification** needs the Accounts Officer or above, and **referring upward** is for an officer who has someone above them, so not the Deputy AG. Neither was raised by the office; both stand until it is.
 - On the pension side the rule is unchanged: a finding is disposed of by the tier that holds the case, while it is under review, on its current examination.
 
 **Enforced at** `GP/backend/gpf/engine.py` (`may`, `who_can`). Each observation now carries the dispositions the asking officer may record (`service._result_view`), and the screen shows the rest disabled with the reason instead of failing on the press.

@@ -95,11 +95,13 @@ def test_each_observation_says_what_this_officer_may_record(svc):
     cid = svc.create_case("residual", officer_id="ao")
     hard = svc.view(cid, "da")["lists"]["hard"][0]
     opts = {o["action"]: o for o in hard["dispositionOptions"]}
-    assert opts["waive"]["allowed"] is True                        # opened on 13 Oct 2026
-    assert opts["correct"]["allowed"] is False                     # still the DAG's
-    assert "Deputy Accountant General" in opts["correct"]["reason"]
-    dag = svc.view(cid, "dag")["lists"]["hard"][0]
-    assert {o["action"]: o["allowed"] for o in dag["dispositionOptions"]}["correct"] is True
+    # Both routes out of a hard stop were opened to every tier on 13 Oct 2026.
+    assert opts["waive"]["allowed"] is True
+    assert opts["correct"]["allowed"] is True
+    assert opts["uphold"]["allowed"] is True
+    # The Deputy AG has nobody to refer upward to, and the screen says why rather than failing.
+    dag = {o["action"]: o for o in svc.view(cid, "dag")["lists"]["hard"][0]["dispositionOptions"]}
+    assert dag["refer"]["allowed"] is False and dag["refer"]["reason"]
 
 
 # -- recording a hard stop CORRECTED is still the DAG's, and every disposition carries written
@@ -111,13 +113,16 @@ def _hard_case(svc):
     return cid, hard
 
 
-def test_the_accounts_officer_cannot_clear_a_hard_stop_by_recording_it_corrected(svc):
-    cid, hard = _hard_case(svc)
-    with pytest.raises(ServiceError) as e:
-        svc.set_disposition(cid, hard["id"], "correct", ground="The department has since filed the attested copy.", officer_id="ao")
-    assert e.value.status == 403
-    assert "Deputy Accountant General" in str(e.value)
-    assert svc.view(cid)["position"]["hard"] == 1                  # still a hard stop
+def test_every_examining_tier_records_a_hard_stop_corrected(svc):
+    """Office decision of 13 Oct 2026, retiring the correction half of G1."""
+    for band in ("da", "ao", "dag"):
+        cid, hard = _hard_case(svc)
+        svc.set_disposition(cid, hard["id"], "correct",
+                            ground="The department has since filed the attested copy; seen in original.",
+                            officer_id=band)
+        v = svc.view(cid, band)
+        assert v["position"]["hard"] == 0, band
+        assert v["position"]["corrected"] == 1, band
 
 
 def test_the_dag_clears_a_hard_stop_with_written_grounds(svc):

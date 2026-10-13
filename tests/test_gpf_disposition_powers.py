@@ -1,12 +1,13 @@
-"""GP Fund: who clears a hard stop, and the written grounds every disposition carries.
+"""GP Fund: who may dispose of an observation, and the written grounds every disposition carries.
 
-    python3 -m unittest tests.test_gpf_hard_stop_is_the_dags -v
+    python3 -m unittest tests.test_gpf_disposition_powers -v
 
-Business decision G1 (7 Oct 2026) reserved a hard stop to the DAG. Its **waiver** half was
-reversed on 13 Oct 2026: every examining tier waives, hard stops included, because the office
-needs the Senior Auditor, the Assistant AO and the Accounts Officer to clear findings on the
-cases they hold. Recording a hard stop **corrected** is still the DAG's, and the grounds and the
-authority are still required of everyone (docs/pension-rules-decisions.md, 13 Oct 2026).
+Business decision G1 (7 Oct 2026) reserved both routes out of a hard stop -- the waiver and the
+correction -- to the DAG. Both were opened on 13 Oct 2026: every examining tier waives and
+records corrected, hard stops included, because the office needs the Senior Auditor, the
+Assistant AO and the Accounts Officer to clear findings on the cases they hold. What survives of
+G1 is the grounds, the authority on a waiver, and the officer's name on the record
+(docs/pension-rules-decisions.md, 13 Oct 2026). This file was test_gpf_hard_stop_is_the_dags.py.
 
 The module's own tests (GP/backend/tests/test_service.py) pin the service; this file pins what
 the pension side relies on: the permission table, and that both screens -- the module's and the
@@ -23,24 +24,28 @@ sys.path.insert(0, str(ROOT / "GP" / "backend"))
 
 
 class ThePermissionTable(unittest.TestCase):
-    def test_only_level_3_records_a_hard_stop_corrected(self):
-        from gpf.engine import OFFICERS, may, who_can
-        by = {o["id"]: o for o in OFFICERS}
-        self.assertFalse(may("correct", "hard", by["ao"]))
-        self.assertFalse(may("correct", "hard", by["da"]))
-        self.assertTrue(may("correct", "hard", by["dag"]))
-        self.assertIn("Deputy Accountant General", who_can("correct", "hard"))
-        self.assertTrue(may("correct", "adv", by["ao"]))             # an advisory: the Accounts Officer still may
-        self.assertTrue(may("uphold", "hard", by["da"]))              # anyone may uphold
-        self.assertEqual(by["dag"]["level"], 3)
+    def test_every_examining_tier_clears_an_observation(self):
+        """Office decision of 13 Oct 2026, retiring G1 of 7 Oct 2026.
 
-    def test_every_examining_tier_waives_a_hard_stop(self):
-        """Office decision of 13 Oct 2026, reversing the waiver half of G1."""
+        Both routes out of an observation are open to all three tiers, on a hard stop as on an
+        advisory: waive it, or record it corrected. Upholding was always anyone's.
+        """
         from gpf.engine import OFFICERS, may
         by = {o["id"]: o for o in OFFICERS}
         for band in ("da", "ao", "dag"):
-            self.assertTrue(may("waive", "hard", by[band]), band)
-            self.assertTrue(may("waive", "adv", by[band]), band)
+            for sev in ("hard", "adv"):
+                self.assertTrue(may("waive", sev, by[band]), (band, sev))
+                self.assertTrue(may("correct", sev, by[band]), (band, sev))
+                self.assertTrue(may("uphold", sev, by[band]), (band, sev))
+        self.assertEqual(by["dag"]["level"], 3)
+
+    def test_what_the_bands_still_decide(self):
+        """Not everything is open: these two still follow the band."""
+        from gpf.engine import OFFICERS, may
+        by = {o["id"]: o for o in OFFICERS}
+        self.assertFalse(may("verify", None, by["da"]))      # a verification needs the AO or above
+        self.assertTrue(may("verify", None, by["ao"]))
+        self.assertFalse(may("refer", "hard", by["dag"]))    # nothing above the DAG to refer to
 
     def test_the_pension_side_maps_the_deputy_ag_to_the_dag_band(self):
         from api.gpf_bridge import OFFICER_FOR_ROLE

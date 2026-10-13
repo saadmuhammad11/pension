@@ -222,11 +222,12 @@ class CaseService:
         # every hard or advisory item whatever the officer's band, so a press answered 403 and
         # the button looked broken (audit 13 Oct 2026).
         if viewer is not None and is_issue(r.get("status")):
-            v["dispositionOptions"] = [
-                {"action": a, "allowed": may(a, r.get("status"), viewer),
-                 "reason": "" if may(a, r.get("status"), viewer) else f"Needs {who_can(a, r.get('status'))}."}
-                for a in ("uphold", "waive", "correct", "refer")
-            ]
+            def _option(a: str) -> dict:
+                ok = may(a, r.get("status"), viewer)
+                who = who_can(a, r.get("status"))
+                return {"action": a, "allowed": ok,
+                        "reason": "" if ok else (f"Needs {who}." if who else "Not open to this desk.")}
+            v["dispositionOptions"] = [_option(a) for a in ("uphold", "waive", "correct", "refer")]
         # The case pages the item rests on, beside any evidence the rule cut (reference_pages).
         from .reference_pages import reference_pages
         have = {e.get("page") for e in (v.get("evidence") or []) if isinstance(e, dict)}

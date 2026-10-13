@@ -144,10 +144,12 @@ def may(action: str, sev: Optional[str], officer: dict) -> bool:
     if action == "refer":
         return L <= 2
     if action == "correct":
-        # Recording a hard stop CORRECTED is the DAG's alone (business decision G1, 7 Oct 2026;
-        # the waiver half of G1 was reversed on 13 Oct 2026, see "waive" below -- this half
-        # stands). An Accounts Officer may still record an advisory corrected.
-        return L >= 3 if sev == "hard" else L >= 2
+        # Every examining tier records an observation corrected, hard stops included (office
+        # decision of 13 Oct 2026). This retires the last of business decision G1 of 7 Oct 2026,
+        # which reserved both clearing routes -- the waiver and the correction -- to the Deputy
+        # AG. The grounds are still required of everyone, and a correction still lapses when the
+        # observation it answered changes.
+        return True
     if action == "waive":
         # Every examining tier waives, hard stops included (office decision of 13 Oct 2026,
         # reversing G1 of 7 Oct 2026, which reserved a hard stop to the Deputy AG). The
@@ -166,10 +168,12 @@ def may(action: str, sev: Optional[str], officer: dict) -> bool:
 
 def who_can(action: str, sev: Optional[str]) -> str:
     if action == "correct":
-        return ("the Deputy Accountant General (Funds)" if sev == "hard"
-                else "the Accounts Officer or above")
+        return "any examining officer, with written grounds"
     if action == "verify":
         return "the Accounts Officer or above"
+    if action == "refer":
+        # Only upward, and the DAG (Funds) is the top of the chain.
+        return "an officer below the Deputy Accountant General (Funds), who has someone to refer to"
     if action == "waive":
         return "any examining officer, with written grounds and the authority relied on"
     return ""
