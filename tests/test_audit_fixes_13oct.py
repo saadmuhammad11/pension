@@ -1,6 +1,6 @@
 """The go-live blockers of the audit of 13 October 2026.
 
-Five fixes, each of which turned a failure of our own reading into either a clean report or an
+The first five each turned a failure of our own reading into either a clean report or an
 accusation against a department:
 
 * C-03  a stage 6 failure left no gap and the battery reported the case clean
@@ -9,12 +9,24 @@ accusation against a department:
 * H-05  one flaky vision read called an attested copy unattested where no second reader ran
 * H-07  the revoked-token sweep compared a UTC stamp against a local clock
 
+The rest of the batch:
+
+* M-03 / H-06  the timing recorder broke its own promise of silence and failed completed runs,
+               and a run that died there never gave its verification slot back
+* H-08  ``case_runs.run_id`` is not unique, and six queries treated it as a key with no ordering
+* M-07  every sign-in ran two sequential scans over an append-only ``audit_log``
+
+C-04, the GP Fund module's missing authentication, is the one blocker of this batch whose tests
+live elsewhere, on both sides of the key: ``tests/test_portal_holds_the_gpf_key.py`` and
+``GP/backend/tests/test_module_needs_the_portals_key.py``.
+
     python3 -m unittest tests.test_audit_fixes_13oct -v
 """
 from __future__ import annotations
 
 import json
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -244,6 +256,171 @@ class SigningOutLastsAsLongAsTheToken(unittest.TestCase):
         source = inspect.getsource(v2.logout)
         self.assertIn('datetime.fromtimestamp(int(claims.get("exp", 0))).isoformat', source)
         self.assertNotIn("tz=timezone.utc", source)
+
+
+class TimingNeverFailsARunThatFinished(unittest.TestCase):
+    """M-03 and H-06. ``record`` promises to be silent on any database error, and must be.
+
+    ``db.target()`` raises when no database is configured. It was called outside the guard, so
+    the exception left ``record``, left the ``stage`` context manager, and left the
+    ``with timing.stage("run")`` that wraps a whole verification: a run that had finished was
+    reported failed. Worse, the same call sits between acquiring a verification slot and the
+    ``try/finally`` that gives it back, so a run that died there held its slot for the life of
+    the process. Two of those stop every verification in the office.
+    """
+
+    def setUp(self) -> None:
+        from pipeline import timing
+        self.timing = timing
+        timing._conn, timing._conn_path = None, None
+        self.addCleanup(setattr, timing, "_conn", None)
+        self.addCleanup(setattr, timing, "_conn_path", None)
+
+    def _no_database(self):
+        from api import db
+        return mock.patch.object(db, "target", side_effect=RuntimeError(
+            "no database: set PENSION_DATABASE_URL (PostgreSQL; deploy/postgres.env) or PENSION_DB"))
+
+    def test_recording_a_row_with_no_database_is_silent(self) -> None:
+        with self._no_database():
+            self.timing.record("queue", "slot", started=time.time() - 1, ended=time.time(),
+                               name="verification slot", run_id="r-no-db")
+
+    def test_a_stage_that_succeeds_is_not_turned_into_a_failure(self) -> None:
+        """The bug as the office saw it: a completed verification reported failed."""
+        with self._no_database():
+            with self.timing.bind("r-no-db"):
+                with self.timing.stage("run"):
+                    pass
+
+    def test_a_stage_that_raises_still_raises_its_own_error(self) -> None:
+        """Silence about the timing row is not silence about the run."""
+        with self._no_database():
+            with self.assertRaises(ValueError):
+                with self.timing.bind("r-no-db"):
+                    with self.timing.stage("run"):
+                        raise ValueError("the run's own failure")
+
+    def test_a_model_call_with_no_database_is_silent(self) -> None:
+        with self._no_database():
+            self.timing.model_call("vision", started=time.time() - 1, ended=time.time())
+
+    def test_the_slot_is_given_back_even_if_its_row_cannot_be_written(self) -> None:
+        """H-06. Nothing measured on the way past may cost the run its slot."""
+        import inspect
+
+        from api import runs
+        source = inspect.getsource(runs._execute_when_free)
+        acquire = source.index("_RUN_SLOTS.acquire()")
+        record = source.index("timing.record")
+        execute = source.index("execute(run)")
+        self.assertLess(acquire, record)
+        self.assertLess(record, execute)
+        self.assertIn("except Exception:", source[record:execute])
+        self.assertIn("finally:", source)
+
+
+class ARunIdIsReadTheSameWayEveryTime(unittest.TestCase):
+    """H-08. The column is not unique, so every query on it needs a deterministic order."""
+
+    def test_no_query_on_a_run_id_is_left_to_chance(self) -> None:
+        """Six call sites treat it as a key, including the approval gate."""
+        source = (Path(__file__).resolve().parents[1] / "api" / "v2.py").read_text(encoding="utf-8")
+        sites = [i for i in range(len(source)) if source.startswith("FROM case_runs WHERE run_id = ?", i)]
+        self.assertGreaterEqual(len(sites), 6, "the call sites moved; re-check them")
+        for at in sites:
+            following = source[at:at + 400]
+            self.assertIn("ORDER BY started_at DESC, submission_no DESC, id DESC", following,
+                          f"no tiebreaker at {source.count(chr(10), 0, at) + 1}")
+            self.assertIn("LIMIT 1", following)
+
+    def test_the_latest_run_of_a_case_breaks_its_tie_too(self) -> None:
+        """Two rows of one case can share ``started_at`` to the second."""
+        from api import v2
+        import inspect
+        source = inspect.getsource(v2._case_dict)
+        self.assertIn("ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1", source)
+
+    def test_a_run_started_in_the_same_second_as_the_one_before_is_still_the_later_one(self) -> None:
+        """What the arbitrary tiebreaker actually cost: ``started_at`` was second-precision and
+        ``id`` is a uuid4, so a resubmission verified within a second of the previous run showed
+        the previous run as the case's latest. It is stamped to the microsecond now."""
+        source = (Path(__file__).resolve().parents[1] / "api" / "case_runs.py").read_text(encoding="utf-8")
+        at = source.index("INSERT INTO case_runs(id, case_id, run_id, submission_no, started_by, started_at")
+        self.assertIn("db.stamp()", source[at:at + 500])
+        self.assertNotIn("db.now()", source[at:at + 400])
+
+    def test_a_microsecond_stamp_sorts_after_the_second_it_is_in(self) -> None:
+        """The rows written before 13 Oct 2026 keep their places, because text order agrees."""
+        from datetime import datetime
+        t = datetime(2026, 10, 13, 15, 0, 1, 123456)
+        self.assertGreater(t.isoformat(timespec="microseconds"), t.isoformat(timespec="seconds"))
+        later = datetime(2026, 10, 13, 15, 0, 2)
+        self.assertGreater(later.isoformat(timespec="seconds"), t.isoformat(timespec="microseconds"))
+
+    def test_the_approval_gate_is_the_one_that_matters(self) -> None:
+        """Which row comes back decides whether an approval must carry a written reason."""
+        from api import v2
+        import inspect
+        source = inspect.getsource(v2._act)
+        at = source.index("FROM case_runs WHERE run_id = ?")
+        self.assertIn("ORDER BY started_at DESC, submission_no DESC, id DESC", source[at:at + 300])
+        self.assertIn("against = latest is None", source[at:at + 500])
+
+
+class TheHotPathsHaveTheirIndexes(unittest.TestCase):
+    """H-08 and M-07. Both were sequential scans over tables that only ever grow."""
+
+    def setUp(self) -> None:
+        from api import db
+        self._tmp = tempfile.TemporaryDirectory(prefix="agpb-0017-")
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "portal.sqlite3"
+        p = mock.patch.object(db, "DB_PATH", self.path)
+        p.start()
+        self.addCleanup(p.stop)
+        db.migrate()
+        self.db = db
+
+    def _indexes(self, table: str) -> set:
+        conn = self.db.connect()
+        try:
+            return {r["name"] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?", (table,))}
+        finally:
+            conn.close()
+
+    def test_the_migration_indexes_the_run_id(self) -> None:
+        self.assertIn("case_runs_run", self._indexes("case_runs"))
+
+    def test_the_migration_indexes_what_every_sign_in_reads(self) -> None:
+        self.assertIn("audit_log_entity", self._indexes("audit_log"))
+
+    def test_the_run_id_index_is_not_unique(self) -> None:
+        """The live table already holds rows that share one; a unique index would not build."""
+        conn = self.db.connect()
+        try:
+            row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'case_runs_run'").fetchone()
+        finally:
+            conn.close()
+        self.assertIsNotNone(row)
+        self.assertNotIn("UNIQUE", (row["sql"] or "").upper())
+
+    def test_the_migration_can_be_run_again(self) -> None:
+        """Every statement in 0017 is IF NOT EXISTS; re-running it changes nothing (cf. M-09)."""
+        sql = (Path(__file__).resolve().parents[1] / "api" / "migrations"
+               / "0017_hot_path_indexes.sql").read_text(encoding="utf-8")
+        body = "\n".join(line for line in sql.splitlines() if not line.strip().startswith("--"))
+        statements = [s.strip() for s in body.split(";") if s.strip()]
+        self.assertTrue(statements)
+        for statement in statements:
+            self.assertIn("IF NOT EXISTS", statement.upper())
+        conn = self.db.connect()
+        try:
+            for statement in statements:
+                conn.execute(statement)
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

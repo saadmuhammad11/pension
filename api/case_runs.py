@@ -137,19 +137,26 @@ def _start_check(conn: db.Connection, case: db.Row, user) -> dict:
             # mistake for the old failed one.
             existing = conn.execute("SELECT id FROM case_runs WHERE case_id = ? AND run_id = ?",
                                     (case["id"], run_id)).fetchone()
+            # db.stamp(), not db.now(): started_at is what orders a case's runs, and at second
+            # precision two of them routinely share one. The id beside it in the ORDER BY is a
+            # uuid4 and breaks a tie arbitrarily -- deterministically, but arbitrarily -- so a
+            # resubmission verified in the same second as the one before it could show the
+            # previous run as the latest (audit of 13 Oct 2026, H-08). A microsecond stamp sorts
+            # after a second-precision one of the same second as text, so the rows already in
+            # the table stay in their right places.
             if existing:
                 conn.execute(
                     "UPDATE case_runs SET submission_no = ?, started_by = ?, started_at = ?, finished_at = NULL, "
                     "state = ?, verdict = NULL, high_flags = NULL, blocking_flags_json = NULL, checklist_result = NULL, "
                     "error = NULL, docs_sha = ?, mode = ?, base_run_id = ? WHERE id = ?",
-                    (case["submission_no"], user.id, db.now(), started.get("state", "queued"),
+                    (case["submission_no"], user.id, db.stamp(), started.get("state", "queued"),
                      documents_sha(conn, case["id"]), mode,
                      base["run_id"] if mode == "INCREMENTAL" else None, existing["id"]))
             else:
                 conn.execute(
                     "INSERT INTO case_runs(id, case_id, run_id, submission_no, started_by, started_at, "
                     "state, auto_forward, docs_sha, mode, base_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
-                    (db.new_id(), case["id"], run_id, case["submission_no"], user.id, db.now(),
+                    (db.new_id(), case["id"], run_id, case["submission_no"], user.id, db.stamp(),
                      started.get("state", "queued"), documents_sha(conn, case["id"]), mode,
                      base["run_id"] if mode == "INCREMENTAL" else None))
             rounds.check_started(conn, case, run_id, mode=mode,

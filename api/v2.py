@@ -689,7 +689,11 @@ def _case_dict(conn: db.Connection, row: db.Row, *, full: bool = False) -> dict:
     d["holder_label"] = workflow.holder_label(row)
     d["intake"] = json.loads(row["intake_json"] or "{}")
     del d["intake_json"]
-    latest = conn.execute("SELECT * FROM case_runs WHERE case_id = ? ORDER BY started_at DESC LIMIT 1",
+    # Two rows of one case can share started_at: it was written at second precision until
+    # 13 Oct 2026, and the rows from before then still are. submission_no is the real sequence
+    # and breaks that tie correctly; id, a uuid4, only makes what is left stable rather than
+    # arbitrary (audit of 13 Oct 2026, H-08).
+    latest = conn.execute("SELECT * FROM case_runs WHERE case_id = ? ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1",
                           (row["id"],)).fetchone()
     d["latest_run"] = dict(latest) if latest else None
     if d["latest_run"]:
@@ -1586,7 +1590,12 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
                                      "examination of the papers as submitted")
         if action == "APPROVE":
             # Against the engine's reading, an approval is an override and needs a real reason.
-            latest = conn.execute("SELECT * FROM case_runs WHERE run_id = ?", (run_id or "",)).fetchone()
+            # Ordered, because the table can hold more than one row for a run id and this
+            # decides whether an approval must carry a written justification; an arbitrary row
+            # made that non-deterministic (audit of 13 Oct 2026, H-08). Same order everywhere
+            # the column is read, so every one of them sees the same row.
+            latest = conn.execute("SELECT * FROM case_runs WHERE run_id = ? "
+                                  "ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1", (run_id or "",)).fetchone()
             against = latest is None or (latest["verdict"] or "") != "FORWARD" or (latest["high_flags"] or 0) > 0
             if against and len(remark) < workflow.MIN_OVERRIDE_REMARK:
                 raise HTTPException(422, f"approving against the AI findings needs a remark of at least "
@@ -2088,7 +2097,8 @@ def case_checklist_action(case_id: str, run_id: str, body: dict = Body(...),
 # check; nothing is reachable this way that the case-keyed routes would refuse.
 
 def _run_by_id(conn: db.Connection, user: User, run_id: str):
-    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
+    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ? "
+                        "ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1", (run_id,)).fetchone()
     if link is None:
         raise HTTPException(404, "no such run")
     return _run_for(conn, user, link["case_id"], run_id)
@@ -2122,7 +2132,8 @@ async def run_events_by_id(run_id: str, request: Request, user: User = Depends(c
 
 @router.get("/runs/{run_id}/dispositions")
 def run_dispositions_by_id(run_id: str, user: User = Depends(current_user), conn: db.Connection = Depends(get_conn)) -> dict:
-    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
+    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ? "
+                        "ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1", (run_id,)).fetchone()
     if link is None:
         raise HTTPException(404, "no such run")
     return case_dispositions(link["case_id"], run_id, user, conn)
@@ -2132,7 +2143,8 @@ def run_dispositions_by_id(run_id: str, user: User = Depends(current_user), conn
 def run_disposition_by_id(run_id: str, request: Request, body: dict = Body(...),
                           user: User = Depends(require_roles(*workflow.AG_SIDE)),
                           conn: db.Connection = Depends(get_conn)) -> dict:
-    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
+    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ? "
+                        "ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1", (run_id,)).fetchone()
     if link is None:
         raise HTTPException(404, "no such run")
     return case_disposition(link["case_id"], run_id, body, user, conn, request)
@@ -2140,7 +2152,8 @@ def run_disposition_by_id(run_id: str, request: Request, body: dict = Body(...),
 
 @router.get("/runs/{run_id}/checklist-actions")
 def run_checklist_by_id(run_id: str, user: User = Depends(current_user), conn: db.Connection = Depends(get_conn)) -> dict:
-    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
+    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ? "
+                        "ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1", (run_id,)).fetchone()
     if link is None:
         raise HTTPException(404, "no such run")
     return case_checklist_actions(link["case_id"], run_id, user, conn)
@@ -2150,7 +2163,8 @@ def run_checklist_by_id(run_id: str, user: User = Depends(current_user), conn: d
 def run_checklist_action_by_id(run_id: str, request: Request, body: dict = Body(...),
                                user: User = Depends(require_roles(*workflow.AG_SIDE)),
                                conn: db.Connection = Depends(get_conn)) -> dict:
-    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ?", (run_id,)).fetchone()
+    link = conn.execute("SELECT case_id FROM case_runs WHERE run_id = ? "
+                        "ORDER BY started_at DESC, submission_no DESC, id DESC LIMIT 1", (run_id,)).fetchone()
     if link is None:
         raise HTTPException(404, "no such run")
     return case_checklist_action(link["case_id"], run_id, body, user, conn, request)
