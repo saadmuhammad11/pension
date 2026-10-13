@@ -124,6 +124,20 @@ RENAMED_LOGINS = {"syed.haider": "ag.reviewer"}
 WING_TIER_LOGINS = (("sa", "AG_SENIOR_AUDITOR", "Senior Auditor"), ("aao", "AG_ASSISTANT_AO", "Assistant Accounts Officer"),
                     ("ao", "AG_AO", "Accounts Officer"))
 
+#: The office's own pension-wing officers, one account per person (list of 13 Oct 2026). Data,
+#: not code: ``config/ag_officers.json``, so the office edits the roster without a release. The
+#: roles are the existing three and carry their existing permissions; nothing here grants anything.
+AG_OFFICERS_FILE = ROOT / "config" / "ag_officers.json"
+
+
+def load_ag_officers() -> list[dict]:
+    """The roster: username, display name, role, role label and pension wing, in file order."""
+    import json as _json
+    if not AG_OFFICERS_FILE.exists():
+        return []
+    return list(_json.loads(AG_OFFICERS_FILE.read_text(encoding="utf-8")).get("officers") or [])
+
+
 #: Accounts retired on 25 Sep 2026 -- the AG Upload role, and the first two demo officers whose
 #: usernames predate the slug rule. Their records move to the department's own officer (or the
 #: administrator, for a department that has none) and the account is removed.
@@ -458,6 +472,8 @@ def seed(conn: Connection | None = None, *, quiet: bool = False) -> dict:
                 created.append({"portal": portal_for(role, dept) or "", "department": _dept_name(conn, dept),
                                 "username": username, "password": password, "role": role,
                                 "department_code": dept or ""})
+            created += _insert_ag_officers(conn, shared, must_change=must_change)
+            retire_desk_logins(conn, quiet=quiet)
             _retire_ag_upload(conn)
         if created:
             _record_credentials(created)
@@ -470,6 +486,99 @@ def seed(conn: Connection | None = None, *, quiet: bool = False) -> dict:
     finally:
         if own:
             conn.close()
+
+
+def _insert_ag_officers(conn: Connection, shared: str | None, *, must_change: int) -> list[dict]:
+    """The named wing officers the office gave us, created once each. Returns what was created.
+
+    One account per person (13 Oct 2026). Several Senior Auditors share a wing and sign in from
+    different PCs at the same time; nothing here or in ``api.auth`` ends one session when another
+    begins, so they do not displace each other. The desk logins they replace are closed by
+    ``retire_desk_logins`` once these exist, never deleted.
+    """
+    from api import passwords
+    from api.auth import hash_password
+    created: list[dict] = []
+    for o in load_ag_officers():
+        if conn.execute("SELECT 1 FROM users WHERE username = ?", (o["username"],)).fetchone():
+            continue
+        # One password each unless the trial sets a shared one, exactly as the rest of the seed.
+        password = shared or passwords.generate()
+        stamp = now()
+        conn.execute(
+            "INSERT INTO users(id, username, display_name, password_hash, role, department_code, pension_wing, "
+            "active, token_version, must_change_password, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, NULL, ?, 1, 1, ?, ?, ?)",
+            (new_id(), o["username"], o["display_name"], hash_password(password), o["role"],
+             o["pension_wing"], must_change, stamp, stamp))
+        created.append({"portal": "ag", "department": f"Accountant General Punjab \u00b7 {o['pension_wing']}",
+                        "username": o["username"], "password": password, "role": o["role"],
+                        "department_code": ""})
+    return created
+
+
+def retire_desk_logins(conn: Connection, *, quiet: bool = True) -> list[str]:
+    """Close the shared desk logins a named officer has taken over. Returns what was closed.
+
+    sa.pension1 ... ao.pension5 were one login per tier per wing, shared by everyone at that desk
+    (9 Oct 2026). They are deactivated, never deleted: ``cases.created_by`` references them, and
+    every case event and audit row they wrote keeps their name and role, so the history still
+    reads correctly. Bumping ``token_version`` ends any session still open on them.
+
+    A desk login is closed only once an ACTIVE named officer holds the same role in the same
+    wing, so a wing is never left without anyone who can sign in -- which is why this runs with
+    the seed, after the roster is created, and not as a migration before it.
+    """
+    from api.departments import PENSION_SECTION_ORDER
+    closed: list[str] = []
+    for n, wing in enumerate(PENSION_SECTION_ORDER, start=1):
+        for short, role, _label in WING_TIER_LOGINS:
+            username = f"{short}.pension{n}"
+            row = conn.execute("SELECT 1 FROM users WHERE username = ? AND active = 1", (username,)).fetchone()
+            if row is None:
+                continue
+            taken_over = conn.execute(
+                "SELECT 1 FROM users WHERE role = ? AND pension_wing = ? AND active = 1 AND username <> ?",
+                (role, wing, username)).fetchone()
+            if taken_over is None:
+                continue                      # nobody has taken this desk over yet; leave it open
+            conn.execute("UPDATE users SET active = 0, token_version = token_version + 1, updated_at = ? "
+                         "WHERE username = ?", (now(), username))
+            closed.append(username)
+    if closed and not quiet:
+        print(f"[db] closed {len(closed)} shared desk login(s) now held by named officers: "
+              + ", ".join(closed), file=sys.stderr)
+    return closed
+
+
+def seed_ag_officers(password: str | None = None, conn: Connection | None = None) -> list[str]:
+    """``config/ag_officers.json`` as accounts, on ``password`` (the seed password by default).
+
+    Idempotent: an account that exists is left exactly as it is, password included.
+    """
+    from api import settings
+    own = conn is None
+    conn = conn or connect()
+    try:
+        with transaction(conn):
+            created = _insert_ag_officers(conn, password or SEED_PASSWORD or None,
+                                          must_change=1 if settings.force_password_change() else 0)
+            retire_desk_logins(conn, quiet=False)
+        if created:
+            _record_credentials(created)
+        return [c["username"] for c in created]
+    finally:
+        if own:
+            conn.close()
+
+
+#: Senior Auditor, then Assistant AO, then AO: the order a case climbs, so the sheet reads the
+#: way the wing works.
+_ROLE_RANK = {"AG_SENIOR_AUDITOR": 0, "AG_ASSISTANT_AO": 1, "AG_AO": 2}
+
+
+def _role_rank(role: str) -> int:
+    return _ROLE_RANK.get(role, 9)
 
 
 def _role_words(role: str) -> str:
@@ -564,7 +673,10 @@ def _credentials_rows(conn: Connection | None = None) -> list[dict]:
     own = conn is None
     conn = conn or connect()
     try:
-        live = {u["username"] for u in conn.execute("SELECT username FROM users WHERE active = 1")}
+        # The person's own name and wing come from the account, not from the CSV: the sheet names
+        # the officer, and the CSV was written before there were named officers to name.
+        live = {u["username"]: u for u in
+                conn.execute("SELECT username, display_name, pension_wing, role FROM users WHERE active = 1")}
     finally:
         if own:
             conn.close()
@@ -573,6 +685,9 @@ def _credentials_rows(conn: Connection | None = None) -> list[dict]:
     for u, r in latest.items():
         if u not in live:
             continue
+        account = live[u]
+        r = {**r, "display_name": account["display_name"], "wing": account["pension_wing"] or "",
+             "role": account["role"] or r.get("role", "")}
         if SINGLE_PORTAL and r.get("url"):
             host = r["url"].split("//", 1)[-1].split(":")[0]
             r = {**r, "port": str(AG_PORTAL_PORT), "url": f"http://{host}:{AG_PORTAL_PORT}/"}
@@ -584,13 +699,35 @@ def render_credentials_html() -> Path:
     """The office's sign-in sheet: every login, searchable, sorted by department. Never served."""
     import html
     from api import passwords
+    from api.departments import PENSION_SECTION_ORDER
     rows = _credentials_rows()
-    tr = "\n".join(
-        f"<tr><td>{html.escape(r['department'])}</td><td><code>{html.escape(r['username'])}</code></td>"
-        f"<td><code>{html.escape(r['password'])}</code></td><td>{html.escape(r['port'])}</td>"
-        f"<td><a href=\"{html.escape(r['url'])}\">{html.escape(r['url'])}</a></td>"
-        f"<td>{html.escape(_role_words(r['role']))}</td></tr>"
-        for r in rows)
+
+    # Grouped by wing, the office's own officers first and in wing order, then the AG's desk,
+    # then the departments (13 Oct 2026). The wing is the heading, so the row says who the
+    # person is rather than repeating it.
+    order = {w: i for i, w in enumerate(PENSION_SECTION_ORDER)}
+
+    def group_of(r: dict) -> str:
+        return r.get("wing") or r.get("department") or "Other"
+
+    def sort_key(r: dict) -> tuple:
+        wing = r.get("wing") or ""
+        return (0, order.get(wing, 99), wing, _role_rank(r["role"]), r["display_name"].lower()) if wing \
+            else (1, 0, group_of(r).lower(), 0, r["display_name"].lower())
+
+    body, last = [], None
+    for r in sorted(rows, key=sort_key):
+        group = group_of(r)
+        if group != last:
+            body.append(f'<tr class="grp"><th colspan="5">{html.escape(group)}</th></tr>')
+            last = group
+        body.append(
+            f"<tr><td>{html.escape(r['display_name'])}</td>"
+            f"<td>{html.escape(_role_words(r['role']))}</td>"
+            f"<td><code>{html.escape(r['username'])}</code></td>"
+            f"<td><code>{html.escape(r['password'])}</code></td>"
+            f"<td><a href=\"{html.escape(r['url'])}\">{html.escape(r['url'])}</a></td></tr>")
+    tr = "\n".join(body)
     doc = f"""<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pension portals — sign-in credentials (confidential)</title>
 <style>
@@ -603,20 +740,32 @@ th,td{{padding:8px 12px;border-top:1px solid #E2E8E3;text-align:left;vertical-al
 code{{font-family:Consolas,Menlo,monospace;background:#F1F4F1;padding:1px 6px;border-radius:6px}}
 .warn{{background:#FFF6E6;border:1px solid #F0D9AE;border-radius:10px;padding:10px 14px;margin-top:14px;font-size:13px}}
 .n{{color:#6B7280;font-size:12px;margin-left:8px}}
+tr.grp th{{background:#1B4332;color:#fff;font-size:12px;letter-spacing:.06em;cursor:default}}
 </style></head><body>
 <header><h1>Pension portals — sign-in credentials</h1><p>Government of the Punjab · Accountant General Office, Lahore · CONFIDENTIAL — for the office's own use; not published anywhere.</p></header>
 <main>
-<input id="q" placeholder="Search department, username or port" autofocus> <span class="n" id="count"></span>
+<input id="q" placeholder="Search a name, wing, role or username" autofocus> <span class="n" id="count"></span>
 <div class="warn">Everyone signs in at the same address with their own account; what they see follows from the account. Passwords can be reset with <code>python3 -m api.db reset-department-password &lt;username&gt;</code>; this file is regenerated from <code>credentials.csv</code>.</div>
 <div class="warn"><strong>How a case moves (pension and GP Fund).</strong> The department's DDO files the case and submits it. The Accountant General's reviewer verifies it with AI, reads the findings and the list of any missing or defective documents, and decides: approve, return to the department with the documents named, ask for documents, or reject &mdash; each with a remark. <strong>Nothing is approved or returned automatically</strong> (decisions of 7 and 9 October 2026); a return made inside the GP Fund module's screens is recorded there, and the case itself is returned by the reviewer.</div>
-<table><thead><tr><th>Department</th><th>Username</th><th>Password</th><th>Port</th><th>Portal</th><th>Role</th></tr></thead>
+<table><thead><tr><th>Name</th><th>Role</th><th>Username</th><th>Password</th><th>Portal</th></tr></thead>
 <tbody id="rows">
 {tr}
 </tbody></table>
 </main>
 <script>
-var q=document.getElementById('q'),rows=[].slice.call(document.querySelectorAll('#rows tr')),count=document.getElementById('count');
-function filter(){{var t=q.value.trim().toLowerCase(),n=0;rows.forEach(function(r){{var show=!t||r.textContent.toLowerCase().indexOf(t)>-1;r.style.display=show?'':'none';if(show)n++;}});count.textContent=n+' of '+rows.length;}}
+var q=document.getElementById('q'),all=[].slice.call(document.querySelectorAll('#rows tr')),count=document.getElementById('count');
+var people=all.filter(function(r){{return !r.classList.contains('grp');}});
+function filter(){{
+  var t=q.value.trim().toLowerCase(),n=0,group=null,shown=0;
+  function closeGroup(){{ if(group) group.style.display=shown?'':'none'; }}
+  all.forEach(function(r){{
+    if(r.classList.contains('grp')){{ closeGroup(); group=r; shown=0; return; }}
+    var hay=r.textContent.toLowerCase()+' '+(group?group.textContent.toLowerCase():'');
+    var show=!t||hay.indexOf(t)>-1; r.style.display=show?'':'none'; if(show){{n++;shown++;}}
+  }});
+  closeGroup();
+  count.textContent=n+' of '+people.length;
+}}
 q.addEventListener('input',filter);filter();
 </script></body></html>"""
     passwords.write_private(CREDENTIALS_HTML, doc)

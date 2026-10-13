@@ -71,14 +71,20 @@ class WingUsers(unittest.TestCase):
         self.assertEqual([w["wing"] for w in cov["wings"]], ["Pension-I", "Pension-II", "Pension-III", "Pension-IV", "Pension-V"])
         self.assertEqual(cov["gaps"], [])                                        # the fixture staffs every tier of every wing
         self.assertEqual(cov["deputy_ag"], 1)
-        # Disable Pension-II's only AO: the report flags it.
+        # Disable every AO of Pension-II -- the named officer and the desk login behind them
+        # (13 Oct 2026: a wing has named officers as well as the desk account) -- and the report
+        # flags the tier as having nobody.
         users = self.client.get("/api/v2/admin/users?pension_wing=Pension-II&role=AG_AO", headers=admin).json()
-        self.assertEqual(len(users), 1)
-        r = self.client.post(f"/api/v2/admin/users/{users[0]['id']}/disable", headers=admin, json={"reason": "transferred"})
-        self.assertEqual(r.status_code, 200, r.text)
+        self.assertGreaterEqual(len(users), 1)
+        for u in users:
+            r = self.client.post(f"/api/v2/admin/users/{u['id']}/disable", headers=admin, json={"reason": "transferred"})
+            self.assertEqual(r.status_code, 200, r.text)
         cov = self.client.get("/api/v2/admin/wing-coverage", headers=admin).json()
         self.assertEqual(cov["gaps"], [{"wing": "Pension-II", "tier": "AO"}])
-        self.assertEqual(next(w for w in cov["wings"] if w["wing"] == "Pension-II")["tiers"], {"SENIOR_AUDITOR": 1, "ASSISTANT_AO": 1, "AO": 0})
+        tiers = next(w for w in cov["wings"] if w["wing"] == "Pension-II")["tiers"]
+        self.assertEqual(tiers["AO"], 0)                                  # the tier that was emptied
+        self.assertGreaterEqual(tiers["SENIOR_AUDITOR"], 1)               # the others are still staffed
+        self.assertGreaterEqual(tiers["ASSISTANT_AO"], 1)
         self.assertEqual(cov["tier_labels"]["AO"], "Accounts Officer")
         # Not the DDO's or a tier officer's business.
         self.assertEqual(self.client.get("/api/v2/admin/wing-coverage", headers=self.login("punjab-police", "punjab-police")).status_code, 403)

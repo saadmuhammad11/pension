@@ -1,0 +1,233 @@
+{
+  "_comment": [
+    "The Accountant General's pension-wing officers, one account per person (office list of",
+    "13 October 2026). The seed creates them; api.db.seed_ag_officers. Each officer sees only",
+    "their own wing's departments and cases, by pension_wing against api.departments.",
+    "PENSION_SECTIONS. The roles are the existing three and carry their existing permissions;",
+    "nothing here grants anything.",
+    "Username: the name in lowercase with a dot between its parts, hyphens counting as breaks",
+    "and a part's own trailing dot not doubled, so 'M. Haseeb Tahir' is m.haseeb.tahir and",
+    "'Ammad-Ud-Din' is ammad.ud.din. Where one person holds the same role in two wings the",
+    "wing is appended, as tariq.chaudhry.p2 and tariq.chaudhry.p5.",
+    "No personnel numbers are kept here."
+  ],
+  "officers": [
+    {
+      "username": "amna.hussain",
+      "display_name": "Amna Hussain",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-I"
+    },
+    {
+      "username": "fareed.jan",
+      "display_name": "Fareed Jan",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-I"
+    },
+    {
+      "username": "irfan.ahmad.janjua",
+      "display_name": "Irfan Ahmad Janjua",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-I"
+    },
+    {
+      "username": "muhammad.jamil",
+      "display_name": "Muhammad Jamil",
+      "role": "AG_ASSISTANT_AO",
+      "role_label": "AAO",
+      "pension_wing": "Pension-I"
+    },
+    {
+      "username": "arshad.ali",
+      "display_name": "Arshad Ali",
+      "role": "AG_AO",
+      "role_label": "AO",
+      "pension_wing": "Pension-I"
+    },
+    {
+      "username": "iffat.mubarak",
+      "display_name": "Iffat Mubarak",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-II"
+    },
+    {
+      "username": "amna.abdul.ghani",
+      "display_name": "Amna Abdul Ghani",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-II"
+    },
+    {
+      "username": "ammad.ud.din",
+      "display_name": "Ammad-Ud-Din",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-II"
+    },
+    {
+      "username": "rana.muhammad.sabir",
+      "display_name": "Rana Muhammad Sabir",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-II"
+    },
+    {
+      "username": "tauqeer.ahmad",
+      "display_name": "Tauqeer Ahmad",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-II"
+    },
+    {
+      "username": "rana.ikhlaq",
+      "display_name": "Rana Ikhlaq",
+      "role": "AG_ASSISTANT_AO",
+      "role_label": "AAO",
+      "pension_wing": "Pension-II"
+    },
+    {
+      "username": "tariq.chaudhry.p2",
+      "display_name": "Tariq Chaudhry",
+      "role": "AG_AO",
+      "role_label": "AO",
+      "pension_wing": "Pension-II"
+    },
+    {
+      "username": "syed.asmar.bukhari",
+      "display_name": "Syed Asmar Bukhari",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-III"
+    },
+    {
+      "username": "haider.aftab",
+      "display_name": "Haider Aftab",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-III"
+    },
+    {
+      "username": "m.haseeb.tahir",
+      "display_name": "M. Haseeb Tahir",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-III"
+    },
+    {
+      "username": "ayesha.najam",
+      "display_name": "Ayesha Najam",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-III"
+    },
+    {
+      "username": "amaisa",
+      "display_name": "Amaisa",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-III"
+    },
+    {
+      "username": "ali.arshad",
+      "display_name": "Ali Arshad",
+      "role": "AG_ASSISTANT_AO",
+      "role_label": "AAO",
+      "pension_wing": "Pension-III"
+    },
+    {
+      "username": "zareen.zafar",
+      "display_name": "Zareen Zafar",
+      "role": "AG_AO",
+      "role_label": "AO",
+      "pension_wing": "Pension-III"
+    },
+    {
+      "username": "attia.rehman",
+      "display_name": "Attia Rehman",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-IV"
+    },
+    {
+      "username": "ehtisham.habib",
+      "display_name": "Ehtisham Habib",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-IV"
+    },
+    {
+      "username": "fahad.javaid",
+      "display_name": "Fahad Javaid",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-IV"
+    },
+    {
+      "username": "khurram.naeem",
+      "display_name": "Khurram Naeem",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-IV"
+    },
+    {
+      "username": "muhammad.ahmad",
+      "display_name": "Muhammad Ahmad",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-IV"
+    },
+    {
+      "username": "summaira.yaseen",
+      "display_name": "Summaira Yaseen",
+      "role": "AG_ASSISTANT_AO",
+      "role_label": "AAO",
+      "pension_wing": "Pension-IV"
+    },
+    {
+      "username": "asif.bhatti",
+      "display_name": "Asif Bhatti",
+      "role": "AG_AO",
+      "role_label": "AO",
+      "pension_wing": "Pension-IV"
+    },
+    {
+      "username": "farhan.mushtaq",
+      "display_name": "Farhan Mushtaq",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-V"
+    },
+    {
+      "username": "ismail",
+      "display_name": "Ismail",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-V"
+    },
+    {
+      "username": "zeeshan.haider",
+      "display_name": "Zeeshan Haider",
+      "role": "AG_SENIOR_AUDITOR",
+      "role_label": "Sr. Auditor",
+      "pension_wing": "Pension-V"
+    },
+    {
+      "username": "m.shafiq",
+      "display_name": "M. Shafiq",
+      "role": "AG_ASSISTANT_AO",
+      "role_label": "AAO",
+      "pension_wing": "Pension-V"
+    },
+    {
+      "username": "tariq.chaudhry.p5",
+      "display_name": "Tariq Chaudhry",
+      "role": "AG_AO",
+      "role_label": "AO",
+      "pension_wing": "Pension-V"
+    }
+  ]
+}

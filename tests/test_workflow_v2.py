@@ -108,7 +108,9 @@ class Database(unittest.TestCase):
 
     def test_migrate_is_idempotent_and_seed_creates_one_officer_per_department(self) -> None:
         self.assertEqual(db.migrate(self.conn), [])
-        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM users").fetchone()[0], 88)   # 86 + reviewer + admin
+        # 86 departments + the AG's desk + the administrator + the 31 named wing officers of
+        # config/ag_officers.json (13 Oct 2026).
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM users").fetchone()[0], 88 + len(db.load_ag_officers()))
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM departments WHERE active = 1 AND code != 'LEGACY'").fetchone()[0], 86)
         self.assertEqual(self.conn.execute("SELECT port FROM departments WHERE code = 'PUNJAB_POLICE'").fetchone()[0], 5180)
         self.assertEqual(db.seed(self.conn, quiet=True)["users_created"], [])
