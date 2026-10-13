@@ -23,6 +23,7 @@ from .clients import ManualUploadConnector, StubModelClient, VllmModelClient
 from .reading import Artefact, ALL_TYPES, ReadingPipeline, ingest_pages, to_json_schema
 from .reading.jobs import JobRegistry
 from .reading.artefacts import CLASSIFY_HINTS
+from . import apikey
 from .reading.barcodes import NullBarcodeDecoder
 from .reference import rules_in_force
 from . import doa as doa_mod
@@ -110,11 +111,33 @@ reading_jobs = JobRegistry()
 # The API description pages list every route; the shared deployment switch turns them off in
 # production (PENSION_ENV=production, docs/DEPLOYMENT.md F3). GPF_API_DOCS=1 forces them on.
 _PRODUCTION = os.environ.get("PENSION_ENV", "").strip().lower() in ("production", "prod")
-_DOCS = os.environ.get("GPF_API_DOCS", "").strip().lower() in ("1", "true", "yes") or not _PRODUCTION
+#: FastAPI's /docs, /redoc and /openapi.json. Off in production; GPF_API_DOCS decides either way
+#: outside it, so a trial box can close them without the rest of production's posture
+#: (13 Oct 2026) -- it used to be forced on whenever production was off.
+_DOCS_FLAG = os.environ.get("GPF_API_DOCS", "").strip().lower()
+_DOCS = (_DOCS_FLAG in ("1", "true", "yes") if _DOCS_FLAG else not _PRODUCTION)
 app = FastAPI(title="GP Fund AI Pre-Audit Module", version="0.1.0",
               description="Deterministic pre-audit for GP Fund claims (AG Punjab).",
               docs_url="/docs" if _DOCS else None, redoc_url="/redoc" if _DOCS else None,
               openapi_url="/openapi.json" if _DOCS else None)
+
+
+@app.middleware("http")
+async def _require_the_portal_s_key(request: Request, call_next):
+    """Every /api request carries the shared key; the portal and the bridge set it.
+
+    The module decides what an officer may do but not who they are -- the portal has already
+    settled that and will not pass a request it has refused. This is what stops anything else
+    on the box asking the module directly, which until 13 Oct 2026 nothing did (C-04). The web
+    UI's own files are not gated: they are served through the same portal and carry no claim.
+    """
+    path = request.url.path
+    if path.startswith("/api") and path not in apikey.OPEN_PATHS:
+        if not apikey.presented_is_right(request.headers.get(apikey.HEADER)):
+            return JSONResponse(status_code=401, content={
+                "detail": "the GP Fund module is reached through the pension portal; "
+                          "this request did not come from it"})
+    return await call_next(request)
 
 
 @app.exception_handler(ServiceError)

@@ -11,8 +11,9 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from gpf import api
+from gpf import apikey
 
-client = TestClient(api.app)
+client = TestClient(api.app, headers={apikey.HEADER: apikey.api_key() or ''})
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32
 HTML = b"<html><script>parent.sessionStorage</script></html>"
 

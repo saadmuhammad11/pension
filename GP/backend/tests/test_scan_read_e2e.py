@@ -15,12 +15,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gpf import api
+from gpf import apikey
 from gpf.clients import ScriptedModelClient
 from gpf.reading import ReadingPipeline, ScriptedBarcodeDecoder
 from gpf.reading.barcodes import DecodedCode
 from test_reading import _scripted_refundable
 
-client = TestClient(api.app)
+client = TestClient(api.app, headers={apikey.HEADER: apikey.api_key() or ''})
 PAGES = [f"p{i}" for i in range(1, 7)]
 
 

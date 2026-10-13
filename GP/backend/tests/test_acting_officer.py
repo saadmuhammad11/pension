@@ -8,8 +8,9 @@ frame's address, which anyone can edit.
 from fastapi.testclient import TestClient
 
 from gpf import api as gpf_api
+from gpf import apikey
 
-client = TestClient(gpf_api.app)
+client = TestClient(gpf_api.app, headers={apikey.HEADER: apikey.api_key() or ''})
 
 
 def _capture(monkeypatch, name):

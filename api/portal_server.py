@@ -404,7 +404,13 @@ class PortalApp:
         # The module gets neither the portal's cookies (the frame's sign-in among them) nor its token,
         # and the officer it records is the signed-in account's: a browser's X-GPF-Officer is dropped.
         headers = {k: v for k, v in request.headers.items()
-                   if k.lower() not in _HOP_BY_HOP and k.lower() not in ("host", "cookie", "authorization", "x-gpf-officer", "x-gpf-user")}
+                   if k.lower() not in _HOP_BY_HOP and k.lower() not in ("host", "cookie", "authorization", "x-gpf-officer", "x-gpf-user", "x-gpf-key")}
+        # The key that tells the module this came from the portal, which has already decided who
+        # the officer is and what they may touch; a browser cannot forge it because it never has
+        # it (audit of 13 Oct 2026, C-04). Dropped from the client's own headers just above.
+        key = gpf_bridge.api_key()
+        if key:
+            headers[gpf_bridge.GPF_KEY_HEADER] = key
         if officer:
             band, _, name = officer.partition("|")
             headers["X-GPF-Officer"] = band

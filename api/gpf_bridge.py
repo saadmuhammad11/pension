@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import re
 import os
+import secrets
+import threading
 import subprocess
 import urllib.error
 import urllib.request
@@ -62,9 +64,68 @@ def header_name(name: str) -> str:
     return quote(" ".join(str(name or "").split()), safe="")
 
 
+#: The key the module expects on every /api request, so that nothing but the portal and this
+#: bridge can reach it (audit of 13 Oct 2026, C-04). Its own copy of this, which must agree on
+#: the environment variable and the file and on nothing else, is ``GP/backend/gpf/apikey.py``.
+GPF_KEY_HEADER = "X-GPF-Key"
+_KEY_FILE = Path(__file__).resolve().parents[1] / "artifacts" / ".gpf_api_key"
+#: Resolved once. The portal puts this header on every proxied request, and a case's scans are
+#: dozens of them, so reading the file each time would be disk I/O inside the portal's event
+#: loop on every page image. ``None`` is cached too: a box that cannot make the key will not
+#: start making it on the next request, and the module refuses either way.
+_key: str | None = None
+_key_read = False
+_key_lock = threading.Lock()
+
+
+def _read_key() -> str | None:
+    given = os.environ.get("GPF_API_KEY", "").strip()
+    if given:
+        return given
+    try:
+        if _KEY_FILE.exists():
+            return _KEY_FILE.read_text(encoding="utf-8").strip() or None
+        _KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        key = secrets.token_urlsafe(32)
+        fd = os.open(_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, key.encode("utf-8"))
+        finally:
+            os.close(fd)
+        return key
+    except FileExistsError:                           # the module created it a moment ago
+        try:
+            return _KEY_FILE.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            return None
+    except OSError:
+        return None
+
+
+def api_key() -> str | None:
+    """The shared key: ``GPF_API_KEY`` where the two run apart, else the file they share."""
+    global _key, _key_read
+    if _key_read:
+        return _key
+    with _key_lock:
+        if not _key_read:
+            _key, _key_read = _read_key(), True
+    return _key
+
+
+def forget_key() -> None:
+    """Drop the resolved key, so the next call reads it again. For the tests."""
+    global _key, _key_read
+    with _key_lock:
+        _key, _key_read = None, False
+
+
 def _request(method: str, path: str, *, body: bytes | None = None, content_type: str | None = None,
              timeout: float = TIMEOUT, acting_name: str | None = None) -> dict:
     req = urllib.request.Request(GPF_URL + path, data=body, method=method)
+    key = api_key()
+    if key:
+        req.add_header(GPF_KEY_HEADER, key)
     if content_type:
         req.add_header("Content-Type", content_type)
     if acting_name:

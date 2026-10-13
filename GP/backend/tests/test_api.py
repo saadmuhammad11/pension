@@ -5,12 +5,13 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from gpf import apikey
 
 from gpf import doa as doa_mod
 from gpf.api import app
 
 SAMPLES = Path(__file__).resolve().parents[2] / "prototype" / "sap-samples"
-client = TestClient(app)
+client = TestClient(app, headers={apikey.HEADER: apikey.api_key() or ''})
 
 
 @pytest.fixture(autouse=True)
