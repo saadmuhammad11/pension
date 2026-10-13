@@ -3,6 +3,9 @@ import { api, BASE, tellPortal } from './api.js';
 import { $, $$, esc, h, badge, toast, openModal, closeModal, trapModalFocus, confirmDialog, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
 import { noteFromPrompt, throttle, sequence, disposalConfirmText } from './pure.js';
 
+/** Characters of reason a decision carries; the service holds the same minimum. */
+const MIN_REASON = 10;
+
 // Embedded in the AG Punjab portal (28 Sep 2026): `?embed=1&officer=ao` in the address hides the
 // header and the intake, fixes the officer the portal signed in, and shows one case's screens.
 const params = new URLSearchParams(location.search);
@@ -488,15 +491,17 @@ function actionsHtml(r) {
     // Every officer used to be offered all three whatever their band, so a press answered 403
     // and the button looked broken (audit 13 Oct 2026). A button they may not use is shown
     // disabled with the reason, never silently removed: the officer needs to know who to ask.
+    // Two decisions, in the officer's words (13 Oct 2026): Approve sets the observation aside,
+    // Reject leaves it standing. They are recorded as waive and uphold, which is what the
+    // service, the audit trail and every disposition already written call them.
     const opts = r.dispositionOptions || null;
     const allow = a => !opts || (opts.find(o => o.action === a) || {}).allowed !== false;
     const why = a => ((opts || []).find(o => o.action === a) || {}).reason || '';
     const act = (a, label) => allow(a)
       ? `<button class="btn small" data-act="disp-${a}">${label}</button>`
       : `<button class="btn small" data-act="disp-${a}" disabled title="${esc(why(a))}">${label}</button>`;
-    btns.push(act('uphold', 'Uphold'));
-    btns.push(act('waive', 'Waive…'));
-    btns.push(act('refer', 'Refer upward'));
+    btns.push(act('waive', 'Approve'));
+    btns.push(act('uphold', 'Reject'));
   }
   return btns.join('') || '<span class="muted small">Recorded.</span>';
 }
@@ -553,35 +558,22 @@ async function handleAction(id, c, r, act, btn) {
         toast('Verification recorded'); await refresh(id, res.diff);
       });
     }
-    if (act === 'disp-uphold' || act === 'disp-refer') {
-      // Written grounds on every disposition (G1, 7 Oct 2026): the next desk reads why.
-      const what = act === 'disp-uphold' ? 'uphold' : 'refer';
-      const ground = noteFromPrompt(prompt(`Grounds for ${what === 'uphold' ? 'upholding' : 'referring'} this observation (at least 15 characters)`, ''));
+    if (act === 'disp-waive' || act === 'disp-uphold') {
+      // One box, the reason, for both decisions (13 Oct 2026). It is recorded against the
+      // officer's own name, which is why it is asked at all.
+      const what = act === 'disp-waive' ? 'waive' : 'uphold';
+      const word = what === 'waive' ? 'approving' : 'rejecting';
+      const ground = noteFromPrompt(prompt(`Reason for ${word} this observation (at least ${MIN_REASON} characters)`, ''));
       if (ground.cancelled) return;
-      if (ground.text.length < 15) { toast('Written grounds of at least 15 characters are required.', true); return; }
+      if (ground.text.length < MIN_REASON) { toast(`A reason of at least ${MIN_REASON} characters is required.`, true); return; }
       return busy(btn, async () => {
         await api.setDisposition(id, r.id, what, ground.text, '', state.officer);
-        toast(what === 'uphold' ? 'Upheld' : 'Referred upward'); await refresh(id);
+        toast(what === 'waive' ? 'Approved' : 'Rejected'); await refresh(id);
       });
     }
-    if (act === 'disp-waive') return waiveModal(id, r);
     if (act === 'cure-doc') return cureDocModal(id, r);
     if (act === 'cure-qr') return cureQrModal(id, r);
   } catch (e) { toast(e.message, true); }
-}
-
-function waiveModal(id, r) {
-  openModal('Waive observation — ' + (r.code || r.id), `
-    <p class="small muted">A waiver needs written grounds (at least 15 characters) and the authority relied on (recorded in the office copy). A hard stop is waived by the DAG alone.</p>
-    <div class="field"><label>Ground for the waiver</label><input type="text" id="w-ground"></div>
-    <div class="field"><label>Authority relied on</label><input type="text" id="w-auth"></div>
-    <button class="btn primary" id="w-go">Waive</button>`);
-  $('#w-go').onclick = () => busy($('#w-go'), async () => {
-    try {
-      await api.setDisposition(id, r.id, 'waive', $('#w-ground').value, $('#w-auth').value, state.officer);
-      closeModal(); toast('Waived'); refresh(id);
-    } catch (e) { toast(e.message, true); }
-  });
 }
 
 function cureDocModal(id, r) {

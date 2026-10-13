@@ -6,8 +6,11 @@ Business decision G1 (7 Oct 2026) reserved both routes out of a hard stop -- the
 correction -- to the DAG. Both were opened on 13 Oct 2026: every examining tier waives and
 records corrected, hard stops included, because the office needs the Senior Auditor, the
 Assistant AO and the Accounts Officer to clear findings on the cases they hold. What survives of
-G1 is the grounds, the authority on a waiver, and the officer's name on the record
-(docs/pension-rules-decisions.md, 13 Oct 2026). This file was test_gpf_hard_stop_is_the_dags.py.
+G1 is a written reason on every disposition, recorded under the officer's own name
+(docs/pension-rules-decisions.md, 13 Oct 2026). The same day the office reduced both screens to
+two buttons -- Approve, which sets the observation aside, and Reject, which leaves it standing --
+with one reason box of at least ten characters and nothing else asked. This file was
+test_gpf_hard_stop_is_the_dags.py.
 
 The module's own tests (GP/backend/tests/test_service.py) pin the service; this file pins what
 the pension side relies on: the permission table, and that both screens -- the module's and the
@@ -55,24 +58,33 @@ class ThePermissionTable(unittest.TestCase):
         self.assertEqual(OFFICER_FOR_ROLE.get("AG_AO"), "ao")
 
 
-class TheScreensAskForGrounds(unittest.TestCase):
-    def test_the_portal_sends_no_empty_grounds(self):
+class TheScreensAskForAReason(unittest.TestCase):
+    def test_the_portal_sends_no_empty_reason(self):
         # GP Fund dispositions are made in the module's own frame (GpfFindings.tsx, which nothing
         # imported, was removed on 9 Oct 2026); the pension findings screen asks for grounds the same way.
         tsx = (ROOT / "portals/src/shared/screens/CaseFindings.tsx").read_text()
         self.assertNotIn("onDispose('uphold', '', '')", tsx)
-        self.assertIn("ground.trim().length < 15", tsx)
+        self.assertIn("ground.trim().length < MIN_REASON", tsx)
+        self.assertIn("export const MIN_REASON = 10", tsx)
+        # Two buttons, in the officer's words (13 Oct 2026).
+        self.assertIn(">\n          Approve\n        </button>", tsx)
+        self.assertIn(">\n          Reject\n        </button>", tsx)
         self.assertFalse((ROOT / "portals/src/shared/screens/GpfFindings.tsx").exists())
 
     def test_the_module_s_own_screen_asks_too(self):
         js = (ROOT / "GP/backend/web/js/app.js").read_text()
         self.assertNotIn("'uphold', '', ''", js)
-        self.assertNotIn("'refer', '', ''", js)
-        self.assertIn("ground.text.length < 15", js)               # the prompt's text, trimmed by noteFromPrompt (F1)
+        self.assertIn("ground.text.length < MIN_REASON", js)       # the prompt's text, trimmed by noteFromPrompt (F1)
+        self.assertIn("const MIN_REASON = 10", js)
+        self.assertIn("'Approve'", js)
+        self.assertIn("'Reject'", js)
+        self.assertNotIn("Refer upward", js)                       # one pair of buttons, not three
 
-    def test_the_service_refuses_short_grounds(self):
+    def test_both_sides_hold_the_same_minimum(self):
         from gpf.service import MIN_GROUND
-        self.assertEqual(MIN_GROUND, 15)
+        from api.dispositions import MIN_GROUND as PENSION_MIN
+        self.assertEqual(MIN_GROUND, 10)
+        self.assertEqual(PENSION_MIN, 10)
 
 
 if __name__ == "__main__":

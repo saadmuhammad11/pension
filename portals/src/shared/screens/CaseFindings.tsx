@@ -200,10 +200,14 @@ export function clearsLastOpenFinding(flags: { id: string }[], disposed: Record<
   return open.length === 0
 }
 
+/** Characters of reason a decision carries. Both decisions are recorded against the officer's
+ *  name, so both are given one; the server holds the same minimum (api.dispositions.MIN_GROUND). */
+export const MIN_REASON = 10
+
 /** What each decision does, in the words the officer sees (F4: the labels say what happens). */
 export const DISPOSITION_WORDS: Record<string, string> = {
-  WAIVE: 'Cleared — does not stand against the case',
-  UPHOLD: 'Upheld — the finding stands; the case cannot be approved while it does',
+  WAIVE: 'Approved — does not stand against the case',
+  UPHOLD: 'Rejected — the finding stands; the case cannot be approved while it does',
   HOLD: 'On hold — exceptional-case lane',
 }
 
@@ -220,7 +224,6 @@ function FlagDisposition(
   const [ground, setGround] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [confirmLast, setConfirmLast] = useState(false)
 
   const TONE_FOR: Record<string, string> = { WAIVE: 'low', UPHOLD: 'high', HOLD: 'medium' }
   const WORD = DISPOSITION_WORDS
@@ -259,58 +262,58 @@ function FlagDisposition(
     )
   }
 
-  const needsGround = action === 'WAIVE'
-  const blocked = !action || (needsGround && ground.trim().length < 15)
+  // Both decisions are recorded against the officer's name, so both are given a reason. Ten
+  // characters, one box, nothing else asked (13 Oct 2026).
+  const blocked = !action || ground.trim().length < MIN_REASON
 
   return (
     <div style={{ marginTop: 'var(--s3)', paddingTop: 'var(--s3)',
                   borderTop: '1px dashed rgba(31,41,55,.12)' }}>
       <div className="row" style={{ gap: 'var(--s2)' }}>
-        <button className={action === 'WAIVE' ? 'primary' : ''} onClick={() => { setAction('WAIVE'); setConfirmLast(false) }}
+        <button className={action === 'WAIVE' ? 'primary' : ''} onClick={() => { setAction('WAIVE') }}
                 style={{ padding: '7px 14px', fontSize: 'var(--t-small)' }}>
-          Clear — set this finding aside
+          Approve
         </button>
-        <button className={action === 'UPHOLD' ? 'primary' : ''} onClick={() => { setAction('UPHOLD'); setConfirmLast(false) }}
+        <button className={action === 'UPHOLD' ? 'primary' : ''} onClick={() => { setAction('UPHOLD') }}
                 style={{ padding: '7px 14px', fontSize: 'var(--t-small)' }}>
-          Uphold — the finding stands
+          Reject
         </button>
       </div>
-      {needsGround && (
+      {action && (
         <div style={{ marginTop: 'var(--s3)' }}>
           <div className="label" style={{ marginBottom: 4 }}>
-            Ground for setting this finding aside (required, at least 15 characters)
+            {action === 'WAIVE'
+              ? `Reason for approving this finding (required, at least ${MIN_REASON} characters)`
+              : `Reason for rejecting this finding (required, at least ${MIN_REASON} characters)`}
           </div>
           <textarea rows={2} value={ground} onChange={e => setGround(e.target.value)}
                     placeholder="Recorded against your name in the audit trail…" />
         </div>
       )}
       {action && lastOpen(action) && (
-        // The last open finding: once it is cleared nothing stands against the case and it can
-        // be approved, so the officer is told before it is recorded (F4). Nothing is approved by
-        // itself (M1): the decision is still the AG's, with a remark.
+        // The last open finding: once it is approved nothing stands against the case and it can
+        // be approved as a whole, so the officer is told before it is recorded (F4). Told, not
+        // asked to tick a second box as well (13 Oct 2026): the reason is the confirmation.
+        // Nothing is approved by itself (M1); the decision is still the AG's, with a remark.
         <div className="banner warn" style={{ marginTop: 'var(--s3)' }} role="status">
           <span className="mark" aria-hidden="true">!</span>
           <div className="sub">
-            <strong>This is the last open finding.</strong> Once it is cleared, nothing stands against the case and it can be approved.
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
-              <input type="checkbox" checked={confirmLast} onChange={e => setConfirmLast(e.target.checked)} />
-              I understand; record it.
-            </label>
+            <strong>This is the last open finding.</strong> Once it is approved, nothing stands against the case and it can be approved.
           </div>
         </div>
       )}
       {action && (
         <div className="row" style={{ marginTop: 'var(--s3)', gap: 'var(--s2)' }}>
-          <button className="gold" disabled={blocked || busy || (lastOpen(action) && !confirmLast)}
+          <button className="gold" disabled={blocked || busy}
                   onClick={async () => {
                     setBusy(true); setError(null)
-                    try { await onDispose(f.id, action, ground); setOpen(false); setAction(null); setConfirmLast(false) }
+                    try { await onDispose(f.id, action, ground); setOpen(false); setAction(null) }
                     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
                     finally { setBusy(false) }
                   }}>
             {busy ? 'Recording…' : 'Record'}
           </button>
-          <button onClick={() => { setAction(null); setGround(''); setError(null); setConfirmLast(false) }}>Cancel</button>
+          <button onClick={() => { setAction(null); setGround(''); setError(null) }}>Cancel</button>
         </div>
       )}
       {error && (

@@ -40,7 +40,9 @@ def _now() -> str:
 
 
 #: Long enough to say what was seen and why -- the same bar the pension side sets on a waiver.
-MIN_GROUND = 15
+#: Characters of reason every disposition carries. Ten, and one box: the officer approves or
+#: rejects the observation and says why, and nothing else is asked (13 Oct 2026).
+MIN_GROUND = 10
 
 
 def _officer(officer_id: str) -> dict:
@@ -378,10 +380,12 @@ class CaseService:
         # correcting and referring were recorded with nothing said, and a decision with no
         # reason cannot be checked by the next desk.
         if len((ground or "").strip()) < MIN_GROUND:
-            raise ServiceError(f"Every disposition needs written grounds of at least {MIN_GROUND} characters "
-                               f"(what was seen, and why the item is {action}{'ed' if action != 'refer' else 'red'}).", 400)
-        if action == "waive" and not (authority or "").strip():
-            raise ServiceError("A waiver needs the authority relied on as well as its ground.", 400)
+            word = {"waive": "approved", "uphold": "rejected"}.get(action, action + "ed")
+            raise ServiceError(f"A reason of at least {MIN_GROUND} characters is required "
+                               f"(what was seen, and why the item is {word}).", 400)
+        # The authority relied on is no longer demanded separately (13 Oct 2026): the officer is
+        # asked for the reason and nothing else, and it is recorded under their own name. The
+        # field is still stored where a caller sends one.
         s.disp[result_id] = {"action": action, "ground": ground, "authority": authority,
                              "by": officer["name"], "desig": officer["desig"], "at": _now(),
                              # What the officer saw when deciding; a re-run that changes the

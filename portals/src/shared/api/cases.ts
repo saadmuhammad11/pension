@@ -398,9 +398,9 @@ export const ACTION_META: Record<CaseAction, { label: string; tone: 'primary' | 
 export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] }, role: string): { action: CaseAction | null; title: string; text: string } {
   // The register has no allowed_actions per row; there, assume the role's usual powers.
   const usual: Record<string, CaseAction[]> = {
-    AG_SENIOR_AUDITOR: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN', 'REQUEST_DOCS'], AG_ASSISTANT_AO: ['FORWARD_TIER', 'RETURN_TIER'],
-    AG_AO: ['APPROVE', 'REJECT', 'RETURN_TIER'], AG_DAG: ['RUN_CHECK', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'],
-    AG_REVIEWER: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN_TIER', 'APPROVE', 'REJECT', 'RETURN', 'REQUEST_DOCS'],   // the AG's desk: every tier
+    AG_SENIOR_AUDITOR: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN'], AG_ASSISTANT_AO: ['FORWARD_TIER', 'RETURN_TIER'],
+    AG_AO: ['APPROVE', 'REJECT', 'RETURN_TIER'], AG_DAG: ['RUN_CHECK', 'APPROVE', 'REJECT', 'RETURN'],
+    AG_REVIEWER: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN_TIER', 'APPROVE', 'REJECT', 'RETURN'],   // the AG's desk: every tier
     ADMIN: [], DEPT_OFFICER: ['ADD_DOCS', 'FORWARD'],
   }
   const a = new Set<CaseAction>(c.allowed_actions.length ? c.allowed_actions : (usual[role] ?? []))

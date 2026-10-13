@@ -120,8 +120,10 @@ class TheDisposition(unittest.TestCase):
     def test_the_latest_decision_on_the_same_finding_wins(self):
         rep = _report(_flag("F-1"))
         self._waive(rep, "F-1")
+        # A rejection carries its reason too, since 13 Oct 2026: both decisions are recorded
+        # against the officer's own name, so both are given one.
         dispositions.record(self.run, run_id="r1", flag_id="F-1", action="UPHOLD", officer="Syed Haider", role="ACCOUNTS_OFFICE",
-                            flag=rep["flags"][0])
+                            ground="The recovery is real; the finding stands.", flag=rep["flags"][0])
         self.assertEqual(dispositions.in_force(rep, self.run)["F-1"]["action"], "UPHOLD")
         self.assertFalse(dispositions.calculation_gate(rep, self.run)["open"])
 

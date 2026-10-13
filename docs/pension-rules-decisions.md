@@ -361,6 +361,21 @@ These were in the audit's High list, are technical, and are fixed in code on bra
 
 **Enforced at** `GP/backend/gpf/engine.py` (`may`, `who_can`). Each observation now carries the dispositions the asking officer may record (`service._result_view`), and the screen shows the rest disabled with the reason instead of failing on the press.
 
+## Decision of 13 October 2026: two buttons, one reason, one way back
+
+**The question.** A finding offered the officer three decisions in GP Fund (uphold, waive, refer upward) and two in pension (clear, uphold), each with its own wording, and a waiver additionally demanded the authority relied on in a second box. At case level there were two ways to send a case back, Return and Request additional documents, which did the same thing in different words.
+
+**Decision (13 Oct 2026):** ☒ **two buttons on every finding, and one way back to the department.**
+
+- A finding is **Approved** — it is set aside and does not stand against the case — or **Rejected** — it stands, and the case cannot be approved while it does. "Refer upward" is withdrawn from the screen.
+- Each decision asks one thing: the **reason**, at least **10 characters**. The separate "authority relied on" box is withdrawn, and the second confirmation tick on the last open finding with it. The reason is recorded against the officer's own name, which is why it is asked at all.
+- The same two words, the same minimum and the same single box in both products.
+- At case level, **Return to the department** is the only way back. It already carries the document picker, so it can name exactly what is wanted and nothing the withdrawn button could ask for is lost.
+
+**What is NOT changed.** Approve and Reject are stored as `WAIVE` and `UPHOLD`, which is what the audit trail, the carry-forward between rounds and every disposition already recorded call them: the words on the screen changed, not the record. `REQUEST_DOCS` stays a transition on the server, because cases sent back under it are still in `DOCS_REQUESTED` and must still be resubmittable. The case-level Approve and Reject, and their remarks, are untouched.
+
+**Enforced at** `api/dispositions.py` and `GP/backend/gpf/service.py` (`MIN_GROUND = 10`, a reason on both decisions), `portals/src/shared/screens/CaseFindings.tsx`, `GP/backend/web/js/app.js`, and `portals/src/shared/components/ActionPanel.tsx` (the single Return).
+
 ## Decisions of 7 October 2026 (evening), recorded
 
 Three further decisions by the rules owner, taken after the day's implementation:

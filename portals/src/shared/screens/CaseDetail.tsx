@@ -37,7 +37,7 @@ type Tab = typeof TABS[number]
 
 /** Actions the panel on the right lists with their own confirm step; the banner's big button
  *  is for the others, so the same action never shows twice on one screen. */
-const PANEL_ACTIONS: CaseAction[] = ['FORWARD', 'APPROVE', 'REQUEST_DOCS', 'RETURN', 'REJECT', 'OVERRIDE']
+const PANEL_ACTIONS: CaseAction[] = ['FORWARD', 'APPROVE', 'RETURN', 'REJECT', 'OVERRIDE']
 
 export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   { caseId: string; onBack: (product: Product) => void; initialTab?: Tab

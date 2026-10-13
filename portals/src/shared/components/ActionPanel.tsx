@@ -7,7 +7,11 @@ import { useEffect, useState } from 'react'
 import { ACTION_META, STATUS_META, actionLabel, type CaseAction, type CaseStatus, type HolderTier, type RequestItem } from '../api/cases'
 
 const STATUSES: CaseStatus[] = ['DRAFT', 'AI_CHECKED', 'FORWARDED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'RETURNED', 'DOCS_REQUESTED']
-const ORDER: CaseAction[] = ['FORWARD', 'FORWARD_TIER', 'APPROVE', 'REQUEST_DOCS', 'RETURN', 'RETURN_TIER', 'REJECT', 'OVERRIDE']
+// One way back to the department (13 Oct 2026). "Request additional documents" was a second
+// button that did the same thing in different words, so the officer had to choose between two
+// returns; Return carries the document picker, so nothing it could ask for is lost. The action
+// itself is kept on the server for the cases already sent back under it.
+const ORDER: CaseAction[] = ['FORWARD', 'FORWARD_TIER', 'APPROVE', 'RETURN', 'RETURN_TIER', 'REJECT', 'OVERRIDE']
 
 export function ActionPanel(
   { actions, hasIssues, busy, onAct, open: openProp, onOpenChange, checklist = [], status, holderTier }:
@@ -28,7 +32,7 @@ export function ActionPanel(
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [other, setOther] = useState('')
   const [otherPages, setOtherPages] = useState('')
-  const asking = open === 'RETURN' || open === 'REQUEST_DOCS'
+  const asking = open === 'RETURN'
   useEffect(() => {
     if (asking) {
       setPicked(new Set(checklist.filter(i => i.status === 'MISSING' || i.status === 'DEFECTIVE').map(i => i.id)))

@@ -47,7 +47,11 @@ CLEARING = ("WAIVE",)
 
 #: Long enough to say why. The same threshold the case-level override uses, for the same
 #: reason: a one-word ground on a waiver is the same as no ground.
-MIN_GROUND = 15
+#: Characters of reason every disposition carries. Ten, and one box: the officer approves or
+#: rejects the finding and says why, and nothing else is asked (13 Oct 2026). Both decisions are
+#: recorded against the officer's own name, so both are given a reason -- until then only a
+#: waiver was.
+MIN_GROUND = 10
 
 
 class DispositionError(ValueError):
@@ -80,12 +84,13 @@ def record(
 
     ground = (ground or "").strip()
     flag = flag or {}
-    if action == "WAIVE" and len(ground) < MIN_GROUND:
+    if len(ground) < MIN_GROUND:
+        what = ("approving" if action == "WAIVE" else "rejecting" if action == "UPHOLD" else "holding")
         raise DispositionError(
-            f"waiving {flag_id} sets aside a finding the engine raised"
+            f"{what} {flag_id}"
             + (f" — {flag.get('title')}" if flag.get("title") else "")
-            + f". A written ground of at least {MIN_GROUND} characters is required, and it is "
-            f"recorded against your name."
+            + f" needs a reason of at least {MIN_GROUND} characters, and it is recorded "
+            f"against your name."
         )
 
     entry = {

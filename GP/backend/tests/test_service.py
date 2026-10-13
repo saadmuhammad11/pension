@@ -76,18 +76,18 @@ def test_every_examining_tier_waives_a_hard_stop(svc):
         assert v["position"]["waived"] == 1, band
 
 
-def test_a_waiver_still_needs_its_grounds_and_authority_whoever_records_it(svc):
-    """What the decision of 13 Oct 2026 did NOT relax."""
+def test_a_decision_still_needs_its_reason_whoever_records_it(svc):
+    """What the decisions of 13 Oct 2026 did NOT relax: a reason, under the officer's name."""
     cid = svc.create_case("residual", officer_id="da")
     hard = svc.view(cid)["lists"]["hard"][0]
-    with pytest.raises(ServiceError) as e:
-        svc.set_disposition(cid, hard["id"], "waive", ground="too short", authority="A", officer_id="da")
-    assert e.value.status == 400 and "written grounds" in str(e.value)
-    with pytest.raises(ServiceError) as e:
-        svc.set_disposition(cid, hard["id"], "waive", ground="A full ground of more than fifteen characters.",
-                            authority="", officer_id="da")
-    assert "authority" in str(e.value)
+    for action in ("waive", "uphold"):
+        with pytest.raises(ServiceError) as e:
+            svc.set_disposition(cid, hard["id"], action, ground="too short", officer_id="da")
+        assert e.value.status == 400 and "reason of at least 10" in str(e.value), action
     assert svc.view(cid)["position"]["hard"] == 1                  # nothing was recorded
+    # Ten characters and no authority: that is now the whole of it.
+    svc.set_disposition(cid, hard["id"], "waive", ground="Seen in the original file.", officer_id="da")
+    assert svc.view(cid, "da")["position"]["hard"] == 0
 
 
 def test_each_observation_says_what_this_officer_may_record(svc):
@@ -136,15 +136,12 @@ def test_the_dag_clears_a_hard_stop_with_written_grounds(svc):
     assert svc.view(cid2)["position"]["hard"] == 0
 
 
-def test_every_disposition_needs_written_grounds(svc):
+def test_every_disposition_needs_a_reason(svc):
     cid, hard = _hard_case(svc)
     for action, officer in (("uphold", "ao"), ("refer", "ao"), ("correct", "dag"), ("waive", "dag")):
         with pytest.raises(ServiceError) as e:
-            svc.set_disposition(cid, hard["id"], action, ground="ok", authority="A", officer_id=officer)
-        assert e.value.status == 400 and "written grounds" in str(e.value), action
-    with pytest.raises(ServiceError) as e:
-        svc.set_disposition(cid, hard["id"], "waive", ground="A full ground of more than fifteen characters.", authority="", officer_id="dag")
-    assert "authority" in str(e.value)
+            svc.set_disposition(cid, hard["id"], action, ground="ok", officer_id=officer)
+        assert e.value.status == 400 and "reason of at least 10" in str(e.value), action
     svc.set_disposition(cid, hard["id"], "uphold", ground="The attested copy is still not on file; the stop stands.", officer_id="ao")
     item = next(x for x in svc.view(cid)["lists"]["hard"] if x["id"] == hard["id"])
     assert item["disposition"]["ground"].startswith("The attested copy")
