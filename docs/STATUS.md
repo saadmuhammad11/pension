@@ -203,7 +203,7 @@ register), N24–N30 (low).
 
 ## Audit of 13 October 2026
 
-That audit has its own report, `AUDIT_REPORT.md` in the project root: 68 findings, with a status
+That audit has its own report, `docs/AUDIT-13OCT-2026.md`: 68 findings, with a status
 table at the top that is kept there rather than repeated here. Eleven are fixed on branch
 `fix/audit-13oct-blockers` (cut from `main` at `d99968e`) and one, H-06, is partly fixed with the
 remainder written out under its heading. Three claims raised during that audit were tested and
