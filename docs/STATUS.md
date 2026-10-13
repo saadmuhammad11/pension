@@ -201,6 +201,26 @@ register), N24–N30 (low).
 | N11 | Low | **New:** Claude session transcripts hold real CNICs | **NOT FIXED** (deliberate) | `~/.claude/projects/-home-tmc-Desktop-pension/` (30 transcripts, 299 MB on 7 Oct) plus a few in neighbouring project folders. `~/.claude` owner-only (700). **Purge the transcripts after the fix work is complete**; they are the working history of the fixes until then |
 | N15 | Low | **New (later report 6b):** sign-out ends the tab's copy of the token, not the token | **FIXED** (7 Oct 2026) | `7bf42ff`. `/api/v2/auth/logout` with a valid token bumps the officer's `token_version`, so that token and the GP Fund frame token (same version) are refused from then on, and the sign-out is on the audit trail (`SIGN_OUT`); without a token, or with a dead one, it still answers 200. The portal's `end()` sends the token before dropping it. Ends every session of that officer, as a password reset does. `tests/test_signout_ends_token.py`; `tsc --noEmit` passes. **9 Oct (evening):** re-done per token: every session token carries a `jti`, sign-out lists it in `revoked_tokens` (migration 0015) until its expiry, frame and media tokens carry the parent's `jti` and die with it; the account's other sessions go on (the shared senior login threw colleagues out mid-case). `token_version` is bumped only for a pre-0015 token |
 
+## Audit of 13 October 2026
+
+That audit has its own report, `AUDIT_REPORT.md` in the project root: 68 findings, with a status
+table at the top that is kept there rather than repeated here. Eleven are fixed on branch
+`fix/audit-13oct-blockers` (cut from `main` at `d99968e`) and one, H-06, is partly fixed with the
+remainder written out under its heading. Three claims raised during that audit were tested and
+discarded as false.
+
+| Suite | Result, 13 Oct 2026 (branch head) |
+|---|---|
+| Pension (`tests/`) | 1139 tests, OK (5 skipped, 1 expected failure), 599 s |
+| GP Fund engine (`GP/gpfund/tests`) | 184 tests, OK |
+| GP Fund backend (`GP/backend`, pytest) | 119 passed, 0 failed |
+| Portal `tsc --noEmit` | passes |
+
+**Live on the trial box:** migration `0017_hot_path_indexes.sql` applied 13 Oct 2026 (both indexes
+are additive; nothing reads differently for them). The GP Fund key (C-04) is in force — the module
+answers 401 without it and the portal's proxy supplies it. The API and the portal still need a
+restart on the branch head to pick up the rest, with no run in progress.
+
 ## Action items
 
 1. **Pension-rules owner:** confirm the draft list of eligible family-pension relations and their proofs (decision sheet, Appendix B); until then the code applies the draft.

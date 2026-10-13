@@ -31,6 +31,11 @@ export PENSION_DATABASE_URL="${PENSION_DATABASE_URL:-}"
 unset PENSION_TEST_DATABASE_URL
 # Trial period (25 Sep 2026): every account, including ones seeded later, uses this password.
 export PENSION_SEED_PASSWORD="${PENSION_SEED_PASSWORD:-1234}"
+# The API's own description pages. Closed here rather than by PENSION_ENV=production, because
+# the office keeps the trial's shared passwords and its sign-in sheet for now and production
+# mode refuses both (13 Oct 2026). Set either to 1 to open them again.
+export PENSION_API_DOCS="${PENSION_API_DOCS:-0}"
+export GPF_API_DOCS="${GPF_API_DOCS:-0}"
 UI_PORT=5184
 # The models run on this machine, so the API reaches them on loopback (5 Oct 2026): the box lost
 # its 192.168.1.1 address that day and every verification would have failed at stage 2. Loopback
