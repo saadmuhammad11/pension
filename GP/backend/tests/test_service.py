@@ -60,15 +60,50 @@ def test_wrong_sap_rejected_and_logged(svc):
     assert any(a["what"] == "SAP extract rejected" for a in svc.view(cid)["audit"])
 
 
-def test_dealing_assistant_cannot_waive_hard_stop(svc):
+def test_every_examining_tier_waives_a_hard_stop(svc):
+    """Office decision of 13 Oct 2026, reversing the waiver half of G1 (7 Oct 2026).
+
+    The Senior Auditor's band waives a hard stop like any other officer. The grounds and the
+    authority are still required, and the waiver is recorded under the officer's own band.
+    """
+    for band in ("da", "ao", "dag"):
+        cid = svc.create_case("residual", officer_id=band)
+        hard = svc.view(cid)["lists"]["hard"][0]
+        svc.set_disposition(cid, hard["id"], "waive", ground="Verified by hand against the file.",
+                            authority="Office order 12/2026", officer_id=band)
+        v = svc.view(cid, band)
+        assert v["position"]["hard"] == 0, band
+        assert v["position"]["waived"] == 1, band
+
+
+def test_a_waiver_still_needs_its_grounds_and_authority_whoever_records_it(svc):
+    """What the decision of 13 Oct 2026 did NOT relax."""
     cid = svc.create_case("residual", officer_id="da")
     hard = svc.view(cid)["lists"]["hard"][0]
     with pytest.raises(ServiceError) as e:
-        svc.set_disposition(cid, hard["id"], "waive", ground="Verified by hand against the file.", authority="a", officer_id="da")
-    assert e.value.status == 403
+        svc.set_disposition(cid, hard["id"], "waive", ground="too short", authority="A", officer_id="da")
+    assert e.value.status == 400 and "written grounds" in str(e.value)
+    with pytest.raises(ServiceError) as e:
+        svc.set_disposition(cid, hard["id"], "waive", ground="A full ground of more than fifteen characters.",
+                            authority="", officer_id="da")
+    assert "authority" in str(e.value)
+    assert svc.view(cid)["position"]["hard"] == 1                  # nothing was recorded
 
 
-# -- only the DAG clears a hard stop, and every disposition carries written grounds (G1, 7 Oct 2026) --
+def test_each_observation_says_what_this_officer_may_record(svc):
+    """The screen builds its buttons from this, so it cannot offer what the service refuses."""
+    cid = svc.create_case("residual", officer_id="ao")
+    hard = svc.view(cid, "da")["lists"]["hard"][0]
+    opts = {o["action"]: o for o in hard["dispositionOptions"]}
+    assert opts["waive"]["allowed"] is True                        # opened on 13 Oct 2026
+    assert opts["correct"]["allowed"] is False                     # still the DAG's
+    assert "Deputy Accountant General" in opts["correct"]["reason"]
+    dag = svc.view(cid, "dag")["lists"]["hard"][0]
+    assert {o["action"]: o["allowed"] for o in dag["dispositionOptions"]}["correct"] is True
+
+
+# -- recording a hard stop CORRECTED is still the DAG's, and every disposition carries written
+# -- grounds (G1, 7 Oct 2026; the waiver half reversed 13 Oct 2026) --
 
 def _hard_case(svc):
     cid = svc.create_case("residual", officer_id="ao")          # residual has a hard stop

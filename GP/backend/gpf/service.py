@@ -150,9 +150,21 @@ class CaseService:
                         "open": pos["open"], "issued": s.issued, "mayAdvance": pos["mayAdvance"]})
         return sorted(out, key=lambda x: x["id"])
 
-    def view(self, case_id: str) -> dict:
+    def view(self, case_id: str, officer_id: str | None = None) -> dict:
+        """The examination as one officer sees it.
+
+        ``officer_id`` is the band of the officer ASKING (the portal sends it on every framed
+        request). What may be done to each observation, and to the case, is judged against that
+        officer. Without it the answer falls back to ``s.officer`` -- whoever acted last -- which
+        is what the screen used to show every reader, so a Senior Auditor was offered buttons
+        that answered to an Accounts Officer's powers (audit 13 Oct 2026).
+        """
         s = self._require(case_id)
         c = self._meta(s)
+        try:
+            viewer = _officer(officer_id) if officer_id else s.officer
+        except ServiceError:
+            viewer = s.officer
         L = lists(s.results)
         sap = s.F.get("sap")
         sap_view = None
@@ -173,7 +185,7 @@ class CaseService:
                      "personnelNo", "gazetted", "pages", "diary", "note", "nameNote")},
             "record": c.get("record") or [],
             "pageIndex": c.get("pageIndex") or [],
-            "lists": {name: [self._result_view(r, s) for r in L[name]]
+            "lists": {name: [self._result_view(r, s, viewer) for r in L[name]]
                       for name in ("hard", "adv", "conf", "sap", "ok")},
             "position": position(s),
             "sap": sap_view or {"present": False, "personnelNo": c.get("personnelNo")},
@@ -182,7 +194,7 @@ class CaseService:
             "doa": {"status": doa_mod.DOA["status"], "version": doa_mod.DOA.get("version")},
             "history": s.history, "audit": s.audit, "uploads": s.uploads,
             "dispositions": s.disp,
-            "disposalOptions": self._disposal_options(s),
+            "disposalOptions": self._disposal_options(s, viewer),
         }
 
     def _diff_view(self, diff: Optional[dict]) -> dict:
@@ -199,12 +211,22 @@ class CaseService:
                 "raised": [brief(e) for e in diff["raised"]],
                 "changed": [brief(e) for e in diff["changed"]]}
 
-    def _result_view(self, r: dict, s: CaseState) -> dict:
+    def _result_view(self, r: dict, s: CaseState, viewer: dict | None = None) -> dict:
         disp = s.disp.get(r["id"])
         keep = ("id", "code", "ref", "title", "doc", "status", "finding", "remedy",
                 "evidence", "cure", "calc", "pair", "checklist", "group", "payload")
         v = {k: r.get(k) for k in keep if k in r}
         v["disposition"] = disp
+        # What THIS officer may record against this observation, judged by the same rule the
+        # service enforces (engine.may). The screen used to offer Uphold / Waive / Refer on
+        # every hard or advisory item whatever the officer's band, so a press answered 403 and
+        # the button looked broken (audit 13 Oct 2026).
+        if viewer is not None and is_issue(r.get("status")):
+            v["dispositionOptions"] = [
+                {"action": a, "allowed": may(a, r.get("status"), viewer),
+                 "reason": "" if may(a, r.get("status"), viewer) else f"Needs {who_can(a, r.get('status'))}."}
+                for a in ("uphold", "waive", "correct", "refer")
+            ]
         # The case pages the item rests on, beside any evidence the rule cut (reference_pages).
         from .reference_pages import reference_pages
         have = {e.get("page") for e in (v.get("evidence") or []) if isinstance(e, dict)}
@@ -369,7 +391,11 @@ class CaseService:
         return {"disposition": s.disp[result_id], "position": position(s)}
 
     # ── disposal gates (§13.3) ──────────────────────────────────────────────────
-    def _disposal_options(self, s: CaseState) -> list[dict]:
+    def _disposal_options(self, s: CaseState, viewer: dict | None = None) -> list[dict]:
+        # Judged against the officer asking, not against whoever acted last: s.officer is
+        # overwritten by every mutation, so the gates a reader saw were another officer's
+        # (audit 13 Oct 2026). dispose() re-checks for real on the way in.
+        who = viewer or s.officer
         pos = position(s)
         opts = []
 
@@ -380,11 +406,11 @@ class CaseService:
         second_return = s.returns >= 1
         if pos["total"] == 0:
             opt("return", False, "No observation to issue.")
-        elif second_return and s.officer["level"] < 3:
+        elif second_return and who["level"] < 3:
             opt("return", False, "A second return needs the DAG (Funds) / DAO I.")
         else:
             opt("return", True)
-        pay_ok = pos["hard"] == 0 and pos["conf"] == 0 and pos["sap"] == 0 and undisposed == 0 and s.officer["level"] >= 2
+        pay_ok = pos["hard"] == 0 and pos["conf"] == 0 and pos["sap"] == 0 and undisposed == 0 and who["level"] >= 2
         pay_reason = ""
         if pos["hard"]:
             pay_reason = f"{pos['hard']} hard stop(s) open."
@@ -394,11 +420,11 @@ class CaseService:
             pay_reason = f"{pos['sap']} SAP item(s) open."
         elif undisposed:
             pay_reason = f"{undisposed} observation(s) undisposed."
-        elif s.officer["level"] < 2:
+        elif who["level"] < 2:
             pay_reason = "Needs the Accounts Officer or above."
         opt("pay", pay_ok, pay_reason)
-        opt("part", s.officer["level"] >= 2 and pos["hard"] == 0,
-            "" if (s.officer["level"] >= 2 and pos["hard"] == 0) else "Needs the Accounts Officer or above and no hard stop.")
+        opt("part", who["level"] >= 2 and pos["hard"] == 0,
+            "" if (who["level"] >= 2 and pos["hard"] == 0) else "Needs the Accounts Officer or above and no hard stop.")
         opt("refer", True)
         opt("hold", True)
         return opts

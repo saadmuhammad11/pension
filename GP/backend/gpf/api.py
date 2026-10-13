@@ -461,8 +461,11 @@ def page_refs(case_id: str) -> list[str]:
 
 
 @app.get("/api/cases/{case_id}")
-def get_case(case_id: str):
-    view = service.view(case_id)
+def get_case(case_id: str, request: Request):
+    # The band of the officer asking, where the portal sent it: what may be done to each
+    # observation and to the case is judged against the reader, not against whoever acted last
+    # (audit 13 Oct 2026). Absent, the answer is unchanged from before.
+    view = service.view(case_id, (request.headers.get(ACTING_OFFICER_HEADER) or "").strip() or None)
     # Pages of a claim read from scans are served by the case itself (below); the demo cases'
     # pages stay under /assets/pages.
     view["pageImages"] = bool(page_refs(case_id))

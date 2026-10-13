@@ -1,6 +1,12 @@
-"""GP Fund: only the DAG clears a hard stop, and every disposition carries written grounds (business decision G1, 7 Oct 2026).
+"""GP Fund: who clears a hard stop, and the written grounds every disposition carries.
 
     python3 -m unittest tests.test_gpf_hard_stop_is_the_dags -v
+
+Business decision G1 (7 Oct 2026) reserved a hard stop to the DAG. Its **waiver** half was
+reversed on 13 Oct 2026: every examining tier waives, hard stops included, because the office
+needs the Senior Auditor, the Assistant AO and the Accounts Officer to clear findings on the
+cases they hold. Recording a hard stop **corrected** is still the DAG's, and the grounds and the
+authority are still required of everyone (docs/pension-rules-decisions.md, 13 Oct 2026).
 
 The module's own tests (GP/backend/tests/test_service.py) pin the service; this file pins what
 the pension side relies on: the permission table, and that both screens -- the module's and the
@@ -17,17 +23,24 @@ sys.path.insert(0, str(ROOT / "GP" / "backend"))
 
 
 class ThePermissionTable(unittest.TestCase):
-    def test_only_level_3_clears_a_hard_stop(self):
+    def test_only_level_3_records_a_hard_stop_corrected(self):
         from gpf.engine import OFFICERS, may, who_can
         by = {o["id"]: o for o in OFFICERS}
-        for action in ("waive", "correct"):
-            self.assertFalse(may(action, "hard", by["ao"]), action)
-            self.assertFalse(may(action, "hard", by["da"]), action)
-            self.assertTrue(may(action, "hard", by["dag"]), action)
-            self.assertIn("Deputy Accountant General", who_can(action, "hard"))
+        self.assertFalse(may("correct", "hard", by["ao"]))
+        self.assertFalse(may("correct", "hard", by["da"]))
+        self.assertTrue(may("correct", "hard", by["dag"]))
+        self.assertIn("Deputy Accountant General", who_can("correct", "hard"))
         self.assertTrue(may("correct", "adv", by["ao"]))             # an advisory: the Accounts Officer still may
         self.assertTrue(may("uphold", "hard", by["da"]))              # anyone may uphold
         self.assertEqual(by["dag"]["level"], 3)
+
+    def test_every_examining_tier_waives_a_hard_stop(self):
+        """Office decision of 13 Oct 2026, reversing the waiver half of G1."""
+        from gpf.engine import OFFICERS, may
+        by = {o["id"]: o for o in OFFICERS}
+        for band in ("da", "ao", "dag"):
+            self.assertTrue(may("waive", "hard", by[band]), band)
+            self.assertTrue(may("waive", "adv", by[band]), band)
 
     def test_the_pension_side_maps_the_deputy_ag_to_the_dag_band(self):
         from api.gpf_bridge import OFFICER_FOR_ROLE

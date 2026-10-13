@@ -1178,6 +1178,7 @@ def get_case(case_id: str, user: User = Depends(current_user),
         row = _case_or_404(conn, case_id, user)
     d = _redact(_case_dict(conn, row, full=True), user)
     d["allowed_actions"] = _allowed_actions(conn, user, row)
+    d["may_dispose"] = _may_dispose(conn, user, row)
     return d
 
 
@@ -1204,6 +1205,25 @@ def _allowed_actions(conn: db.Connection, user: User, row: db.Row) -> list[str]:
     if "APPROVE" in out and user.id in _submitters(conn, row):
         out.remove("APPROVE")                                 # maker-checker (C1): the submitter does not approve
     return out
+
+
+def _may_dispose(conn: db.Connection, user: User, row: db.Row) -> bool:
+    """Whether this officer may act on the findings of the case's current examination.
+
+    The same conditions ``_run_for(acting=True)`` enforces, answered once for the screen so the
+    waive and uphold controls are offered only where they will work. The screen decided it from
+    the role capability alone, so every AG account was shown them and all but the holding tier
+    got a 409 on the press (audit 13 Oct 2026, M-12). Kept out of ``allowed_actions``: that list
+    is the workflow moves the action panel draws buttons for, and this is not one of them.
+    """
+    if user.role not in workflow.AG_SIDE or row["status"] != workflow.UNDER_REVIEW:
+        return False
+    try:
+        workflow.check_holder(user, row, "DISPOSE")
+        workflow.check_one_tier_per_case(conn, user, row)
+    except workflow.WorkflowError:
+        return False
+    return True
 
 
 #: What the old register (api.cases) records as the deciding desk for each portal role.

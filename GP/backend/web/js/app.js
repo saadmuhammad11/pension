@@ -484,9 +484,19 @@ function actionsHtml(r) {
     btns.push(`<button class="btn small primary" data-act="cure-qr">Upload clearer copy / missing side</button>`);
   }
   if (r.status === 'hard' || r.status === 'adv') {
-    btns.push(`<button class="btn small" data-act="disp-uphold">Uphold</button>`);
-    btns.push(`<button class="btn small" data-act="disp-waive">Waive…</button>`);
-    btns.push(`<button class="btn small" data-act="disp-refer">Refer upward</button>`);
+    // What this officer may actually record, as the service judges it (dispositionOptions).
+    // Every officer used to be offered all three whatever their band, so a press answered 403
+    // and the button looked broken (audit 13 Oct 2026). A button they may not use is shown
+    // disabled with the reason, never silently removed: the officer needs to know who to ask.
+    const opts = r.dispositionOptions || null;
+    const allow = a => !opts || (opts.find(o => o.action === a) || {}).allowed !== false;
+    const why = a => ((opts || []).find(o => o.action === a) || {}).reason || '';
+    const act = (a, label) => allow(a)
+      ? `<button class="btn small" data-act="disp-${a}">${label}</button>`
+      : `<button class="btn small" data-act="disp-${a}" disabled title="${esc(why(a))}">${label}</button>`;
+    btns.push(act('uphold', 'Uphold'));
+    btns.push(act('waive', 'Waive…'));
+    btns.push(act('refer', 'Refer upward'));
   }
   return btns.join('') || '<span class="muted small">Recorded.</span>';
 }

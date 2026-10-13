@@ -181,7 +181,11 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const m = STATUS_META[c.status]
   const hasIssues = run ? (run.verdict !== 'FORWARD' || (run.high_flags ?? 0) > 0 || (run.blocking_flags ?? []).length > 0) : true
   const deptSide = deptView                       // the administrator acts on no side (G6)
-  const canReview = !!can?.dispose && (m.side === 'ag' || !!can?.override)
+  // The server answers this, not the role: findings are acted on while the case is under review,
+  // on its current examination, by the tier that holds it (the AG desk and the Deputy AG at any
+  // tier). Deciding it from the role capability alone offered Waive and Uphold to every AG
+  // account and 409'd all but the holder (audit 13 Oct 2026, M-12).
+  const canReview = !!c.may_dispose
   // The documents the AG's return asked for, for this round (AUTO_RETURN / GPF_RETURN: rows from before 9 Oct 2026,
   // when the system still returned cases by itself).
   const sentBack = m.side === 'department' ? [...c.events].reverse().find(e => ['AUTO_RETURN', 'GPF_RETURN', 'RETURN', 'REQUEST_DOCS'].includes(e.action)) : undefined

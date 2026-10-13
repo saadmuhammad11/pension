@@ -148,6 +148,10 @@ export interface CaseFull extends CaseBase {
   forwarded_with: OpenIssues | null
   officer_remark: string | null
   allowed_actions: CaseAction[]
+  /** Whether this officer may waive or uphold the findings of the case's current examination:
+   *  under review, on the current run, by the tier that holds it (the AG desk and the Deputy AG
+   *  at any tier). Answered by the server, never derived from the role (audit 13 Oct 2026). */
+  may_dispose?: boolean
 }
 
 export interface Department { code: string; name: string; digital: number; pension_section: string | null }
