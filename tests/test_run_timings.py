@@ -106,7 +106,10 @@ class RunTimings(unittest.TestCase):
         self.assertIn('timing.model_call("vision"', (root / "extraction/client.py").read_text())
         self.assertIn('timing.model_call("ocr"', (root / "extraction/ocr.py").read_text())
         self.assertIn("timing.carry(identify_page", (root / "pipeline/run.py").read_text())
-        self.assertIn("timing.carry(extract_page_confirmed", (root / "pipeline/extract.py").read_text())
+        # Stage 6's pooled read is wrapped in timing.carry so its queue wait is recorded. The
+        # callable is `reader` -- the per-run read cache's confirmed() or, with no cache,
+        # extract_page_confirmed directly (extraction.readcache, perf/read-cache).
+        self.assertIn("timing.carry(reader", (root / "pipeline/extract.py").read_text())
         gp = (root / "GP/backend/gpf").read_text if False else None
         self.assertIn("timing.model_call(model", (root / "GP/backend/gpf/clients/model_client.py").read_text())
         self.assertIn('timing.stage("classify"', (root / "GP/backend/gpf/reading/pipeline.py").read_text())

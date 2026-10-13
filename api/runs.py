@@ -604,11 +604,18 @@ def _execute(run: Run) -> None:
         # ExtractionGap here -- correctly, it carries Form B-I and not Form D-I -- and the
         # whole run was marked failed, so nine correctly identified documents were thrown away
         # and the officer saw an error where a document list should have been.
+        # One read cache for both vision stages of this run: a page stage 4 reads for its figures
+        # is not read again by stage 6 for its identifiers where the image and schema match
+        # (extraction.readcache, perf/read-cache). The confirming double read still happens on the
+        # first read of each page; only the repeat is removed.
+        from extraction.readcache import ReadCache
+        read_cache = ReadCache()
+
         run.emit("extract", "reading determination-critical documents (each read twice)")
         try:
             with timing.stage("extract"):
                 stage_extract(run.run_dir, progress=lambda line: run.emit("extract", line.strip()),
-                              carry=carry)
+                              carry=carry, cache=read_cache)
         except Exception as exc:                          # noqa: BLE001
             run.emit("extract", f"no determination inputs — {exc}", level="warn")
             _record_gap(run, "extract", str(exc))
@@ -626,7 +633,11 @@ def _execute(run: Run) -> None:
             with timing.stage("assertions"):
                 stage_assertions(run.run_dir,
                                  progress=lambda line: run.emit("assertions", line.strip()),
-                                 carry=carry)
+                                 carry=carry, cache=read_cache)
+            if read_cache.hits:
+                run.emit("assertions",
+                         f"{read_cache.hits} page read(s) reused from stage 4 "
+                         f"({read_cache.misses} fresh)")
         except Exception as exc:                          # noqa: BLE001
             run.emit("assertions", f"cross-document checks incomplete — {exc}", level="warn")
 

@@ -112,12 +112,29 @@ almost entirely by eliminating the redundant re-reads — without touching the *
 
 ## 5. Recommended next pass (Phase 2), lowest-risk first
 
-1. **Shared read cache** keyed on image-hash + schema, reused across `extract` and `assertions`
-   within a run. Keep the double read (two calls fill the cache); every later request for the same
-   (page, schema) is served from it. Prove no finding changes with `tools/bench_compare.py`.
-2. Measure against the baseline; record the delta here and in `docs/PERF-BASELINE.md`.
+1. **Shared read cache** — **IMPLEMENTED** (`perf/read-cache` branch, 9 Oct 2026). Keyed on image
+   bytes + schema + read options, reused across `extract` (stage 4) and `assertions` (stage 6)
+   within a run. The confirming double read still happens on the first read of each page; the
+   repeat is removed. Cache hits return deep copies so no stage sees another's edits. See
+   `extraction/readcache.py`; wired in `pipeline/extract.py` (`stage_extract`, `stage_assertions`)
+   and `api/runs.py` (one cache per run). Unit test `tests/test_read_cache.py` pins the dedup,
+   key separation and copy isolation; the stage falls back to reading directly when no cache is
+   passed, so behaviour without it is unchanged.
+2. **Measure against the baseline — NEXT.** Run `tools/bench.py --label readcache` on the trial box
+   when the GPU is free, then `tools/bench_compare.py baseline readcache` to confirm findings are
+   byte-identical, and record the wall-time delta here and in `docs/PERF-BASELINE.md`. (Not run yet:
+   it needs the vision model and a quiet GPU.)
 3. Only then consider schema unification and the `GENERIC_PAGE`/NDC question (the latter needs a
    rules-owner decision, like the other scope items in `docs/pension-rules-decisions.md`).
+
+### Note found during this pass (not addressed here)
+
+`tests/test_api_runs.py` has a **pre-existing flaky failure** unrelated to this change: `start_run`
+spawns a daemon thread (`api/runs.py:854`) that is not joined before the test's `TemporaryDirectory`
+and DB patches are torn down, so under load the thread races teardown and the suite intermittently
+errors with `Directory not empty: 'artifacts'`, `No such file ... /uploads/...`, or `no database`.
+Reproduced at the same rate on clean `main` (≈1 in 6 combined runs of `test_pipeline_stages +
+test_api_runs + test_workflow_v2`). Worth a separate fix: join the run threads in `tearDown`.
 
 **Invariants to hold throughout:** the H1 disagreeing-double-read guard stays (commit `4af79ea`);
 no business rule changes; `bench_compare` green on every commit; the live trial is not touched

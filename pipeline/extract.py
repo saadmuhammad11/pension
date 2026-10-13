@@ -27,7 +27,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from extraction.readcache import ReadCache
 
 from pipeline.ingest import atomic_write_text, read_checkpoint
 from extraction.classify import classify_pay_label
@@ -187,6 +190,7 @@ def stage_extract(
     *,
     progress: Callable[[str], None] | None = None,
     carry: dict | None = None,
+    cache: "ReadCache | None" = None,
 ) -> dict:
     """Read the determination-critical documents. Resumable: skips what is already on disk.
 
@@ -194,7 +198,12 @@ def stage_extract(
     earlier round, in the same role there -- the prescribed form, a pension document, the
     salary statement, the LPC -- is taken from that round rather than read again. Only reads
     of new pages reach the model. Without it the stage runs exactly as it always has.
+
+    ``cache`` (``extraction.readcache``): a per-run store of confirmed reads shared with
+    stage 6, so a page this stage reads is not read again there. When it is absent the stage
+    reads directly, exactly as before.
     """
+    reader = cache.confirmed if cache is not None else extract_page_confirmed
     run = Path(run_dir)
     out_path = run / FIELDS
     done = read_checkpoint(out_path)
@@ -259,7 +268,7 @@ def stage_extract(
         from extraction.orient import upright_form_image
         form_image = upright_form_image(image_for[page], page, schema_name=form_type,
                                         progress=progress)
-        ext, agreement = extract_page_confirmed(form_image, schema_name=form_type)
+        ext, agreement = reader(form_image, schema_name=form_type)
         agreement.update({"document": form_type, "page": page})
         data = ext.data
         if reuse is not None:
@@ -332,7 +341,7 @@ def stage_extract(
                 progress(f"stage 4  reading {doc['type']} p.{pg} for the pension in payment "
                          f"(§8.3 authority; double read)")
             try:
-                e, agree = extract_page_confirmed(image_for[pg], schema_name="PPO")
+                e, agree = reader(image_for[pg], schema_name="PPO")
             except ExtractionError as exc:
                 result.setdefault("unread_pay_documents", []).append(
                     {"document": doc["type"], "page": pg, "reason": str(exc)}
@@ -365,7 +374,7 @@ def stage_extract(
         if progress:
             progress(f"stage 4  reading {doc_type} p.{pg} (double read)")
         try:
-            e, agree = extract_page_confirmed(image_for[pg], schema_name="AG_PAY_CERTIFICATE")
+            e, agree = reader(image_for[pg], schema_name="AG_PAY_CERTIFICATE")
         except ExtractionError as exc:
             # A SUPPLEMENTARY pay document that cannot be read is a gap in the record, not a
             # reason to throw away the prescribed form that was read successfully. This read
@@ -1698,6 +1707,7 @@ def stage_assertions(
     *,
     progress: Callable[[str], None] | None = None,
     carry: dict | None = None,
+    cache: "ReadCache | None" = None,
 ) -> dict:
     """Collect the same fact as stated by each document. Resumable.
 
@@ -1705,7 +1715,13 @@ def stage_assertions(
     does not produce a wrong field -- it invents a personnel-number mismatch, and F-1 is a
     HIGH flag that blocks a PPO and sends a shortcoming letter to a department that did
     nothing wrong. A false accusation costs more than a second read.
+
+    ``cache`` (``extraction.readcache``): the per-run store shared with stage 4. A page stage 4
+    already read for its figures is reused here for its identifiers rather than read again,
+    where both stages read the same image under the same schema. Absent, the stage reads
+    directly, as before.
     """
+    reader = cache.confirmed if cache is not None else extract_page_confirmed
     run = Path(run_dir)
     out_path = run / ASSERTIONS
     done = read_checkpoint(out_path)
@@ -1756,7 +1772,7 @@ def stage_assertions(
     def read(doc_type: str, page: int, schema: str):
         if progress:
             progress(f"stage 6  {doc_type} p.{page}")
-        ext, _ = extract_page_confirmed(image_for[page], schema_name=schema)
+        ext, _ = reader(image_for[page], schema_name=schema)
         return ext.data
 
     # -- identifiers, stated per document ------------------------------------------------
@@ -1792,7 +1808,7 @@ def stage_assertions(
     from pipeline import timing
     pool = ThreadPoolExecutor(max_workers=ASSERTION_CONCURRENCY)
     futures = [
-        pool.submit(timing.carry(extract_page_confirmed, stage="assertions", page=pg), image_for[pg], schema_name=sch)
+        pool.submit(timing.carry(reader, stage="assertions", page=pg), image_for[pg], schema_name=sch)
         for _doc, pg, sch in jobs
     ]
     try:
