@@ -68,7 +68,16 @@ def _connection() -> Any:
     SQLite file, whatever ``api.db`` is pointed at); reopened if the database target changes."""
     global _conn, _conn_path
     from api import db, dbcore
-    key = (str(db.target()), str(db.DB_PATH))
+    try:
+        # Inside the guard, not outside it. db.target() raises when no database is configured,
+        # and that escaped record() -- which promises to be silent on any database error -- out
+        # through the stage() context manager and out of `with timing.stage("run")`, which wraps
+        # a whole verification. A run that had finished was reported failed, and a run that had
+        # waited for a slot died before its try/finally and never gave the slot back, so two of
+        # them stopped every verification in the office (audit 13 Oct 2026, M-03 and H-06).
+        key = (str(db.target()), str(db.DB_PATH))
+    except Exception:                                 # noqa: BLE001 -- no database, no timing rows
+        return None
     with _lock:
         if _conn is not None and _conn_path == key:
             return _conn

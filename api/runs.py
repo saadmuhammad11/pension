@@ -782,8 +782,13 @@ def _execute_when_free(run: Run) -> None:
     if not _RUN_SLOTS.acquire(blocking=False):
         run.emit("queue", "waiting for a free verification slot")
         _RUN_SLOTS.acquire()
-        timing.record("queue", "slot", started=waited_from, ended=time.time(), name="verification slot",
-                      queue_s=time.time() - waited_from, run_id=run.run_id)
+        try:
+            # Belt and braces behind the timing fix: the slot is held from the acquire above,
+            # and nothing measured on the way past may stop the run executing or releasing it.
+            timing.record("queue", "slot", started=waited_from, ended=time.time(), name="verification slot",
+                          queue_s=time.time() - waited_from, run_id=run.run_id)
+        except Exception:                             # noqa: BLE001 -- a lost row, never a lost slot
+            pass
     try:
         execute(run)
     finally:
