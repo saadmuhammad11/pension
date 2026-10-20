@@ -33,6 +33,13 @@ TITLE_ONLY = ("(To be issued by the appointing Authority 90 days before superann
               "drawing pay Rs. 84570 reckonable for pension, in BS 15, is hereby retired.")
 
 
+#: The same page without the forms' printed rubric -- the scenario title and nothing else.
+#: What the model's own transcribed number has to carry on its own.
+NO_RUBRIC = ("Subject. NOTIFICATION/ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF "
+             "PENSIONARY BENEFITS. On attaining the age of superannuation, MR. SAFDAR ALI "
+             "S/o Muhammad Ashiq, Designation EST (V), drawing pay Rs. 84570, in BS 15.")
+
+
 def _ident(label: str, printed: str | None) -> I.PageIdentity:
     return I.PageIdentity(page=17, document_type=label, confidence=1.0, evidence=printed or "",
                           is_first_page=True, printed_form_number=printed)
@@ -62,13 +69,15 @@ class ReclaimFromModelNumber(unittest.TestCase):
         self.assertEqual(out.document_type, "ANNEX_A")
         self.assertIsNone(out.promoted_from)
 
-    def test_no_printed_number_from_the_model_reclaims_nothing(self) -> None:
-        out = _reclaim(_ident("ANNEX_A", None), TITLE_ONLY)
+    def test_without_the_rubric_the_model_must_supply_the_number(self) -> None:
+        """A title on its own has never been enough to overrule the model, and still is not."""
+        out = _reclaim(_ident("ANNEX_A", None), NO_RUBRIC)
         self.assertEqual(out.document_type, "ANNEX_A")
 
     def test_a_label_that_is_not_a_form_reclaims_nothing(self) -> None:
-        """Annex-A is a descriptive roll; it parses to no prescribed form."""
-        out = _reclaim(_ident("ANNEX_A", "Annex-A"), TITLE_ONLY)
+        """Annex-A is a descriptive roll; it parses to no prescribed form, and without the
+        rubric there is no second phrase to carry the page on its own."""
+        out = _reclaim(_ident("ANNEX_A", "Annex-A"), NO_RUBRIC)
         self.assertEqual(out.document_type, "ANNEX_A")
 
     def test_a_reader_that_looped_reclaims_nothing(self) -> None:

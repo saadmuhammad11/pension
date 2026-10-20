@@ -1490,21 +1490,48 @@ class AmendedBase(unittest.TestCase):
         with self.assertRaises(EmolumentsError):
             reckon_average([AnnualPay(2025, Decimal(n)) for n in ("1", "2", "3")], self._pack())
 
-    def test_a_last_drawn_base_is_refused_under_the_amended_pack(self):
-        """One pay slip is not the average, and on a rising scale it is always larger."""
-        from datetime import date, datetime
+    def _last_drawn_case(self):
+        from datetime import date
         from rules.emoluments import reckon_average
-        from rules.engine import SelfPensionCase, determine_self_pension
+        from rules.engine import SelfPensionCase
         pack = self._pack()
-        case = SelfPensionCase(
+        return SelfPensionCase(
             case_ref="t", date_of_birth=date(1966, 2, 28),
             date_of_first_entry=date(1987, 11, 1), date_of_retirement=date(2026, 2, 27),
             emoluments=reckon_average(self._years(), pack), bps=14,
             base_is_three_year_average=False,        # the caller has not said it averaged
-        )
-        with self.assertRaises(ValueError) as ctx:
-            determine_self_pension(case, pack, datetime(2026, 9, 10))
+        ), pack
+
+    def test_a_last_drawn_base_is_refused_once_a_figure_is_published(self):
+        """One pay slip is not the average, and on a rising scale it is always larger.
+
+        The refusal is conditional on rules.scope.CALCULATIONS_IN_SCOPE from 20 Oct 2026: it
+        is there to stop an overstated figure reaching an officer, and this release publishes
+        no figure at all. With calculations back in scope it must still refuse, which is what
+        this pins -- see tests.test_base_guard_follows_scope for the other half.
+        """
+        from datetime import datetime
+        from unittest import mock
+        from rules import engine, scope
+        from rules.engine import determine_self_pension
+        case, pack = self._last_drawn_case()
+        with mock.patch.object(scope, "CALCULATIONS_IN_SCOPE", True), \
+                mock.patch.object(engine.scope, "CALCULATIONS_IN_SCOPE", True):
+            with self.assertRaises(ValueError) as ctx:
+                determine_self_pension(case, pack, datetime(2026, 9, 10))
         self.assertIn("three years", str(ctx.exception))
+
+    def test_with_no_figure_published_it_is_provisional_instead_of_refused(self):
+        """The officer still gets the dates, the rule pack and the BLOCKING items; the case
+        is marked provisional and says why. Every self-pension bundle hit this -- 21 runs of
+        21 on 20 Oct 2026 -- because the three 1 July figures are keyed at intake."""
+        from datetime import datetime
+        from rules.engine import determine_self_pension
+        case, pack = self._last_drawn_case()
+        det = determine_self_pension(case, pack, datetime(2026, 9, 10))
+        self.assertIn("BLOCKING-23", det.unverified_engaged)
+        self.assertTrue(any("three basic-pay figures" in c for c in det.caveats),
+                        f"no caveat explaining the base: {det.caveats}")
 
     def test_superannuation_takes_no_voluntary_reduction(self):
         from datetime import date, datetime

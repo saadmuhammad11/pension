@@ -356,13 +356,19 @@ def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity,
     the label: no second reading is not evidence against the first. Returns the identity and
     the page's text, which is the form's text when reclaimed.
     """
-    from .ocr import PageText, form_titles_on, forms_printed_on, looks_degenerate, ocr_page
+    from .ocr import (PageText, form_rubric_on, form_titles_on, forms_printed_on,
+                      looks_degenerate, ocr_page)
     try:
         text = ocr_page(image, ident.page)
     except Exception:                                   # noqa: BLE001
         return ident, ""
     titles = form_titles_on(text)
     numbers = tuple(dict.fromkeys(forms_printed_on(text)))
+
+    def promoted(name: str) -> tuple[PageIdentity, str]:
+        return replace(ident, document_type=name, is_first_page=True,
+                       promoted_from=ident.document_type), text.text or ""
+
     if not numbers and not looks_degenerate(text):
         # OCR read the page but did not transcribe its form number, and the model DID. On the
         # 78-page bundle of 20 Oct 2026 page 17 was the department's Form B-I: the model filed
@@ -383,12 +389,45 @@ def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity,
                                             text=ident.printed_form_number or "",
                                             model=text.model))
         if len(claimed) == 1 and claimed[0] in titles:
-            return replace(ident, document_type=claimed[0], is_first_page=True,
-                           promoted_from=ident.document_type), text.text or ""
+            return promoted(claimed[0])
+
+        # The form's own printed RUBRIC, where no number is printed at all.
+        #
+        # These forms do not always print a number anywhere a reader catches, and the model
+        # does not always transcribe one. Swept over 503 real pages on 20 Oct 2026, eleven
+        # genuine Form B-I pages across nine bundles were filed as SUPERANNUATION_ORDER or
+        # ANNEX_A for exactly that reason -- which is honest of the model, because Form B-I IS
+        # the retirement notification; it is the PRESCRIBED one, and the checklist asks for
+        # the prescribed one.
+        #
+        # So the second phrase comes off the page instead: "(To be issued by the Appointing
+        # authority 90 days before superannuation...)", the instruction printed on the blank
+        # form. It says the page is a prescribed form without saying which, and on those 503
+        # pages it appeared on 17, every one a genuine form and nothing else -- not on the
+        # forwarding letter or the departmental checklist that print a form NUMBER while
+        # merely listing it as an enclosure.
+        #
+        # Which form it is still has to be said by something. OCR's title says it where there
+        # is exactly one; where the title is damaged past recognition -- one real page prints
+        # "ORDERS OF SUPERANUATION RETIREMENT", the words the other way round -- the model's
+        # own transcribed number says it, and the rubric is what makes that safe to take.
+        # Two titles means two forms on one sheet and is left for a person.
+        #
+        # A model number that names a DIFFERENT form blocks this. The two readers disagree
+        # about which form the page is, and this function overrules a label only where they
+        # agree -- a disagreement is the case the module leaves for a person. Nothing real is
+        # lost to it: every page the sweep recovered either had an agreeing number or had
+        # none at all.
+        contradicted = bool(claimed) and not set(claimed) & set(titles) if titles else False
+        if form_rubric_on(text) and not contradicted:
+            distinct = tuple(dict.fromkeys(titles))
+            if len(distinct) == 1:
+                return promoted(distinct[0])
+            if not distinct and len(claimed) == 1:
+                return promoted(claimed[0])
     if len(numbers) != 1 or numbers[0] not in titles:
         return ident, text.text or ""
-    return replace(ident, document_type=numbers[0], is_first_page=True,
-                   promoted_from=ident.document_type), text.text or ""
+    return promoted(numbers[0])
 
 
 def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdentity:

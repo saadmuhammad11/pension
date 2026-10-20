@@ -341,6 +341,26 @@ _FORM_TITLES: dict[str, tuple[str, ...]] = {
 #: phrases distinct while tolerating what a reader does to a photocopy.
 _TITLE_MATCH = 0.86
 
+#: ...and how close each WORD of it must be, which is the test that does the real work.
+#:
+#: Comparing the phrase to a same-length window as one string was too loose, because the
+#: damage a reader does and the difference between two sentences are not the same shape.
+#: Measured on real pages 20 Oct 2026, a whole-window ratio alone read "Form B-I" off three
+#: documents that are not it:
+#:
+#:   "RETIREMENT ON SUPERANNUATION"  vs  "...due TO RETIREMENT SUPERANNUATION..."   a Last Pay Certificate
+#:   "RETIREMENT ON SUPERANNUATION"  vs  "RETIRED ON SUPERANUATION w.e.f"          a service statement
+#:   "FOR ANTICIPATORY PENSION"      vs  "...OF PENSION ANTICIPATORY PENSION..."   an Annex-A undertaking
+#:
+#: Every one is a DIFFERENT WORD in the slot, not a damaged one, and word by word every one
+#: fails: DUE/RETIREMENT, RETIRED/RETIREMENT, OF/FOR. What the fuzzy bar is for -- "RETIREMNT"
+#: for "RETIREMENT" -- is a damaged word in the right slot, and that still passes at 0.95.
+#:
+#: It matters more than a miss would. _verify_form_claim accepts a title alone as
+#: corroboration where no number is printed, so a spurious title does not merely fail to find
+#: a form, it CONFIRMS the model's claim of the wrong one.
+_TITLE_WORD_MATCH = 0.82
+
 
 def form_titles_on(page_text: PageText) -> tuple[str, ...]:
     """Which prescribed forms the page identifies by its printed TITLE, per OCR.
@@ -365,15 +385,56 @@ def form_titles_on(page_text: PageText) -> tuple[str, ...]:
     found: list[str] = []
     for name, phrases in _FORM_TITLES.items():
         for phrase in phrases:
-            if phrase in text:
-                found.append(name)
-                break
-            n = len(phrase.split())
-            if any(SequenceMatcher(None, phrase, " ".join(words[i:i + n])).ratio() >= _TITLE_MATCH
-                   for i in range(len(words) - n + 1)):
+            if phrase in text or _phrase_on(phrase, words):
                 found.append(name)
                 break
     return tuple(found)
+
+
+#: The instruction printed at the head of the prescribed forms' own template:
+#: "(To be issued by the Appointing authority 90 days before superannuation of the retiring
+#: Government servant)". It says the page IS one of the prescribed forms. It does not say
+#: WHICH -- the B and D forms share it -- so it corroborates, it never decides.
+#:
+#: Swept over 503 real pages on 20 Oct 2026 it appeared on 17, and every one of them was a
+#: genuine prescribed form: 13 Form B-I and 2 Form D-I, plus 2 already identified. It appeared
+#: on nothing else -- not on the forwarding letter that lists "Annex-B-I (Form)" among its
+#: enclosures, not on the departmental checklist that lists "Annexure Pension form B-I", not
+#: on the Annex-A undertaking. Those three are exactly the pages that print a form's NUMBER
+#: without being one, which is why the rubric is worth having: it is the phrase a page carries
+#: because it IS the form, not because it refers to one.
+_FORM_RUBRIC = ("ISSUED BY THE APPOINTING AUTHORITY",
+                "DAYS BEFORE SUPERANNUATION OF THE RETIRING GOVERNMENT SERVANT")
+
+
+def form_rubric_on(page_text: PageText) -> bool:
+    """Does the page carry the prescribed forms' own printed instruction?
+
+    Read exactly as a title is read, damage and all, and for the same reason. Used only where
+    no form number is printed, and never on its own -- see ``_reclaim_form``.
+    """
+    text = re.sub(r"\s+", " ", page_text.normalised)
+    words = text.split()
+    return any(phrase in text or _phrase_on(phrase, words) for phrase in _FORM_RUBRIC)
+
+
+def _phrase_on(phrase: str, words: list[str]) -> bool:
+    """Is ``phrase`` printed somewhere in ``words``, allowing for what OCR does to letters?
+
+    A window of the same number of words, close enough BOTH as a whole and word by word. The
+    word-by-word test is the one that discriminates: it asks that each word of the phrase be
+    that word, damaged, rather than letting a run of near-misses average out to a pass.
+    """
+    wanted = phrase.split()
+    n = len(wanted)
+    for i in range(len(words) - n + 1):
+        window = words[i:i + n]
+        if SequenceMatcher(None, phrase, " ".join(window)).ratio() < _TITLE_MATCH:
+            continue
+        if all(SequenceMatcher(None, a, b).ratio() >= _TITLE_WORD_MATCH
+               for a, b in zip(wanted, window)):
+            return True
+    return False
 
 
 # -- Attestation, repetition loops and banded reading -------------------------------------

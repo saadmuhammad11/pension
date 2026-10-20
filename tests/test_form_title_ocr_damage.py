@@ -19,6 +19,14 @@ What must NOT be lost is discrimination -- _FORM_TITLES only holds phrases that 
 form from its neighbours, and a loose match that let B-I's title confirm a B-II claim would
 confirm exactly the false positive the check exists to stop.
 
+The first version of this match compared the phrase with a same-length window as ONE STRING,
+and lost exactly that. Swept over 500 real pages it read "Form B-I" off a Last Pay
+Certificate, a Last Pay and Service Statement and an Annex-A undertaking, because a run of
+near-misses averages out to a pass. The class below is those three pages. They are not a
+miss but a FALSE POSITIVE, which is the worse half: _verify_form_claim accepts a title alone
+where no number is printed, so a spurious title does not fail to find a form -- it confirms
+the model's claim of the wrong one.
+
     python3 -m unittest tests.test_form_title_ocr_damage -v
 """
 from __future__ import annotations
@@ -40,6 +48,41 @@ DAMAGED = ("1 (To be issued by the Appointing authority 90 days before superannu
 CLEAN = ("(To be issued by the appointing Authority 90 days before superannuation of the "
          "retiring Government servant) Subject. NOTIFICATION/ORDERS OF RETIREMENT ON "
          "SUPERANNUATION AND SANCTION OF PENSIONARY BENEFITS")
+
+
+#: Real pages, as the reader returned them, that are NOT the form their words brush against.
+NOT_A_FORM = {
+    "a Last Pay Certificate":
+        "Last pay certificate Office of the DY.DEO (W-EE) TEHSIL SHALIMAR LAHORE. Name of "
+        "Govt. Servant: Yasmin Hanif Designation: EST Scale of pay : BPS NO. 15 Proceeding "
+        "due to: Retirement (Superannuation) She will be paid up to 18-08-2026",
+    "a Last Pay and Service Statement":
+        "Form No. 5 Last Pay and Service Statement Date 25.09.2025 Office: Accountant "
+        "General-Punjab Lahore ABDUL WAIAD OSD DECEASED Retired on Superanuation w.e.f "
+        "21,03,2023 at the following rates",
+    "an Annex-A undertaking":
+        "(Annex-A) (Under Articale-920 (1) CSR I Muhammad Shafique herby under take to refund "
+        "the amount established against me. DECLARATION OF NON-RECEIPT OF PENSION/ "
+        "ANTICIPATORY PENSION OR GRATUITY (Under Articale-922 (a) CSR",
+}
+
+
+class ADifferentWordIsNotADamagedOne(unittest.TestCase):
+    """The slot has to hold THAT word, damaged -- not some other word that reads like it."""
+
+    def test_none_of_these_pages_names_a_form(self) -> None:
+        for what, text in NOT_A_FORM.items():
+            with self.subTest(page=what):
+                self.assertEqual(_titles(text), (), f"{what} must not name a form")
+
+    def test_the_words_that_fooled_it_are_the_ones_being_rejected(self) -> None:
+        """Named so the next person can see what the bar is actually doing: DUE is not
+        RETIREMENT, RETIRED is not RETIREMENT, and OF is not FOR."""
+        for phrase in ("Proceeding due to Retirement Superannuation",
+                       "Retired on Superanuation w.e.f",
+                       "non-receipt of pension anticipatory pension or gratuity"):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(_titles(phrase), ())
 
 
 class FormTitleOcrDamage(unittest.TestCase):
