@@ -23,7 +23,10 @@ from pipeline import timing
 class CallLogFile(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        p = unittest.mock.patch.object(db, "ROOT", Path(self.tmp.name))
+        # PENSION_RUN_ROOT, not db.ROOT: tests/__init__.py points the whole suite at a
+        # temporary root so no test can write into the live artefacts directory, and that
+        # setting wins over db.ROOT. A suite that wants its own root sets the same variable.
+        p = unittest.mock.patch.dict("os.environ", {"PENSION_RUN_ROOT": self.tmp.name})
         p.start(); self.addCleanup(p.stop)
         # the database half is exercised by tests.test_run_timings; keep this to the file
         q = unittest.mock.patch.object(timing, "TIMING_DB", False)
