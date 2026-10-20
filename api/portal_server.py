@@ -47,6 +47,7 @@ from pathlib import Path
 import aiohttp
 import uvicorn
 from starlette.applications import Starlette
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.datastructures import MutableHeaders
 from starlette.middleware import Middleware
 from starlette.requests import Request
@@ -215,7 +216,19 @@ class PortalApp:
             finally:
                 await self.stop()
 
-        self.app = Starlette(routes=routes, lifespan=lifespan, middleware=[Middleware(SecurityHeaders)])
+        # GZip before the security headers, so it wraps the proxied module's assets too.
+        # Nothing compressed anything: no middleware here, none in the API, and nginx -- which
+        # would normally do it -- is not in front on this deployment. The portal's own bundle
+        # is 357 KB of JavaScript and 59 KB of CSS, and opening the GP Fund examination adds
+        # the module's 43 KB and 32 KB on top, all of it uncompressed over a public address.
+        # Measured 20 Oct 2026: 502 KB becomes 145 KB, a 71% saving, which is most of a second
+        # on a 2 Mbit link and the reason the examination tab felt slow to open.
+        #
+        # 500 bytes: below that a gzip header and the CPU cost it, and the small JSON replies
+        # the case screen polls are better left alone.
+        self.app = Starlette(routes=routes, lifespan=lifespan,
+                             middleware=[Middleware(GZipMiddleware, minimum_size=500),
+                                         Middleware(SecurityHeaders)])
 
     def _reload_template(self) -> None:
         """Read index.html once, and again whenever a rebuild changes it (its asset names change)."""

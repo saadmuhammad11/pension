@@ -808,6 +808,11 @@ def _get(run_id: str) -> Run:
 # -- the multi-department case system ------------------------------------------------------------
 from api.v2 import router as _v2_router  # noqa: E402
 
+#: Responses go out compressed. See api/portal_server.py for the measurement; the case lists
+#: and the GP Fund view are JSON in the tens of kilobytes and compress by about 70%.
+from starlette.middleware.gzip import GZipMiddleware  # noqa: E402
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 app.include_router(_v2_router)
 from api.signatories import router as _signatories_router  # noqa: E402  -- signing authorities (C1, 9 Oct 2026)
 app.include_router(_signatories_router)
