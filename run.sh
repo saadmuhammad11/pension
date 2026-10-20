@@ -37,9 +37,19 @@ export PENSION_SEED_PASSWORD="${PENSION_SEED_PASSWORD:-1234}"
 export PENSION_API_DOCS="${PENSION_API_DOCS:-0}"
 export GPF_API_DOCS="${GPF_API_DOCS:-0}"
 UI_PORT=5184
-# The models run on this machine, so the API reaches them on loopback (5 Oct 2026): the box lost
-# its 192.168.1.1 address that day and every verification would have failed at stage 2. Loopback
-# does not depend on which network the box is on. Override any of these for another GPU box.
+# WHERE THE MODELS ARE. They ran on this machine until 18 Oct 2026 (DGX Spark), reached on
+# loopback. They now run on a separate Ascend NPU server, so there is no defensible default
+# here: /etc/pension/pension.env names the real endpoints and these are only a fallback for a
+# developer box that serves its own models. The status board below reads whatever is set rather
+# than assuming a port, because a board that checks the wrong address reports a healthy server
+# down and teaches the operator to ignore it.
+if [[ -z "${PENSION_VISION_URL:-}" && -r /etc/pension/pension.env ]]; then
+  for _v in PENSION_VISION_URL PENSION_OCR_URL PENSION_EMBED_URL PENSION_RERANK_URL; do
+    _val="$(sed -n "s/^$_v=//p" /etc/pension/pension.env | tail -1)"
+    [[ -n "$_val" ]] && export "$_v=$_val"
+  done
+  unset _v _val
+fi
 export PENSION_VISION_URL="${PENSION_VISION_URL:-http://127.0.0.1:8011/v1/chat/completions}"
 export PENSION_OCR_URL="${PENSION_OCR_URL:-http://127.0.0.1:8012/v1/chat/completions}"
 export PENSION_EMBED_URL="${PENSION_EMBED_URL:-http://127.0.0.1:8093/v1/embeddings}"
@@ -49,7 +59,8 @@ if [[ -z "${PENSION_MODEL_API_KEY:-}" && -r /etc/pension/models.env ]]; then
   PENSION_MODEL_API_KEY="$(sed -n 's/^VLLM_API_KEY=//p' /etc/pension/models.env | tail -1)"
 fi
 export PENSION_MODEL_API_KEY="${PENSION_MODEL_API_KEY:-}"
-MODEL_HOST=127.0.0.1
+#: scheme://host:port of a configured model endpoint -- the base the /health probe hangs off.
+base_of() { printf '%s' "$1" | sed -E 's#^([a-zA-Z]+://[^/]+).*#\1#'; }
 LOGS="$ROOT/artifacts/logs"
 API_LOG="$LOGS/api.log"
 UI_LOG="$LOGS/portal.log"
@@ -60,6 +71,10 @@ bad()  { printf "  ${C_BAD}%-7s${C_OFF} %s\n" "DOWN" "$1"; }
 warn() { printf "  ${C_WARN}%-7s${C_OFF} %s\n" "WARN" "$1"; }
 
 up() { curl -sf -m 3 "$1" >/dev/null 2>&1; }
+# Answered at all, whatever the status. A route behind sign-in returns 401 to an unauthenticated
+# probe, which is the service working: `up` reads that as down and reported a healthy case
+# system dead on every production box (19 Oct 2026).
+answers() { local c; c=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$1" 2>/dev/null); [[ -n "$c" && "$c" != 000 ]]; }
 
 # Only ever touches processes whose working directory is inside this project. Port 5173 on this
 # machine belongs to a colleague's portal, and an earlier `pkill -f vite` would have taken it
@@ -226,19 +241,23 @@ model_services() {
   # lists an unused service teaches the operator to read red as normal, and then a real
   # outage looks like the usual noise. qwen3guard on :8095 was listed here and is called
   # by nothing; it is reported below the line, as provisioned rather than needed.
+  local base
   echo "  model services this project calls:"
-  for entry in "vision:8011" "ocr:8012" "embedding:8093"; do
-    name=${entry%%:*}; port=${entry##*:}
-    if up "http://$MODEL_HOST:$port/health"; then ok "$name :$port"; else bad "$name :$port"; fi
+  for entry in "vision:$PENSION_VISION_URL" "ocr:$PENSION_OCR_URL" "embedding:$PENSION_EMBED_URL"; do
+    name=${entry%%:*}; base=$(base_of "${entry#*:}")
+    if [[ -z "$base" ]]; then warn "$name has no endpoint configured"; continue; fi
+    if up "$base/health"; then ok "$name $base"; else bad "$name $base"; fi
   done
-  if up "http://192.168.101.10:8094/health"; then ok "reranker 192.168.101.10:8094"; else bad "reranker 192.168.101.10:8094"; fi
-  echo "  provisioned on the estate, called by nothing in this pipeline:"
-  if up "http://$MODEL_HOST:8095/health"; then
-    warn "guard :8095 up (unused — it holds GPU memory the pipeline needs)"
+  # The reranker is optional: rag/store.py falls back to embedding-only ranking and says so in
+  # each hit's stage. It is reported against the address actually configured, so an unset or a
+  # stale PENSION_RERANK_URL is visible rather than hidden behind a hard-coded one.
+  if [[ -n "${PENSION_RERANK_URL:-}" ]]; then
+    base=$(base_of "$PENSION_RERANK_URL")
+    if up "$base/health"; then ok "reranker $base"
+    else warn "reranker $base unreachable — citations rank on embeddings alone"; fi
   else
-    echo "      guard :8095 down (unused, so this is not a fault)"
+    echo "      no reranker configured (citations rank on embeddings alone)"
   fi
-  if up "http://192.168.101.10:8001/health"; then ok "reasoning 192.168.101.10:8001 (unused)"; else echo "      reasoning :8001 down (unused, so this is not a fault)"; fi
 }
 
 status() {
@@ -248,6 +267,10 @@ status() {
   if up "http://127.0.0.1:$UI_PORT/__portals"; then
     local n; n=$(curl -sf -m 3 "http://127.0.0.1:$UI_PORT/__portals" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['bound']))" 2>/dev/null)
     ok "portals $n port(s) · AG portal http://localhost:$UI_PORT/ · departments :5180-5267 (portals/README.md)"
+  elif up "http://127.0.0.1:$UI_PORT/"; then
+    # /__portals is not served in production (api/portal_server.py), so its absence there is
+    # the setting working, not the portal being down.
+    ok "portal   http://localhost:$UI_PORT/ (production: /__portals not served)"
   else
     bad "portals :$UI_PORT"
   fi
@@ -255,9 +278,9 @@ status() {
   model_services
   echo
   # A run needs the vision model; the portal will start without it and then fail at stage 3.
-  up "http://$MODEL_HOST:8011/health" || warn "vision :8011 is down — document classification and field extraction cannot run"
+  up "$(base_of "$PENSION_VISION_URL")/health" || warn "the vision model is down — document classification and field extraction cannot run"
   echo
-  up "http://127.0.0.1:$API_PORT/api/v2/departments" && ok "case system http://localhost:$API_PORT/api/v2/ · sign in at http://localhost:$UI_PORT/ (portals/README.md)" || bad "case system :$API_PORT/api/v2"
+  answers "http://127.0.0.1:$API_PORT/api/v2/departments" && ok "case system http://localhost:$API_PORT/api/v2/ · sign in at http://localhost:$UI_PORT/ (portals/README.md)" || bad "case system :$API_PORT/api/v2"
   up "http://127.0.0.1:8201/api/health" && ok "GP Fund module http://localhost:8201/ · in the portal at http://localhost:$UI_PORT/gpf/" || bad "GP Fund module :8201 (./GP/run.sh)"
 }
 

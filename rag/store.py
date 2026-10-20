@@ -52,11 +52,13 @@ CITATIONS_PATH = ROOT / "artifacts" / "rag" / "citations.json"
 CITE_WORKERS = int(os.environ.get("AGPB_CITE_WORKERS", "8"))
 
 #: PENSION_EMBED_URL / PENSION_RERANK_URL point a deployment at its own model boxes (docs/DEPLOYMENT.md F4).
-EMBED_ENDPOINT = os.environ.get("PENSION_EMBED_URL") or "http://192.168.1.1:8093/v1/embeddings"
+from extraction import envfile as _envfile
+
+EMBED_ENDPOINT = _envfile.endpoint("PENSION_EMBED_URL", "embedding")
 EMBED_MODEL = "qwen3-embedding-4b"
 #: Spark-1, over the direct cable (was 10.170.0.240, then 192.168.100.10, until 1 Oct 2026).
-RERANK_ENDPOINT = (os.environ.get("PENSION_RERANK_URL") or os.environ.get("AGPB_RERANK_ENDPOINT")
-                   or "http://192.168.101.10:8094/v1/rerank")
+RERANK_ENDPOINT = (_envfile.endpoint("PENSION_RERANK_URL", "rerank")
+                   or os.environ.get("AGPB_RERANK_ENDPOINT") or "")
 RERANK_MODEL = "qwen3-reranker-4b"
 
 #: Qwen3-Embedding is instruction-aware on the query side, and omitting the instruction costs
@@ -112,16 +114,29 @@ class Chunk:
 
 
 def _post(endpoint: str, payload: dict, timeout_s: int = 120) -> dict:
+    """Every call to the embedding and rerank servers goes through here, so this is where they
+    are timed. They were the one part of a run that cost model time and reported none of it
+    (19 Oct 2026); a citation lookup that has gone slow was invisible beside vision and OCR."""
+    import time
     from extraction.model_auth import model_headers
+    from pipeline import timing
+    role = "rerank" if "rerank" in endpoint else "embedding"
+    started = time.time()
     req = urllib.request.Request(endpoint, json.dumps(payload).encode(), model_headers())
     try:
-        return json.loads(urllib.request.urlopen(req, timeout=timeout_s).read())
+        body = json.loads(urllib.request.urlopen(req, timeout=timeout_s).read())
     except urllib.error.HTTPError as exc:
-        raise RagError(
-            f"{endpoint} returned HTTP {exc.code}: {exc.read()[:300].decode(errors='replace')}"
-        ) from exc
+        detail = exc.read()[:300].decode(errors="replace")
+        timing.model_call(role, started=started, ended=time.time(), status="error",
+                          detail={"http": exc.code})
+        raise RagError(f"{endpoint} returned HTTP {exc.code}: {detail}") from exc
     except OSError as exc:
+        timing.model_call(role, started=started, ended=time.time(), status="error",
+                          detail={"error": str(exc)[:200]})
         raise RagError(f"cannot reach {endpoint} ({exc})") from exc
+    timing.model_call(role, started=started, ended=time.time(),
+                      detail={"n": len(payload.get("input") or payload.get("documents") or [])})
+    return body
 
 
 # -- corpus ------------------------------------------------------------------------------------

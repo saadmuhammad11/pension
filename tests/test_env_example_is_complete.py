@@ -22,7 +22,26 @@ NOT_FOR_DEPLOYMENT = {"PENSION_PYTHON"}
 
 def settings_read_by_the_code() -> set[str]:
     names: set[str] = set()
-    pattern = re.compile(r"""(?:environ(?:\.get)?\s*[\[(]\s*|getenv\s*\(\s*)["']((?:PENSION|GPF)_[A-Z0-9_]+)["']""")
+    # A setting name written as a literal anywhere it is passed into a call: os.environ["X"],
+    # os.environ.get("X"), getenv("X"), and the project's own resolvers -- envfile.endpoint("X")
+    # for the model endpoints, _workers("X") for the pool sizes.
+    #
+    # Named helpers were matched one by one until 20 Oct 2026, and the moment the endpoints
+    # moved behind envfile.endpoint() the four *_URL settings read as STALE while still being
+    # read. A detector that goes blind when code is refactored is worse than none: it says
+    # "this setting no longer exists" about one that does.
+    # The ways this code asks the environment for a setting, named explicitly. A looser rule
+    # cannot work: record.document("PENSION_SLIP") is a document type and SOURCES =
+    # ("PENSION_REGISTER", ...) a signatory source, and both look exactly like a settings read.
+    #
+    # The list is the point. Add a resolver and this test fails until it is named here, which
+    # is the moment to decide whether the new setting belongs in the example. The four model
+    # endpoints moved behind envfile.endpoint() on 20 Oct 2026 and silently read as STALE --
+    # the detector said a live setting no longer existed, which is worse than not checking.
+    READERS = ("environ", "getenv", "endpoint", "_workers", "_flag")
+    pattern = re.compile(
+        r"""(?:(?:%s)(?:\.get)?\s*[\[(]\s*)["']((?:PENSION|GPF)_[A-Z0-9_]+)["']"""
+        % "|".join(READERS))
     for folder in CODE:
         for path in (ROOT / folder).rglob("*.py"):
             if "tests" in path.parts or "__pycache__" in path.parts:

@@ -24,7 +24,9 @@ from extraction.model_auth import model_headers
 from extraction.schemas import SCHEMAS
 
 #: The vision model. PENSION_VISION_URL points a deployment at its own GPU box (docs/DEPLOYMENT.md F4).
-DEFAULT_ENDPOINT = os.environ.get("PENSION_VISION_URL") or "http://192.168.1.1:8011/v1/chat/completions"
+from extraction import envfile as _envfile
+
+DEFAULT_ENDPOINT = _envfile.endpoint("PENSION_VISION_URL", "vision")
 DEFAULT_MODEL = "qwen3-vl-30b-a3b-fp8"
 
 PROMPT_VERSION = "AGPB-EXTRACT-PROMPT-1.0"
