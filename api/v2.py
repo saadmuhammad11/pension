@@ -186,14 +186,17 @@ def gpf_session(request: Request, user: User = Depends(require_roles(*workflow.A
     from fastapi.responses import JSONResponse
     from api.auth import GPF_SCOPE, GPF_TOKEN_TTL, issue_scoped_token
     response = JSONResponse({"ok": True, "expires_in": int(GPF_TOKEN_TTL.total_seconds())})
-    # Secure whenever the request came over HTTPS, and always in production, where nginx is the
-    # only way in: a browser then never sends the cookie over plain HTTP, whatever a proxy header
-    # says (audit 6 Oct 2026, L2). The trial, served over plain HTTP, keeps a cookie it can use.
+    # Secure whenever the request came over HTTPS, and wherever the deployment is behind TLS,
+    # so a browser never sends the cookie over plain HTTP whatever a proxy header says
+    # (audit 6 Oct 2026, L2). settings.behind_tls() and not production() directly: production
+    # is MEANT to be nginx in front, but a box where it is not yet issues a Secure cookie the
+    # browser silently discards, and the frame then refuses an officer who did everything
+    # right. The flag states what is true rather than what is intended.
     https = (request.headers.get("x-forwarded-proto") or request.url.scheme) == "https"
     parent = _claims_of_request(request).get("jti")      # the session this frame belongs to: its sign-out ends the frame too
     response.set_cookie(GPF_COOKIE, issue_scoped_token(user, GPF_SCOPE, GPF_TOKEN_TTL, parent_jti=parent),
                         max_age=int(GPF_TOKEN_TTL.total_seconds()), path="/gpf", httponly=True,
-                        samesite="strict", secure=https or settings.production())
+                        samesite="strict", secure=https or settings.behind_tls())
     return response
 
 

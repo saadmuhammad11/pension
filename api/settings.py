@@ -42,6 +42,31 @@ def force_password_change() -> bool:
     return production() if given is None else given
 
 
+def behind_tls() -> bool:
+    """Is something terminating TLS in front of these services?
+
+    Production implies it, because production is meant to be nginx in front and the services
+    on loopback. Where that is not yet true, PENSION_BEHIND_TLS=0 says so, and it is read
+    rather than assumed because one thing turns on it that fails in a way nobody connects to
+    the cause: the GP Fund frame's cookie.
+
+    That cookie is issued Secure in production (audit 6 Oct 2026, L2, "where nginx is the only
+    way in"). A browser DISCARDS a Secure cookie that arrives over plain HTTP -- it does not
+    warn, it does not send it back, it simply never stores it. So on a box in production mode
+    with the portal still answering on its own port over HTTP, the frame could never sign in
+    and said "The GP Fund module opens from a case in the pension portal... open the case
+    there" to an officer who had done exactly that (20 Oct 2026).
+
+    Setting this to 0 does not weaken anything that TLS was protecting, because there is no
+    TLS: the sign-in password and the bearer token already cross the same connection in
+    clear. It stops the flag protecting a connection that does not exist at the cost of a
+    feature that does. Set it back to 1 -- or just remove it, since production implies it --
+    the day nginx terminates TLS in front, and the cookie goes back to Secure.
+    """
+    given = _flag("PENSION_BEHIND_TLS")
+    return production() if given is None else given
+
+
 def api_docs() -> bool:
     """FastAPI's /docs, /redoc and /openapi.json. Off in production; PENSION_API_DOCS=1 forces them on."""
     given = _flag("PENSION_API_DOCS")

@@ -999,6 +999,13 @@ def _production_startup_checks() -> None:
     if db.CREDENTIALS_CSV.exists():
         print(f"[v2] production: the plaintext sign-in sheet {db.CREDENTIALS_CSV} is still on disk; hand the "
               f"passwords out, then run `python3 -m api.db forget-credentials`", flush=True)
+    if not _settings.behind_tls():
+        # Loud, every start, because it is a security posture and not a preference. The thing
+        # it turns off is small; the thing it says about the deployment is not.
+        print("[v2] production with PENSION_BEHIND_TLS=0: nothing terminates TLS in front of "
+              "this service, so every password and token crosses the network in clear. The GP "
+              "Fund frame cookie is issued WITHOUT Secure so a browser will keep it. Put nginx "
+              "with a certificate in front and remove this setting.", flush=True)
 
 
 if __name__ == "__main__":
