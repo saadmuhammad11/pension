@@ -408,7 +408,16 @@ def summarise(run: Run) -> dict:
 
 
 def gpu_utilisation() -> dict:
-    """Live GPU numbers.
+    """This host's numbers, and what the model servers are doing.
+
+    The device columns are about THIS box. Until 18 Oct 2026 that was the same box as the
+    models (DGX Spark, ``infra/serve-qwen3-vl.sh``), so nvidia-smi here answered "how busy is
+    the thing doing the work". Since the move to the Ascend NPU server it does not: the models
+    are over the network, nvidia-smi is not installed, and the device fields are null -- which
+    is the honest answer for this host, not a claim that the accelerator is idle.
+
+    ``models`` is the replacement signal and is read from each server's own /metrics
+    (api.model_metrics), so it works whatever silicon is on the far end.
 
     On the GB10 the memory columns report ``[N/A]`` because CPU and GPU share one coherent
     pool, so memory is read from /proc/meminfo instead. Where a figure is genuinely
@@ -443,6 +452,13 @@ def gpu_utilisation() -> dict:
         out["mem_used_gb"] = round(total - info["MemAvailable"] / 1048576, 1)
     except Exception:
         pass
+    try:
+        from api import model_metrics
+        out["models"] = model_metrics.snapshot(timeout_s=3.0)
+        out["pressure"] = model_metrics.pressure(out["models"])
+    except Exception:                                 # noqa: BLE001 -- a status page, never a run
+        out["models"] = {}
+        out["pressure"] = None
     return out
 
 

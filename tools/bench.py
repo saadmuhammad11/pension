@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -87,27 +88,67 @@ def _healthy(url: str) -> bool:
 
 
 class Sampler:
-    """GPU utilisation (nvidia-smi) and RAM, once a second, on a thread."""
+    """This host's RAM, and what the model servers are doing, once a second on a thread.
+
+    nvidia-smi was the measurement while the models shared this box (DGX Spark). On the Ascend
+    server they do not, and nvidia-smi here records nothing -- which silently produced a
+    benchmark with no utilisation column at all, so the one tool for measuring a tuning change
+    could not see the thing being tuned.
+
+    What replaces it is read from the servers themselves (api.model_metrics) and is what the
+    concurrency question needs an answer to: how many requests were actually executing at once
+    (``running``), and whether any were queued for scheduler capacity (``waiting_capacity``) --
+    the point past which more concurrency buys queueing rather than throughput.
+    """
 
     def __init__(self) -> None:
-        self.gpu: list[float] = []
+        self.gpu: list[float] = []                 # device utilisation, when a device is local
+        self.running: list[float] = []
+        self.waiting: list[float] = []
+        self.kv: list[float] = []
         self.ram_used: list[int] = []
         self.rss: list[int] = []
         self._stop = threading.Event()
         self._t = threading.Thread(target=self._run, daemon=True)
 
     def _run(self) -> None:
-        import psutil
-        proc = psutil.Process()
+        from api import model_metrics
+        # psutil is optional: it reports this host's RAM, which is no longer where the work
+        # happens. Importing it at the top of this loop meant one missing package silenced the
+        # model-server sampling too, and the benchmark then recorded nothing at all.
+        try:
+            import psutil
+            proc = psutil.Process()
+        except ImportError:
+            psutil, proc = None, None
         while not self._stop.is_set():
             try:
-                out = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
-                                     capture_output=True, text=True, timeout=5).stdout.strip()
-                self.gpu.append(float(out.splitlines()[0]))
+                p = model_metrics.pressure()
+                self.running.append(p["running"])
+                self.waiting.append(p["waiting_capacity"])
+                self.kv.append(p["kv_cache_pct_max"])
             except Exception:                              # noqa: BLE001
                 pass
-            self.ram_used.append(psutil.virtual_memory().used)
-            self.rss.append(proc.memory_info().rss)
+            for tool, args in (("npu-smi", ["npu-smi", "info"]),
+                               ("nvidia-smi", ["nvidia-smi", "--query-gpu=utilization.gpu",
+                                               "--format=csv,noheader,nounits"])):
+                if not shutil.which(tool):
+                    continue
+                try:
+                    out = subprocess.run(args, capture_output=True, text=True,
+                                         errors="replace", timeout=5).stdout
+                    if tool == "nvidia-smi":
+                        self.gpu.append(float(out.strip().splitlines()[0]))
+                    else:
+                        pcts = [float(x) for x in re.findall(r"(\d{1,3})\s*%", out)]
+                        if pcts:
+                            self.gpu.append(max(pcts))
+                except Exception:                          # noqa: BLE001
+                    pass
+                break
+            if psutil is not None:
+                self.ram_used.append(psutil.virtual_memory().used)
+                self.rss.append(proc.memory_info().rss)
             self._stop.wait(1.0)
 
     def __enter__(self) -> "Sampler":
@@ -118,9 +159,15 @@ class Sampler:
 
     def summary(self) -> dict:
         gb = 1024 ** 3
+        mean = lambda xs: round(sum(xs) / len(xs), 2) if xs else None     # noqa: E731
         return {"gpu_util_mean_pct": round(sum(self.gpu) / len(self.gpu), 1) if self.gpu else None,
                 "gpu_util_max_pct": max(self.gpu) if self.gpu else None,
                 "gpu_samples": len(self.gpu),
+                "model_running_mean": mean(self.running),
+                "model_running_max": max(self.running) if self.running else None,
+                "model_waiting_capacity_max": max(self.waiting) if self.waiting else None,
+                "model_kv_cache_pct_max": round(max(self.kv) * 100, 2) if self.kv else None,
+                "model_samples": len(self.running),
                 "ram_used_peak_gb": round(max(self.ram_used) / gb, 2) if self.ram_used else None,
                 "ram_used_start_gb": round(self.ram_used[0] / gb, 2) if self.ram_used else None,
                 "process_rss_peak_mb": round(max(self.rss) / 1024 ** 2, 1) if self.rss else None,

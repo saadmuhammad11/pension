@@ -17,13 +17,20 @@ def main(argv: list[str]) -> int:
     d = ROOT / "artifacts" / "bench" / argv[1]
     cases = {p.stem: json.loads(p.read_text()) for p in sorted(d.glob("*.json")) if p.stem != "summary"}
     print(f"# {argv[1]}  ({(d / 'summary.json').exists() and json.loads((d / 'summary.json').read_text()).get('git')})\n")
-    print(f"{'case':<8}{'state':<8}{'wall s':>8}{'gpu% mean':>10}{'gpu% max':>9}{'RAM peak GB':>12}{'RSS MB':>8}  flags  verdict")
+    # conc max / queued are the tuning columns: how many requests the servers really ran at
+    # once, and whether any waited for scheduler capacity. Raising concurrency past the point
+    # where "queued" leaves zero buys queueing, not throughput.
+    print(f"{'case':<8}{'state':<8}{'wall s':>8}{'conc mean':>10}{'conc max':>9}{'queued':>7}"
+          f"{'kv%':>6}{'gpu% max':>9}{'RAM peak GB':>12}  flags  verdict")
     for name, r in cases.items():
         res = r.get("resources") or {}
         f = r.get("findings") or {}
         nflags = len(f.get("flags") or []) if "flags" in f else sum(len(v) for k, v in (f.get("items") or {}).items() if k in ("hard", "adv"))
-        print(f"{name:<8}{str(r.get('state')):<8}{r.get('wall_s') or 0:>8.1f}{str(res.get('gpu_util_mean_pct')):>10}{str(res.get('gpu_util_max_pct')):>9}"
-              f"{str(res.get('ram_used_peak_gb')):>12}{str(res.get('process_rss_peak_mb')):>8}  {nflags:<5}  {f.get('verdict') or (f.get('position') or {}).get('mayAdvance')}")
+        print(f"{name:<8}{str(r.get('state')):<8}{r.get('wall_s') or 0:>8.1f}"
+              f"{str(res.get('model_running_mean')):>10}{str(res.get('model_running_max')):>9}"
+              f"{str(res.get('model_waiting_capacity_max')):>7}{str(res.get('model_kv_cache_pct_max')):>6}"
+              f"{str(res.get('gpu_util_max_pct')):>9}{str(res.get('ram_used_peak_gb')):>12}"
+              f"  {nflags:<5}  {f.get('verdict') or (f.get('position') or {}).get('mayAdvance')}")
     # stages across cases
     print("\n## Time by stage (sum over cases, sorted)")
     stage_tot: Counter = Counter(); stage_by_case = defaultdict(dict)
