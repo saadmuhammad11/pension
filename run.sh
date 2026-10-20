@@ -44,7 +44,7 @@ UI_PORT=5184
 # than assuming a port, because a board that checks the wrong address reports a healthy server
 # down and teaches the operator to ignore it.
 if [[ -z "${PENSION_VISION_URL:-}" && -r /etc/pension/pension.env ]]; then
-  for _v in PENSION_VISION_URL PENSION_OCR_URL PENSION_EMBED_URL PENSION_RERANK_URL; do
+  for _v in PENSION_VISION_URL PENSION_OCR_URL PENSION_EMBED_URL PENSION_RERANK_URL PENSION_MODEL_API_KEY; do
     _val="$(sed -n "s/^$_v=//p" /etc/pension/pension.env | tail -1)"
     [[ -n "$_val" ]] && export "$_v=$_val"
   done
@@ -53,11 +53,14 @@ fi
 export PENSION_VISION_URL="${PENSION_VISION_URL:-http://127.0.0.1:8011/v1/chat/completions}"
 export PENSION_OCR_URL="${PENSION_OCR_URL:-http://127.0.0.1:8012/v1/chat/completions}"
 export PENSION_EMBED_URL="${PENSION_EMBED_URL:-http://127.0.0.1:8093/v1/embeddings}"
-# The model servers' key (audit 6 Oct 2026, item 7): once the keyed units are installed every /v1
-# request needs it. Read from the same file the units load (root:tmc 640) unless already set.
-if [[ -z "${PENSION_MODEL_API_KEY:-}" && -r /etc/pension/models.env ]]; then
-  PENSION_MODEL_API_KEY="$(sed -n 's/^VLLM_API_KEY=//p' /etc/pension/models.env | tail -1)"
-fi
+# The model servers' key (audit 6 Oct 2026, item 7): every /v1 request needs it. It is read from
+# pension.env by the loop above, with the endpoints it belongs beside.
+#
+# It used to come from /etc/pension/models.env, the file the vLLM units load. That file belongs
+# on the MODEL box -- root:tmc there, holding the serving settings -- and has never existed on
+# this one. The fallback was written when the models ran here; since 18 Oct 2026 they do not, so
+# it read a file that is not present and left the key empty, which is a 401 from every server
+# for a reason nothing would have explained (20 Oct 2026).
 export PENSION_MODEL_API_KEY="${PENSION_MODEL_API_KEY:-}"
 #: scheme://host:port of a configured model endpoint -- the base the /health probe hangs off.
 base_of() { printf '%s' "$1" | sed -E 's#^([a-zA-Z]+://[^/]+).*#\1#'; }
