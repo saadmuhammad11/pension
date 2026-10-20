@@ -339,7 +339,10 @@ def _safe_extract(data: bytes, into: Path, *, depth: int = 1, budget: _Budget | 
 
 
 def _run(cmd: list[str], *, timeout: int = 60) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    # errors="replace": poppler echoes a document's own metadata, which is not always UTF-8.
+    # A scan whose Title held a 0xFE byte raised UnicodeDecodeError out of _pdf_pages and the
+    # whole bundle was reported unreadable (19 Oct 2026). The lines read here are all ASCII.
+    return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout)
 
 
 def _pdf_pages(pdf: Path) -> int:
@@ -544,7 +547,7 @@ def _office_to_pdf(src: Path, out_dir: Path, profile: Path) -> Path:
         ["soffice", "--headless", "--norestore", f"-env:UserInstallation=file://{profile}",
          f"--infilter={_OFFICE_FILTERS[ext]}",
          "--convert-to", "pdf", "--outdir", str(out_dir), str(src)],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace", start_new_session=True,
     )
     try:
         _, stderr = proc.communicate(timeout=_SOFFICE_TIMEOUT)

@@ -112,8 +112,10 @@ TOOL_TIMEOUT = int(os.environ.get("PENSION_PDF_TOOL_TIMEOUT", "300") or 300)
 
 
 def _run(cmd: list[str]) -> str:
+    # errors="replace": these tools echo a document's own text and metadata, which is not
+    # always UTF-8, and a strict decode turns one odd byte into a failed run (19 Oct 2026).
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=TOOL_TIMEOUT)
+        proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=TOOL_TIMEOUT)
     except subprocess.TimeoutExpired:
         raise IngestError(f"{cmd[0]} did not finish within {TOOL_TIMEOUT} s") from None
     if proc.returncode != 0:

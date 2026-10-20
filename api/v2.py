@@ -899,7 +899,7 @@ def pdf_page_count(body: "bytes | Path") -> int | None:
         return None
     if isinstance(body, Path):
         try:
-            out = subprocess.run(["pdfinfo", str(body)], capture_output=True, text=True, timeout=30).stdout
+            out = subprocess.run(["pdfinfo", str(body)], capture_output=True, text=True, errors="replace", timeout=30).stdout
         except (OSError, subprocess.TimeoutExpired):
             return None
         m = re.search(r"^Pages:\s+(\d+)", out, re.M)
@@ -908,7 +908,7 @@ def pdf_page_count(body: "bytes | Path") -> int | None:
         fh.write(body)
         fh.flush()
         try:
-            out = subprocess.run(["pdfinfo", fh.name], capture_output=True, text=True, timeout=30).stdout
+            out = subprocess.run(["pdfinfo", fh.name], capture_output=True, text=True, errors="replace", timeout=30).stdout
         except (OSError, subprocess.TimeoutExpired):
             return None
     m = re.search(r"^Pages:\s+(\d+)", out, re.M)
