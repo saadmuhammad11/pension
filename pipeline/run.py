@@ -23,6 +23,7 @@ belongs with a raw multi-page scan.
 
 from __future__ import annotations
 
+import os
 import json
 from dataclasses import asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,7 +35,13 @@ from .ingest import (SourcePage, atomic_write_text, load_manifest, read_checkpoi
 
 #: How many pages to read at once. Matched to the vision server's --max-num-seqs: asking for
 #: more than it will batch just queues requests inside vLLM and adds latency to each.
-IDENTIFY_CONCURRENCY = 4
+#:
+#: Tunable without a redeploy (PENSION_IDENTIFY_CONCURRENCY). The value that suits one
+#: accelerator does not suit the next -- 4 was chosen on the DGX Spark, and the move to the
+#: Ascend NPU server on 18 Oct 2026 invalidated the measurement behind it, not just the number.
+#: A constant that needs a source edit and a restart cannot be swept, and an unswept constant
+#: stays at whatever the last machine wanted.
+IDENTIFY_CONCURRENCY = max(1, int(os.environ.get("PENSION_IDENTIFY_CONCURRENCY") or 4))
 
 IDENTITIES = "identities.json"
 DOCUMENTS = "documents.json"
@@ -281,8 +288,18 @@ def documents_named_by_their_own_heading(run: Path, rows: list[dict],
     specifically is left exactly where it put it.
     """
     from extraction.identify import GENERIC_LABELS, STATEMENTS_ON_LABELLED_PAGES, statements_on_page, titles_on_page
-    from pipeline.extract import page_ocr_text
+    from pipeline.extract import page_ocr_text, prefetch_page_ocr
     from rules.caserecord import Document
+
+    # Read every page this loop will want, at once, before entering it. The loop below is
+    # unchanged and still runs in row order on this thread -- `covered`, `added` and `unread`
+    # are built exactly as before -- it just no longer waits on a round trip per page.
+    prefetch_page_ocr(run, [
+        row["page"] for row in rows
+        if row.get("page") is not None
+        and (row.get("document_type") in GENERIC_LABELS
+             or row.get("document_type") in STATEMENTS_ON_LABELLED_PAGES)
+    ])
 
     covered = {(p, d.type) for d in docs for p in d.pages}
     added: list[Document] = []

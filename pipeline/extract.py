@@ -20,6 +20,7 @@ of the pensionable amount.
 
 from __future__ import annotations
 
+import os
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -43,7 +44,15 @@ from rules.dii import (InputMissing, DEATH_AFTER_RETIREMENT, REGRANT_AFTER_WIDOW
 
 #: Documents read at once in stage 6. Each is a confirming double read, so twice this many
 #: requests are in flight; matched to the vision server's --max-num-seqs.
-ASSERTION_CONCURRENCY = 2
+#:
+#: Tunable without a redeploy (PENSION_ASSERTION_CONCURRENCY); see IDENTIFY_CONCURRENCY in
+#: pipeline/run.py for why. Stage 6 is the dominant cost of a run -- 451.8s of a 631.6s run
+#: measured 19 Oct 2026, at 1.76x parallelism -- so this is the one with the most to give.
+ASSERTION_CONCURRENCY = max(1, int(os.environ.get("PENSION_ASSERTION_CONCURRENCY") or 2))
+
+#: Pages whose printed heading stage 3b reads at once (see prefetch_page_ocr). Was one at a
+#: time until 19 Oct 2026.
+ASSEMBLE_OCR_CONCURRENCY = max(1, int(os.environ.get("PENSION_ASSEMBLE_OCR_CONCURRENCY") or 8))
 
 FIELDS = "fields.json"
 DETERMINATION = "determination.json"
@@ -805,6 +814,66 @@ def page_ocr_text(run: Path, page: int) -> str | None:
     cache[key] = text
     atomic_write_text(cache_path, json.dumps(cache, ensure_ascii=False))
     return text
+
+
+def prefetch_page_ocr(run: Path, pages: list[int], *, concurrency: int | None = None) -> int:
+    """Read these pages' OCR text at once and put it in the cache ``page_ocr_text`` reads.
+
+    Stage 3b asked for one page at a time and waited for each: 9 calls, 91.5s, every one
+    starting as the last ended, while the OCR server reported a single request running
+    (19 Oct 2026). The reads are independent, so they are done together here and the caller's
+    loop then hits a warm cache with its ordering and its shared state untouched.
+
+    The cache is NOT written from the pool. ``page_ocr_text`` read-modify-writes one JSON
+    file, so concurrent writers would each save their own entry over everyone else's; the
+    reads happen in the pool and the single write happens here, on the calling thread.
+
+    Returns how many pages were actually read. A page already cached is not read again, and a
+    page whose read FAILS is not cached -- same discipline as page_ocr_text, where a reader
+    that was briefly down must not leave "this page is blank" in the run as a fact.
+    """
+    from extraction.ocr import ocr_page
+    from pipeline import timing
+
+    cache_path = run / "ocr_text.json"
+    cache: dict = {}
+    if cache_path.exists():
+        try:
+            cache = json.loads(cache_path.read_text())
+        except ValueError:
+            cache = {}
+    wanted = [p for p in dict.fromkeys(pages) if str(p) not in cache]
+    if not wanted:
+        return 0
+
+    manifest = json.loads((run / "manifest.json").read_text())
+    image_of = {p["page"]: run / p["image_path"] for p in manifest["pages"]}
+    todo = [p for p in wanted if p in image_of]
+    if not todo:
+        return 0
+
+    workers = concurrency or ASSEMBLE_OCR_CONCURRENCY
+    def read(page: int) -> tuple[int, str | None]:
+        try:
+            return page, ocr_page(image_of[page], page).text
+        except Exception:                            # noqa: BLE001 -- not cached, see above
+            return page, None
+
+    if workers <= 1 or len(todo) < 2:
+        results = [read(p) for p in todo]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = [f.result() for f in [
+                pool.submit(timing.carry(read, stage="assemble", page=p), p) for p in todo]]
+
+    read_ok = 0
+    for page, text in results:
+        if text is not None:
+            cache[str(page)] = text
+            read_ok += 1
+    if read_ok:
+        atomic_write_text(cache_path, json.dumps(cache, ensure_ascii=False))
+    return read_ok
 
 
 def ocr_witnesses(run: Path, already: set[int], limit: int = 8) -> list[dict]:
@@ -1727,7 +1796,7 @@ def stage_assertions(
     result: dict[str, Any] = {
         "assertions": [], "annex_a_family": [], "frc_family": [], "recoveries": [],
         "document_dates": [], "names": [], "issuing_offices": [], "unreadable": [],
-        "payroll_deductions_noted": [], "cnic_cards": [],
+        "payroll_deductions_noted": [], "cnic_cards": [], "disputed": [],
     }
     # A resubmission (pipeline.carryover): what the earlier round read from the pages this
     # round carries, under their new numbers, and only the new pages are read below. Facts
@@ -1807,7 +1876,23 @@ def stage_assertions(
             if progress:
                 progress(f"stage 6  {doc['type']} p.{page}")
             try:
-                data = future.result()[0].data
+                # BOTH halves. extract_page_confirmed returns (extraction, agreement), and
+                # taking only [0] applied half of decision H1: the reader blanks a disputed
+                # figure or date, the page then contributes nothing, and NOTHING said why.
+                # On the 78-page bundle p.60's document_date read four different values across
+                # four attempts; it is absent from document_dates, absent from unreadable, and
+                # raises no finding (20 Oct 2026). Stage 4 keeps its agreements and they reach
+                # check_disputed_reads through fields.json; stage 6 dropped its own.
+                #
+                # "A check that silently did not run is worse than a missing field"
+                # (rules.flags.check_disputed_reads).
+                extraction, agreement = future.result()
+                data = extraction.data
+                if isinstance(agreement, dict) and not agreement.get("agree", True):
+                    result["disputed"].append({
+                        "page": page, "document": doc["type"],
+                        "fields": list(agreement.get("disputed") or ("figures on the page",)),
+                    })
             except Exception as exc:                 # noqa: BLE001
                 # Do NOT just log this. An unreadable determination-critical document has to
                 # reach the case report as a finding: LPC p.29 failed all three read attempts on

@@ -31,6 +31,8 @@ import math
 import os
 import re
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
@@ -169,6 +171,84 @@ def _page_sizes_pts(pdf: Path, total: int) -> dict[int, tuple[float, float]]:
             for m in re.finditer(r"Page\s+(\d+)\s+size:\s*([\d.]+)\s*x\s*([\d.]+)", out)}
 
 
+#: Pages rendered at once. Rendering is this stage's whole cost and it is local CPU: each page
+#: carries a ~6 Mpx JPEG scan that poppler decodes and rescales single-threaded, measured at
+#: 5.3s a page on 19 Oct 2026 -- 121.8s of a 25-page run -- with 31 of this box's 32 cores idle.
+#: Measured on a real case file: 8 pages took 42.4s one at a time and 6.3s eight at a time, for
+#: the same 42.1s of CPU.
+#:
+#: Memory is bounded: _oversized_pages raises before any page is rendered, so no page here can
+#: exceed bundle.MAX_FRAME_PIXELS (50 Mpx, ~450 MB in poppler at worst).
+def _workers(variable: str) -> int:
+    """Worker count from ``variable``: unset or empty means this box's core count.
+
+    An explicit 0 clamps to 1, it does not mean "default". Someone who writes 0 is turning
+    the pool OFF, and silently giving them every core would be the opposite of what they
+    asked for. A value that is not a number is treated as unset rather than raising at import
+    and taking the whole service down with it.
+    """
+    raw = os.environ.get(variable)
+    if raw is None or not raw.strip():
+        return os.cpu_count() or 8
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return os.cpu_count() or 8
+
+
+RENDER_CONCURRENCY = _workers("PENSION_RENDER_CONCURRENCY")
+
+#: Page renders in flight in this PROCESS, across every run it is working on.
+#:
+#: A per-run number cannot be right. Rendering is local CPU on a box with a fixed number of
+#: cores, so the value that suits one run starves it when eight share the machine, and the
+#: value that suits eight leaves one run using an eighth of the box. Tuned for eight runs at 4
+#: each, a single 78-page case spent 322.6s of CPU work four-at-a-time on 32 idle cores
+#: (20 Oct 2026).
+#:
+#: So the per-run pool asks for as much as it likes and this budget decides what actually runs.
+#: One run gets the whole box; eight share it; neither needs to know how many others there are.
+RENDER_WORKERS = _workers("PENSION_RENDER_WORKERS")
+_RENDER_BUDGET = threading.BoundedSemaphore(RENDER_WORKERS)
+
+
+def _render_one(pdf: Path, pages_dir: Path, dpi: int, n: int) -> None:
+    """One page to ``pages_dir/pNNN*.png``. Timed per page: one slow page is invisible in a
+    stage total, and this stage is nothing but these calls."""
+    import time as _time
+    from pipeline import timing as _timing
+    started = _time.time()
+    with _RENDER_BUDGET:
+        _run(["pdftoppm", "-png", "-r", str(dpi), "-f", str(n), "-l", str(n),
+              str(pdf), str(pages_dir / f"p{n:03d}")])
+    _timing.record("page", "render", started=started, ended=_time.time(), page=n, name=f"{dpi}dpi")
+
+
+def _prerender(pdf: Path, pages_dir: Path, dpi: int, wanted: list[int]) -> None:
+    """Render the pages the loop is about to want, together.
+
+    The loop below is left exactly as it was -- same order, same checkpoint on the same
+    thread, same per-page glob -- and simply finds the PNG already on disk. A page that fails
+    here is not raised: the loop renders it itself and raises there, so the error still
+    carries the page it belongs to and an interrupted run still resumes page by page.
+    """
+    if not wanted:
+        return
+    if RENDER_CONCURRENCY <= 1 or len(wanted) < 2:
+        for n in wanted:
+            _render_one(pdf, pages_dir, dpi, n)
+        return
+    from pipeline import timing
+    with ThreadPoolExecutor(max_workers=min(RENDER_CONCURRENCY, len(wanted))) as pool:
+        futures = [pool.submit(timing.carry(_render_one, stage="ingest", page=n),
+                               pdf, pages_dir, dpi, n) for n in wanted]
+        for f in futures:
+            try:
+                f.result()
+            except Exception:                        # noqa: BLE001 -- the loop renders and raises
+                pass
+
+
 def _oversized_pages(pdf: Path, total: int, dpi: int) -> list[tuple[int, int]]:
     """(page, megapixels) of every page that would render past the image limit at ``dpi``.
 
@@ -237,17 +317,30 @@ def _ingest_raw_scan(pdf: Path, out: Path, pages_dir: Path,
     judge = upright.vision_judge()
     pages: list[SourcePage] = []
     fields = set(SourcePage.__dataclass_fields__)
-    for n in range(1, total + 1):
+    # Everything the loop will have to render, rendered together first. The same two tests the
+    # loop uses decide it, so a resumed run re-renders exactly nothing.
+    _prerender(pdf, pages_dir, dpi, [
+        n for n in range(1, total + 1)
+        if not ((carried or {}).get(n) and (out / (carried or {})[n]["image_path"]).exists())
+        and not (sorted(pages_dir.glob(f"p{n:03d}-*.png")) or sorted(pages_dir.glob(f"p{n:03d}.png")))
+    ])
+    def facts(n: int) -> SourcePage:
+        """Everything this stage knows about one page. Independent of every other page.
+
+        Rendering was the obvious cost and was parallelised first, but it is not all of it:
+        deciding the page's orientation and scoring its legibility each load and analyse the
+        rendered image, and those ran one page at a time afterwards. On a 78-page case the
+        renders finished in 82s and the stage was still going a minute later with nothing on
+        the model servers and one core busy (20 Oct 2026).
+        """
         row = (carried or {}).get(n)
         if row is not None and (out / row["image_path"]).exists():
-            pages.append(SourcePage(**{k: v for k, v in row.items() if k in fields}))
-            continue
+            return SourcePage(**{k: v for k, v in row.items() if k in fields})
         produced = sorted(pages_dir.glob(f"p{n:03d}-*.png")) or sorted(
             pages_dir.glob(f"p{n:03d}.png")
         )
         if not produced:
-            _run(["pdftoppm", "-png", "-r", str(dpi), "-f", str(n), "-l", str(n),
-                  str(pdf), str(pages_dir / f"p{n:03d}")])
+            _render_one(pdf, pages_dir, dpi, n)
             produced = sorted(pages_dir.glob(f"p{n:03d}*.png"))
         if not produced:
             raise IngestError(f"page {n} of {pdf.name} could not be rendered")
@@ -256,11 +349,12 @@ def _ingest_raw_scan(pdf: Path, out: Path, pages_dir: Path,
         # classifier, the OCR pass, the extractor or the officer's own preview sees it --
         # so all of them read the same image. extraction/upright.py explains how the angle
         # is chosen; the page as rendered is kept beside it.
-        turn = upright.decide(image, judge)
-        if turn.rotated:
-            upright.apply(image, turn.rotation, image.with_name(f"{image.stem}-as-scanned.png"))
-        quality, w, h = _quality(image)
-        pages.append(SourcePage(
+        with _RENDER_BUDGET:
+            turn = upright.decide(image, judge)
+            if turn.rotated:
+                upright.apply(image, turn.rotation, image.with_name(f"{image.stem}-as-scanned.png"))
+            quality, w, h = _quality(image)
+        return SourcePage(
             page=n,
             image_path=str(image.relative_to(out)),
             header_title="",
@@ -270,7 +364,18 @@ def _ingest_raw_scan(pdf: Path, out: Path, pages_dir: Path,
             height=h,
             rotation=turn.rotation,
             rotation_basis=turn.basis,
-        ))
+        )
+
+    numbers = list(range(1, total + 1))
+    if RENDER_CONCURRENCY <= 1 or len(numbers) < 2:
+        pages = [facts(n) for n in numbers]
+    else:
+        from pipeline import timing
+        with ThreadPoolExecutor(max_workers=min(RENDER_CONCURRENCY, len(numbers))) as pool:
+            # Read back by index: the manifest is the bundle's page order, and completion
+            # order would shuffle the case file.
+            pages = [f.result() for f in
+                     [pool.submit(timing.carry(facts, stage="ingest", page=n), n) for n in numbers]]
     return pages
 
 

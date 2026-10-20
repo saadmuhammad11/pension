@@ -51,9 +51,25 @@ BLOCK_INSTRUCTION = (
     "countersignature. Fill the schema from that block only; a value not printed there is null."
 )
 
-def read_block(image: Path) -> dict:
+def read_block(image: Path, cache: dict | None = None) -> dict:
+    """The signature block printed on this page.
+
+    A pure function of the IMAGE: same schema, same instruction, same limits, no document in
+    the question. So when several prescribed forms cite one page the answer is the same every
+    time, and ``cache`` keeps it.
+
+    That is not hypothetical. check_form runs once per form and the caller's de-duplication
+    keys on (type, pages), so Form B-I, B-II, B-III and B-IV all sitting on page 13 -- which
+    is what a departmental bundle looks like when the four sanction forms are printed on one
+    sheet -- read that page four times and threw three answers away (20 Oct 2026).
+    """
+    key = str(image)
+    if cache is not None and key in cache:
+        return cache[key]
     ext = extract_page(image, "PSA_SIGNATURE_BLOCK", max_tokens=1024, timeout_s=180,
                        instruction_override=BLOCK_INSTRUCTION)
+    if cache is not None:
+        cache[key] = ext.data
     return ext.data
 
 
@@ -106,13 +122,14 @@ def cut_signature(image: Path, box: list | None, out: Path) -> str | None:
 
 
 def check_form(run: Path, page_images: dict[int, Path], doc: dict, *,
-               department_hint: str | None = None, register: tuple | None = None) -> dict:
+               department_hint: str | None = None, register: tuple | None = None,
+               block_cache: dict | None = None) -> dict:
     """One prescribed form: its signature block, the cut-out signature, and the specimen it answers to."""
     pages = [p for p in doc.get("pages", []) if p in page_images]
     blocks = []
     for page in pages:
         try:
-            blocks.append((page, read_block(page_images[page])))
+            blocks.append((page, read_block(page_images[page], block_cache)))
         except ExtractionError as exc:
             blocks.append((page, {"_error": str(exc)}))
     # The page carrying the sanctioning authority's signature: the last one that shows it
@@ -195,6 +212,9 @@ def stage_psa_signatures(run_dir: str | Path, *, progress: Callable[[str], None]
     images = {p["page"]: run / p["image_path"] for p in manifest["pages"]}
     documents = json.loads((run / "documents.json").read_text())
     hint = _department_hint(run)
+    #: One read per PAGE, not per form. The loop below de-duplicates on (type, pages), which
+    #: does not help when four different forms sit on one sheet.
+    block_cache: dict = {}
     for doc in documents:
         if doc["type"] not in PRESCRIBED_FORMS or not doc.get("pages"):
             continue
@@ -203,7 +223,8 @@ def stage_psa_signatures(run_dir: str | Path, *, progress: Callable[[str], None]
             continue
         if progress:
             progress(f"signature  {doc['type']} p.{','.join(map(str, key[1]))}")
-        result["forms"].append(check_form(run, images, doc, department_hint=hint, register=register))
+        result["forms"].append(check_form(run, images, doc, department_hint=hint,
+                                          register=register, block_cache=block_cache))
         atomic_write_text(out_path, json.dumps(result, indent=2, ensure_ascii=False, default=str))
     result["register"] = [s.id for s in (register if register is not None else specimens.load())]
     atomic_write_text(out_path, json.dumps(result, indent=2, ensure_ascii=False, default=str))

@@ -46,6 +46,8 @@ engine read. "The AI silently rotated the evidence" is not a sentence anyone wan
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -189,6 +191,79 @@ def tidy_line_starts(image_path: str | Path) -> float:
     return spread_of_ends / spread_of_starts
 
 
+#: Times the reader is asked about one candidate rotation. All must agree, or it does not count.
+#:
+#: The reader is not stable on a page whose layout is nearly tied. Measured on page 17 of a real
+#: 78-page bundle (line starts 0.93 at 90°, 1.07 at 270°), asked SERIALLY six times: 270° five
+#: times and 0° once, and sixteen times concurrently: 270° twelve, 0° four. So the same scan was
+#: turned upright or left alone depending on nothing the manifest could show, and the basis
+#: sentence read like a settled judgement either way (20 Oct 2026).
+#:
+#: This is the discipline extraction/client.py already applies to determination-critical reads:
+#: ask more than once and require agreement, because a single read can be wrong in a way no
+#: confidence score reveals.
+#:
+#: WHICH read is unreliable matters. Measured on that page, 20 asks per candidate: the 270°
+#: rotation came back upright 20/20, and the 90° rotation -- the wrong one -- came back upright
+#: 7 times in 20. So the page really does read upright one way, and what moved was a SPURIOUS
+#: yes on the other candidate, which makes two winners and sends a readable page through as
+#: "both ways round look right". Unanimity is therefore the rule rather than a majority: a
+#: candidate the reader is not consistent about has not earned a vote.
+#:
+#: A disagreement means UNSURE, which leaves the page exactly as it was scanned -- an officer
+#: can read a sideways page by tilting their head, where a page turned the wrong way looks
+#: authoritative and is upside down.
+JUDGE_READS = 3
+
+#: Reads of the candidate rotations in flight at once (see _ask_all). 1 restores the old
+#: one-after-another behaviour.
+JUDGE_CONCURRENCY = max(1, int(os.environ.get("PENSION_JUDGE_CONCURRENCY") or 6))
+
+
+#: A read that raised. Distinct from None, which is the reader saying "unsure".
+_FAILED = object()
+
+
+def _verdict_from(answers: list) -> bool | None:
+    """The rule, unchanged: unanimity or nothing, and a read that raised cannot vote."""
+    if not answers or any(a is _FAILED for a in answers):
+        return None
+    first = answers[0]
+    return first if all(a is first for a in answers) else None
+
+
+def _ask_all(judge, images: dict[int, "Path"]) -> dict[int, bool | None]:
+    """Every read of every candidate rotation, together.
+
+    Two candidates at JUDGE_READS each is six round trips, and they ran one after another: a
+    sideways page cost 6.4s against 0.08s for a page the layout could place on its own,
+    measured over a 78-page bundle where about twenty pages run sideways (20 Oct 2026). The
+    reads are independent -- same question, different image, no shared state -- and the model
+    server sits idle through ingest.
+
+    Nothing about the decision changes: the same six answers, the same unanimity rule applied
+    per candidate on this thread. Only the waiting is shared.
+    """
+    def one(image):
+        try:
+            return judge(image)
+        except Exception:                          # noqa: BLE001 - cannot vote, not a crash
+            return _FAILED
+
+    jobs = [(angle, images[angle]) for angle in images for _ in range(JUDGE_READS)]
+    if JUDGE_CONCURRENCY <= 1 or len(jobs) < 2:
+        answers = [(angle, one(img)) for angle, img in jobs]
+    else:
+        with ThreadPoolExecutor(max_workers=min(JUDGE_CONCURRENCY, len(jobs))) as pool:
+            futures = [pool.submit(one, img) for _, img in jobs]
+            answers = [(jobs[i][0], f.result()) for i, f in enumerate(futures)]
+
+    out: dict[int, list] = {angle: [] for angle in images}
+    for angle, a in answers:
+        out[angle].append(a)
+    return {angle: _verdict_from(vals) for angle, vals in out.items()}
+
+
 def decide(
     image_path: str | Path,
     judge: Callable[[Path], bool | None] | None = None,
@@ -219,14 +294,15 @@ def decide(
     with Image.open(path) as img, tempfile.TemporaryDirectory(prefix="upright-") as tmp:
         verdicts: dict[int, bool | None] = {}
         tidy: dict[int, float] = {}
+        # Rotating and scoring stay here: PIL is not safe to drive from several threads at
+        # once, and both are cheap beside the round trips.
+        turned_paths: dict[int, Path] = {}
         for angle in (90, 270):
             turned = Path(tmp) / f"{path.stem}-{angle}.png"
             img.rotate(angle, expand=True).save(turned)
             tidy[angle] = tidy_line_starts(turned)
-            try:
-                verdicts[angle] = judge(turned)
-            except Exception:                      # noqa: BLE001 - a judge that fails is one
-                verdicts[angle] = None             # that cannot vote, not a crash
+            turned_paths[angle] = turned
+        verdicts = _ask_all(judge, turned_paths)
 
     upright_ones = [a for a, v in verdicts.items() if v is True]
     # Recorded either way: the ratio that used to decide this, kept so a reader can see what
