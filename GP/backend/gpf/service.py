@@ -44,6 +44,16 @@ def _now() -> str:
 #: rejects the observation and says why, and nothing else is asked (13 Oct 2026).
 MIN_GROUND = 10
 
+#: Cures that are a VERIFICATION in substance, whatever the route they arrive on, and so need
+#: the band a verification needs -- the Accounts Officer or above.
+#:
+#: "verify" records the officer's own check of the DOA signature, the thumb impression or the
+#: death claim. "qr" marks the sanction's QR code decoded and agreeing, which clears the
+#: sanction check. Both reach the engine through ``cure``, whose own gate is may("upload") --
+#: True for every band, the Dealing Assistant included. The dedicated ``verify`` route has
+#: always checked the band properly; this is the same action arriving by another door.
+_CURES_THAT_VERIFY = frozenset({"verify", "qr"})
+
 
 def _officer(officer_id: str) -> dict:
     """The acting officer: a band (``ao``), or ``band|Name`` where the pension portal named the
@@ -304,6 +314,14 @@ class CaseService:
         if not cure:
             raise ServiceError(f"Item '{result_id}' does not accept a document.", 400)
         kind = cure.get("kind")
+        # Each branch is gated by the permission ITS OWN action needs, and before anything is
+        # written. The route-wide may("upload") above returns True for every band, so gating
+        # the route alone let a Dealing Assistant record through here the verification that
+        # the dedicated verify route refuses them -- the DOA signature check, the thumb
+        # impression and the death-claim check are all cure.kind == "verify" (audit of
+        # 13 Oct 2026, H-14; the QR cure clears the sanction check the same way, H-15).
+        if kind in _CURES_THAT_VERIFY and not may("verify", None, officer):
+            raise ServiceError(f"Recording a verification needs {who_can('verify', None)}.", 403)
         upload_meta = None
         if content is not None:
             upload_meta = self.docs.save(case_id, filename or "upload", content)
@@ -314,7 +332,12 @@ class CaseService:
         if kind == "sap":
             raise ServiceError("This item is cured on the SAP extracts step; upload the extract there.", 400)
         elif kind == "verify":
-            self._apply_verification(s, cure["vid"], bool(values.get("ok", True)), values.get("note", ""), officer)
+            # No default. `ok` defaulted to True, so a caller that sent nothing at all
+            # recorded the check as passed (H-14). A verification is a statement an officer
+            # makes; it is not something a missing field decides.
+            if "ok" not in values:
+                raise ServiceError("Recording a verification needs an explicit result: send ok true or false.", 400)
+            self._apply_verification(s, cure["vid"], bool(values["ok"]), values.get("note", ""), officer)
         elif kind == "qr":
             self._apply_qr_cure(s, cure.get("qid"), values, stored_name)
         elif kind == "doc":
@@ -357,7 +380,11 @@ class CaseService:
         q["page"] = q.get("page") or ("upload: " + filename)
         if "payload" in values:
             q["payload"] = values["payload"]
-        agrees = values.get("agrees", True)
+        # No default, for the reason "ok" has none above: this clears the sanction check, and
+        # a caller that said nothing about whether the code agrees has not said it does (H-15).
+        if "agrees" not in values:
+            raise ServiceError("Recording a QR check needs an explicit result: send agrees true or false.", 400)
+        agrees = values["agrees"]
         q["compare"] = [{"field": "Content", "qrVal": values.get("payload", "(decoded)"),
                          "docVal": "the document", "docLabel": "document", "match": bool(agrees)}]
 

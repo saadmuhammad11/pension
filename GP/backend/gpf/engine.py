@@ -55,18 +55,32 @@ def evaluate(F: dict) -> list[dict]:
         CUSTOM_CHECKS[c] for c in (F.get("custom") or []) if c in CUSTOM_CHECKS
     ]
     for ch in all_checks:
+        undecidable = None
         try:
             applies = bool(ch.applies(F))
-        except Exception:
-            applies = False
+        except Exception as e:
+            # A check that could not decide WHETHER it applies has not decided that it does
+            # not. This was swallowed -- `applies = False` -- so the check vanished from the
+            # case with nothing logged and nothing shown, and a case that had lost a hard stop
+            # read clean (audit of 13 Oct 2026, H-16). The `applies` predicates index facts
+            # freely, so one malformed fact object is all it takes.
+            #
+            # Treated exactly as a failure inside run() below, which has always been honest
+            # about itself: the check is kept, named, and put to a human as a confirmation.
+            applies, undecidable = True, e
         if not applies:
             continue
-        try:
-            r = ch.run(F)
-        except Exception as e:  # a rule that cannot evaluate never crashes the engine
+        if undecidable is not None:
             r = {"status": "conf",
-                 "finding": "The rule could not be evaluated on the facts available ("
-                            + str(e) + "). Check by hand."}
+                 "finding": "The rule could not decide whether it applies to this case ("
+                            + str(undecidable) + "). Check by hand."}
+        else:
+            try:
+                r = ch.run(F)
+            except Exception as e:  # a rule that cannot evaluate never crashes the engine
+                r = {"status": "conf",
+                     "finding": "The rule could not be evaluated on the facts available ("
+                                + str(e) + "). Check by hand."}
         if not r:
             continue
         items = r if isinstance(r, list) else [r]
