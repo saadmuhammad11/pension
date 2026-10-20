@@ -15,6 +15,8 @@ to. See ``types.py``.
 
 from __future__ import annotations
 
+from rules import scope
+
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -227,7 +229,18 @@ def determine_family_pension_death_in_service(
         base_method = pack.ref("pension_base", "method")
     except Exception:                                    # noqa: BLE001
         base_method = "last_drawn"
-    if base_method == "average_last_3_years" and not case.base_is_three_year_average:
+    base_is_not_the_required_average = (
+        base_method == "average_last_3_years" and not case.base_is_three_year_average)
+    # The refusal stands only while this release publishes a figure. It does not
+    # (rules.scope.CALCULATIONS_IN_SCOPE is False, business decision of 7 Oct 2026, and
+    # scrub_report removes every computed amount from the report, the API and the screens),
+    # so an overstated base cannot reach anybody -- and refusing instead cost the officer the
+    # checks that DO reach them: the dates, the rule pack, the BLOCKING items, the inputs read.
+    #
+    # Every self-pension bundle hit this, 21 runs out of 21 on 20 Oct 2026, because the three
+    # 1 July figures are keyed at intake (SOP 5.8) and were not. The guard returns the moment
+    # calculations come back into scope, which is what the flag is for.
+    if base_is_not_the_required_average and scope.CALCULATIONS_IN_SCOPE:
         raise ValueError(
             f"rule pack {pack.id} requires the pension base to be the average basic pay "
             f"including personal pay over the last three years, reckoned from 1 July of "
@@ -237,6 +250,8 @@ def determine_family_pension_death_in_service(
             f"pay in force on 1 July in each of the three years before retirement, or route "
             f"the case to manual determination."
         )
+    if base_is_not_the_required_average:
+        engaged.append("BLOCKING-23")
 
     # -- 1. reckonable emoluments ----------------------------------------------------------
     emol = case.emoluments
@@ -841,12 +856,25 @@ def determine_self_pension(
         base_method = pack.ref("pension_base", "method")
     except Exception:                                    # noqa: BLE001
         base_method = "last_drawn"
-    if base_method == "average_last_3_years" and not case.base_is_three_year_average:
+    base_is_not_the_required_average = (
+        base_method == "average_last_3_years" and not case.base_is_three_year_average)
+    # The refusal stands only while this release publishes a figure. It does not
+    # (rules.scope.CALCULATIONS_IN_SCOPE is False, business decision of 7 Oct 2026, and
+    # scrub_report removes every computed amount from the report, the API and the screens),
+    # so an overstated base cannot reach anybody -- and refusing instead cost the officer the
+    # checks that DO reach them: the dates, the rule pack, the BLOCKING items, the inputs read.
+    #
+    # Every self-pension bundle hit this, 21 runs out of 21 on 20 Oct 2026, because the three
+    # 1 July figures are keyed at intake (SOP 5.8) and were not. The guard returns the moment
+    # calculations come back into scope, which is what the flag is for.
+    if base_is_not_the_required_average and scope.CALCULATIONS_IN_SCOPE:
         raise ValueError(
             f"rule pack {pack.id} requires the base to be the average basic pay including "
             f"personal pay over the last three years (rule 4.4(4) as substituted on "
             f"2 December 2024). A single last-drawn figure is larger on any rising scale."
         )
+    if base_is_not_the_required_average:
+        engaged.append("BLOCKING-23")
     if case.base_from_printed_average:
         # A fact about THIS case's inputs, not a rule the pack marks unverified. Engaging a
         # BLOCKING id is what makes the determination provisional and puts the case in the
@@ -968,6 +996,14 @@ def determine_self_pension(
     steps.extend(commutation)
 
     caveats = list(case.extra_caveats)
+    if base_is_not_the_required_average and not case.base_from_printed_average:
+        caveats.append(
+            "PROVISIONAL (BLOCKING-23): the three basic-pay figures as at 1 July of the last "
+            "three years (rule 4.4(4) as substituted) have not been supplied at intake, so the "
+            "base is not the average those rules require. This release publishes no computed "
+            "figure, and the checks below ran on what the bundle states. No PPO may issue "
+            "until the three figures are keyed and the case is recomputed."
+        )
     if case.base_from_printed_average:
         caveats.append(
             "PROVISIONAL (BLOCKING-23): the pension base is the 'Average Basic pay' figure "
