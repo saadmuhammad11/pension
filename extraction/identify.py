@@ -26,7 +26,9 @@ that fits nothing is ``OTHER`` and reaches a human; the model never coins a type
 
 from __future__ import annotations
 
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
@@ -260,7 +262,7 @@ def _reclassify_after_denial(
     # denied as Form B-I, came back as Form B-III, was accepted -- and the bundle then held
     # two prescribed forms, so §4.1 refused to type the case at all.
     if again.document_type in _FORM_NUMBER:
-        from .ocr import form_titles_on, forms_printed_on, ocr_page
+        from .ocr import form_titles_on, forms_printed_on, looks_degenerate, ocr_page
         corroborating = PageIdentity(
             page=ident.page, document_type=again.document_type, confidence=again.confidence,
             evidence=again.evidence, is_first_page=again.is_first_page,
@@ -274,8 +276,13 @@ def _reclassify_after_denial(
             text = ocr_page(image, ident.page)
         except Exception:                               # noqa: BLE001
             return ident
+        # Same rule as verify_with_ocr: loop-garbage is not a second reading, so it may not
+        # deny the re-read either -- otherwise the recovery path inherits the fault that made
+        # the recovery necessary.
         checked = _verify_form_claim(
-            corroborating, forms_printed_on(text), form_titles_on(text),
+            corroborating,
+            None if looks_degenerate(text) else forms_printed_on(text),
+            None if looks_degenerate(text) else form_titles_on(text),
         )
         if checked.document_type == "OTHER":
             return ident
@@ -349,13 +356,36 @@ def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity,
     the label: no second reading is not evidence against the first. Returns the identity and
     the page's text, which is the form's text when reclaimed.
     """
-    from .ocr import form_titles_on, forms_printed_on, ocr_page
+    from .ocr import PageText, form_titles_on, forms_printed_on, looks_degenerate, ocr_page
     try:
         text = ocr_page(image, ident.page)
     except Exception:                                   # noqa: BLE001
         return ident, ""
+    titles = form_titles_on(text)
     numbers = tuple(dict.fromkeys(forms_printed_on(text)))
-    if len(numbers) != 1 or numbers[0] not in form_titles_on(text):
+    if not numbers and not looks_degenerate(text):
+        # OCR read the page but did not transcribe its form number, and the model DID. On the
+        # 78-page bundle of 20 Oct 2026 page 17 was the department's Form B-I: the model filed
+        # it ANNEX_A at confidence 1.00 while reporting printed_form_number "Annex-B-1", and
+        # OCR read the scenario title as Form B-I's but never caught the label in the corner.
+        # One printed number was required, so nothing was reclaimed and the PSA sanction form
+        # read MISSING against the department.
+        #
+        # This is NOT the model corroborating itself -- the trap this function's bar exists to
+        # avoid. It is the model CONTRADICTING itself: the number it read says Form B-I and the
+        # label it chose says ANNEX_A, and the independent reader's title agrees with the
+        # number, not the label. Two readings against one, and the weaker of them is the
+        # model's own conclusion rather than its transcription.
+        #
+        # The bar is otherwise untouched: a number OCR did find still decides on its own terms,
+        # the title must still agree, and a page whose reader looped supplies nothing.
+        claimed = forms_printed_on(PageText(page=ident.page,
+                                            text=ident.printed_form_number or "",
+                                            model=text.model))
+        if len(claimed) == 1 and claimed[0] in titles:
+            return replace(ident, document_type=claimed[0], is_first_page=True,
+                           promoted_from=ident.document_type), text.text or ""
+    if len(numbers) != 1 or numbers[0] not in titles:
         return ident, text.text or ""
     return replace(ident, document_type=numbers[0], is_first_page=True,
                    promoted_from=ident.document_type), text.text or ""
@@ -385,6 +415,13 @@ def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdenti
     return _reclassify_after_denial(denied, image, (text.text or "")[:1200])
 
 
+#: Pages second-read at once in stage "verify". Was a plain sequential loop until 19 Oct 2026,
+#: which measured 1.00x parallelism -- 89.4s of model work in 89.5s of wall clock -- while the
+#: OCR server reported one request running and nothing queued. Each page here is independent,
+#: so this is the same shape of work stage 3 already fans out.
+VERIFY_CONCURRENCY = max(1, int(os.environ.get("PENSION_VERIFY_CONCURRENCY") or 4))
+
+
 def verify_with_ocr(
     identities: Sequence[PageIdentity],
     image_for: Callable[[int], str | Path],
@@ -395,34 +432,54 @@ def verify_with_ocr(
     those are the ones that select a pension formula. Everything else is a field-level risk
     the checklist and the flag battery already cover.
     """
-    from .ocr import form_titles_on, forms_printed_on, ocr_page
+    from pipeline import timing
 
-    out: list[PageIdentity] = []
-    form_text: dict[int, str] = {}
-    for ident in identities:
+    from .ocr import form_titles_on, forms_printed_on, looks_degenerate, ocr_page
+
+    def one(ident: PageIdentity) -> tuple[PageIdentity, int | None, str | None]:
+        """Second-read one page. Returns the identity, and the form text to keep for it.
+
+        Independent of every other page: it reads one image and returns one identity. That is
+        what makes the pool below safe -- no shared state is touched here, and the caller
+        reassembles both the order and the form_text dictionary on its own thread.
+        """
         # A pay-document claim gets the same second reader a form claim gets. The model
         # answered LPC, at confidence 1.00, for the REVERSE of a CNIC -- and justified it
         # with the card's own serial and number. An LPC is read for its pay figures, so a
         # CNIC filed as one puts an identity card into the determination path.
         if ident.document_type in _PAY_DOCUMENT_TYPES:
-            out.append(_deny_pay_claim_on_a_card(ident, image_for(ident.page)))
-            continue
+            return _deny_pay_claim_on_a_card(ident, image_for(ident.page)), None, None
         # The proforma decides a checklist line on its own (AG-10, decision S3), so the vision
         # model's word is not enough for it either: OCR must find its printed title. It prints
         # no form number, so it is not one of the prescribed forms below and never takes part
         # in deciding the case type.
         if ident.document_type == "QUALIFYING_SERVICE_PROFORMA":
-            out.append(_verify_proforma_claim(ident, image_for(ident.page)))
-            continue
+            return _verify_proforma_claim(ident, image_for(ident.page)), None, None
         if ident.document_type not in _FORM_NUMBER:
             if ident.document_type in PROMOTABLE_LABELS:
-                ident, page_text = _reclaim_form(ident, image_for(ident.page))
-                if ident.promoted_from:
-                    form_text[ident.page] = page_text[:8000]
-            out.append(ident)
-            continue
+                promoted, page_text = _reclaim_form(ident, image_for(ident.page))
+                if promoted.promoted_from:
+                    return promoted, promoted.page, page_text[:8000]
+                return promoted, None, None
+            return ident, None, None
         text = ocr_page(image_for(ident.page), ident.page)
-        verified = _verify_form_claim(ident, forms_printed_on(text), form_titles_on(text))
+        # A reader that fell into a repetition loop has not read the page, and its silence
+        # about a form number is not evidence that none is printed. On a real 78-page bundle
+        # three pages the vision model called FORM_B_I at 0.95 came back 97% repeated -- "In
+        # terms of full pay", 319 times, cut off mid-word -- and because that text printed no
+        # form number the claim was denied and the PSA sanction form was reported MISSING
+        # against the department (20 Oct 2026). looks_degenerate() was written for exactly
+        # this and was applied only to the card and attestation paths.
+        #
+        # None, not (): the parameter already means "no second reading, do not verify", which
+        # is the truth here. An empty tuple means "a reader looked and found no number", and
+        # that is what withdrew a correct classification.
+        unreadable = looks_degenerate(text)
+        verified = _verify_form_claim(
+            ident,
+            None if unreadable else forms_printed_on(text),
+            None if unreadable else form_titles_on(text),
+        )
         # A denial says what the page is NOT. Filing it as OTHER then drops it from the
         # bundle, so a correct rejection still costs the office a document: on the real
         # cases an "Application for Grant of Family Pension", an "Entitlement Declaration"
@@ -438,8 +495,25 @@ def verify_with_ocr(
         # separates the seven Form D-II checklist columns from one another.
         # 8,000 rather than 2,000: a Form B-I runs to ~3,600 characters of OCR and its
         # retirement date, average pay and qualifying service all sat past the old cut.
-        form_text[verified.page] = text.text[:8000]
-        out.append(verified)
+        if unreadable:
+            # Stage 6 quotes the form's own wording from this; 319 repeats of one line is not
+            # wording. Better it have nothing than confident noise.
+            return verified, None, None
+        return verified, verified.page, text.text[:8000]
+
+    idents = list(identities)
+    if VERIFY_CONCURRENCY <= 1 or len(idents) < 2:
+        results = [one(i) for i in idents]
+    else:
+        with ThreadPoolExecutor(max_workers=VERIFY_CONCURRENCY) as pool:
+            # Submitted in order and read back by index, so the bundle's page order survives
+            # the pool: a tuple returned in completion order would reorder the documents.
+            results = [f.result() for f in [
+                pool.submit(timing.carry(one, stage="verify", page=i.page), i) for i in idents
+            ]]
+
+    out = [r[0] for r in results]
+    form_text: dict[int, str] = {page: text for _, page, text in results if page is not None}
     verify_with_ocr.form_text = form_text          # noqa: B010 - read by stage_verify_forms
     return tuple(out)
 

@@ -26,6 +26,7 @@ import base64
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 import urllib.error
 import urllib.request
@@ -37,7 +38,32 @@ from typing import Any
 from extraction.model_auth import model_headers
 
 #: PENSION_OCR_URL points a deployment at its own GPU box (docs/DEPLOYMENT.md F4).
-OCR_ENDPOINT = os.environ.get("PENSION_OCR_URL") or "http://192.168.1.1:8012/v1/chat/completions"
+from extraction import envfile as _envfile
+
+#: Discourages the reader from emitting the same token over and over. FREE-FORM TEXT ONLY --
+#: it is NOT set on the vision model, whose answers are JSON and must repeat "label", "value"
+#: and "confidence" on every item.
+#:
+#: Measured 20 Oct 2026: 19 of 27 cached OCR reads across three real bundles -- 70% -- were
+#: repetition loops that spent the whole 2048-token budget on one line and were then discarded
+#: as evidence. Page 74 of the 78-page bundle emitted "In terms of full pay" 319 times, and the
+#: silence about a form number that produced is what denied a genuine Form B-I.
+#:
+#: 0.6 chosen by measurement on that page and on clean pages beside it:
+#:
+#:                        p.74 (looping)        p.17 (clean)        p.23 (clean)
+#:   baseline             16.3s 2048 tok LOOP   17.2s 2048 tok      2.0s 147 tok
+#:   repetition_penalty   19-43s     still looping -- no help
+#:   frequency_penalty .6  3.9s  310 tok ok     7.8s  787 tok       1.9s 109 tok
+#:
+#: It does not merely stop the loop: freed of it, page 74 reads FURTHER down the form than the
+#: baseline ever reached, and page 17 stops cleanly where it used to hit the cap. Form-number
+#: and title detection are unchanged on the clean pages, which is the property that matters --
+#: FORM_B_I is still found on p.17 and still absent on p.23.
+FREQUENCY_PENALTY = float(os.environ.get("PENSION_OCR_FREQUENCY_PENALTY") or 0.6)
+
+
+OCR_ENDPOINT = _envfile.endpoint("PENSION_OCR_URL", "OCR")
 OCR_MODEL = "paddleocr-vl-1.6"
 
 OCR_INSTRUCTION = (
@@ -100,6 +126,7 @@ def ocr_page(
         "model": model,
         "temperature": 0,
         "max_tokens": max_tokens,
+        "frequency_penalty": FREQUENCY_PENALTY,
         "messages": [{
             "role": "user",
             "content": [
@@ -309,18 +336,44 @@ _FORM_TITLES: dict[str, tuple[str, ...]] = {
 }
 
 
+#: How close an OCR'd window must be to a title phrase to count. The same bar
+#: ``_designations_in`` uses, and for the same reason -- it is tight enough to keep distinct
+#: phrases distinct while tolerating what a reader does to a photocopy.
+_TITLE_MATCH = 0.86
+
+
 def form_titles_on(page_text: PageText) -> tuple[str, ...]:
     """Which prescribed forms the page identifies by its printed TITLE, per OCR.
 
     Corroboration of last resort, for a form that does not print its number. It is weaker
     evidence than the number and is used only where the number is absent -- never to overrule
     a number that is present and says something else.
+
+    Matched the way ``_designations_in`` matches a designation, because OCR damages a title
+    exactly as it damages a stamp. Three pages of a real bundle were genuine Form B-I -- the
+    model even transcribed "FORM B-I" -- and the reader returned "NOTIFICATION/ORDERS OF
+    RETIREMNT ON SUPERANNUATION AND SANCTION OF PENSION BENEFITS": one dropped letter. An
+    exact substring test found nothing, no number was captured either, and three correct
+    classifications were withdrawn, leaving the Pension Sanctioning Authority form MISSING
+    against a department that had filed it (20 Oct 2026).
+
+    A dropped letter is not a different document. The phrases still have to DISCRIMINATE --
+    see _FORM_TITLES -- and a close match to a discriminating phrase is still that phrase.
     """
     text = re.sub(r"\s+", " ", page_text.normalised)
-    return tuple(
-        name for name, phrases in _FORM_TITLES.items()
-        if any(phrase in text for phrase in phrases)
-    )
+    words = text.split()
+    found: list[str] = []
+    for name, phrases in _FORM_TITLES.items():
+        for phrase in phrases:
+            if phrase in text:
+                found.append(name)
+                break
+            n = len(phrase.split())
+            if any(SequenceMatcher(None, phrase, " ".join(words[i:i + n])).ratio() >= _TITLE_MATCH
+                   for i in range(len(words) - n + 1)):
+                found.append(name)
+                break
+    return tuple(found)
 
 
 # -- Attestation, repetition loops and banded reading -------------------------------------
@@ -461,6 +514,10 @@ class Attestation:
     read_the_foot: bool
 
 
+#: The attestation bands read at once. Two independent crops of one page; 1 disables the pool.
+ATTESTATION_BAND_CONCURRENCY = max(1, int(os.environ.get("PENSION_ATTESTATION_BAND_CONCURRENCY") or 2))
+
+
 def attestation_on(image: str | Path, page: int, **kw: Any) -> Attestation:
     """Look for a third-party attestation on this page, in the place one is written.
 
@@ -494,24 +551,53 @@ def attestation_on(image: str | Path, page: int, **kw: Any) -> Attestation:
         step = (width if landscape else height) / 2
         margin = int((width if landscape else height) * _BAND_OVERLAP)
         foot_read = False
+        # The two bands are independent reads of one image and were done one after the other:
+        # 56s of strictly serial OCR on the slowest page of a run measured 19 Oct 2026, on the
+        # critical path of stage 6. They are read together now.
+        #
+        # Cropping stays on this thread. It is local CPU and quick, and a PIL Image handle is
+        # not safe to crop and save from several threads at once; only the model round trip,
+        # which is all of the time, is moved into the pool.
+        crops: list[Path] = []
         for i in range(2):
             top = max(0, int(i * step) - margin)
             bottom = min(width if landscape else height, int((i + 1) * step) + margin)
             box = (top, 0, bottom, height) if landscape else (0, top, width, bottom)
             with tempfile.NamedTemporaryFile(suffix=src.suffix or ".png", delete=False) as fh:
                 tmp = Path(fh.name)
+            im.crop(box).save(tmp)
+            crops.append(tmp)
+
+        def _read(path: Path) -> "PageText | None":
+            """The band, or None where the reader refused it -- the caller's OcrError case."""
             try:
-                im.crop(box).save(tmp)
-                part = ocr_page(tmp, page, **kw)
+                return ocr_page(path, page, **kw)
             except OcrError:
+                return None
+
+        try:
+            if ATTESTATION_BAND_CONCURRENCY <= 1:
+                parts = [_read(c) for c in crops]
+            else:
+                from pipeline import timing
+                with ThreadPoolExecutor(max_workers=min(ATTESTATION_BAND_CONCURRENCY, len(crops))) as pool:
+                    # Read back by index: bands[0] and bands[-1] mean the top and the foot, and
+                    # completion order would silently swap them.
+                    parts = [f.result() for f in
+                             [pool.submit(timing.carry(_read, stage="assertions", page=page), c)
+                              for c in crops]]
+        finally:
+            for c in crops:
+                c.unlink(missing_ok=True)
+
+        for i, part in enumerate(parts):
+            if part is None:
                 bands.append(PageText(page=page, text="", model=OCR_MODEL))
                 continue
-            finally:
-                tmp.unlink(missing_ok=True)
             if looks_degenerate(part):
                 # Confident noise. Treat the band as unread rather than as evidence.
                 part = PageText(page=page, text="", model=OCR_MODEL, finish_reason="length")
-            if i == len(range(2)) - 1:
+            if i == len(parts) - 1:
                 foot_read = part.complete and (not landscape or bands[0].complete)
             bands.append(part)
 
