@@ -16,6 +16,7 @@ not the run.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import time
@@ -103,12 +104,68 @@ def _drop_connection() -> None:
         _conn, _conn_path = None, None
 
 
+#: Where a run's call log is written: one JSON object per line, in the run's own directory,
+#: beside the artefacts it produced. A log belongs in a file -- it is append-only, it is read
+#: by eye and by grep, it does not want a schema, and it should not compete with case data for
+#: the database (20 Oct 2026).
+#:
+#: PENSION_CALL_LOG=0 turns it off.
+CALL_LOG = os.environ.get("PENSION_CALL_LOG", "1") not in ("0", "false", "no", "off")
+
+#: The timings table stays the source for tools/bench.py, `python3 -m pipeline.timing` and the
+#: GP Fund module's own writer, which all read it. PENSION_TIMING_DB=0 stops those writes; the
+#: file log above is unaffected and keeps every call.
+TIMING_DB = os.environ.get("PENSION_TIMING_DB", "1") not in ("0", "false", "no", "off")
+
+_log_lock = threading.Lock()
+
+
+def log_root() -> "Path":
+    """Where run directories live. PENSION_RUN_ROOT overrides it.
+
+    Resolved per call, not at import: a test that redirects the project root (as
+    tests.test_run_timings redirects db.DB_PATH) must be able to redirect this too, or its
+    fixture runs write calls.jsonl into the live artefacts directory -- which is exactly what
+    happened the first time this log existed (20 Oct 2026).
+    """
+    from api import db as _db
+    return Path(os.environ.get("PENSION_RUN_ROOT") or _db.ROOT)
+
+
+def _log_line(rid: str, row: dict) -> None:
+    """Append one call to the run's log. Never raises into the pipeline."""
+    if not CALL_LOG:
+        return
+    try:
+        path = Path(log_root()) / "artifacts" / f"run-{rid}" / "calls.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(row, ensure_ascii=False, default=str)
+        with _log_lock, path.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except Exception:                                 # noqa: BLE001 -- a lost line, never a lost run
+        pass
+
+
 def record(kind: str, stage: str, *, started: float, ended: float, name: str | None = None, page: int | None = None,
            pages: int | None = None, queue_s: float | None = None, status: str = "ok", detail: dict | None = None,
            run_id: str | None = None) -> None:
-    """One row. ``started``/``ended`` are time.time() stamps. Silent on any database error."""
+    """One call. ``started``/``ended`` are time.time() stamps.
+
+    Written to the run's calls.jsonl, and to run_timings while TIMING_DB is on. Silent on any
+    error in either: a lost record must never cost a run.
+    """
     rid = run_id or current()
     if not rid:
+        return
+    _log_line(rid, {
+        "at": datetime.fromtimestamp(started).isoformat(timespec="milliseconds"),
+        "ended": datetime.fromtimestamp(ended).isoformat(timespec="milliseconds"),
+        "kind": kind, "stage": stage, "name": name, "page": page, "pages": pages,
+        "duration_s": round(ended - started, 3),
+        "queue_s": None if queue_s is None else round(queue_s, 3),
+        "status": status, "detail": detail,
+    })
+    if not TIMING_DB:
         return
     conn = _connection()
     if conn is None:
@@ -191,10 +248,104 @@ def summary(run_id: str, conn: Any = None) -> dict:
     return {"run_id": run_id, "wall_s": wall, "slot_wait_s": queue, "stages": stages, "models": models, "rows": len(rows)}
 
 
+def rows_for(run_id: str, conn: Any = None) -> list[dict]:
+    """Every row of one run, oldest first."""
+    from api import db
+    own = conn is None
+    conn = conn or db.connect()
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM run_timings WHERE run_id = ? ORDER BY started_at", (run_id,))]
+    finally:
+        if own:
+            conn.close()
+
+
+def recent_runs(limit: int = 15, conn: Any = None) -> list[dict]:
+    """The runs that have written timings, newest first -- so a run id can be found without SQL."""
+    from api import db
+    own = conn is None
+    conn = conn or db.connect()
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT run_id, COUNT(*) AS rows, MIN(started_at) AS started, MAX(ended_at) AS ended "
+            "FROM run_timings GROUP BY run_id ORDER BY MIN(started_at) DESC LIMIT ?", (limit,))]
+    finally:
+        if own:
+            conn.close()
+
+
+def _secs(a: str, b: str) -> float:
+    return (datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds()
+
+
+def print_timeline(run_id: str, *, width: int = 34) -> int:
+    """Every step of one run in the order it happened, with its offset from the run's start.
+
+    summary() answers "where did the time go"; this answers "what happened, and when". The bar
+    shows each step against the run's wall clock, so concurrent model calls are visibly
+    concurrent rather than looking like a sequence that does not add up.
+    """
+    rows = rows_for(run_id)
+    if not rows:
+        print(f"no timing rows for run {run_id}", file=sys.stderr)
+        return 1
+    t0 = min(r["started_at"] for r in rows)
+    wall = max(_secs(t0, r["ended_at"]) for r in rows) or 1.0
+
+    print(f"run {run_id}   started {t0}   wall {wall:.1f} s   {len(rows)} steps")
+    print()
+    print(f"{'t+':>8}  {'dur':>8}  {'step':<30} {'page':>5}  {'':<{width}} status")
+    for r in rows:
+        at = _secs(t0, r["started_at"])
+        dur = r["duration_s"]
+        left = int(width * at / wall)
+        span = max(1, int(width * dur / wall))
+        bar = (" " * left + "#" * span)[:width]
+        label = r["stage"] if r["kind"] == "stage" else f"{r['kind']}:{r['stage']}"
+        if r["name"] and r["kind"] != "stage":
+            label = f"{label} {r['name']}"
+        page = f"p.{r['page']}" if r["page"] is not None else (f"{r['pages']}p" if r["pages"] else "")
+        flag = r["status"] if r["status"] != "ok" else ""
+        qs = f" +{r['queue_s']:.1f}q" if r["queue_s"] else ""
+        print(f"{at:7.1f}s  {dur:7.1f}s  {label:<30.30} {page:>5}  {bar:<{width}} {flag}{qs}")
+    return 0
+
+
+def _load_env() -> None:
+    """The services read /etc/pension/pension.env; an administrator at a shell does not. Without
+    PENSION_DATABASE_URL this would silently report on the SQLite file instead of the real run."""
+    import os
+    if os.environ.get("PENSION_DATABASE_URL"):
+        return
+    env = Path("/etc/pension/pension.env")
+    try:
+        for line in env.read_text().splitlines():
+            if line.startswith("PENSION_DATABASE_URL="):
+                os.environ["PENSION_DATABASE_URL"] = line.split("=", 1)[1].strip()
+                return
+    except OSError:
+        pass
+
+
+USAGE = """usage: python3 -m pipeline.timing <run_id>              totals per stage and model role
+       python3 -m pipeline.timing <run_id> --timeline   every step, in the order it happened
+       python3 -m pipeline.timing --list [n]            recent run ids"""
+
+
 def main(argv: list[str]) -> int:
+    _load_env()
     if len(argv) < 2:
-        print("usage: python3 -m pipeline.timing <run_id>", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
         return 2
+    if argv[1] in ("--list", "-l"):
+        limit = int(argv[2]) if len(argv) > 2 else 15
+        for r in recent_runs(limit):
+            print(f"  {r['run_id']}  {r['started']}  ->  {r['ended']}  "
+                  f"{_secs(r['started'], r['ended']):7.1f} s  {r['rows']:4d} steps")
+        return 0
+    if "--timeline" in argv[2:]:
+        return print_timeline(argv[1])
     s = summary(argv[1])
     print(f"run {s['run_id']}: wall {s['wall_s']} s, slot wait {s['slot_wait_s']:.1f} s, {s['rows']} rows")
     for name, st in sorted(s["stages"].items(), key=lambda kv: -kv[1]["duration_s"]):

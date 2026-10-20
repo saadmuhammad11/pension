@@ -21,6 +21,10 @@ class RunTimings(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory(); self.addCleanup(self._tmp.cleanup)
         self.path = Path(self._tmp.name) / "portal.sqlite3"
         self._p = mock.patch.object(db, "DB_PATH", self.path); self._p.start(); self.addCleanup(self._p.stop)
+        # timing.record also writes a calls.jsonl under the project root; send it to the
+        # temporary directory too, or the fixture runs land in the live artefacts directory.
+        self._r = mock.patch.dict("os.environ", {"PENSION_RUN_ROOT": self._tmp.name})
+        self._r.start(); self.addCleanup(self._r.stop)
         timing._conn, timing._conn_path = None, None            # a fresh connection on the test database
         db.migrate()
 
