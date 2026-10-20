@@ -97,7 +97,13 @@ class V2Test(unittest.TestCase):
     fail_runs: bool = False
 
     def setUp(self) -> None:
+        # addCleanup, not tearDown: unittest skips tearDown entirely when setUp raises part
+        # way through, and this fixture seeds 119 accounts and writes their plaintext sheet
+        # beside the temporary database. Two of those directories were found in /tmp on
+        # 20 Oct 2026, left by runs that were interrupted. Registered the moment it exists,
+        # so whatever happens after this line it still goes.
         self._tmp = tempfile.TemporaryDirectory(prefix="agpb-v2-")
+        self.addCleanup(self._tmp.cleanup)
         root = Path(self._tmp.name)
         artifacts = root / "artifacts"
         artifacts.mkdir()
@@ -144,7 +150,6 @@ class V2Test(unittest.TestCase):
         runs.RUNS.update(self._saved_runs)
         for p in reversed(self._patches):
             p.stop()
-        self._tmp.cleanup()
 
     # -- helpers ----------------------------------------------------------------------------
 
