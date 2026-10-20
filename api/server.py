@@ -815,7 +815,18 @@ app.include_router(_signatories_router)
 #: The old portal's routes carry no sign-in of their own. Now that every case belongs to a
 #: department, they are reachable only with a case-system token; the handful of reference
 #: routes the run script and the portals need stay open.
-_OPEN_V1 = ("/api/health", "/api/gpu", "/api/variants", "/api/v2/")
+#:
+#: /api/gpu was in this list and is not any more (20 Oct 2026). It was written when the models
+#: ran on this box and it reported this box's own utilisation to the trial console. It now
+#: reports the model servers themselves -- their addresses on the private network, the model
+#: names and versions being served, KV-cache occupancy and cumulative token counts -- and the
+#: portal is reachable from the public internet, so that was the estate's topology and workload
+#: readable by anyone who asked. Nothing calls it: not the portal, not run.sh, not bench.py.
+#: An operator sees it signed in, like every other operational figure.
+#:
+#: /api/health stays open because a health check that needs a credential is not a health check.
+#: It says whether each dependency is up, and no more.
+_OPEN_V1 = ("/api/health", "/api/variants", "/api/v2/")
 
 MAX_REQUEST_BYTES = _settings.MAX_REQUEST_BYTES
 

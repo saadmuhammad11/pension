@@ -54,7 +54,24 @@ def min_password_length() -> int:
 
 #: The most a single request body may be (the upload caps plus multipart overhead). Refused from
 #: the Content-Length alone, before a byte of it is read: by the portal's proxy and by the API.
-MAX_REQUEST_BYTES = 520 * 1024 * 1024
+#:
+#: 40 MB, set by the office on 20 Oct 2026, down from 520 MB. Measured against what departments
+#: actually send on this box the same day: the largest real bundle is 35.0 MB (a 78-page scan,
+#: zip and merged PDF both), so the margin is 12.5% and a case much past ~90 pages will be
+#: refused at the door. That is a deliberately tight door -- PENSION_MAX_UPLOAD_MB opens it
+#: without a redeploy if a long service record needs it, and the page caps below are the other
+#: half of the same guard.
+#:
+#: Keep deploy/nginx/pension.conf's client_max_body_size in step, or nginx refuses first and
+#: the officer gets its error page instead of the API's sentence.
+def _max_request_mb() -> int:
+    try:
+        return max(1, int(os.environ.get("PENSION_MAX_UPLOAD_MB") or 40))
+    except ValueError:
+        return 40
+
+
+MAX_REQUEST_BYTES = _max_request_mb() * 1024 * 1024
 
 
 def max_bundle_pages() -> int:
