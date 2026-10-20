@@ -115,3 +115,10 @@ portals/dist-demo/
 !rules/specimens/*.jpg
 !GP/gpfund/corpus/*.json
 !infra/models/*.fingerprint
+# ---- Portal static assets (20 Oct 2026) ----
+# Footer.tsx has carried `<img src="./tmc-logo.png">` since the design of 28 Sep 2026 and the
+# file was never in the tree, so the portal answered that request with its SPA fallback: HTTP
+# 200, content-type text/html, and a broken image in the footer of every page. Vite copies
+# portals/public/ verbatim to the site root, so anything put there is by definition meant to be
+# published and belongs in the clone -- portals/dist/ stays ignored, being build output.
+!portals/public/*
