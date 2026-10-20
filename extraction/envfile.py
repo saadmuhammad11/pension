@@ -14,6 +14,16 @@ looks like a considered decision.
 So the file is read here, into the environment, for anything that was not started with it --
 ``tools/bench.py``, a pipeline module run by hand, a test harness. Values already set win: the
 environment is the override, this is only the default.
+
+ONLY THE ENDPOINTS, never the rest of the file. Reading it wholesale is what the first version
+did, and importing ``extraction.client`` then put ``PENSION_ENV=production``,
+``PENSION_DATABASE_URL`` and ``PENSION_JWT_SECRET`` into any process that touched an extraction
+module. 157 tests failed on 20 Oct 2026 because production mode came on underneath them --
+and worse, ``env -u PENSION_DATABASE_URL python3 -m unittest``, which is how this box runs a
+suite WITHOUT writing to the live database, had its unset silently put back. A module that
+resolves a model address may not decide the posture of the process or which database it talks
+to; those have their own readers, and ``pipeline.timing._load_env`` is the shape to copy --
+one named setting, for one command, where the operator asked for it.
 """
 from __future__ import annotations
 
@@ -28,11 +38,22 @@ _loaded = False
 _lock = threading.Lock()
 
 
-def load(path: Path | None = None) -> int:
-    """Put any PENSION_*/GPF_* setting not already in the environment there. Returns how many.
+#: The settings this module may take from the deployment file: how to reach the model servers,
+#: and nothing else about the process. The allowlist is the point -- see the note above about
+#: reading the file wholesale.
+#:
+#: The key belongs with the addresses. Without it the servers answer a hand-run module with a
+#: connection reset, and the endpoints it did supply are then no use to anybody.
+MODEL_SETTINGS = ("PENSION_VISION_URL", "PENSION_OCR_URL", "PENSION_EMBED_URL",
+                  "PENSION_RERANK_URL", "PENSION_MODEL_API_KEY")
 
-    Silent on a missing or unreadable file: a developer box with no deployment is not an error,
-    and the caller's own default still applies.
+
+def load(path: Path | None = None, *, only: tuple[str, ...] = MODEL_SETTINGS) -> int:
+    """Put the model settings not already in the environment there. Returns how many.
+
+    ``only`` names every setting that may be copied; nothing else in the file is read, whatever
+    it says. Silent on a missing or unreadable file: a developer box with no deployment is not
+    an error, and the caller's own default still applies.
     """
     global _loaded
     with _lock:
@@ -52,7 +73,7 @@ def load(path: Path | None = None) -> int:
                 continue
             key, _, value = line.partition("=")
             key, value = key.strip(), value.strip()
-            if not key.startswith(("PENSION_", "GPF_")) or key in os.environ:
+            if key not in only or key in os.environ:
                 continue
             os.environ[key] = value
             added += 1
