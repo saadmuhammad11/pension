@@ -36,6 +36,32 @@ def bind(job_id: str | None) -> Iterator[None]:
         _local.job_id = before
 
 
+def carry(fn, *, page: int | None = None):
+    """Wrap a callable about to be handed to a pool, so it runs bound to the submitting
+    thread's job.
+
+    The job id lives in a threading.local, which a pool worker does not inherit. Without this,
+    every per-page `timing.stage(...)` inside a worker finds no job, record() drops the row,
+    and the run that was just made three times faster reports no timings at all -- which is
+    how a measurement disappears exactly when it becomes interesting (20 Oct 2026).
+
+    The wait between submission and start is kept too: with four workers and more pages than
+    that, the later pages queue, and a page's wall time is not its model time.
+    """
+    job_id = current()
+    submitted = time.monotonic()
+
+    def wrapped(*a, **k):
+        waited = time.monotonic() - submitted
+        with bind(job_id):
+            _local.queue_s = waited
+            try:
+                return fn(*a, **k)
+            finally:
+                _local.queue_s = None
+    return wrapped
+
+
 def _db_target() -> str | Path | None:
     raw = os.environ.get("GPF_DB")
     if raw == "":

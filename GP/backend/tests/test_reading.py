@@ -201,7 +201,11 @@ def test_a_resubmission_reads_only_its_new_pages_and_assembles_the_same_case(tmp
     r1 = ReadingPipeline(model, barcodes).run(
         [Page(i + 1, f"p{i + 1}") for i in range(4)], kind="refundable", gazetted="non-gazetted",
         cache=cache, page_keys=[f"docA:{k}" for k in range(1, 5)])
-    assert model.seen == ["p1", "p2", "p3", "p4"] and r1.reused_pages == []
+    # sorted(): pages are read together now (GPF_READ_CONCURRENCY), so the ORDER the model
+    # is asked in is whatever order the calls finish in. What the cache guarantees is WHICH
+    # pages reach the model, and that is what this asserts -- sorted, not set, so a page read
+    # twice would still fail.
+    assert sorted(model.seen) == ["p1", "p2", "p3", "p4"] and r1.reused_pages == []
 
     # Round 2: the same document plus the two new pages. Only p5 and p6 reach the model.
     model = _Counting(ScriptedModelClient(classifications, extractions))
@@ -209,7 +213,7 @@ def test_a_resubmission_reads_only_its_new_pages_and_assembles_the_same_case(tmp
     r2 = ReadingPipeline(model, barcodes).run(
         [Page(i + 1, f"p{i + 1}") for i in range(6)], kind="refundable", gazetted="non-gazetted",
         cache=cache, page_keys=[f"docA:{k}" for k in range(1, 5)] + ["docB:1", "docB:2"], on_progress=events.append)
-    assert model.seen == ["p5", "p6"]
+    assert sorted(model.seen) == ["p5", "p6"]        # only the new pages; order is the pool's
     assert r2.reused_pages == [1, 2, 3, 4]
     assert sum(1 for e in events if e.get("reused")) == 4
 

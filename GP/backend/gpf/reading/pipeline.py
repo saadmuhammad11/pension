@@ -17,12 +17,30 @@ rules seam is tested.
 """
 from __future__ import annotations
 
+import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from ..clients.model_client import ExtractedField, ModelClient
 from .artefacts import Artefact
 from .barcodes import BarcodeDecoder, DecodedCode, NullBarcodeDecoder
+
+
+#: Pages read at once. Each page is two model calls and a local barcode decode, and no page
+#: needs anything another page produced, so this is the same shape of work the pension
+#: pipeline fans out in stage 3.
+#:
+#: 4 by default, not more: these servers also carry the pension pipeline, which runs up to
+#: PENSION_MAX_CONCURRENT_RUNS cases at PENSION_IDENTIFY_CONCURRENCY each. The budget is
+#: shared and this is the smaller claim on it. GPF_READ_CONCURRENCY=1 restores the serial
+#: read exactly, which is the first thing to try if a result ever looks order-dependent.
+def read_concurrency() -> int:
+    try:
+        return max(1, int(os.environ.get("GPF_READ_CONCURRENCY") or 4))
+    except ValueError:
+        return 4
 
 
 # ── stage 1: ingest ───────────────────────────────────────────────────────────
@@ -108,15 +126,42 @@ class ReadingPipeline:
             if on_progress:
                 on_progress({"total": total, **ev})
 
+        # `done` counts pages FINISHED, not the loop index. With pages read together they
+        # finish out of order, and a bar fed an index walks backwards (jobs.Job.done takes
+        # whatever it is given). Counting completions keeps it monotonic whatever order the
+        # model answers in.
+        _finished = 0
+        _finished_lock = threading.Lock()
+
+        def emit_running(**ev):
+            with _finished_lock:
+                n = _finished
+            emit(done=n, **ev)
+
+        def emit_done(**ev):
+            nonlocal _finished
+            with _finished_lock:
+                _finished += 1
+                n = _finished
+            emit(done=n, **ev)
+
         emit(stage="ingest", done=0, page=None,
              message=f"{total} page{'s' if total != 1 else ''} received")
 
-        for i, pg in enumerate(pages):
+        def read_one(i: int, pg: Page) -> dict:
+            """Everything this stage does with one page, and nothing another page needs.
+
+            Two model calls -- classify, then extract for whatever classify said the page is --
+            and a local barcode decode. The only shared thing it touches is the page cache,
+            which keys one file per page, so two pages never write the same file.
+            """
+            out: dict = {"page": pg.number, "result": None, "needs_human": [],
+                         "illegible": False, "reused": False}
             if pg.illegible:
-                illegible.append(pg.number)
-                emit(stage="illegible", done=i + 1, page=pg.number,
-                     message=f"Page {pg.number} is illegible — skipped")
-                continue
+                out["illegible"] = True
+                emit_done(stage="illegible", page=pg.number,
+                          message=f"Page {pg.number} is illegible — skipped")
+                return out
             hit = cache.get(keys[i]) if keys else None
             if hit is not None:
                 from .page_cache import codes_from, fields_from
@@ -126,19 +171,19 @@ class ReadingPipeline:
                 for name, ef in fields.items():
                     if ef.needs_human:
                         gated.append(name)
-                        needs_human.append({"page": pg.number, "artefact": artefact, "field": name,
-                                            "confidence": ef.confidence, "threshold": ef.threshold})
-                page_results.append(PageResult(page=pg.number, artefact=artefact,
-                                               classify_confidence=float(hit.get("classify_confidence") or 0.0),
-                                               fields=fields, codes=codes_from(hit, pg.number),
-                                               needs_human=gated))
-                reused.append(pg.number)
-                emit(stage="page-done", done=i + 1, page=pg.number, artefact=artefact, reused=True,
-                     message=f"Page {pg.number} of {total} — {_label(artefact)}, unchanged since the last submission")
-                continue
+                        out["needs_human"].append({"page": pg.number, "artefact": artefact, "field": name,
+                                                   "confidence": ef.confidence, "threshold": ef.threshold})
+                out["result"] = PageResult(page=pg.number, artefact=artefact,
+                                           classify_confidence=float(hit.get("classify_confidence") or 0.0),
+                                           fields=fields, codes=codes_from(hit, pg.number),
+                                           needs_human=gated)
+                out["reused"] = True
+                emit_done(stage="page-done", page=pg.number, artefact=artefact, reused=True,
+                          message=f"Page {pg.number} of {total} — {_label(artefact)}, unchanged since the last submission")
+                return out
             # stage 3: classify
-            emit(stage="classify", done=i, page=pg.number,
-                 message=f"Page {pg.number} of {total} — identifying the document")
+            emit_running(stage="classify", page=pg.number,
+                         message=f"Page {pg.number} of {total} — identifying the document")
             from . import timing
             with timing.stage("classify", page=pg.number):
                 cls = self.model.classify_document(pg.image_ref)
@@ -148,8 +193,8 @@ class ReadingPipeline:
                 art_enum = Artefact(artefact)
             except ValueError:
                 art_enum = Artefact.UNKNOWN
-            emit(stage="extract", done=i, page=pg.number, artefact=artefact,
-                 message=f"Page {pg.number} of {total} — reading {_label(artefact)}")
+            emit_running(stage="extract", page=pg.number, artefact=artefact,
+                         message=f"Page {pg.number} of {total} — reading {_label(artefact)}")
             with timing.stage("extract", page=pg.number):
                 fields = ({} if art_enum is Artefact.UNKNOWN
                           else self.model.extract_fields(pg.image_ref, artefact))
@@ -158,18 +203,48 @@ class ReadingPipeline:
             for name, ef in fields.items():
                 if ef.needs_human:
                     gated.append(name)
-                    needs_human.append({"page": pg.number, "artefact": artefact, "field": name,
-                                        "confidence": ef.confidence, "threshold": ef.threshold})
+                    out["needs_human"].append({"page": pg.number, "artefact": artefact, "field": name,
+                                               "confidence": ef.confidence, "threshold": ef.threshold})
             # stage 5: barcodes (deterministic)
             with timing.stage("barcodes", page=pg.number):
                 codes = self.barcodes.decode_page(pg.image_ref, pg.number)
-            page_results.append(PageResult(page=pg.number, artefact=artefact,
-                                           classify_confidence=cls.confidence, fields=fields,
-                                           codes=codes, needs_human=gated))
+            out["result"] = PageResult(page=pg.number, artefact=artefact,
+                                       classify_confidence=cls.confidence, fields=fields,
+                                       codes=codes, needs_human=gated)
             if keys:
                 cache.put(keys[i], artefact=artefact, confidence=cls.confidence, fields=fields, codes=codes)
-            emit(stage="page-done", done=i + 1, page=pg.number, artefact=artefact,
-                 message=f"Page {pg.number} of {total} — {_label(artefact)} read")
+            emit_done(stage="page-done", page=pg.number, artefact=artefact,
+                      message=f"Page {pg.number} of {total} — {_label(artefact)} read")
+            return out
+
+        # Pages are read together. Measured on this box 20 Oct 2026, a three-page claim spent
+        # 54.99s of model time in 55.0s of wall clock -- 1.00x, every page waiting for the one
+        # before it, while the vision server reported a single request running against a
+        # scheduler that will take 128. The per-page cost is also wildly uneven (4.8s, 11.3s,
+        # 35.4s on those three), so serial order means the whole case waits on the worst page
+        # AND on every page before it; read together, it waits only on the worst.
+        workers = read_concurrency()
+        if workers <= 1 or total < 2:
+            outcomes = [read_one(i, pg) for i, pg in enumerate(pages)]
+        else:
+            with ThreadPoolExecutor(max_workers=min(workers, total)) as pool:
+                # Submitted in order and read back by index: the case file is a page order,
+                # and completion order here is the order the model happened to finish in.
+                from . import timing as _timing
+                futures = [pool.submit(_timing.carry(read_one, page=pg.number), i, pg)
+                           for i, pg in enumerate(pages)]
+                outcomes = [f.result() for f in futures]
+
+        # Assembled on this thread, in page order, exactly as the serial loop left them.
+        for out in outcomes:
+            if out["illegible"]:
+                illegible.append(out["page"])
+                continue
+            if out["reused"]:
+                reused.append(out["page"])
+            if out["result"] is not None:
+                page_results.append(out["result"])
+            needs_human.extend(out["needs_human"])
 
         # stage 5b: deterministic, and fast — but it is the step that turns per-page
         # extractions into a case, so it is worth naming rather than leaving a stalled bar.
