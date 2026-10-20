@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -94,8 +95,15 @@ elif _VLLM_URL:
     try:
         model_client = VllmModelClient.from_server(_VLLM_URL, api_key=_VLLM_API_KEY,
                                                    timeout=_VLLM_TIMEOUT)
-    except Exception:
-        model_client = VllmModelClient(_VLLM_URL, timeout=_VLLM_TIMEOUT)
+    except Exception as exc:
+        # The key goes on the fallback too. It did not, so a discovery that failed for ANY
+        # reason produced a client with api_key="EMPTY", and every later call came back 401 --
+        # the examination reported "Unauthorized" when the truth was that discovery had asked
+        # the wrong path and got a 404 (20 Oct 2026). A fallback that quietly drops the
+        # credential turns one fault into a different and misleading one.
+        print(f"[gpf] model discovery failed ({exc}); using {_VLLM_URL} without it",
+              file=sys.stderr)
+        model_client = VllmModelClient(_VLLM_URL, api_key=_VLLM_API_KEY, timeout=_VLLM_TIMEOUT)
 else:
     model_client = StubModelClient()
 # explicit env overrides win over auto-discovery

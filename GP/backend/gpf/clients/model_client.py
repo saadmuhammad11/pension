@@ -92,6 +92,22 @@ class StubModelClient:
         return {"ok": True, "mode": "stub", "note": "No models; fixtures supply facts."}
 
 
+
+def _server_root(url: Optional[str]) -> str:
+    """The server root, whether the setting named it with ``/v1`` on the end or without.
+
+    Every request this client makes appends its own ``/v1/...``, so the base it holds must be
+    the root. GPF_VLLM_URL on the live box was set to ``http://host:8000/v1``, which is what
+    an OpenAI-compatible base URL normally means and what every other setting in
+    /etc/pension/pension.env looks like -- so discovery asked for ``/v1/v1/models``, got 404,
+    and the whole examination failed as "Unauthorized" (20 Oct 2026). The setting was not
+    wrong in any way an administrator could be expected to see; the client was fussy. It now
+    accepts either, because there is no reading of "the vLLM server is at this address" under
+    which one of the two should fail.
+    """
+    u = (url or "").strip().rstrip("/")
+    return u[:-3].rstrip("/") if u.endswith("/v1") else u
+
 class VllmModelClient:
     """Talks to vLLM's OpenAI-compatible HTTP API, one endpoint PER ROLE (§1, §2).
 
@@ -109,14 +125,14 @@ class VllmModelClient:
                  vision_url: Optional[str] = None, ocr_url: Optional[str] = None,
                  reasoning_url: Optional[str] = None, embed_url: Optional[str] = None,
                  timeout: float = 180.0):
-        b = base_url.rstrip("/") if base_url else None
+        b = _server_root(base_url) if base_url else None
         self.base_url = b
         self.api_key = api_key
         self.timeout = timeout
-        self.vision_url = (vision_url or b or "").rstrip("/")
-        self.ocr_url = (ocr_url or b or "").rstrip("/")
-        self.reasoning_url = (reasoning_url or b or "").rstrip("/")
-        self.embed_url = (embed_url or b or "").rstrip("/")
+        self.vision_url = _server_root(vision_url or b or "")
+        self.ocr_url = _server_root(ocr_url or b or "")
+        self.reasoning_url = _server_root(reasoning_url or b or "")
+        self.embed_url = _server_root(embed_url or b or "")
         self.vision_model = vision_model
         self.ocr_model = ocr_model
         self.reasoning_model = reasoning_model
@@ -127,7 +143,7 @@ class VllmModelClient:
     @staticmethod
     def _list_models(base_url: str, api_key: str, timeout: float) -> list[str]:
         import urllib.request
-        req = urllib.request.Request(base_url.rstrip("/") + "/v1/models",
+        req = urllib.request.Request(_server_root(base_url) + "/v1/models",
                                      headers={"Authorization": "Bearer " + api_key})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return [m["id"] for m in json.loads(r.read().decode("utf-8")).get("data", [])]
