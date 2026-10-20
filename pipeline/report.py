@@ -1184,7 +1184,14 @@ def build_report(run_dir: str | Path, *, with_citations: bool = True,
         ) + ocr_unread,
         cross_checks_ran=cross_checks_ran,
         ambiguous_dates=two_digit_year_dates(run, facts),
-        disputed_reads=disputed_reads_from_fields(_fields_document(fields_path)),
+        # Stage 4's disputes come from fields.json; stage 6's from its own record. Both are
+        # the same finding to an officer -- two reads of one page disagreed -- and until
+        # 20 Oct 2026 only the first half arrived.
+        disputed_reads=disputed_reads_from_fields(_fields_document(fields_path))
+        + tuple(dict.fromkeys(
+            (d.get("document") or "", d.get("page"), tuple(d.get("fields") or ()))
+            for d in facts.get("disputed", []) if isinstance(d, dict)
+        )),
         # These four were literals of the golden case -- diary 41759, the School Education
         # Department, and "Waqar Abdul Basit" -- sitting in the middle of the production
         # path. On any other bundle the shortcoming letters would have gone out carrying
