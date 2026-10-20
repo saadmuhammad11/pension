@@ -130,20 +130,35 @@ class ReadingPipeline:
         # finish out of order, and a bar fed an index walks backwards (jobs.Job.done takes
         # whatever it is given). Counting completions keeps it monotonic whatever order the
         # model answers in.
+        # ...and `in_flight` says how many pages are with the model right now. Completed pages
+        # alone make a bar that sits at nothing while four pages work and then jumps by four,
+        # which an officer reads as stuck. The two together let the screen show what is
+        # finished and what is under way, which is the honest shape of a parallel read.
         _finished = 0
-        _finished_lock = threading.Lock()
+        _in_flight = 0
+        _counts = threading.Lock()
 
         def emit_running(**ev):
-            with _finished_lock:
-                n = _finished
-            emit(done=n, **ev)
+            with _counts:
+                d, f = _finished, _in_flight
+            emit(done=d, in_flight=f, **ev)
+
+        def started():
+            nonlocal _in_flight
+            with _counts:
+                _in_flight += 1
+
+        def ended():
+            nonlocal _in_flight
+            with _counts:
+                _in_flight = max(0, _in_flight - 1)
 
         def emit_done(**ev):
             nonlocal _finished
-            with _finished_lock:
+            with _counts:
                 _finished += 1
-                n = _finished
-            emit(done=n, **ev)
+                d, f = _finished, _in_flight
+            emit(done=d, in_flight=f, **ev)
 
         emit(stage="ingest", done=0, page=None,
              message=f"{total} page{'s' if total != 1 else ''} received")
@@ -181,38 +196,45 @@ class ReadingPipeline:
                 emit_done(stage="page-done", page=pg.number, artefact=artefact, reused=True,
                           message=f"Page {pg.number} of {total} — {_label(artefact)}, unchanged since the last submission")
                 return out
-            # stage 3: classify
-            emit_running(stage="classify", page=pg.number,
-                         message=f"Page {pg.number} of {total} — identifying the document")
-            from . import timing
-            with timing.stage("classify", page=pg.number):
-                cls = self.model.classify_document(pg.image_ref)
-            artefact = str(cls.value)
-            # stage 4: extract fields for this artefact type
+            # From here the page is in the model's hands, and the screen counts it as
+            # under way. In a finally, so a page that raises does not leave the bar
+            # claiming it is still being read.
+            started()
             try:
-                art_enum = Artefact(artefact)
-            except ValueError:
-                art_enum = Artefact.UNKNOWN
-            emit_running(stage="extract", page=pg.number, artefact=artefact,
-                         message=f"Page {pg.number} of {total} — reading {_label(artefact)}")
-            with timing.stage("extract", page=pg.number):
-                fields = ({} if art_enum is Artefact.UNKNOWN
-                          else self.model.extract_fields(pg.image_ref, artefact))
-            # confidence gating (§4.5): below-threshold fields go to a person
-            gated = []
-            for name, ef in fields.items():
-                if ef.needs_human:
-                    gated.append(name)
-                    out["needs_human"].append({"page": pg.number, "artefact": artefact, "field": name,
-                                               "confidence": ef.confidence, "threshold": ef.threshold})
-            # stage 5: barcodes (deterministic)
-            with timing.stage("barcodes", page=pg.number):
-                codes = self.barcodes.decode_page(pg.image_ref, pg.number)
-            out["result"] = PageResult(page=pg.number, artefact=artefact,
-                                       classify_confidence=cls.confidence, fields=fields,
-                                       codes=codes, needs_human=gated)
-            if keys:
-                cache.put(keys[i], artefact=artefact, confidence=cls.confidence, fields=fields, codes=codes)
+                # stage 3: classify
+                emit_running(stage="classify", page=pg.number,
+                             message=f"Page {pg.number} of {total} — identifying the document")
+                from . import timing
+                with timing.stage("classify", page=pg.number):
+                    cls = self.model.classify_document(pg.image_ref)
+                artefact = str(cls.value)
+                # stage 4: extract fields for this artefact type
+                try:
+                    art_enum = Artefact(artefact)
+                except ValueError:
+                    art_enum = Artefact.UNKNOWN
+                emit_running(stage="extract", page=pg.number, artefact=artefact,
+                             message=f"Page {pg.number} of {total} — reading {_label(artefact)}")
+                with timing.stage("extract", page=pg.number):
+                    fields = ({} if art_enum is Artefact.UNKNOWN
+                              else self.model.extract_fields(pg.image_ref, artefact))
+                # confidence gating (§4.5): below-threshold fields go to a person
+                gated = []
+                for name, ef in fields.items():
+                    if ef.needs_human:
+                        gated.append(name)
+                        out["needs_human"].append({"page": pg.number, "artefact": artefact, "field": name,
+                                                   "confidence": ef.confidence, "threshold": ef.threshold})
+                # stage 5: barcodes (deterministic)
+                with timing.stage("barcodes", page=pg.number):
+                    codes = self.barcodes.decode_page(pg.image_ref, pg.number)
+                out["result"] = PageResult(page=pg.number, artefact=artefact,
+                                           classify_confidence=cls.confidence, fields=fields,
+                                           codes=codes, needs_human=gated)
+                if keys:
+                    cache.put(keys[i], artefact=artefact, confidence=cls.confidence, fields=fields, codes=codes)
+            finally:
+                ended()
             emit_done(stage="page-done", page=pg.number, artefact=artefact,
                       message=f"Page {pg.number} of {total} — {_label(artefact)} read")
             return out

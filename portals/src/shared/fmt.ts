@@ -35,3 +35,10 @@ export function money(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—'
   return `Rs ${fmtAmount(n)}`
 }
+
+/** Seconds as m:ss, for an elapsed clock. Shared so the pension analysis screen and the GP
+ *  Fund examination show the same thing the same way. */
+export function mmss(seconds: number): string {
+  const s = Math.max(0, seconds)
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+}

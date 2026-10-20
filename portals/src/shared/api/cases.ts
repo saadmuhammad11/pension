@@ -278,7 +278,7 @@ export interface GpfState {
   gpf_case_id: string | null
   module_up: boolean
   officer: string
-  job: { state: string; stage?: string; done?: number; total?: number; page?: number; artefact?: string; message?: string; elapsed?: number; detail?: string } | null
+  job: { state: string; stage?: string; done?: number; inFlight?: number; total?: number; page?: number; artefact?: string; message?: string; elapsed?: number; detail?: string } | null
   case: { id?: string; version?: number; position?: Record<string, number>; caseDisp?: string | null; meta?: Record<string, unknown>; counts?: Record<string, number>; error?: string } | null
   embed_url?: string
   view?: GpfView

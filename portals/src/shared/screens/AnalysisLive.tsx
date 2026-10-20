@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { pageImageUrl, runStatus, subscribe, type RunEvent } from '../api'
 import { ScanViewer } from '../scan/ScanViewer'
+import { mmss } from '../fmt'
 import { documentLabel } from '../labels'
 import { useMediaTokenVersion } from '../auth/useMediaToken'
 import { FULL, STAGES, barTarget, nextShown, stageOf } from './analysisBar'
@@ -50,7 +51,6 @@ const VERB: Record<number, string> = { 2: 'Second reading', 3: 'Reading the deta
 /** How many log lines the screen keeps (F16). */
 const LOG_LINES = 300
 
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 const shortName = (t: string) => documentLabel(t).split(' — ')[0]
 
 export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => void }) {

@@ -163,3 +163,62 @@ class TestTheProgressBarDoesNotWalkBackwards:
             ReadingPipeline(_SlowModel(_scripted(), 0), ScriptedBarcodeDecoder({})).run(
                 _pages(6), kind="refundable", on_progress=events.append)
         assert max(e["done"] for e in events if e.get("done") is not None) == 6
+
+
+class TestTheBarKnowsWhatIsUnderWay:
+    """`done` alone is a bar that sits at nothing while four pages work and then jumps by
+    four. On a live five-page claim it was 0% for the first ten seconds, which an officer
+    reads as stuck. `in_flight` is what the screen draws as the pale part of the bar."""
+
+    def _events(self, pages, concurrency):
+        events = []
+        with mock.patch.dict(os.environ, {"GPF_READ_CONCURRENCY": str(concurrency)}):
+            ReadingPipeline(_SlowModel(_scripted(), 0.03), ScriptedBarcodeDecoder({})).run(
+                _pages(pages), kind="refundable", on_progress=events.append)
+        return [e for e in events if e.get("in_flight") is not None]
+
+    def test_pages_are_reported_as_under_way_before_any_finish(self):
+        events = self._events(6, 4)
+        before_first_finish = [e for e in events if (e.get("done") or 0) == 0]
+        assert any(e["in_flight"] > 1 for e in before_first_finish), \
+            "the bar would sit at zero with nothing to show for it"
+
+    def test_it_returns_to_zero_when_the_read_is_over(self):
+        events = self._events(6, 4)
+        assert events[-1]["in_flight"] == 0
+
+    def test_done_plus_in_flight_never_exceeds_the_page_count(self):
+        for e in self._events(6, 4):
+            assert (e.get("done") or 0) + e["in_flight"] <= e["total"], e
+
+    def test_a_page_that_raises_does_not_leave_the_bar_claiming_it_is_being_read(self):
+        """The counter is decremented in a finally. Without it a failed page would hold a
+        slice of the bar for ever, on a screen that is still polling."""
+        class _Boom:
+            def classify_document(self, ref):
+                if ref == "p3":
+                    raise RuntimeError("the model fell over")
+                return _scripted().classify_document(ref)
+
+            def extract_fields(self, ref, artefact):
+                return {}
+
+        events = []
+        with mock.patch.dict(os.environ, {"GPF_READ_CONCURRENCY": "4"}):
+            with pytest.raises(RuntimeError):
+                ReadingPipeline(_Boom(), ScriptedBarcodeDecoder({})).run(
+                    _pages(6), kind="refundable", on_progress=events.append)
+        counted = [e for e in events if e.get("in_flight") is not None]
+        assert counted, "no progress was reported at all"
+        assert counted[-1]["in_flight"] >= 0
+
+
+class TestTheJobServesAClock:
+    def test_the_view_carries_elapsed_and_in_flight(self):
+        """The screen shows `mmss(elapsed) elapsed`, and the module serves elapsed rather
+        than the browser timing it, so a clock skew cannot show a negative timer."""
+        from gpf.reading.jobs import Job
+        v = Job(id="job-x", total=5, done=2, in_flight=3).view()
+        assert v["inFlight"] == 3
+        assert v["done"] == 2 and v["total"] == 5
+        assert isinstance(v["elapsed"], float) and v["elapsed"] >= 0

@@ -31,6 +31,7 @@ class Job:
     stage: str = "queued"
     message: str = "Starting"
     done: int = 0                       # pages finished
+    in_flight: int = 0                  # pages with the model right now (>1 since 20 Oct 2026)
     total: int = 0                      # pages in the upload
     page: Optional[int] = None          # page currently under the model
     artefact: Optional[str] = None
@@ -46,7 +47,8 @@ class Job:
         end = self.finished_at or time.time()
         return {
             "jobId": self.id, "state": self.state, "stage": self.stage,
-            "message": self.message, "done": self.done, "total": self.total,
+            "message": self.message, "done": self.done, "inFlight": self.in_flight,
+            "total": self.total,
             "page": self.page, "artefact": self.artefact,
             "elapsed": round(end - self.started_at, 1),
             **({"result": self.result} if self.result is not None else {}),
@@ -88,6 +90,8 @@ class JobRegistry:
                 job.total = ev.get("total", job.total) or job.total
                 if ev.get("done") is not None:
                     job.done = ev["done"]
+                if ev.get("in_flight") is not None:
+                    job.in_flight = ev["in_flight"]
                 job.page = ev.get("page")
                 if ev.get("artefact"):
                     job.artefact = ev["artefact"]
