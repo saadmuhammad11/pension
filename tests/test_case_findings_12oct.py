@@ -206,9 +206,27 @@ class ServiceStatementAndAutonomousPayslip(unittest.TestCase):
             item = _item(_record(("FORM_B_I", doc), "FRESH_SELF", bps=4), item_id)
             self.assertEqual((item.status, item.located), (FOUND_NOT_REQUIRED, (2,)), item_id)
 
-    def test_the_statement_still_tells_a_gazetted_officer_for_the_service_book_line(self) -> None:
-        from rules.checklist import NOT_APPLICABLE
+    def test_the_service_book_line_is_no_longer_required_of_anyone(self) -> None:
+        """AG-10 was NOT_APPLICABLE for a gazetted officer until the office removed the
+        requirement outright on 20 Oct 2026. It is now NOT_REQUIRED in every case type, so the
+        gazetted distinction no longer decides this line -- see NOT_REQUIRED_ANYWHERE."""
+        from rules.checklist import NOT_REQUIRED
         item = _item(_record(("FORM_B_I", "SERVICE_STATEMENT"), "FRESH_SELF"), "AG-10")
+        self.assertEqual(item.status, NOT_REQUIRED)
+
+    def test_a_service_book_that_is_filed_is_still_cited(self) -> None:
+        """Removed, not deleted: a bundle that carries the book has it acknowledged rather
+        than the paper going unmentioned."""
+        from rules.checklist import FOUND_NOT_REQUIRED
+        item = _item(_record(("FORM_B_I", "SERVICE_BOOK"), "FRESH_SELF"), "AG-10")
+        self.assertEqual(item.status, FOUND_NOT_REQUIRED)
+        self.assertTrue(item.located, "the page carrying it must still be cited")
+
+    def test_the_statement_still_tells_a_gazetted_officer_elsewhere(self) -> None:
+        """The capability AG-10 used is still live: it excuses the Last Pay Certificate for a
+        gazetted officer (decision S15), so removing AG-10 must not have orphaned it."""
+        from rules.checklist import NOT_APPLICABLE
+        item = _item(_record(("FORM_B_I", "SERVICE_STATEMENT"), "FRESH_SELF"), "AG-08")
         self.assertEqual(item.status, NOT_APPLICABLE)
 
 

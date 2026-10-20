@@ -37,7 +37,7 @@ NOT_REQUIRED = "NOT_REQUIRED"
 FOUND_NOT_REQUIRED = "FOUND_NOT_REQUIRED"
 
 #: The lines not required in any case type, and those not required in particular columns.
-NOT_REQUIRED_ANYWHERE = frozenset({"AG-09", "AG-12", "AG-19", "AG-23", "AG-24"})
+NOT_REQUIRED_ANYWHERE = frozenset({"AG-09", "AG-10", "AG-12", "AG-19", "AG-23", "AG-24"})
 NOT_REQUIRED_FOR: dict[str, frozenset[str]] = {
     # Unmarried daughter / son: there is no widow, so there is no sole-widow certificate to ask for.
     "AG-16": frozenset({"UNMARRIED_CHILD"}),
@@ -788,6 +788,12 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         # The proforma for qualifying service satisfies the line too (scope change C2, decided
         # by the user 12 Oct 2026, S3): either paper, from now on, with no cut-off date while the
         # proforma is still "proposed". A cut-off, if the office notifies one, goes here.
+        #
+        # NOT REQUIRED in any case type from 20 Oct 2026, by the office's decision -- the same
+        # treatment AG-09 was given on 12 Oct. The line is kept rather than deleted so a service
+        # book that IS filed is still cited (FOUND_NOT_REQUIRED) instead of going unmentioned,
+        # and so the reason this stopped being asked for stays on the record. Absent, it is
+        # NOT_REQUIRED and never counts as missing.
         ("SERVICE_BOOK", "CHARACTER_SERVICE_ROLL", "QUALIFYING_SERVICE_PROFORMA"),
         not_applicable_when=_service_book_not_kept,
         applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "REVISED", "DEATH_IN_SERVICE"}),

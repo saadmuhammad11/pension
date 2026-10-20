@@ -917,48 +917,63 @@ class ConditionalRequirements(unittest.TestCase):
         self.assertEqual(self._nikah("Someone Else Entirely", self.FRC, variant="FRESH_SELF"), [])
         self.assertEqual(self._nikah("Someone Else Entirely", self.FRC, variant=None), [])
 
-    def test_a_gazetted_officer_is_not_asked_for_a_service_book(self):
-        """AG-09/AG-10 are either-or: gazetted is BPS-16 and above (AG office, 09-09-2026)."""
+    def test_neither_service_record_line_is_asked_for_any_more(self):
+        """AG-09 stopped being required on 12 Oct 2026 (S16) and AG-10 on 20 Oct 2026. Neither
+        can make a checklist INCOMPLETE, whatever the grade."""
         from rules import run_checklist
-        rec = CaseRecord(case_ref="t", case_type="", pay_scale_bps=19)
-        cl = run_checklist(rec, variant="DEATH_IN_SERVICE")
-        self.assertEqual(cl.item("AG-10").status, "NOT_APPLICABLE")
-        self.assertIn("gazetted (BS-19)", cl.item("AG-10").reason)
-        # AG-09 itself is a not-required line in every case type (user, 12 Oct 2026, S16).
-        self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
+        for bps in (19, 15, None):
+            for variant in ("FRESH_SELF", "DEATH_IN_SERVICE"):
+                cl = run_checklist(CaseRecord(case_ref="t", case_type="", pay_scale_bps=bps),
+                                   variant=variant)
+                with self.subTest(bps=bps, variant=variant):
+                    self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
+                    self.assertEqual(cl.item("AG-10").status, "NOT_REQUIRED")
 
-    def test_a_non_gazetted_servant_is_not_asked_for_a_service_statement(self):
-        from rules import run_checklist
-        rec = CaseRecord(case_ref="t", case_type="", pay_scale_bps=15)
-        cl = run_checklist(rec, variant="FRESH_SELF")
-        self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
-        self.assertEqual(cl.item("AG-10").status, "MISSING")
-
-    def test_bps_16_is_gazetted(self):
-        """The boundary itself, pinned: 16 is gazetted, 15 is not."""
-        from rules import run_checklist
-        for bps, expected in ((16, "NOT_APPLICABLE"), (15, "MISSING")):
-            rec = CaseRecord(case_ref="t", case_type="", pay_scale_bps=bps)
-            self.assertEqual(
-                run_checklist(rec, variant="FRESH_SELF").item("AG-10").status, expected, bps)
-
-    def test_without_a_grade_the_bundle_decides(self):
-        """An AG service statement is issued only to gazetted officers, so its presence says so."""
+    def test_a_service_record_on_file_is_still_cited(self):
+        """Removed, not deleted: a paper that IS filed is acknowledged with its page."""
         from rules import run_checklist
         from rules.caserecord import Document
-        rec = CaseRecord(case_ref="t", case_type="",
+        for doc, item_id in (("SERVICE_STATEMENT", "AG-09"), ("SERVICE_BOOK", "AG-10")):
+            cl = run_checklist(
+                CaseRecord(case_ref="t", case_type="",
+                           documents=(Document(type=doc, pages=(9,)),)), variant="FRESH_SELF")
+            with self.subTest(document=doc):
+                self.assertEqual((cl.item(item_id).status, cl.item(item_id).located),
+                                 ("FOUND_NOT_REQUIRED", (9,)))
+
+    def test_bps_16_is_gazetted(self):
+        """The boundary itself, pinned: 16 is gazetted, 15 is not.
+
+        Read through AG-08 now. It was read through AG-10 until that line stopped being a
+        requirement; the Last Pay Certificate still turns on the same distinction, because a
+        gazetted officer's last pay is certified by Audit/Payrolls (decision S15)."""
+        from rules import run_checklist
+        for bps, expected in ((16, "NOT_APPLICABLE"), (15, "MISSING")):
+            # AG-08's rule reads record.case_variant, so the record carries it too.
+            rec = CaseRecord(case_ref="t", case_type="", pay_scale_bps=bps,
+                             case_variant="FRESH_SELF")
+            self.assertEqual(
+                run_checklist(rec, variant="FRESH_SELF").item("AG-08").status, expected, bps)
+
+    def test_without_a_grade_the_bundle_decides(self):
+        """An AG service statement is issued only to gazetted officers, so its presence says so.
+        Also read through AG-08 since AG-10 stopped asking."""
+        from rules import run_checklist
+        from rules.caserecord import Document
+        rec = CaseRecord(case_ref="t", case_type="", case_variant="FRESH_SELF",
                          documents=(Document(type="SERVICE_STATEMENT", pages=(9,)),))
         cl = run_checklist(rec, variant="FRESH_SELF")
         self.assertEqual((cl.item("AG-09").status, cl.item("AG-09").located), ("FOUND_NOT_REQUIRED", (9,)))
-        self.assertEqual(cl.item("AG-10").status, "NOT_APPLICABLE")
+        self.assertEqual(cl.item("AG-08").status, "NOT_APPLICABLE")
+        self.assertIn("gazetted", cl.item("AG-08").reason)
 
-    def test_with_neither_grade_nor_document_the_service_book_stays_required(self):
-        """Nothing establishes which record applies, so the service book may not be excused;
-        the statement is a not-required line regardless (S16)."""
+    def test_with_neither_grade_nor_document_the_pay_certificate_stays_required(self):
+        """Nothing establishes which record applies, so the Last Pay Certificate may not be
+        excused. A grade that cannot be told keeps the requirement, so the line asks."""
         from rules import run_checklist
-        cl = run_checklist(CaseRecord(case_ref="t", case_type=""), variant="FRESH_SELF")
-        self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
-        self.assertEqual(cl.item("AG-10").status, "MISSING")
+        cl = run_checklist(CaseRecord(case_ref="t", case_type="", case_variant="FRESH_SELF"),
+                           variant="FRESH_SELF")
+        self.assertEqual(cl.item("AG-08").status, "MISSING")
 
     def test_the_ppo_book_and_bank_file_are_never_required(self):
         """Items 23/24, office rule of 30 Sep 2026: not required in any case type. Absent they

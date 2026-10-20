@@ -147,16 +147,27 @@ class Checklist(unittest.TestCase):
         from rules.checklist import run_checklist
         return next(i for i in run_checklist(record, variant=variant).items if i.id == item_id)
 
-    def test_the_proforma_alone_satisfies_ag_10_for_a_non_gazetted_servant(self) -> None:
-        from rules.checklist import MISSING, PRESENT
-        self.assertEqual(self._item(_record((), bps=4), "AG-10", "FRESH_SELF").status, MISSING)
+    def test_ag_10_is_not_asked_for_at_all(self) -> None:
+        """The office removed the requirement on 20 Oct 2026. An empty bundle used to make
+        AG-10 MISSING; it is NOT_REQUIRED now, in every case type."""
+        from rules.checklist import NOT_REQUIRED
+        self.assertEqual(self._item(_record((), bps=4), "AG-10", "FRESH_SELF").status, NOT_REQUIRED)
+
+    def test_the_proforma_is_still_cited_against_ag_10_when_filed(self) -> None:
+        """Removed, not deleted. The line keeps its satisfied_by list so a proforma that IS
+        filed is acknowledged -- FOUND_NOT_REQUIRED, with the page -- instead of the paper
+        going unmentioned. It was PRESENT while the line was still required."""
+        from rules.checklist import FOUND_NOT_REQUIRED
         item = self._item(_record(("QUALIFYING_SERVICE_PROFORMA",), bps=4), "AG-10", "FRESH_SELF")
-        self.assertEqual(item.status, PRESENT)
+        self.assertEqual(item.status, FOUND_NOT_REQUIRED)
+        self.assertTrue(item.located, "the page carrying it must still be cited")
         self.assertIn("proforma for qualifying service", item.requirement)
 
-    def test_the_service_book_alone_still_satisfies_ag_10(self) -> None:
-        from rules.checklist import PRESENT
-        self.assertEqual(self._item(_record(("SERVICE_BOOK",), bps=4), "AG-10", "FRESH_SELF").status, PRESENT)
+    def test_the_service_book_is_still_cited_against_ag_10_when_filed(self) -> None:
+        from rules.checklist import FOUND_NOT_REQUIRED
+        item = self._item(_record(("SERVICE_BOOK",), bps=4), "AG-10", "FRESH_SELF")
+        self.assertEqual(item.status, FOUND_NOT_REQUIRED)
+        self.assertTrue(item.located)
 
     def test_the_proforma_is_a_service_record_for_every_servant(self) -> None:
         # CL-09 is the FD checklist's service-record line (death in service), which runs where
