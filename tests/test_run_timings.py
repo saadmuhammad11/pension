@@ -25,6 +25,12 @@ class RunTimings(unittest.TestCase):
         # temporary directory too, or the fixture runs land in the live artefacts directory.
         self._r = mock.patch.dict("os.environ", {"PENSION_RUN_ROOT": self._tmp.name})
         self._r.start(); self.addCleanup(self._r.stop)
+        # These tests are about the run_timings TABLE, which stopped being written by default
+        # on 20 Oct 2026 -- logs do not belong in the case database. The table write is still a
+        # supported mode (PENSION_TIMING_DB=1), so the suite that tests it asks for it; what is
+        # written by default is the file log, which tests.test_call_log_file covers.
+        self._db = mock.patch.object(timing, "TIMING_DB", True)
+        self._db.start(); self.addCleanup(self._db.stop)
         timing._conn, timing._conn_path = None, None            # a fresh connection on the test database
         db.migrate()
 

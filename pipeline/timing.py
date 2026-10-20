@@ -112,10 +112,14 @@ def _drop_connection() -> None:
 #: PENSION_CALL_LOG=0 turns it off.
 CALL_LOG = os.environ.get("PENSION_CALL_LOG", "1") not in ("0", "false", "no", "off")
 
-#: The timings table stays the source for tools/bench.py, `python3 -m pipeline.timing` and the
-#: GP Fund module's own writer, which all read it. PENSION_TIMING_DB=0 stops those writes; the
-#: file log above is unaffected and keeps every call.
-TIMING_DB = os.environ.get("PENSION_TIMING_DB", "1") not in ("0", "false", "no", "off")
+#: The same records in the run_timings table. OFF by default since 20 Oct 2026: logs do not
+#: belong in the case database. Every reader -- summary(), the --timeline and --list commands,
+#: tools/bench.py -- reads the run's calls.jsonl now, so nothing needs the table.
+#:
+#: PENSION_TIMING_DB=1 turns the writes back on for a deployment that has something pointed at
+#: the table. The table and its migration are left alone either way: the rows already there are
+#: a record of real runs and dropping them is a separate decision, not a side effect of this.
+TIMING_DB = os.environ.get("PENSION_TIMING_DB", "0") not in ("0", "false", "no", "off")
 
 _log_lock = threading.Lock()
 
@@ -221,15 +225,8 @@ def page_of(image: str | Path) -> int | None:
 
 
 def summary(run_id: str, conn: Any = None) -> dict:
-    """Totals per stage and per model role for one run, from the table."""
-    from api import db
-    own = conn is None
-    conn = conn or db.connect()
-    try:
-        rows = [dict(r) for r in conn.execute("SELECT * FROM run_timings WHERE run_id = ? ORDER BY started_at", (run_id,))]
-    finally:
-        if own:
-            conn.close()
+    """Totals per stage and per model role for one run, from its call log."""
+    rows = rows_for(run_id, conn)
     stages = {}
     models: dict[str, dict] = {}
     queue = 0.0
@@ -248,31 +245,57 @@ def summary(run_id: str, conn: Any = None) -> dict:
     return {"run_id": run_id, "wall_s": wall, "slot_wait_s": queue, "stages": stages, "models": models, "rows": len(rows)}
 
 
+def log_path(run_id: str) -> "Path":
+    """The file a run's calls are written to."""
+    return Path(log_root()) / "artifacts" / f"run-{run_id}" / "calls.jsonl"
+
+
 def rows_for(run_id: str, conn: Any = None) -> list[dict]:
-    """Every row of one run, oldest first."""
-    from api import db
-    own = conn is None
-    conn = conn or db.connect()
-    try:
-        return [dict(r) for r in conn.execute(
-            "SELECT * FROM run_timings WHERE run_id = ? ORDER BY started_at", (run_id,))]
-    finally:
-        if own:
-            conn.close()
+    """Every call of one run, oldest first, read from its calls.jsonl.
+
+    Shaped like the run_timings row it replaces -- started_at/ended_at rather than the file's
+    at/ended -- so summary(), print_timeline() and tools/bench.py did not have to change with
+    it. ``conn`` is accepted and ignored: callers that still pass one keep working.
+    """
+    path = log_path(run_id)
+    if not path.exists():
+        return []
+    out: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:                            # a torn last line: a log, not a ledger
+            continue
+        out.append({"run_id": run_id, "kind": r.get("kind"), "stage": r.get("stage"),
+                    "name": r.get("name"), "page": r.get("page"), "pages": r.get("pages"),
+                    "started_at": r.get("at"), "ended_at": r.get("ended"),
+                    "duration_s": r.get("duration_s"), "queue_s": r.get("queue_s"),
+                    "status": r.get("status"), "detail_json": r.get("detail")})
+    out.sort(key=lambda r: r["started_at"] or "")
+    return out
 
 
 def recent_runs(limit: int = 15, conn: Any = None) -> list[dict]:
-    """The runs that have written timings, newest first -- so a run id can be found without SQL."""
-    from api import db
-    own = conn is None
-    conn = conn or db.connect()
-    try:
-        return [dict(r) for r in conn.execute(
-            "SELECT run_id, COUNT(*) AS rows, MIN(started_at) AS started, MAX(ended_at) AS ended "
-            "FROM run_timings GROUP BY run_id ORDER BY MIN(started_at) DESC LIMIT ?", (limit,))]
-    finally:
-        if own:
-            conn.close()
+    """The runs that have a call log, newest first -- so a run id can be found without SQL."""
+    root = Path(log_root()) / "artifacts"
+    if not root.is_dir():
+        return []
+    found = []
+    for d in root.glob("run-*"):
+        f = d / "calls.jsonl"
+        if not f.is_file() or not f.stat().st_size:
+            continue
+        rows = rows_for(d.name[len("run-"):])
+        if not rows:
+            continue
+        found.append({"run_id": d.name[len("run-"):], "rows": len(rows),
+                      "started": min(r["started_at"] for r in rows),
+                      "ended": max(r["ended_at"] for r in rows)})
+    found.sort(key=lambda r: r["started"], reverse=True)
+    return found[:limit]
 
 
 def _secs(a: str, b: str) -> float:

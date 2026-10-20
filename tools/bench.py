@@ -207,12 +207,42 @@ def _findings_gpf(view: dict) -> dict:
             "facts_keys": sorted((view.get("facts") or {}).keys()) if isinstance(view.get("facts"), dict) else None}
 
 
+def _log_rows(run_id: str) -> list[dict]:
+    """A run's calls, from whichever of the two logs holds them, in run_timings row shape."""
+    import json as _json
+    from pipeline import timing as _pension
+    rows = _pension.rows_for(run_id)
+    if rows:
+        return rows
+    gpf = Path(os.environ.get("GPF_DATA_DIR") or ".") / "jobs" / f"{run_id}.jsonl"
+    if not gpf.is_file():
+        return []
+    out = []
+    for line in gpf.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            r = _json.loads(line)
+        except ValueError:
+            continue
+        out.append({"run_id": run_id, "kind": r.get("kind"), "stage": r.get("stage"),
+                    "name": r.get("name"), "page": r.get("page"), "pages": r.get("pages"),
+                    "started_at": r.get("at"), "ended_at": r.get("ended"),
+                    "duration_s": r.get("duration_s"), "queue_s": r.get("queue_s"),
+                    "status": r.get("status"), "detail_json": r.get("detail")})
+    out.sort(key=lambda r: r["started_at"] or "")
+    return out
+
+
 def _timings(db_path: Path | str, run_id: str) -> dict:
-    con = dbcore.connect(str(db_path))
-    try:
-        rows = [dict(r) for r in con.execute("SELECT * FROM run_timings WHERE run_id = ? ORDER BY id", (run_id,))]
-    finally:
-        con.close()
+    """One run's stage and model totals, read from its call log.
+
+    The run_timings table until 20 Oct 2026, and the table is not written any more -- logs do
+    not belong in the case database. Both sides write a calls.jsonl instead: the pension
+    pipeline into the run's own directory, GP Fund into <GPF_DATA_DIR>/jobs/. ``db_path`` is
+    kept in the signature because the caller has one and the bench report records it.
+    """
+    rows = _log_rows(run_id)
     stages, models = {}, {}
     for r in rows:
         if r["kind"] == "stage":

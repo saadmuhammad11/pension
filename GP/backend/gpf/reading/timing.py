@@ -1,10 +1,17 @@
-"""Where a GP Fund reading job's time goes, kept in the database (perf/pipeline, 7 Oct 2026).
+"""Where a GP Fund reading job's time goes: one JSON object per line, in a file.
 
-The module's own small writer -- it runs as its own process -- to the same ``run_timings`` table
-(api/migrations/0011 in the pension tree; created here if absent) in the database ``GPF_DB`` names:
-a PostgreSQL URL (9 Oct 2026) or a SQLite file, through the pension tree's engine shim
-(``gpf.dbshim``). Rows: one per page stage (classify, extract, barcodes) and one per model call,
-under the reading job's id. Writes never raise into the read.
+One line per page stage (classify, extract, barcodes) and one per model call, under the
+reading job's id, in ``<GPF_DATA_DIR>/jobs/<job-id>.jsonl``. Writes never raise into the read:
+a lost line is not a lost examination.
+
+A file, not the database. This was written to the pension tree's ``run_timings`` table and is
+not any more (20 Oct 2026, the office's instruction): a log is append-only, read by eye and by
+grep, wants no schema, and should not share the store that holds the cases and has to be
+backed up and restored. The pension pipeline's own log moved the same way and for the same
+reason -- see pipeline/timing.py, whose file this mirrors line for line so one reader can read
+both.
+
+GPF_TIMING_DB=1 puts the table writes back for a deployment that has something pointed at it.
 """
 from __future__ import annotations
 
@@ -19,7 +26,33 @@ from typing import Any, Iterator
 
 _local = threading.local()
 _lock = threading.Lock()
+_log_lock = threading.Lock()
 _conn: Any = None
+
+#: The call log. GPF_CALL_LOG=0 turns it off.
+CALL_LOG = os.environ.get("GPF_CALL_LOG", "1") not in ("0", "false", "no", "off")
+
+#: The same records in run_timings. Off by default: logs do not belong in the case database.
+TIMING_DB = os.environ.get("GPF_TIMING_DB", "0") not in ("0", "false", "no", "off")
+
+
+def log_dir() -> Path:
+    """Where a job's calls are written. Beside the module's other data, not in the database."""
+    return Path(os.environ.get("GPF_DATA_DIR") or ".") / "jobs"
+
+
+def _log_line(job_id: str, row: dict) -> None:
+    """Append one call to the job's log. Never raises into the read."""
+    if not CALL_LOG:
+        return
+    try:
+        d = log_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(row, ensure_ascii=False, default=str)
+        with _log_lock, (d / f"{job_id}.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except Exception:                                 # noqa: BLE001 -- a lost line, never a lost read
+        pass
 
 
 def current() -> str | None:
@@ -106,6 +139,16 @@ def record(kind: str, stage: str, *, started: float, ended: float, name: str | N
            pages: int | None = None, status: str = "ok", detail: dict | None = None, job_id: str | None = None) -> None:
     jid = job_id or current()
     if not jid:
+        return
+    _log_line(jid, {
+        "at": datetime.fromtimestamp(started).isoformat(timespec="milliseconds"),
+        "ended": datetime.fromtimestamp(ended).isoformat(timespec="milliseconds"),
+        "kind": kind, "stage": stage, "name": name, "page": page, "pages": pages,
+        "duration_s": round(ended - started, 3),
+        "queue_s": getattr(_local, "queue_s", None),
+        "status": status, "detail": detail,
+    })
+    if not TIMING_DB:
         return
     conn = _connection()
     if conn is None:
