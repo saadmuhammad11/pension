@@ -179,40 +179,38 @@ class LpcOnASelfPension(unittest.TestCase):
 
 
 class ServiceStatementAndAutonomousPayslip(unittest.TestCase):
-    """AG-12 (autonomous-body payslip) is not required in any case type (user, 12 Oct 2026, S16):
-    "not required" when absent, cited when filed, never "not found".
+    """AG-09 and AG-12 stopped being required in any case type on 12 Oct 2026 (S16) -- "not
+    required" when absent, cited when filed, never "not found" -- and on 21 Oct the office took
+    the LINES off the sheet as well, with AG-10 and AG-19. A checklist that prints what it does
+    not want reads as noise to the officer working down it. What it asks for instead is AG-26.
 
-    AG-09 was in that same position until 21 Oct 2026, when the office took the LINE off the
-    sheet as well -- a checklist that prints what it does not want reads as noise to the officer
-    working down it. AG-10 went with it. What the office asks for instead is AG-26.
+    What survives the removal is the capability AG-09's document gave the engine: an AG service
+    statement is issued only to gazetted officers, so a bundle carrying one still excuses AG-08
+    (decision S15). That is tested below and is the reason the Requirement blocks are kept with
+    an empty column set rather than deleted.
     """
 
-    def test_absent_they_read_not_required_on_every_column(self) -> None:
-        from rules.checklist import ALL_VARIANTS, NOT_REQUIRED, requirements_for, run_checklist
+    def test_none_of_them_is_printed_on_any_column(self) -> None:
+        """Not missing, not "not required" -- not printed at all, on any of the eleven."""
+        from rules.checklist import ALL_VARIANTS, RETIRED_LINES, requirements_for, run_checklist
         from rules import CaseRecord
         for variant in ALL_VARIANTS:
             ids = {r.id for r in requirements_for(variant)}
             cl = run_checklist(CaseRecord(case_ref="T", case_type="", pay_scale_bps=4, case_variant=variant),
                                variant=variant)
-            for item_id in ("AG-12",):
-                if item_id not in ids:
-                    continue                                   # the sheet has no such line on this column
-                item = cl.item(item_id)
-                self.assertEqual(item.status, NOT_REQUIRED, (variant, item_id))
-                self.assertIn("not required in any case type", item.reason)
-            # AG-09 and AG-10 are off the sheet entirely (21 Oct 2026): not missing, not "not
-            # required" -- not printed at all, on any column.
-            self.assertNotIn("AG-09", ids, variant)
-            self.assertNotIn("AG-10", ids, variant)
-            self.assertNotIn("AG-09", [i.id for i in cl.items], variant)
-            self.assertNotIn("AG-10", [i.id for i in cl.items], variant)
-        self.assertIn("AG-12", {r.id for r in requirements_for("FRESH_SELF")})
+            shown = {i.id for i in cl.items}
+            for item_id in ("AG-09", "AG-10", "AG-12", "AG-19"):
+                with self.subTest(variant=variant, item=item_id):
+                    self.assertNotIn(item_id, ids)
+                    self.assertNotIn(item_id, shown)
+                    self.assertIn(item_id, RETIRED_LINES)
 
-    def test_filed_it_is_cited_as_found_not_required(self) -> None:
-        from rules.checklist import FOUND_NOT_REQUIRED
-        for item_id, doc in (("AG-12", "SALARY_STATEMENT"),):
-            item = _item(_record(("FORM_B_I", doc), "FRESH_SELF", bps=4), item_id)
-            self.assertEqual((item.status, item.located), (FOUND_NOT_REQUIRED, (2,)), item_id)
+    def test_a_filed_payslip_no_longer_puts_a_row_on_the_sheet(self) -> None:
+        """It was cited as FOUND_NOT_REQUIRED while the line existed."""
+        from rules.checklist import run_checklist
+        cl = run_checklist(_record(("FORM_B_I", "SALARY_STATEMENT"), "FRESH_SELF", bps=4),
+                           variant="FRESH_SELF")
+        self.assertNotIn("AG-12", [i.id for i in cl.items])
 
     def test_the_service_book_line_is_off_the_sheet(self) -> None:
         """AG-10 was NOT_APPLICABLE for a gazetted officer, then NOT_REQUIRED everywhere from

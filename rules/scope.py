@@ -126,6 +126,38 @@ def scrub_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
     if isinstance(out.get("determination_gap"), dict):
         out["determination_gap"] = {k: strip_figures(v) if isinstance(v, str) else v for k, v in out["determination_gap"].items()}
     out["calculations_in_scope"] = CALCULATIONS_IN_SCOPE
+    if isinstance(out.get("checklist"), dict):
+        out["checklist"] = _without_retired_lines(out["checklist"])
+    return out
+
+
+def _without_retired_lines(checklist: dict[str, Any]) -> dict[str, Any]:
+    """A stored checklist as today's sheet prints it: the lines the office has since taken off
+    are dropped and the counts recomputed.
+
+    Cases verified before 21 Oct 2026 carry AG-09, AG-10 and AG-19 reading "Not required". The
+    report on disk is the record of what was checked and is never rewritten; this is the same
+    treatment the computed amounts get above. Idempotent, and a no-op on a report written since.
+
+    The counts are recomputed rather than decremented so that a report whose counts were already
+    inconsistent is not made worse, and because `required` is simply the number of lines.
+    """
+    from rules.checklist import (DEFECTIVE, FOUND_NOT_REQUIRED, MISSING, NOT_APPLICABLE,
+                                 NOT_REQUIRED, PRESENT, RETIRED_LINES)
+    items = [i for i in (checklist.get("items") or [])
+             if not (isinstance(i, dict) and i.get("id") in RETIRED_LINES)]
+    if len(items) == len(checklist.get("items") or []):
+        return checklist
+    out = dict(checklist)
+    out["items"] = items
+    status = [i.get("status") for i in items if isinstance(i, dict)]
+    out["required"] = len(items)
+    out["present"] = status.count(PRESENT)
+    out["missing"] = status.count(MISSING)
+    out["defective"] = status.count(DEFECTIVE)
+    out["not_applicable"] = status.count(NOT_APPLICABLE)
+    out["not_required"] = status.count(NOT_REQUIRED) + status.count(FOUND_NOT_REQUIRED)
+    out["satisfied"] = out["present"] + out["not_applicable"] + out["not_required"]
     return out
 
 

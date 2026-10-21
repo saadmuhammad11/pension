@@ -1400,28 +1400,31 @@ class ServiceBookPages(unittest.TestCase):
 
 
 class LateSubmission(unittest.TestCase):
-    """Item 19, the reason for late submission: not required in any case type (office rule,
-    30 Sep 2026), however old the case. The three-year test no longer decides it."""
+    """Item 19, the reason for late submission: not required in any case type since 30 Sep 2026
+    (office rule), and off the sheet entirely from 21 Oct -- it printed a "Not required" row on
+    ten columns and the office asked for the row itself to go. The three-year test decides
+    nothing now, whatever the age of the case."""
 
-    def _status(self, began, sent, variant="WIDOW", documents=()):
+    def _items(self, began, sent, variant="WIDOW", documents=()):
         from rules import CaseRecord, run_checklist
         rec = CaseRecord(case_ref="t", case_type="", case_variant=variant,
                          entitlement_date=began, submitted_date=sent, documents=documents)
-        return run_checklist(rec, variant=variant).item("AG-19")
+        return [i.id for i in run_checklist(rec, variant=variant).items]
 
-    def test_never_missing_whatever_the_age_of_the_case(self):
+    def test_the_line_is_not_printed_whatever_the_age_of_the_case(self):
         from datetime import date
         for began, sent in ((date(2026, 7, 3), date(2026, 7, 29)), (date(2021, 7, 29), date(2026, 5, 20)),
                             (None, date(2026, 5, 1)), (date(2021, 1, 1), None)):
-            self.assertEqual(self._status(began, sent).status, "NOT_REQUIRED")
-            self.assertEqual(self._status(began, sent, variant="FRESH_SELF").status, "NOT_REQUIRED")
+            self.assertNotIn("AG-19", self._items(began, sent), (began, sent))
+            self.assertNotIn("AG-19", self._items(began, sent, variant="FRESH_SELF"), (began, sent))
 
-    def test_a_reason_on_file_is_found_not_required(self):
+    def test_a_reason_on_file_no_longer_puts_a_row_on_the_sheet(self):
+        """It was acknowledged as FOUND_NOT_REQUIRED while the line existed."""
         from datetime import date
         from rules.caserecord import Document
-        item = self._status(date(2021, 7, 29), date(2026, 5, 20),
+        items = self._items(date(2021, 7, 29), date(2026, 5, 20),
                             documents=(Document(type="LATE_SUBMISSION_REASON", pages=(3,)),))
-        self.assertEqual((item.status, item.located), ("FOUND_NOT_REQUIRED", (3,)))
+        self.assertNotIn("AG-19", items)
 
 
 class OfficeRulesOf30September(unittest.TestCase):

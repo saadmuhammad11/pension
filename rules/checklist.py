@@ -38,6 +38,20 @@ FOUND_NOT_REQUIRED = "FOUND_NOT_REQUIRED"
 
 #: The lines not required in any case type, and those not required in particular columns.
 NOT_REQUIRED_ANYWHERE = frozenset({"AG-09", "AG-10", "AG-12", "AG-19", "AG-23", "AG-24"})
+
+#: Lines the office took OFF the sheet (21 Oct 2026), as distinct from lines it does not
+#: require. Their Requirement blocks are kept with applies_to=frozenset() so the reason and the
+#: conditions stay on the record, which is what makes them invisible to requirements_for.
+#:
+#: Cases verified BEFORE that date have these lines in their stored case_report.json, where
+#: they read "Not required". The reports are not rewritten -- they are the record of what the
+#: office checked -- so rules.scope.scrub_report drops them on the way out, the same way it
+#: drops computed amounts from reports written before 7 Oct 2026. An officer opening an old
+#: case sees today's sheet; the artefact on disk is untouched.
+#:
+#: Every one of them was NOT_REQUIRED or FOUND_NOT_REQUIRED, so dropping them lowers `required`
+#: and `satisfied` by the same number and leaves `missing` alone: no stored result changes.
+RETIRED_LINES = frozenset({"AG-09", "AG-10", "AG-12", "AG-19"})
 NOT_REQUIRED_FOR: dict[str, frozenset[str]] = {
     # Unmarried daughter / son: there is no widow, so there is no sole-widow certificate to ask for.
     "AG-16": frozenset({"UNMARRIED_CHILD"}),
@@ -819,8 +833,11 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-12",
         "Last computerised payslip (autonomous bodies), attested by the DDO",
         ("SALARY_STATEMENT",),
-        # Not required in any case type since 12 Oct 2026 (NOT_REQUIRED_ANYWHERE, S16).
-        applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "DEATH_IN_SERVICE"}),
+        # Not required in any case type since 12 Oct 2026 (NOT_REQUIRED_ANYWHERE, S16), and off
+        # the sheet entirely from 21 Oct with AG-09, AG-10 and AG-19: it was the last of the
+        # four still printing a row, FOUND_NOT_REQUIRED, on a bundle that happened to carry a
+        # salary statement.
+        applies_to=frozenset(),
     ),
     Requirement(
         "AG-13",
@@ -865,7 +882,12 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "Reason for late submission, by the DDO, where the case is more than three years old",
         ("LATE_SUBMISSION_REASON",),
         not_applicable_when=_case_submitted_in_time,
-        applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "DEATH_IN_SERVICE", "WIDOW", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER", "DISABLED_CHILD_SIBLING", "PARENT", "SISTER"}),
+        # Off the sheet entirely from 21 Oct 2026, with AG-09 and AG-10. It has not been
+        # required in any case type since 30 Sep (office rule) and went on printing a "Not
+        # required" row on ten of the eleven columns. The three-year condition is kept on the
+        # line rather than deleted: it is the only record of what the requirement WAS, and it
+        # costs nothing while the column set is empty.
+        applies_to=frozenset(),
     ),
     Requirement(
         "AG-20",
