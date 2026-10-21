@@ -917,20 +917,25 @@ class ConditionalRequirements(unittest.TestCase):
         self.assertEqual(self._nikah("Someone Else Entirely", self.FRC, variant="FRESH_SELF"), [])
         self.assertEqual(self._nikah("Someone Else Entirely", self.FRC, variant=None), [])
 
-    def test_neither_service_record_line_is_asked_for_any_more(self):
-        """AG-09 stopped being required on 12 Oct 2026 (S16) and AG-10 on 20 Oct 2026. Neither
-        can make a checklist INCOMPLETE, whatever the grade."""
+    def test_neither_service_record_line_is_on_the_sheet_any_more(self):
+        """AG-09 stopped being required on 12 Oct 2026 (S16) and AG-10 on 20 Oct. On 21 Oct the
+        office took both LINES off the sheet: neither is printed on any column, whatever the
+        grade. What it asks for instead is AG-26."""
         from rules import run_checklist
         for bps in (19, 15, None):
             for variant in ("FRESH_SELF", "DEATH_IN_SERVICE"):
                 cl = run_checklist(CaseRecord(case_ref="t", case_type="", pay_scale_bps=bps),
                                    variant=variant)
+                ids = [i.id for i in cl.items]
                 with self.subTest(bps=bps, variant=variant):
-                    self.assertEqual(cl.item("AG-09").status, "NOT_REQUIRED")
-                    self.assertEqual(cl.item("AG-10").status, "NOT_REQUIRED")
+                    self.assertNotIn("AG-09", ids)
+                    self.assertNotIn("AG-10", ids)
+                    self.assertIn("AG-26", ids)
 
-    def test_a_service_record_on_file_is_still_cited(self):
-        """Removed, not deleted: a paper that IS filed is acknowledged with its page."""
+    def test_a_service_record_on_file_no_longer_has_a_line_to_be_cited_against(self):
+        """They were acknowledged as FOUND_NOT_REQUIRED while the lines existed. The lines are
+        gone (21 Oct 2026), so neither paper puts a row on the sheet -- and neither makes the
+        checklist incomplete either, which is what the office wanted."""
         from rules import run_checklist
         from rules.caserecord import Document
         for doc, item_id in (("SERVICE_STATEMENT", "AG-09"), ("SERVICE_BOOK", "AG-10")):
@@ -938,8 +943,7 @@ class ConditionalRequirements(unittest.TestCase):
                 CaseRecord(case_ref="t", case_type="",
                            documents=(Document(type=doc, pages=(9,)),)), variant="FRESH_SELF")
             with self.subTest(document=doc):
-                self.assertEqual((cl.item(item_id).status, cl.item(item_id).located),
-                                 ("FOUND_NOT_REQUIRED", (9,)))
+                self.assertNotIn(item_id, [i.id for i in cl.items])
 
     def test_bps_16_is_gazetted(self):
         """The boundary itself, pinned: 16 is gazetted, 15 is not.
@@ -957,13 +961,15 @@ class ConditionalRequirements(unittest.TestCase):
 
     def test_without_a_grade_the_bundle_decides(self):
         """An AG service statement is issued only to gazetted officers, so its presence says so.
-        Also read through AG-08 since AG-10 stopped asking."""
+        Read through AG-08: AG-10 stopped asking on 20 Oct 2026 and AG-09's own line came off
+        the sheet on 21 Oct, but the DOCUMENT still decides this, which is the point of keeping
+        _service_record_pair alive after both lines went."""
         from rules import run_checklist
         from rules.caserecord import Document
         rec = CaseRecord(case_ref="t", case_type="", case_variant="FRESH_SELF",
                          documents=(Document(type="SERVICE_STATEMENT", pages=(9,)),))
         cl = run_checklist(rec, variant="FRESH_SELF")
-        self.assertEqual((cl.item("AG-09").status, cl.item("AG-09").located), ("FOUND_NOT_REQUIRED", (9,)))
+        self.assertNotIn("AG-09", [i.id for i in cl.items])
         self.assertEqual(cl.item("AG-08").status, "NOT_APPLICABLE")
         self.assertIn("gazetted", cl.item("AG-08").reason)
 

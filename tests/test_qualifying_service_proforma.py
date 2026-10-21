@@ -147,27 +147,32 @@ class Checklist(unittest.TestCase):
         from rules.checklist import run_checklist
         return next(i for i in run_checklist(record, variant=variant).items if i.id == item_id)
 
-    def test_ag_10_is_not_asked_for_at_all(self) -> None:
-        """The office removed the requirement on 20 Oct 2026. An empty bundle used to make
-        AG-10 MISSING; it is NOT_REQUIRED now, in every case type."""
-        from rules.checklist import NOT_REQUIRED
-        self.assertEqual(self._item(_record((), bps=4), "AG-10", "FRESH_SELF").status, NOT_REQUIRED)
+    def test_ag_10_is_not_on_the_sheet_at_all(self) -> None:
+        """The office removed the requirement on 20 Oct 2026 and the LINE on 21 Oct. An empty
+        bundle used to make AG-10 MISSING, then NOT_REQUIRED; now it is not printed at all.
+        What the office asks for instead is AG-26, Performa for Qualifying Service."""
+        from rules.checklist import run_checklist
+        items = [i.id for i in run_checklist(_record((), bps=4), variant="FRESH_SELF").items]
+        self.assertNotIn("AG-10", items)
+        self.assertIn("AG-26", items)
 
-    def test_the_proforma_is_still_cited_against_ag_10_when_filed(self) -> None:
-        """Removed, not deleted. The line keeps its satisfied_by list so a proforma that IS
-        filed is acknowledged -- FOUND_NOT_REQUIRED, with the page -- instead of the paper
-        going unmentioned. It was PRESENT while the line was still required."""
-        from rules.checklist import FOUND_NOT_REQUIRED
-        item = self._item(_record(("QUALIFYING_SERVICE_PROFORMA",), bps=4), "AG-10", "FRESH_SELF")
-        self.assertEqual(item.status, FOUND_NOT_REQUIRED)
-        self.assertTrue(item.located, "the page carrying it must still be cited")
-        self.assertIn("proforma for qualifying service", item.requirement)
+    def test_a_filed_proforma_is_cited_against_ag_26(self) -> None:
+        """It used to be acknowledged against AG-10 as FOUND_NOT_REQUIRED. AG-10 is off the
+        sheet from 21 Oct 2026, and the proforma now answers a line that is actually required:
+        AG-26, PRESENT, with the page it was found on."""
+        from rules.checklist import PRESENT
+        item = self._item(_record(("QUALIFYING_SERVICE_PROFORMA",), bps=4), "AG-26", "FRESH_SELF")
+        self.assertEqual(item.status, PRESENT)
+        self.assertTrue(item.located, "the page carrying it must be cited")
+        self.assertEqual(item.requirement, "Performa for Qualifying Service")
 
-    def test_the_service_book_is_still_cited_against_ag_10_when_filed(self) -> None:
-        from rules.checklist import FOUND_NOT_REQUIRED
-        item = self._item(_record(("SERVICE_BOOK",), bps=4), "AG-10", "FRESH_SELF")
-        self.assertEqual(item.status, FOUND_NOT_REQUIRED)
-        self.assertTrue(item.located)
+    def test_a_filed_service_book_no_longer_answers_anything(self) -> None:
+        """The book satisfied AG-10, and AG-10 is gone. A bundle carrying a service book and no
+        proforma leaves AG-26 MISSING: the office asked for the proforma instead, and a book is
+        not one. This is the whole point of the change -- the department must file the new paper."""
+        from rules.checklist import MISSING
+        item = self._item(_record(("SERVICE_BOOK",), bps=4), "AG-26", "FRESH_SELF")
+        self.assertEqual(item.status, MISSING)
 
     def test_the_proforma_is_a_service_record_for_every_servant(self) -> None:
         # CL-09 is the FD checklist's service-record line (death in service), which runs where

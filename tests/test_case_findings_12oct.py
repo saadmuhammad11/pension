@@ -179,9 +179,13 @@ class LpcOnASelfPension(unittest.TestCase):
 
 
 class ServiceStatementAndAutonomousPayslip(unittest.TestCase):
-    """AG-09 (service statement, gazetted by Audit) and AG-12 (autonomous-body payslip) are not
-    required in any case type (user, 12 Oct 2026, S16): "not required" when absent, cited when
-    filed, never "not found"."""
+    """AG-12 (autonomous-body payslip) is not required in any case type (user, 12 Oct 2026, S16):
+    "not required" when absent, cited when filed, never "not found".
+
+    AG-09 was in that same position until 21 Oct 2026, when the office took the LINE off the
+    sheet as well -- a checklist that prints what it does not want reads as noise to the officer
+    working down it. AG-10 went with it. What the office asks for instead is AG-26.
+    """
 
     def test_absent_they_read_not_required_on_every_column(self) -> None:
         from rules.checklist import ALL_VARIANTS, NOT_REQUIRED, requirements_for, run_checklist
@@ -190,37 +194,34 @@ class ServiceStatementAndAutonomousPayslip(unittest.TestCase):
             ids = {r.id for r in requirements_for(variant)}
             cl = run_checklist(CaseRecord(case_ref="T", case_type="", pay_scale_bps=4, case_variant=variant),
                                variant=variant)
-            for item_id in ("AG-09", "AG-12"):
+            for item_id in ("AG-12",):
                 if item_id not in ids:
                     continue                                   # the sheet has no such line on this column
                 item = cl.item(item_id)
                 self.assertEqual(item.status, NOT_REQUIRED, (variant, item_id))
                 self.assertIn("not required in any case type", item.reason)
-            self.assertNotIn("AG-09", [i.id for i in cl.items if i.status == "MISSING"], variant)
-        self.assertIn("AG-09", {r.id for r in requirements_for("FRESH_SELF")})
+            # AG-09 and AG-10 are off the sheet entirely (21 Oct 2026): not missing, not "not
+            # required" -- not printed at all, on any column.
+            self.assertNotIn("AG-09", ids, variant)
+            self.assertNotIn("AG-10", ids, variant)
+            self.assertNotIn("AG-09", [i.id for i in cl.items], variant)
+            self.assertNotIn("AG-10", [i.id for i in cl.items], variant)
         self.assertIn("AG-12", {r.id for r in requirements_for("FRESH_SELF")})
 
-    def test_filed_they_are_cited_as_found_not_required(self) -> None:
+    def test_filed_it_is_cited_as_found_not_required(self) -> None:
         from rules.checklist import FOUND_NOT_REQUIRED
-        for item_id, doc in (("AG-09", "SERVICE_STATEMENT"), ("AG-12", "SALARY_STATEMENT")):
+        for item_id, doc in (("AG-12", "SALARY_STATEMENT"),):
             item = _item(_record(("FORM_B_I", doc), "FRESH_SELF", bps=4), item_id)
             self.assertEqual((item.status, item.located), (FOUND_NOT_REQUIRED, (2,)), item_id)
 
-    def test_the_service_book_line_is_no_longer_required_of_anyone(self) -> None:
-        """AG-10 was NOT_APPLICABLE for a gazetted officer until the office removed the
-        requirement outright on 20 Oct 2026. It is now NOT_REQUIRED in every case type, so the
-        gazetted distinction no longer decides this line -- see NOT_REQUIRED_ANYWHERE."""
-        from rules.checklist import NOT_REQUIRED
-        item = _item(_record(("FORM_B_I", "SERVICE_STATEMENT"), "FRESH_SELF"), "AG-10")
-        self.assertEqual(item.status, NOT_REQUIRED)
-
-    def test_a_service_book_that_is_filed_is_still_cited(self) -> None:
-        """Removed, not deleted: a bundle that carries the book has it acknowledged rather
-        than the paper going unmentioned."""
-        from rules.checklist import FOUND_NOT_REQUIRED
-        item = _item(_record(("FORM_B_I", "SERVICE_BOOK"), "FRESH_SELF"), "AG-10")
-        self.assertEqual(item.status, FOUND_NOT_REQUIRED)
-        self.assertTrue(item.located, "the page carrying it must still be cited")
+    def test_the_service_book_line_is_off_the_sheet(self) -> None:
+        """AG-10 was NOT_APPLICABLE for a gazetted officer, then NOT_REQUIRED everywhere from
+        20 Oct 2026, and from 21 Oct the office took the line off the sheet: it is not printed
+        on any column, whether or not a service book is in the bundle."""
+        from rules.checklist import run_checklist
+        for docs in ((), ("FORM_B_I", "SERVICE_STATEMENT"), ("FORM_B_I", "SERVICE_BOOK")):
+            cl = run_checklist(_record(docs, "FRESH_SELF"), variant="FRESH_SELF")
+            self.assertNotIn("AG-10", [i.id for i in cl.items], docs)
 
     def test_the_statement_still_tells_a_gazetted_officer_elsewhere(self) -> None:
         """The capability AG-10 used is still live: it excuses the Last Pay Certificate for a

@@ -44,7 +44,7 @@ const send = (method, params = {}) => new Promise(r => { const i = ++id; pending
 await send('Page.enable'); await send('Runtime.enable')
 await send('Emulation.setDeviceMetricsOverride', { width: +W, height: +H, deviceScaleFactor: 1, mobile: +W < 800 })
 // A real token from the real API, planted before the app loads.
-const login = await (await fetch('http://127.0.0.1:5184/api/v2/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: user, password: '1234', portal: 'ag' }) })).json()
+const login = await (await fetch('http://127.0.0.1:5184/api/v2/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: user, password: process.env.PORTAL_PW || '1234', portal: 'ag' }) })).json()
 if (login.token) await send('Page.addScriptToEvaluateOnNewDocument', { source: `sessionStorage.setItem('pension.ag.token', ${JSON.stringify(login.token)})` })
 else console.error('login failed', JSON.stringify(login).slice(0, 200))
 await send('Page.navigate', { url: `http://127.0.0.1:5184/#${route}` })

@@ -771,10 +771,17 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         "AG-09",
         "Service statement, gazetted by Audit (Payrolls)",
         ("SERVICE_STATEMENT",),
-        # Not required in any case type since 12 Oct 2026 (NOT_REQUIRED_ANYWHERE, S16): cited
-        # when filed, "not required" when not. The statement still tells a gazetted officer
-        # from a non-gazetted servant for AG-10 (_service_record_pair).
-        applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "DEATH_IN_SERVICE"}),
+        # Off the sheet entirely from 21 Oct 2026 by the office's decision. It was not required
+        # in any case type from 12 Oct (S16) but still printed a "Not required" line on every
+        # column, and the office asked for the line itself to go: a checklist that lists what
+        # it does not want read as noise to the officers working it.
+        #
+        # The line is kept here rather than deleted so the reason stays on the record, and
+        # because the statement still tells a gazetted officer from a non-gazetted servant for
+        # _service_record_pair, which excuses AG-08 for a gazetted officer (decision S15).
+        # Empty applies_to is what removes it: requirements_for skips a line whose column set
+        # does not contain the variant.
+        applies_to=frozenset(),
     ),
     Requirement(
         "AG-10",
@@ -794,9 +801,13 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         # book that IS filed is still cited (FOUND_NOT_REQUIRED) instead of going unmentioned,
         # and so the reason this stopped being asked for stays on the record. Absent, it is
         # NOT_REQUIRED and never counts as missing.
+        #
+        # Off the sheet entirely from 21 Oct 2026, with AG-09 and for the same reason: it stopped
+        # being required on 20 Oct and went on printing "Not required" on every column. What the
+        # office now asks for instead is AG-26, the proforma, which is required everywhere.
         ("SERVICE_BOOK", "CHARACTER_SERVICE_ROLL", "QUALIFYING_SERVICE_PROFORMA"),
         not_applicable_when=_service_book_not_kept,
-        applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "REVISED", "DEATH_IN_SERVICE"}),
+        applies_to=frozenset(),
     ),
     Requirement(
         "AG-11",
@@ -907,8 +918,12 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
     # in the bundle, which is the whole of what the checklist decides.
     Requirement(
         "AG-26",
-        "Proforma for qualifying service, certified by the department and verified by the "
-        "Accountant General / District Accounts Office",
+        # The office's own words for it, and the spelling printed on the form itself
+        # ("PROPOSED PERFORMA FOR QUALIFYING SEVICE FOR PENSION"). Renamed 21 Oct 2026 from
+        # "Proforma for qualifying service, certified by the department and verified by the
+        # Accountant General / District Accounts Office": a checklist line is read at a glance
+        # down a column, and the certification it describes is the same on every other line.
+        "Performa for Qualifying Service",
         ("QUALIFYING_SERVICE_PROFORMA",),
         applies_to=frozenset(ALL_VARIANTS),
     ),
