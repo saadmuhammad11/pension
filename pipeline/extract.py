@@ -64,7 +64,13 @@ ASSEMBLE_OCR_CONCURRENCY = max(1, int(os.environ.get("PENSION_ASSEMBLE_OCR_CONCU
 #: Same discipline as prefetch_page_ocr: the reads happen in the pool, every mutation of
 #: `result` happens on the calling thread, and results are folded in SUBMISSION order, so the
 #: recoveries already-seen set still grows in page order and progress lines still arrive in it.
-OCR_SWEEP_CONCURRENCY = max(1, int(os.environ.get("PENSION_OCR_SWEEP_CONCURRENCY") or 8))
+#:
+#: Four, not more. Ten real pages read sequentially took 31.7s; pooled at 4, 17.9s (1.80x);
+#: pooled at 8, 17.6s (1.80x). PaddleOCR has one chip and decodes tokens like any other reader,
+#: so it saturates around four and the rest is queueing. These also multiply with
+#: PENSION_MAX_CONCURRENT_RUNS, and eight runs at eight would put 64 requests on that one chip
+#: for no gain over 32.
+OCR_SWEEP_CONCURRENCY = max(1, int(os.environ.get("PENSION_OCR_SWEEP_CONCURRENCY") or 4))
 
 FIELDS = "fields.json"
 DETERMINATION = "determination.json"
