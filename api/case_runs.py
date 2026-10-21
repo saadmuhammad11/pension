@@ -194,7 +194,11 @@ def _start_gpf(case, docs: list, intake: dict, user) -> dict:
             # ...and re-read into the module case this portal case already holds, so the
             # officer's dispositions carry into the new round instead of being abandoned with
             # an examination the portal then stops pointing at (H-19).
-            into_case=str(case["gpf_case_id"] or ""))
+            # .keys(), like the product check above: the row reaching here is not always a
+            # full SELECT *, and indexing a column that is not on it would raise on EVERY GP
+            # Fund submission rather than only on a resubmission. Absent means "no module case
+            # yet", which is exactly a first submission.
+            into_case=str((case["gpf_case_id"] if "gpf_case_id" in case.keys() else None) or ""))
     except gpf_bridge.GpfError as exc:
         raise workflow.WorkflowError(exc.status, exc.detail) from exc
     return {"run_id": GPF_RUN_PREFIX + str(job["jobId"]), "resumed": False, "state": "queued" if job.get("state") == "queued" else "running"}
