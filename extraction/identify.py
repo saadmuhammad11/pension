@@ -442,7 +442,11 @@ def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdenti
     except Exception:                                   # noqa: BLE001
         return ident
     flat = re.sub(r"\s+", " ", text.text or "").lower()
-    if re.search(PROFORMA_TITLE, flat):
+    # Either the printed title, or the sections that only this form prints. Requiring the title
+    # alone would have denied the proforma filed on 21 Oct 2026, whose title line is above the
+    # top of the scan -- and a denial here does not merely doubt the claim, it files the page as
+    # OTHER and drops the document from the bundle.
+    if re.search(PROFORMA_TITLE, flat) or re.search(PROFORMA_SECTIONS, flat):
         return ident
     denied = PageIdentity(
         page=ident.page, document_type="OTHER", confidence=ident.confidence,
@@ -586,8 +590,26 @@ NO_INCOME_STATEMENT = (
 #: "service" are both matched loosely.
 PROFORMA_TITLE = r"(?:pro|per|pre)\s*form\w{0,5}\s+for\s+qualifying\s+se\w{0,6}\s+for\s+pension"
 
+#: The proforma identified by its STRUCTURE rather than its heading, because the heading is
+#: often not on the page at all. The copy filed with the case of 21 Oct 2026 (run b3b0e3f35d7c,
+#: p.1) begins "[For Use in the Administrative/Attached Department/Office]" -- the title line is
+#: above the top of the scan -- and the vision model, told to look for the heading, answered
+#: OTHER at confidence 1.00. The page then counted as no document at all, so the checklist line
+#: it exists to satisfy would have read MISSING against a department that had filed it.
+#:
+#: Its numbered sections are what make it this form and nothing else: no other pension document
+#: prints PARTICULARS OF EMPLOYEE, then SERVICE RECORD SUMMARY, then PAY FIXATION, in that
+#: order. OCR read all three cleanly off that scan. The gaps are bounded so that three headings
+#: scattered across unrelated pages of one sheet cannot combine into a match.
+PROFORMA_SECTIONS = (
+    r"particulars\s+of\s+employ\w{0,3}"
+    r".{0,600}?service\s+record\s+summ\w{0,4}"
+    r".{0,600}?pay\s+fixation"
+)
+
 DOCUMENT_TITLES: tuple[tuple[str, str], ...] = (
     (PROFORMA_TITLE, "QUALIFYING_SERVICE_PROFORMA"),
+    (PROFORMA_SECTIONS, "QUALIFYING_SERVICE_PROFORMA"),
     (r"list\s+of\s+family\s+members|descriptive\s+roll", "ANNEX_A"),
     (r"sole\s+(?:family|widow)\s+certificate|sole\s+and\s+lawful\s+widow"
      r"|lawful\s+widow\s+certificate", "SOLE_WIDOW_CERTIFICATE"),

@@ -744,12 +744,18 @@ DOCUMENT_TYPE_GLOSS = {
         "'Charge Report' - the form on which an officer reports assuming or handing over "
         "charge of a post, giving the post, the office and the date",
     "QUALIFYING_SERVICE_PROFORMA":
-        "the one-page proforma headed 'PERFORMA FOR QUALIFYING SERVICE FOR PENSION' (often "
-        "'PROPOSED PERFORMA ...', sometimes spelt 'PROFORMA'), with the sections 'PARTICULARS OF "
-        "EMPLOYEE', 'SERVICE RECORD SUMMARY' and 'PAY FIXATION', and at the foot a block 'For Use "
-        "in the Accountant General/District Accounts Office' signed by an Accounts Officer. It "
-        "says '(As Per Service Book)' and mentions the service book, but it is NOT a page of the "
-        "service book: it is a printed form filled in by the office",
+        "the one-page proforma whose NUMBERED SECTIONS are '1. PARTICULARS OF EMPLOYEE', "
+        "'2. SERVICE RECORD SUMMARY' (ending in 'Net Qualifying Service'), '3. PAY FIXATION' and "
+        "'4. PENSION CONTRIBUTION / PENSIONARY SHARE', with a 'Pension Sanction Authority' stamp "
+        "and, at the foot, a block headed 'For Use in the Accountant General/District Accounts "
+        "Office' where an Accounts Officer verifies the years, months and days served. Those "
+        "sections ARE the identification. It is often headed 'PERFORMA FOR QUALIFYING SERVICE FOR "
+        "PENSION' (or 'PROPOSED PERFORMA ...', sometimes spelt 'PROFORMA') -- but frequently the "
+        "heading is absent, cropped above the top of the scan, or replaced by '(For Use in the "
+        "Administrative/Attached Department/Office)'. Answer this type on the sections even when "
+        "no such heading is visible. It says '(As Per Service Book)' and mentions the service "
+        "book throughout, but it is NOT a page of the service book: it is a printed form filled "
+        "in by the office, and from 21 Oct 2026 it is what departments file INSTEAD of the book",
     "CHARACTER_SERVICE_ROLL":
         "'Character and Service Roll' / 'Character Roll' - the departmental service record of "
         "a non-gazetted servant, carrying a photograph, personal particulars, the posting "

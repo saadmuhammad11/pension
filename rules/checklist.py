@@ -893,6 +893,25 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
         ("AFFIDAVIT",),
         applies_to=frozenset({"FRESH_INVALID", "DEATH_IN_SERVICE", "WIDOW", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER", "DISABLED_CHILD_SIBLING", "PARENT", "SISTER"}),
     ),
+    # The proforma for qualifying service, required of every case type from 21 Oct 2026 by the
+    # office's decision. It is the paper that REPLACED the service book: AG-10 stopped being
+    # required anywhere on 20 Oct, and departments now file this one-pager instead of sending
+    # the book. So this is not an addition to the service-record lines but the successor to
+    # them, and unlike AG-09 and AG-10 it is asked for in all eleven variants.
+    #
+    # AG-26 rather than AG-22, which is retired: a number the office has seen on a sheet should
+    # not come back meaning something else.
+    #
+    # The service record is still read as the office states it and compared with nothing -- no
+    # qualifying service is computed here (rules/scope.py). This line asks whether the paper is
+    # in the bundle, which is the whole of what the checklist decides.
+    Requirement(
+        "AG-26",
+        "Proforma for qualifying service, certified by the department and verified by the "
+        "Accountant General / District Accounts Office",
+        ("QUALIFYING_SERVICE_PROFORMA",),
+        applies_to=frozenset(ALL_VARIANTS),
+    ),
 )
 
 
