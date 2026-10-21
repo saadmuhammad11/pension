@@ -550,6 +550,30 @@ GENERIC_PAGE = _envelope(
             "or above the signature -- the 'Government of ... Department' or 'Office of the "
             "...' line, reproduced as printed. null if the page carries no issuing office."
         ),
+        # Nothing in the tree reads ``fields`` -- "label" appears nowhere in assertions.json,
+        # and the assertions are built from the named extractions instead. It is 66.5% of this
+        # schema's output and so looks like free money. It is not: it is scratchpad. Enumerating
+        # the page's labelled values is what makes the model READ the page; asked only for the
+        # five scalars below, it answers them from context.
+        #
+        # Measured 21 Oct 2026, 6 real pages, 3 reps per arm, comparing only what stage 6
+        # consumes (value and confidence at extract.py:1916, identifiers at :1978, summary),
+        # date formats and office spacing normalised, against the arm's own self-disagreement:
+        #
+        #   dropped entirely   6.9s vs 24.5s (3.6x)  -- 4 regressions, noise floor 2
+        #   maxItems 12       19.3s vs 24.2s (1.3x)  -- 3 regressions, noise floor 4
+        #   maxItems 6        18.3s vs 24.2s (1.3x)  -- 3 regressions, noise floor 4
+        #
+        # The regressions are not cosmetic. Dropping it put document_date on ffd0a4b6 p.13 at
+        # three different values in the wrong YEAR where 24 entries gave 2024-04-26 three times
+        # running, and moved issuing_office on 95807464 p.9 from the school that signed the page
+        # to "Accountant General, Punjab" -- the model guessing from context instead of reading
+        # the letterhead. Capping to 12 reproduces that same office failure in milder form, and
+        # does not even shrink the response much: the model redistributes into summary and
+        # longer values rather than stopping (f6 on aaa848e5 p.3 returned MORE than f24).
+        #
+        # An office or a date invented from context is exactly the evidence an officer would
+        # act on. 24 stays. The saving is real and it is not available.
         "fields": {
             "type": "array",
             "maxItems": 24,

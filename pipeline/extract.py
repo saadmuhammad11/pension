@@ -54,6 +54,18 @@ ASSERTION_CONCURRENCY = max(1, int(os.environ.get("PENSION_ASSERTION_CONCURRENCY
 #: time until 19 Oct 2026.
 ASSEMBLE_OCR_CONCURRENCY = max(1, int(os.environ.get("PENSION_ASSEMBLE_OCR_CONCURRENCY") or 8))
 
+#: Stage 6's own OCR sweeps -- recoveries off every LPC, and the attestation second reader.
+#: Both were plain `for` loops issuing one ~8s call at a time while the vision reader beside
+#: them sustained 4-6 concurrent. Measured over four real runs on 21 Oct 2026: 22-31 OCR
+#: calls, 156-211s busy, span 152-189s -- a mean concurrency of 1.0, against a wall clock of
+#: 221-268s. The reads are independent and go to the PaddleOCR server (its own chip), so they
+#: contend with nothing the vision model is doing.
+#:
+#: Same discipline as prefetch_page_ocr: the reads happen in the pool, every mutation of
+#: `result` happens on the calling thread, and results are folded in SUBMISSION order, so the
+#: recoveries already-seen set still grows in page order and progress lines still arrive in it.
+OCR_SWEEP_CONCURRENCY = max(1, int(os.environ.get("PENSION_OCR_SWEEP_CONCURRENCY") or 8))
+
 FIELDS = "fields.json"
 DETERMINATION = "determination.json"
 
@@ -1693,8 +1705,10 @@ def check_attestation_by_ocr(result: dict, documents: list, image_for: dict,
     from extraction.ocr import attestation_on
     from rules.checklist import ATTESTED_COPY_TYPES
 
+    from pipeline import timing
+
     done = {c["page"] for c in result.get("attestation_checked", [])}
-    read = 0
+    wanted: list[int] = []
     for doc in documents:
         if doc.get("type") not in ATTESTED_COPY_TYPES or doc.get("attested") is not False:
             continue
@@ -1703,18 +1717,35 @@ def check_attestation_by_ocr(result: dict, documents: list, image_for: dict,
                 continue
             if only_pages is not None and page not in only_pages:
                 continue
-            try:
-                found = attestation_on(image_for[page], page)
-            except Exception:                        # noqa: BLE001
-                continue                             # not read: the first answer stands
-            read += 1
-            if progress:
-                progress(f"stage 6  p.{page} attestation "
-                         + (", ".join(found.marks) if found.marks else "none found"))
-            result.setdefault("attestation_checked", []).append({
-                "page": page, "marks": list(found.marks),
-                "read_the_foot": found.read_the_foot, "by": "ocr",
-            })
+            if page not in wanted:
+                wanted.append(page)
+
+    def _read_attestation(page: int):
+        try:
+            return attestation_on(image_for[page], page)
+        except Exception:                            # noqa: BLE001
+            return None                              # not read: the first answer stands
+
+    if OCR_SWEEP_CONCURRENCY <= 1 or len(wanted) < 2:
+        bands = [(p, _read_attestation(p)) for p in wanted]
+    else:
+        with ThreadPoolExecutor(max_workers=min(OCR_SWEEP_CONCURRENCY, len(wanted))) as ap:
+            bands = list(zip(wanted, [f.result() for f in [
+                ap.submit(timing.carry(_read_attestation, stage="ocr", page=p), p)
+                for p in wanted]]))
+
+    read = 0
+    for page, found in bands:
+        if found is None:
+            continue
+        read += 1
+        if progress:
+            progress(f"stage 6  p.{page} attestation "
+                     + (", ".join(found.marks) if found.marks else "none found"))
+        result.setdefault("attestation_checked", []).append({
+            "page": page, "marks": list(found.marks),
+            "read_the_foot": found.read_the_foot, "by": "ocr",
+        })
     return read
 
 
@@ -2082,29 +2113,41 @@ def stage_assertions(
     # because a recovery is a printed figure beside a printed word.
     from extraction.ocr import ocr_page, recoveries_in
 
-    for doc in documents:
-        if doc["type"] != "LPC":
+    lpc_pages = [page for doc in documents if doc["type"] == "LPC"
+                 for page in doc["pages"]
+                 if only_pages is None or page in only_pages]
+
+    def _read_recoveries(page: int):
+        """In the pool. Returns what was read, or the exception, for folding on the caller."""
+        try:
+            return recoveries_in(ocr_page(image_for[page], page))
+        except Exception as exc:                     # noqa: BLE001
+            return exc
+
+    if OCR_SWEEP_CONCURRENCY <= 1 or len(lpc_pages) < 2:
+        swept = [(p, _read_recoveries(p)) for p in lpc_pages]
+    else:
+        with ThreadPoolExecutor(max_workers=min(OCR_SWEEP_CONCURRENCY, len(lpc_pages))) as rp:
+            swept = list(zip(lpc_pages, [f.result() for f in [
+                rp.submit(timing.carry(_read_recoveries, stage="ocr", page=p), p)
+                for p in lpc_pages]]))
+
+    for page, found in swept:
+        if isinstance(found, Exception):
+            result["unreadable"].append({
+                "page": page, "document": "LPC",
+                "reason": f"OCR failed: {str(found)[:200]}",
+            })
             continue
-        for page in doc["pages"]:
-            if only_pages is not None and page not in only_pages:
-                continue
-            try:
-                found = recoveries_in(ocr_page(image_for[page], page))
-            except Exception as exc:                 # noqa: BLE001
-                result["unreadable"].append({
-                    "page": page, "document": "LPC",
-                    "reason": f"OCR failed: {str(exc)[:200]}",
-                })
-                continue
-            already = {(r["page"], r["amount"]) for r in result["recoveries"]}
-            for rec in found:
-                if (rec["page"], rec["amount"]) in already:
-                    continue            # the vision reader already stated this same figure
-                if progress:
-                    progress(f"stage 6  LPC p.{page} recovery {rec['amount']:,} (OCR)")
-                result["recoveries"].append({
-                    **rec, "amount_exact": str(rec["amount"]), "document": "LPC",
-                })
+        already = {(r["page"], r["amount"]) for r in result["recoveries"]}
+        for rec in found:
+            if (rec["page"], rec["amount"]) in already:
+                continue                # the vision reader already stated this same figure
+            if progress:
+                progress(f"stage 6  LPC p.{page} recovery {rec['amount']:,} (OCR)")
+            result["recoveries"].append({
+                **rec, "amount_exact": str(rec["amount"]), "document": "LPC",
+            })
     checkpoint()
 
     # -- attestation, read a second time where the page reading saw none ----------------
