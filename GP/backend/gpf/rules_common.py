@@ -230,8 +230,26 @@ def _qr(F):
     return out
 
 
-check(id="QR", group="qr", ref="R10 · B1-iii", title="QR codes",
-      applies=lambda F: len((F.get("qr") or [])) > 0, run=_qr)
+# QR CHECKING IS OUT OF SCOPE (office decision, 21 Oct 2026). Neither check below is
+# registered, so no examination raises a QR finding of any kind.
+#
+# It never worked. The reading pipeline is wired to NullBarcodeDecoder, which returns nothing,
+# so F["qr"] was always empty: the QR check never fired, and QR-SANCTION fell through to its
+# other branch and told the officer the sanction "carries no QR code" -- a statement of fact
+# about a page nothing had looked at. On a sanction that does carry one, that is the opposite
+# of the truth, printed with the authority of a check (audit of 13 Oct 2026, H-13).
+#
+# Offered and declined: wiring the real decoder. zxingcpp IS installed now, so it is a one-line
+# change -- but a check that has never run against a real scan is not evidence, and the office
+# chose to drop the claim rather than to start making a new one.
+#
+# WHAT THIS COSTS: rule B1-iii is not evaluated. It applies only to a QR-coded sanction a
+# department has not verified, and nothing here can tell whether a sanction is QR-coded. The
+# bodies of both checks are kept, unregistered, so restoring this is wiring the decoder and
+# putting the two check() calls back -- not writing the rules again.
+#
+# check(id="QR", group="qr", ref="R10 · B1-iii", title="QR codes",
+#       applies=lambda F: len((F.get("qr") or [])) > 0, run=_qr)
 
 
 def _qr_sanction(F):
@@ -250,11 +268,11 @@ def _qr_sanction(F):
             "evidence": [ev(s.get("page"), "Sanction")]}
 
 
-check(id="QR-SANCTION", group="qr", ref="B1-iii · R10", code="B1-iii",
-      title="QR-coded sanction (Health, Education, Police)",
-      applies=lambda F: (KIND(F, *ADVANCES) and D(F).get("sanction") and D(F)["sanction"].get("present")
-                         and bool(re.search(r"health|education|police", D(F)["sanction"].get("dept") or "", re.I))),
-      run=_qr_sanction)
+# check(id="QR-SANCTION", group="qr", ref="B1-iii · R10", code="B1-iii",
+#       title="QR-coded sanction (Health, Education, Police)",
+#       applies=lambda F: (KIND(F, *ADVANCES) and D(F).get("sanction") and D(F)["sanction"].get("present")
+#                          and bool(re.search(r"health|education|police", D(F)["sanction"].get("dept") or "", re.I))),
+#       run=_qr_sanction)
 
 
 # ── R4: signatories against the delegation of authority register ──────────────

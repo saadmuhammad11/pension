@@ -15,12 +15,25 @@ from gpf.fixtures import all_case_keys, load_case
 GROUND_TRUTH = json.loads((Path(__file__).parent / "ground_truth.json").read_text(encoding="utf-8"))
 
 # Spec §16.2 headline counts: (hard, adv/observation, conf/verify, sap).
+#
+# AMENDED 21 Oct 2026, when QR checking went out of scope (rules_common.py). Thirteen QR rows
+# leave the corpus and three cases lose advisories with them:
+#
+#     fp-death      4 -> 1 advisories   (QR: death cert, decline, FRC, old CNIC, widow CNIC)
+#     fp-dismissal  4 -> 2 advisories   (QR: CNIC back, e-stamp, order)
+#     residual      1 -> 0 advisories   (QR: CNIC back, notification barcode)
+#
+# NO REAL EXAMINATION CHANGES. These fixtures carry canned QR facts; a scan read on the box
+# does not, because the pipeline is wired to NullBarcodeDecoder and F["qr"] is always empty.
+# So the corpus has been asserting advisories that no deployed build has ever raised, and this
+# amendment makes the acceptance suite describe the engine that actually runs. If the decoder
+# is ever wired, these rows and these counts come back with it.
 SPEC_16_2 = {
     "fp-non-gazetted": (0, 3, 5, 0),
-    "fp-death": (4, 4, 7, 0),
-    "fp-dismissal": (0, 4, 6, 0),
+    "fp-death": (4, 1, 7, 0),
+    "fp-dismissal": (0, 2, 6, 0),
     "missing-credits": (1, 1, 1, 4),
-    "residual": (1, 1, 2, 0),
+    "residual": (1, 0, 2, 0),
     "refundable": (0, 2, 4, 0),
     "non-refundable": (0, 2, 4, 0),
     "balance-transfer": (0, 0, 2, 5),

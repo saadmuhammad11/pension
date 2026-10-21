@@ -48,11 +48,13 @@ MIN_GROUND = 10
 #: the band a verification needs -- the Accounts Officer or above.
 #:
 #: "verify" records the officer's own check of the DOA signature, the thumb impression or the
-#: death claim. "qr" marks the sanction's QR code decoded and agreeing, which clears the
-#: sanction check. Both reach the engine through ``cure``, whose own gate is may("upload") --
-#: True for every band, the Dealing Assistant included. The dedicated ``verify`` route has
-#: always checked the band properly; this is the same action arriving by another door.
-_CURES_THAT_VERIFY = frozenset({"verify", "qr"})
+#: death claim. It reaches the engine through ``cure``, whose own gate is may("upload") -- True
+#: for every band, the Dealing Assistant included. The dedicated ``verify`` route has always
+#: checked the band properly; this is the same action arriving by another door.
+#:
+#: "qr" was the other one, until QR checking went out of scope on 21 Oct 2026 and the rules
+#: that raised a qr cure were unregistered (rules_common.py). Nothing can raise one now.
+_CURES_THAT_VERIFY = frozenset({"verify"})
 
 
 def _officer(officer_id: str) -> dict:
@@ -339,7 +341,11 @@ class CaseService:
                 raise ServiceError("Recording a verification needs an explicit result: send ok true or false.", 400)
             self._apply_verification(s, cure["vid"], bool(values["ok"]), values.get("note", ""), officer)
         elif kind == "qr":
-            self._apply_qr_cure(s, cure.get("qid"), values, stored_name)
+            # Unreachable: no registered rule raises a qr cure since QR checking went out of
+            # scope (21 Oct 2026). Refused rather than quietly handled, so a stored case from
+            # before that carrying one says so instead of being half-applied.
+            raise ServiceError("QR checking is not part of this release; this item cannot be "
+                               "cured by decoding a code.", 400)
         elif kind == "doc":
             apply_key = cure.get("apply")
             fn = CURES.get(apply_key)
@@ -370,23 +376,6 @@ class CaseService:
     def _apply_verification(self, s: CaseState, vid: str, ok: bool, note: str, officer: dict) -> None:
         s.F.setdefault("verifications", {})[vid] = {
             "ok": ok, "by": officer["name"], "desig": officer["desig"], "at": _now(), "note": note}
-
-    def _apply_qr_cure(self, s: CaseState, qid: str, values: dict, filename: str) -> None:
-        q = next((x for x in (s.F.get("qr") or []) if x["id"] == qid), None)
-        if not q:
-            raise ServiceError(f"No QR item '{qid}'.", 404)
-        q["decoded"] = True
-        q["notSupplied"] = None
-        q["page"] = q.get("page") or ("upload: " + filename)
-        if "payload" in values:
-            q["payload"] = values["payload"]
-        # No default, for the reason "ok" has none above: this clears the sanction check, and
-        # a caller that said nothing about whether the code agrees has not said it does (H-15).
-        if "agrees" not in values:
-            raise ServiceError("Recording a QR check needs an explicit result: send agrees true or false.", 400)
-        agrees = values["agrees"]
-        q["compare"] = [{"field": "Content", "qrVal": values.get("payload", "(decoded)"),
-                         "docVal": "the document", "docLabel": "document", "match": bool(agrees)}]
 
     # ── dispositions (§13.2) ────────────────────────────────────────────────────
     @_per_case

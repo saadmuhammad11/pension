@@ -483,9 +483,6 @@ function actionsHtml(r) {
   if (cure.kind === 'doc') {
     btns.push(`<button class="btn small primary" data-act="cure-doc">Upload document against this</button>`);
   }
-  if (cure.kind === 'qr') {
-    btns.push(`<button class="btn small primary" data-act="cure-qr">Upload clearer copy / missing side</button>`);
-  }
   if (r.status === 'hard' || r.status === 'adv') {
     // What this officer may actually record, as the service judges it (dispositionOptions).
     // Every officer used to be offered all three whatever their band, so a press answered 403
@@ -572,7 +569,6 @@ async function handleAction(id, c, r, act, btn) {
       });
     }
     if (act === 'cure-doc') return cureDocModal(id, r);
-    if (act === 'cure-qr') return cureQrModal(id, r);
   } catch (e) { toast(e.message, true); }
 }
 
@@ -605,23 +601,6 @@ function fieldSelect(f, opts) {
     <select data-k="${esc(f.k)}">${opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}</select></div>`;
 }
 
-function cureQrModal(id, r) {
-  openModal('QR code — ' + esc(r.title), `
-    <p class="small muted">Upload a clearer copy or the missing card side. Confirm what the decoded code shows.</p>
-    <div class="field"><label>Decoded payload (optional)</label><input type="text" data-k="payload"></div>
-    <div class="chk field"><input type="checkbox" data-k="agrees" checked> The code agrees with the document</div>
-    <div class="field"><label>Attach the image (optional)</label><input type="file" id="q-file"></div>
-    <button class="btn primary" id="q-go">Apply</button>`);
-  $('#q-go').onclick = () => busy($('#q-go'), async () => {
-    const values = { payload: $('#modal-body [data-k="payload"]').value,
-                     agrees: $('#modal-body [data-k="agrees"]').checked };
-    const file = $('#q-file').files[0] || null;
-    try {
-      const res = await api.cure(id, r.id, values, state.officer, file);
-      closeModal(); toast('QR checked, case re-checked'); refresh(id, res.diff);
-    } catch (e) { toast(e.message, true); }
-  });
-}
 
 // ── disposal ──────────────────────────────────────────────────────────────────
 const DISPOSAL_LABEL = {
