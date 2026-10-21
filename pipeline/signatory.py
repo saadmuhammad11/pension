@@ -29,7 +29,9 @@ with one model call per form page.
 from __future__ import annotations
 
 import json
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable
@@ -39,6 +41,14 @@ from pipeline.ingest import atomic_write_text
 from rules import specimens
 
 PSA_SIGNATURES = "psa_signatures.json"
+
+#: Signature blocks read at once. Each is one small vision call on a page nothing else needs,
+#: and the loop in stage_psa_signatures cannot finish without every one of them, so they do not
+#: have to wait for each other. On run c193b540fa35 the three forms were read strictly in
+#: series -- 197.8s, 201.6s and 205.3s, one request in flight the whole way, 11.5s of a 209s
+#: case. 4 is enough: a bundle rarely carries more than four prescribed forms, and these share
+#: the vision server with the pension pipeline's own stages.
+SIGNATURE_CONCURRENCY = max(1, int(os.environ.get("PENSION_SIGNATURE_CONCURRENCY") or 4))
 
 #: The prescribed forms a Pension Sanctioning Authority signs (BRAIN §2, SOP §5.2 AG-04).
 PRESCRIBED_FORMS = ("FORM_B_I", "FORM_B_II", "FORM_B_III", "FORM_B_IV", "FORM_D_I", "FORM_D_II")
@@ -215,6 +225,36 @@ def stage_psa_signatures(run_dir: str | Path, *, progress: Callable[[str], None]
     #: One read per PAGE, not per form. The loop below de-duplicates on (type, pages), which
     #: does not help when four different forms sit on one sheet.
     block_cache: dict = {}
+
+    # read_block is a pure function of the image and already caches on it, so the reads the
+    # loop below will make can all be done now, together. Filled here the loop hits a warm
+    # cache and makes no model call at all: its order, its per-form checkpoint and its
+    # de-duplication on (type, pages) are untouched, and a read that FAILS is simply left
+    # uncached for the loop to attempt and record as it always did.
+    wanted: list[Path] = []
+    for doc in documents:
+        if doc["type"] not in PRESCRIBED_FORMS or not doc.get("pages"):
+            continue
+        key = (doc["type"], tuple(p for p in doc["pages"] if p in images))
+        if key in done:
+            continue
+        for page in key[1]:
+            if images[page] not in wanted:
+                wanted.append(images[page])
+
+    def _prefetch(image: Path):
+        try:
+            return read_block(image, None)
+        except Exception:                             # noqa: BLE001 -- left uncached, see above
+            return None
+
+    if len(wanted) > 1 and SIGNATURE_CONCURRENCY > 1:
+        with ThreadPoolExecutor(max_workers=min(SIGNATURE_CONCURRENCY, len(wanted))) as pool:
+            for image, data in zip(wanted, [f.result() for f in
+                                            [pool.submit(_prefetch, i) for i in wanted]]):
+                if data is not None:
+                    block_cache[str(image)] = data
+
     for doc in documents:
         if doc["type"] not in PRESCRIBED_FORMS or not doc.get("pages"):
             continue

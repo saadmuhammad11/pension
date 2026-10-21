@@ -214,6 +214,29 @@ def _envelope(props: dict[str, Any], required: list[str]) -> dict[str, Any]:
     base_props = {
         "doc_type": {"type": "string"},
         "identifiers": _IDENTIFIERS,
+        # dates_iso, raw_strings, key_amounts and unreadable have no consumer anywhere in the
+        # tree. On GENERIC_PAGE they come back empty, so the gate of 21 Oct 2026 measured
+        # dropping them at 0.1% and concluded there was nothing here. That gate tested the
+        # wrong schema. On AG_PAY_CERTIFICATE they are 32% of the output -- key_amounts alone
+        # 20% -- and that schema is the critical path: p.12 of run c193b540fa35 held 132.3s of
+        # a 156.3s stage 6.
+        #
+        # Dropping them there is worth 1.54x and 31% fewer characters, and it does not ship.
+        # Six pay pages, three reps per arm, 21 Oct 2026, comparing only what stages 4 and 6
+        # consume: SIX regressions against an eleven-wide noise floor. The one that settles it
+        # is recovery_note on p.12 -- the full schema read "Recoverable: 57,527.36" three times
+        # out of three, and without key_amounts the model answered with the page's boilerplate,
+        # "all amounts are in Pak Rupees". A recovery is money owed to the government. It also
+        # put gross_printed_rs and total_deductions_printed_rs at two different values on
+        # ec5a65c1 p.18 where the full schema gave one.
+        #
+        # Enumerating the printed amounts is what makes the model LOCATE the figures rather
+        # than take the words beside them -- the same thing fields[] does for the scalars on
+        # GENERIC_PAGE. Unread by code is not the same as unused.
+        #
+        # Worth knowing separately: on these pay pages the FULL schema disagreed with itself on
+        # 11 of 42 comparisons, a 26% noise floor against 5-10% on GENERIC_PAGE. That is why
+        # the confirming double read exists on pay documents and why it is not negotiable.
         "dates_iso": {
             "type": "array",
             "maxItems": 20,

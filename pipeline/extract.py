@@ -1930,6 +1930,23 @@ def stage_assertions(
             continue                         # carried: the earlier round's reading stands
         family_jobs.append((family_type, family_key, family_page))
 
+    # The pay documents' payroll OCR happens on the fold thread below, one call at a time
+    # between documents, on the PaddleOCR server while the vision pool is busy elsewhere. On
+    # run c193b540fa35 that was p.10 at t=149.7s and p.12 at t=173.7s, 8.7s and 9.0s, the
+    # second of them the only request in flight anywhere. Both pages are known before the fold
+    # starts and neither read depends on anything the fold produces, so they are read here,
+    # together, at the same max_tokens the call site uses. The fold then finds them ready; a
+    # page that is missing or failed is read at the call site exactly as before.
+    pay_pages = [p for d in documents if d["type"] in _PAY_DOCS for p in (d.get("pages") or [])[:1]
+                 if p in image_for and (only_pages is None or p in only_pages)]
+
+    def _read_pay_text(page: int) -> str | None:
+        try:
+            from extraction.ocr import ocr_page as _o
+            return _o(image_for[page], page, max_tokens=3072).text
+        except Exception:                                # noqa: BLE001 -- the call site retries
+            return None
+
     family_pool = ThreadPoolExecutor(max_workers=max(1, len(family_jobs)))
     family_futures = [
         family_pool.submit(
@@ -1937,6 +1954,10 @@ def stage_assertions(
             image_for[pg], schema_name=_SCHEMA_FOR[dt])
         for dt, _key, pg in family_jobs
     ]
+
+    pay_pool = ThreadPoolExecutor(max_workers=max(1, min(OCR_SWEEP_CONCURRENCY, len(pay_pages) or 1)))
+    pay_futures = {pg: pay_pool.submit(timing.carry(_read_pay_text, stage="ocr", page=pg), pg)
+                   for pg in pay_pages}
 
     try:
         for (doc, page, schema), future in zip(jobs, futures):
@@ -2007,7 +2028,9 @@ def stage_assertions(
                     from extraction.ocr import ocr_page as _ocr
                     from extraction.payroll import payroll_facts_on
                     from rules.case_type import pay_scale_from_form
-                    pay_text = _ocr(image_for[page], page, max_tokens=3072).text
+                    prefetched = pay_futures[page].result() if page in pay_futures else None
+                    pay_text = (prefetched if prefetched is not None
+                                else _ocr(image_for[page], page, max_tokens=3072).text)
                     facts = payroll_facts_on(pay_text)
                     # An LPC prints the grade in a sentence rather than a field.
                     grade = facts.bps or pay_scale_from_form(pay_text)
@@ -2227,6 +2250,7 @@ def stage_assertions(
             })
         checkpoint()
     family_pool.shutdown(wait=False)
+    pay_pool.shutdown(wait=False)
 
     if carry:
         result["carryover"] = {
