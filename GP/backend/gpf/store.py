@@ -217,12 +217,34 @@ class DbCaseRepository:
         marks = ", ".join("?" for _ in cols)
         updates = ", ".join(f"{c} = excluded.{c}" for c in cols if c not in ("id", "created_at"))
         with self._lock:
-            self.conn.execute(f"INSERT INTO gpf_cases({names}) VALUES ({marks}) "
-                              f"ON CONFLICT(id) DO UPDATE SET {updates}", tuple(cols.values()))
+            self._execute(f"INSERT INTO gpf_cases({names}) VALUES ({marks}) "
+                          f"ON CONFLICT(id) DO UPDATE SET {updates}", tuple(cols.values()))
+
+    def _execute(self, sql: str, params: tuple) -> None:
+        """Run one write, reopening the connection once if it has gone away.
+
+        The module holds a single connection opened at import and never reopened, so a
+        PostgreSQL restart -- or an idle timeout, or a failover -- broke every GP Fund write
+        permanently until someone restarted the service (H-17). The pension API opens a
+        connection per request and never noticed; its own timing module already reconnects,
+        and this is the same move.
+
+        One retry, not a loop: if the fresh connection fails too, the database is down and the
+        caller must hear about it rather than wait while this spins.
+        """
+        try:
+            self.conn.execute(sql, params)
+            return
+        except Exception:                             # noqa: BLE001 -- retried once, then raised
+            try:
+                self.conn = dbcore.connect(self.target)
+            except Exception:
+                raise
+        self.conn.execute(sql, params)
 
     def record_document(self, case_id: str, meta: dict) -> None:
         with self._lock:
-            self.conn.execute(
+            self._execute(
                 "INSERT INTO gpf_documents(id, case_id, name, stored_as, sha256, bytes, content_type, saved_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (uuid.uuid4().hex, case_id, meta["name"] or "upload", meta["storedAs"], meta["hash"],
@@ -259,8 +281,41 @@ class DbCaseRepository:
         return self._mem.get(case_id)
 
     def save(self, case_id: str, state: CaseState) -> None:
+        """Persist first; on failure put memory back to what the database holds.
+
+        It was memory first and the database afterwards with no rollback, and a write that
+        raised gave the caller a 500 while every later read went on showing the disposal, the
+        waiver and the verification as recorded -- until the next restart, when they were
+        gone, because memory is rebuilt from the table (audit of 13 Oct 2026, H-17). An
+        officer who saw an error, looked again and found their decision there would reasonably
+        conclude it had gone in.
+
+        Ordering the two is not enough on its own. get() hands back the stored object and the
+        service mutates it in place, so by the time save() is called the change is ALREADY in
+        memory and re-assigning the same object changes nothing. The only honest repair is to
+        reload the case from the database, which is the last state that really exists, and let
+        the exception go to the caller.
+
+        If the reload fails too the case is dropped from memory rather than left mutated: the
+        next read fetches it, and a 404 an officer can retry beats a decision that looks saved
+        and is not.
+        """
+        try:
+            self._write(case_id, state)
+        except Exception:
+            try:
+                self._mem[case_id] = self._reload(case_id)
+            except Exception:                         # noqa: BLE001 -- the database is unreachable
+                self._mem.pop(case_id, None)
+            raise
         self._mem[case_id] = state
-        self._write(case_id, state)
+
+    def _reload(self, case_id: str) -> CaseState:
+        """One case, as the database holds it."""
+        row = self.conn.execute("SELECT state_json FROM gpf_cases WHERE id = ?", (case_id,)).fetchone()
+        if row is None:
+            raise KeyError(case_id)
+        return _from_snapshot(json.loads(row["state_json"]))
 
     def list_ids(self) -> list[str]:
         return list(self._mem.keys())
