@@ -9,7 +9,10 @@
 :root {
   --green: #1B4332;  --green2: #2D6A4F; --green3: #40916C;
   --sage:  #EDF4EE;  --sage2:  #DCEADF; --gold:   #C9A227; --gold2: #E7C55B;
-  --ink:   #1F2937;  --muted:  #6B7280; --line:   #E2E8E3;
+  /* --muted darkened from #6B7280 on 21 Oct 2026: it measured 4.48:1 on --bg and 4.32:1
+     on --sage, both under the 4.5 WCAG AA needs for 14px text. #656D76 is 4.86 on --bg,
+     5.25 on white and 4.69 on --sage. */
+  --ink:   #1F2937;  --muted:  #656D76; --line:   #E2E8E3;
   --red:   #B42318;  --redbg:  #FEF0EE; --amber:  #B54708; --amberbg: #FFF6E6;
   --ok:    #1E7B4F;  --okbg:   #E9F6EF;
   --bg:    #F4F7F4;
@@ -26,6 +29,11 @@
      is why nothing led the eye: every label competed with every heading. */
   --t-micro: 11px; --t-small: 12px; --t-body: 14px; --t-lead: 15px;
   --t-h3: 17px;    --t-h2: 22px;    --t-h1: 27px;   --t-figure: 30px;
+
+  /* The technical log on the analysis screen: a dark panel, so its own small palette.
+     Were hardcoded in AnalysisLive.tsx, which put two colours outside the token system
+     and out of reach of any later theme. All three clear AA on --log-bg (11.8, 8.4, 9.9). */
+  --log-bg: #18201C; --log-fg: #D5DBD7; --log-err: #FF9E93; --log-warn: #E7C55B;
 
   --shadow-1: 0 1px 2px rgba(27, 67, 50, .05);
   --shadow-2: 0 4px 14px rgba(27, 67, 50, .09);

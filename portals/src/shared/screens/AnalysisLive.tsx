@@ -199,18 +199,24 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
         </span>
       </div>
 
-      {/* The bar. */}
+      {/* The bar. role="progressbar" as Upload and CaseDetail already carry it: a reader that
+          cannot see this screen was told nothing at all for the three minutes it runs. */}
       <div className="an-bar-wrap">
-        <div className="an-bar">
+        <div className="an-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100}
+             aria-valuenow={pct} aria-label="Analysis progress">
           <div className={`an-fill${finished ? '' : ' is-live'}`} style={{ width: `${shown}%`, transition: 'width 1s linear' }} />
         </div>
         <span className="an-pct">{pct}%</span>
       </div>
-      <div className="an-now" key={slowLine ? 'slow' : line}>
-        <span className="an-dot" aria-hidden="true" />
-        {finished === 'done' ? 'Analysis complete — opening the findings…'
-          : finished === 'failed' ? 'The analysis stopped. The technical log below says where.'
-          : line}
+      {/* The live region is the WRAPPER, not the line: `key` remounts the line to restart its
+          animation, and a live region that is replaced rather than changed is not announced. */}
+      <div aria-live="polite" aria-atomic="true">
+        <div className="an-now" key={slowLine ? 'slow' : line}>
+          <span className="an-dot" aria-hidden="true" />
+          {finished === 'done' ? 'Analysis complete — opening the findings…'
+            : finished === 'failed' ? 'The analysis stopped. The technical log below says where.'
+            : line}
+        </div>
       </div>
 
       <div className="an-grid">
@@ -253,7 +259,7 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
         {events.length > LOG_LINES && <div style={{ opacity: .6 }}>… {events.length - LOG_LINES} earlier lines not shown</div>}
         {logLines.map(e => (
           <div key={e.seq} style={{
-            color: e.level === 'error' ? '#FF9E93' : e.level === 'warn' ? '#E7C55B' : undefined,
+            color: e.level === 'error' ? 'var(--log-err)' : e.level === 'warn' ? 'var(--log-warn)' : undefined,
           }}>
             {e.at}  {e.stage.padEnd(10)}  {e.message}
           </div>

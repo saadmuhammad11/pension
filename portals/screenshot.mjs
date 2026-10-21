@@ -8,9 +8,30 @@
 //   node screenshot.mjs school-education /cases/<id> case.png 1440 2000
 //   node screenshot.mjs syed.haider / phone.png 390 2000 "All cases"     # click a button/tile first
 import { spawn } from 'node:child_process'
+if (typeof WebSocket === 'undefined') {
+  console.error('no global WebSocket -- Node 20 needs: node --experimental-websocket screenshot.mjs ...')
+  process.exit(1)
+}
 import { writeFileSync } from 'node:fs'
 const [user, route, out, W = '1440', H = '1400', clickText = ''] = process.argv.slice(2)
-const BIN = process.env.HOME + '/.cache/ms-playwright/chromium_headless_shell-1234/chrome-linux/headless_shell'
+// Whatever Playwright actually installed: the build number changes with every release, and
+// the binary was renamed headless_shell -> chrome-headless-shell, so a hardcoded path is a
+// path that works on one machine for a few months. Newest build wins.
+import { readdirSync, existsSync } from 'node:fs'
+const ROOT = process.env.HOME + '/.cache/ms-playwright'
+const BIN = (() => {
+  if (process.env.HEADLESS_SHELL) return process.env.HEADLESS_SHELL
+  const dirs = existsSync(ROOT) ? readdirSync(ROOT).filter(d => d.startsWith('chromium')).sort().reverse() : []
+  for (const d of dirs) {
+    for (const rel of ['chrome-headless-shell-linux64/chrome-headless-shell',
+                       'chrome-linux/headless_shell', 'chrome-linux/chrome']) {
+      const c = `${ROOT}/${d}/${rel}`
+      if (existsSync(c)) return c
+    }
+  }
+  console.error(`no chromium under ${ROOT} -- run: npx playwright install chromium`)
+  process.exit(1)
+})()
 const port = 9300 + Math.floor(Math.random() * 500)
 const chrome = spawn(BIN, ['--headless', '--no-sandbox', '--disable-gpu', '--hide-scrollbars', `--remote-debugging-port=${port}`, `--window-size=${W},${H}`, 'about:blank'], { stdio: 'ignore' })
 const sleep = ms => new Promise(r => setTimeout(r, ms))

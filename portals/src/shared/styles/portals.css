@@ -421,10 +421,15 @@ button.btn-primary:disabled { background: #E4EBE5; border-color: var(--line); co
    ledger strip), one green ramp in the figures, underline navigation, no decorative motion.
    ========================================================================================== */
 @font-face { font-family: "Geist"; src: url("./fonts/Geist.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
-@font-face { font-family: "Geist Mono"; src: url("./fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+/* Geist Mono was declared here and never shipped: portals/public/fonts/ does not exist, so
+   every page asked for /fonts/GeistMono.woff2, the SPA fallback answered index.html with
+   HTTP 200 and content-type text/html, and the browser rejected 1,039 bytes of markup as a
+   font before falling back to Consolas anyway (21 Oct 2026). Declaring a face we do not have
+   buys a wasted request and a console error on every load. Put the .woff2 in public/fonts/
+   and restore both lines to use it. */
 :root {
   --font: "Geist", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  --font-mono: "Geist Mono", Consolas, Menlo, ui-monospace, monospace;
+  --font-mono: Consolas, Menlo, ui-monospace, monospace;
   --t-body: 14.5px; --t-h1: 26px; --t-h2: 19px; --t-h3: 16px; --t-lead: 14.5px;
 }
 html, body { font-family: var(--font); font-feature-settings: "cv11", "ss01"; }
@@ -563,7 +568,7 @@ button:focus-visible, .tile:focus-visible, a:focus-visible { outline: 2px solid 
 @media (max-width: 900px) { .review-grid { grid-template-columns: 1fr; } .dept-sidebar { height: auto; } }
 
 /* The analysis log. */
-.an-log { color: #D5DBD7; background: #18201C; border-radius: 10px; font-size: 12.5px; line-height: 1.7; }
+.an-log { color: var(--log-fg); background: var(--log-bg); border-radius: 10px; font-size: 12.5px; line-height: 1.7; }
 .an-log-head { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; }
 
 /* Sign-in, in the same voice. */
