@@ -481,6 +481,26 @@ def extract_page_confirmed(
     bulk triage of non-critical pages, use :func:`extract_page` and rely on the
     majority-amounts-null guard and the arithmetic reconciliation instead.
 
+    Issuing the two reads AT ONCE does not work, and was measured (21 Oct 2026)
+    ------------------------------------------------------------------------
+    It is the obvious optimisation -- stage 6 is 80% of a case and its critical path is these
+    two reads in series -- so it was built behind a flag and put to five pages that had each
+    produced a real extract-disagree finding, twice each, both ways. It failed on both counts:
+
+        ef969066 p.14   sequential  61.6s  disputed document_date
+                        sequential  56.2s  disputed document_date
+                        concurrent  66.9s  AGREED            <- the dispute was lost
+                        concurrent  66.4s  disputed document_date
+
+    It is SLOWER (every page was level or worse: 66.9 against 61.6, 6.6 against 4.4), because
+    the engine gives nothing away for batching two decodes -- two at once cost what two in a
+    row cost. And it is less safe: two simultaneous reads are both FIRST reads, so the one
+    property this function rests on is gone, and on that page it cost a real disagreement one
+    time in two.
+
+    Do not reach for it again without re-running that comparison. The code was written and
+    reverted; the measurement is the part worth keeping.
+
     Returns ``(extraction, agreement)`` where the extraction is the SECOND read and agreement
     records whether the two agreed and on what. When the reads disagree on a figure or a date
     (business decision H1, 7 Oct 2026) the page's figures and the disputed dates are BLANKED in
