@@ -1902,6 +1902,42 @@ def stage_assertions(
         pool.submit(timing.carry(extract_page_confirmed, stage="assertions", page=pg), image_for[pg], schema_name=sch)
         for _doc, pg, sch in jobs
     ]
+    # -- family, submitted with the pool above and folded at the end of the stage ---------
+    # Measured on run 5407024d3f55 (21 Oct 2026): the pool above drained at t=107s and the
+    # stage then ran to t=226s with exactly ONE request in flight the whole way -- 119s, 53%
+    # of the stage and 41% of the case, strictly serial. Most of it was the family sweep:
+    # Annex-A and the FRC one after the other, each a confirming double read, 22.2 + 23.6 +
+    # 17.1 + 23.9s.
+    #
+    # The two documents are independent of everything else in the stage. Started after the
+    # pool they simply queued behind it: on run 2429ac0a7f81 they began at t=116s, once the
+    # pool had drained at 107s, and ran to 161s -- and because the two chains are unequal, the
+    # Annex-A confirming read spent its last 21s as the only request in flight. Submitted with
+    # the pool instead, a ~45s chain finishes well inside the pool's own 107s and costs the
+    # stage nothing.
+    #
+    # So the reads start here and are folded in their old order below. Every mutation of
+    # `result`, every progress line and every checkpoint still happens on this thread, in the
+    # order it happened before; only the waiting moved.
+    family_jobs: list[tuple[str, str, int]] = []
+    for family_type, family_key in (("ANNEX_A", "annex_a_family"), ("NADRA_FRC", "frc_family")):
+        family_doc = next((d for d in documents
+                           if d["type"] == family_type and d["pages"]), None)
+        if family_doc is None:
+            continue
+        family_page = family_doc["pages"][0]
+        if only_pages is not None and family_page not in only_pages:
+            continue                         # carried: the earlier round's reading stands
+        family_jobs.append((family_type, family_key, family_page))
+
+    family_pool = ThreadPoolExecutor(max_workers=max(1, len(family_jobs)))
+    family_futures = [
+        family_pool.submit(
+            timing.carry(extract_page_confirmed, stage="assertions", page=pg),
+            image_for[pg], schema_name=_SCHEMA_FOR[dt])
+        for dt, _key, pg in family_jobs
+    ]
+
     try:
         for (doc, page, schema), future in zip(jobs, futures):
             if progress:
@@ -2107,39 +2143,6 @@ def stage_assertions(
             checkpoint()
     finally:
         pool.shutdown(wait=False)
-    # -- family, reads started here and folded further down -------------------------------
-    # Measured on run 5407024d3f55 (21 Oct 2026): the pool above drained at t=107s and the
-    # stage then ran to t=226s with exactly ONE request in flight the whole way -- 119s, 53%
-    # of the stage and 41% of the case, strictly serial. Most of it was the family sweep:
-    # Annex-A and the FRC one after the other, each a confirming double read, 22.2 + 23.6 +
-    # 17.1 + 23.9s.
-    #
-    # The two documents are independent of each other, and they read on the VISION server
-    # while the two sweeps below read on PaddleOCR -- a different machine with its own chip.
-    # Running them in series bought nothing at all.
-    #
-    # So the reads start here and are folded in their old order below. Every mutation of
-    # `result`, every progress line and every checkpoint still happens on this thread, in the
-    # order it happened before; only the waiting moved.
-    family_jobs: list[tuple[str, str, int]] = []
-    for family_type, family_key in (("ANNEX_A", "annex_a_family"), ("NADRA_FRC", "frc_family")):
-        family_doc = next((d for d in documents
-                           if d["type"] == family_type and d["pages"]), None)
-        if family_doc is None:
-            continue
-        family_page = family_doc["pages"][0]
-        if only_pages is not None and family_page not in only_pages:
-            continue                         # carried: the earlier round's reading stands
-        family_jobs.append((family_type, family_key, family_page))
-
-    family_pool = ThreadPoolExecutor(max_workers=max(1, len(family_jobs)))
-    family_futures = [
-        family_pool.submit(
-            timing.carry(extract_page_confirmed, stage="assertions", page=pg),
-            image_for[pg], schema_name=_SCHEMA_FOR[dt])
-        for dt, _key, pg in family_jobs
-    ]
-
     # -- recoveries, read by OCR from every LPC ------------------------------------------
     # §8.3 puts the LPC above every other document on recoveries, so every LPC is read --
     # not just the first, and not only the ones the vision model managed. OCR is the reader
