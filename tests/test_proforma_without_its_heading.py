@@ -69,11 +69,20 @@ class TheHeadingIsNotTheIdentification(unittest.TestCase):
         """It prints "qualifying service" and "PAY FIXATION" but not the sections, in order."""
         self.assertNotIn("QUALIFYING_SERVICE_PROFORMA", titles_on_page(FORM_B_I))
 
-    def test_three_headings_scattered_across_a_sheet_do_not_combine(self) -> None:
-        """The gaps are bounded: unrelated paragraphs between them are not one form."""
-        far_apart = ("PARTICULARS OF EMPLOYEE" + " filler" * 200
-                     + " SERVICE RECORD SUMMARY" + " filler" * 200 + " PAY FIXATION")
+    def test_headings_scattered_across_a_sheet_do_not_combine(self) -> None:
+        """The gap is bounded: unrelated paragraphs between them are not one form."""
+        far_apart = "PARTICULARS OF EMPLOYEE" + " filler" * 400 + " SERVICE RECORD SUMMARY"
         self.assertIsNone(re.search(PROFORMA_SECTIONS, far_apart.lower()))
+
+    def test_a_read_that_drops_a_section_still_matches(self) -> None:
+        """OCR is not deterministic. On the second run of the same page it skipped section 2
+        and went straight from PARTICULARS OF EMPLOYEE to PAY FIXATION; requiring all three in
+        order left the page OTHER, which is the whole failure this guards against."""
+        dropped = ("1. PARTICULARS OF EMPLOYEE A B Sample 1. Name of Employee: A B Sample "
+                   "29-04-41Y 3. PAY FIXATION It is certified that pay fixation of Mr. A B "
+                   "Sample Personal No. 00000000 on service book is complete in all respect")
+        self.assertIsNotNone(re.search(PROFORMA_SECTIONS, dropped.lower()))
+        self.assertIn("QUALIFYING_SERVICE_PROFORMA", titles_on_page(dropped))
 
 
 class TheOfficeAsksForItInEveryCase(unittest.TestCase):

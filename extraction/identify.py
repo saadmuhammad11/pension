@@ -597,14 +597,22 @@ PROFORMA_TITLE = r"(?:pro|per|pre)\s*form\w{0,5}\s+for\s+qualifying\s+se\w{0,6}\
 #: OTHER at confidence 1.00. The page then counted as no document at all, so the checklist line
 #: it exists to satisfy would have read MISSING against a department that had filed it.
 #:
-#: Its numbered sections are what make it this form and nothing else: no other pension document
-#: prints PARTICULARS OF EMPLOYEE, then SERVICE RECORD SUMMARY, then PAY FIXATION, in that
-#: order. OCR read all three cleanly off that scan. The gaps are bounded so that three headings
-#: scattered across unrelated pages of one sheet cannot combine into a match.
+#: Its numbered sections are what make it this form and nothing else. "PARTICULARS OF EMPLOYEE"
+#: is the anchor -- section 1 of this proforma and of nothing else in a pension bundle -- and ONE
+#: more of its sections within reach confirms it.
+#:
+#: All three were required at first, in order. That was too brittle for a reader that is not
+#: deterministic: re-running the same page the same day, OCR skipped section 2 entirely and went
+#: "1. PARTICULARS OF EMPLOYEE ... 29-04-41Y ... 3. PAY FIXATION", so the match failed and the
+#: page stayed OTHER on a second run after the first had been rescued. Which sections survive a
+#: read varies; that one of them does is reliable.
+#:
+#: The gap is bounded so headings scattered across a composite sheet cannot combine. Checked
+#: against the real bundle: it matches both OCR readings of the proforma and none of the service
+#: statement, Form B-I, the LPC, the pension application or the departmental checklist.
 PROFORMA_SECTIONS = (
     r"particulars\s+of\s+employ\w{0,3}"
-    r".{0,600}?service\s+record\s+summ\w{0,4}"
-    r".{0,600}?pay\s+fixation"
+    r".{0,1500}?(?:service\s+record\s+summ\w{0,4}|pay\s+fixation|pension\s+contribut\w{0,3})"
 )
 
 DOCUMENT_TITLES: tuple[tuple[str, str], ...] = (

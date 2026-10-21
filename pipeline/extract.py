@@ -1866,12 +1866,6 @@ def stage_assertions(
         target = out_path if final else partial
         atomic_write_text(target, json.dumps(result, indent=2, ensure_ascii=False, default=str))
 
-    def read(doc_type: str, page: int, schema: str):
-        if progress:
-            progress(f"stage 6  {doc_type} p.{page}")
-        ext, _ = extract_page_confirmed(image_for[page], schema_name=schema)
-        return ext.data
-
     # -- identifiers, stated per document ------------------------------------------------
     # Ordered so the documents that DECIDE flags come first. The bundle order put twelve
     # No-Demand Certificates ahead of the LPC carrying the recovery and the Form D-I carrying
@@ -2113,6 +2107,39 @@ def stage_assertions(
             checkpoint()
     finally:
         pool.shutdown(wait=False)
+    # -- family, reads started here and folded further down -------------------------------
+    # Measured on run 5407024d3f55 (21 Oct 2026): the pool above drained at t=107s and the
+    # stage then ran to t=226s with exactly ONE request in flight the whole way -- 119s, 53%
+    # of the stage and 41% of the case, strictly serial. Most of it was the family sweep:
+    # Annex-A and the FRC one after the other, each a confirming double read, 22.2 + 23.6 +
+    # 17.1 + 23.9s.
+    #
+    # The two documents are independent of each other, and they read on the VISION server
+    # while the two sweeps below read on PaddleOCR -- a different machine with its own chip.
+    # Running them in series bought nothing at all.
+    #
+    # So the reads start here and are folded in their old order below. Every mutation of
+    # `result`, every progress line and every checkpoint still happens on this thread, in the
+    # order it happened before; only the waiting moved.
+    family_jobs: list[tuple[str, str, int]] = []
+    for family_type, family_key in (("ANNEX_A", "annex_a_family"), ("NADRA_FRC", "frc_family")):
+        family_doc = next((d for d in documents
+                           if d["type"] == family_type and d["pages"]), None)
+        if family_doc is None:
+            continue
+        family_page = family_doc["pages"][0]
+        if only_pages is not None and family_page not in only_pages:
+            continue                         # carried: the earlier round's reading stands
+        family_jobs.append((family_type, family_key, family_page))
+
+    family_pool = ThreadPoolExecutor(max_workers=max(1, len(family_jobs)))
+    family_futures = [
+        family_pool.submit(
+            timing.carry(extract_page_confirmed, stage="assertions", page=pg),
+            image_for[pg], schema_name=_SCHEMA_FOR[dt])
+        for dt, _key, pg in family_jobs
+    ]
+
     # -- recoveries, read by OCR from every LPC ------------------------------------------
     # §8.3 puts the LPC above every other document on recoveries, so every LPC is read --
     # not just the first, and not only the ones the vision model managed. OCR is the reader
@@ -2162,15 +2189,13 @@ def stage_assertions(
     checkpoint()
 
     # -- family, as Annex-A states it and as NADRA records it -----------------------------
-    for doc_type, key in (("ANNEX_A", "annex_a_family"), ("NADRA_FRC", "frc_family")):
-        doc = next((d for d in documents if d["type"] == doc_type and d["pages"]), None)
-        if doc is None:
-            continue
-        page = doc["pages"][0]
-        if only_pages is not None and page not in only_pages:
-            continue                         # carried: the earlier round's reading stands
+    for (doc_type, key, page), family_future in zip(family_jobs, family_futures):
+        if progress:
+            progress(f"stage 6  {doc_type} p.{page}")
         try:
-            data = read(doc_type, page, _SCHEMA_FOR[doc_type])
+            # (extraction, agreement), as the pool above also takes it; this sweep has only
+            # ever used the extraction, and that is left exactly as it was.
+            data = family_future.result()[0].data
         except Exception as exc:                     # noqa: BLE001
             if progress:
                 progress(f"stage 6  {doc_type} p.{page} unreadable — {exc}")
@@ -2198,6 +2223,7 @@ def stage_assertions(
                 "page": page, "document": doc_type,
             })
         checkpoint()
+    family_pool.shutdown(wait=False)
 
     if carry:
         result["carryover"] = {
