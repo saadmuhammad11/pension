@@ -651,7 +651,21 @@ DOCUMENT_TYPE_GLOSS = {
     "FORM_D_II": "printed 'FORM D-II' - family pension where a PENSIONER died",
     "ANNEX_A": "'Annexure-A' / Descriptive Roll, with undertaking and commutation option",
     "NADRA_DEATH_CERTIFICATE": "NADRA death certificate / death registration certificate",
-    "NADRA_FRC": "NADRA 'Family Registration Certificate' listing family members",
+    # One line until 21 Oct 2026, and it described an FRC nobody files. The copy attached to
+    # run b3b0e3f35d7c p.18 is the ordinary kind: entirely in Urdu, no English heading at all.
+    # The model answered SERVICE_STATEMENT at 0.95 -- reading the school's attestation stamp as
+    # a letterhead -- and did so at every rotation, so the family register of a real case went
+    # into the bundle as a service record. OCR cannot correct it either: the page loops and
+    # looks_degenerate() rejects the text. The description is the only reader there is.
+    "NADRA_FRC":
+        "NADRA 'Family Registration Certificate' (FRC) -- the computerised extract of a family "
+        "register. USUALLY ENTIRELY IN URDU with no English heading. Look for a 'CRC No.' and a "
+        "barcode, and a table listing the family one member per row: name, CNIC or B-Form "
+        "number, relationship (\u0648\u0627\u0644\u062f father, \u0648\u0627\u0644\u062f\u0647 mother, \u0628\u06cc\u0648\u06cc wife, \u0628\u06cc\u0679\u0627 son, \u0628\u06cc\u0679\u06cc daughter) and a registration date. SEVERAL "
+        "DIFFERENT CNIC NUMBERS on one page is the strongest single sign. A department, school "
+        "or DDO commonly stamps and signs it to attest the copy: that stamp is an attestation, "
+        "not a letterhead -- it does not make the page that office's own document, and it never "
+        "makes it a service statement",
     "CNIC": "a CNIC card copy — say WHOSE in person_named; do not guess the role",
     "SUCCESSION_CERTIFICATE": "succession certificate defining heirs' shares in the estate",
     "LPC": "'Last Pay Certificate' issued by AG/DAO",
