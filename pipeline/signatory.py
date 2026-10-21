@@ -249,9 +249,18 @@ def stage_psa_signatures(run_dir: str | Path, *, progress: Callable[[str], None]
             return None
 
     if len(wanted) > 1 and SIGNATURE_CONCURRENCY > 1:
+        # timing.carry, not a bare submit: a pool thread is not bound to this run, and the
+        # recorder drops what it cannot attribute. Submitted bare, the three signature reads of
+        # run 56ffcf25fd93 still happened -- psa_signatures.json has all three forms -- and
+        # vanished from calls.jsonl, which is the log an auditor reads to see what the case
+        # cost and what was asked of the model.
+        from pipeline import timing
+        page_of = {str(images[p]): p for p in images}
         with ThreadPoolExecutor(max_workers=min(SIGNATURE_CONCURRENCY, len(wanted))) as pool:
-            for image, data in zip(wanted, [f.result() for f in
-                                            [pool.submit(_prefetch, i) for i in wanted]]):
+            futures = [pool.submit(timing.carry(_prefetch, stage="signatures",
+                                                page=page_of.get(str(i))), i)
+                       for i in wanted]
+            for image, data in zip(wanted, [f.result() for f in futures]):
                 if data is not None:
                     block_cache[str(image)] = data
 

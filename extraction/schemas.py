@@ -564,6 +564,21 @@ PPO = _envelope(
 
 GENERIC_PAGE = _envelope(
     {
+        # Unbounded on purpose, and nothing reads it -- the `summary` at rules/flags.py is a
+        # Flag's own attribute, not this. The model answers "One line" with 660-940 characters,
+        # about 19% of this schema's output, so capping it at 160 looked like free tokens.
+        #
+        # It is not. Six pages, three reps per arm, 21 Oct 2026: the summary did shrink to 160
+        # characters exactly as told, and the TOTAL response grew from 3,627 to 3,741
+        # characters and got 5% slower -- the model wrote the difference into fields[] instead.
+        # Two regressions came with it, including document_date on p.18 going from a stable
+        # None to {'2023-04-01', None}: a date invented where the full schema reported none.
+        #
+        # That is the third time capping a field redistributed rather than saved (fields[] at
+        # maxItems 12 and 6 were the others, and f6 on aaa848e5 p.3 returned MORE than f24).
+        # On this model a per-page output budget appears to be roughly fixed, and constraining
+        # one field moves the tokens rather than removing them. Trimming schemas is not a lever
+        # on this pipeline; measure before believing otherwise.
         "summary": {"type": "string", "description": "One line: what this page is."},
         # On the forwarding letter this is the department whose delay the SLA flag names and
         # whose name goes at the top of a shortcoming letter. It was a hardcoded string --
