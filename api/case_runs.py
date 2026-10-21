@@ -190,7 +190,11 @@ def _start_gpf(case, docs: list, intake: dict, user) -> dict:
             officer=gpf_bridge.OFFICER_FOR_ROLE.get(getattr(user, "role", ""), "ao"),
             work_dir=gpf_bridge.scratch_dir(case["id"], case["submission_no"]),
             # Every round of the case under one scope: a resubmission reads only its new pages.
-            reuse_scope=f"portal-case-{case['id']}")
+            reuse_scope=f"portal-case-{case['id']}",
+            # ...and re-read into the module case this portal case already holds, so the
+            # officer's dispositions carry into the new round instead of being abandoned with
+            # an examination the portal then stops pointing at (H-19).
+            into_case=str(case["gpf_case_id"] or ""))
     except gpf_bridge.GpfError as exc:
         raise workflow.WorkflowError(exc.status, exc.detail) from exc
     return {"run_id": GPF_RUN_PREFIX + str(job["jobId"]), "resumed": False, "state": "queued" if job.get("state") == "queued" else "running"}

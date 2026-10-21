@@ -123,10 +123,50 @@ class CaseService:
         self.repo.create(case_id, s)
         return case_id
 
-    def create_case_from_facts(self, facts: dict, *, meta: dict, officer_id: str = "ao") -> str:
-        """Open a case from an assembled facts object (produced by the reading pipeline)."""
+    def create_case_from_facts(self, facts: dict, *, meta: dict, officer_id: str = "ao",
+                               into: Optional[str] = None) -> str:
+        """Open a case from an assembled facts object (produced by the reading pipeline).
+
+        ``into`` names an existing case to RE-READ rather than a new one to open: the portal
+        passes the module case it already holds for this claim, so a resubmission is a second
+        round of one examination instead of a second examination.
+
+        It was always a new case. The portal's pointer was then overwritten to the new id and
+        every disposition, ground, authority and verification the officer had recorded went
+        with the old one -- which stayed in the database, holding the claimant's facts,
+        unreachable and unauditable through the portal. The sweep behind the audit of 13 Oct
+        2026 found 17 of those among 61 cases (H-19).
+
+        What carries, and what does not, is decided by what can be RECONCILED:
+
+        * dispositions carry, through run_case -> reconcile_dispositions, which already does
+          this honestly for a re-run. A disposition of an observation that has gone is kept and
+          marked cured; one whose observation now says something else -- a different amount
+          after a cure or a corrected reading -- is marked stale and counts as open again until
+          an officer disposes of what it says now.
+        * verifications do NOT carry. A verification is an officer's statement about a page in
+          a particular submission ("the DOA signature matches"), there is no fingerprint to
+          reconcile it against, and the department has just sent new pages. Carrying one would
+          let a statement about a replaced document go on satisfying a check. The officer is
+          asked again, which is the conservative answer and the right one for an audit office.
+
+        That line is the rule: carry what can be reconciled, re-ask for what cannot.
+        """
         officer = _officer(officer_id)
         kind = facts.get("kind") or "unknown"
+        if into:
+            s = self.repo.get(into)
+            if s is None:
+                raise ServiceError(f"No such case '{into}' to re-read into.", 404)
+            kept = len(s.disp)
+            facts.pop("verifications", None)
+            s.F = facts
+            s.officer = officer
+            s.meta = meta or s.meta
+            run_case(s, reason="Re-read from a new submission")
+            s.log_audit("Re-read from scans", {"kind": kind, "dispositionsCarried": kept})
+            self.repo.save(into, s)
+            return into
         case_id = kind + "-scan-" + uuid.uuid4().hex[:8]
         s = CaseState(k=case_id, F=facts, officer=officer, meta=meta)
         run_case(s, reason="Initial processing (from scans)")

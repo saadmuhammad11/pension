@@ -229,7 +229,8 @@ def specimen_label(filename: str) -> str:
 # -- the examination -----------------------------------------------------------------------------
 
 def start_examination(files: list[Path], *, kind: str, gazetted: str, officer: str, work_dir: Path,
-                      reuse_scope: str = "", specimens: list[Path] | None = None) -> dict:
+                      reuse_scope: str = "", specimens: list[Path] | None = None,
+                      into_case: str = "") -> dict:
     """Ask the module to read the pages and open its case. Returns the job view ({jobId, ...}).
 
     ``reuse_scope`` (the portal's case id, 30 Sep 2026): the module keeps each page's reading
@@ -245,6 +246,10 @@ def start_examination(files: list[Path], *, kind: str, gazetted: str, officer: s
     fields = {"kind": kind, "gazetted": gazetted if gazetted in GAZETTED else "unknown", "officer": officer}
     if reuse_scope:
         fields.update({"reuse_scope": reuse_scope, "page_keys": json.dumps(keys)})
+    # The module case this portal case already has, so a resubmission re-reads into it and the
+    # officer's dispositions survive the round (H-19). Empty on a first submission.
+    if into_case:
+        fields["into_case"] = into_case
     # The department's specimen signature(s), as images, with what each is of.
     spec_images: list[Path] = []
     labels: list[str] = []

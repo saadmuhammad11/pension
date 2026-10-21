@@ -366,7 +366,7 @@ async def _store_scans(files: list[UploadFile]) -> list[str]:
 
 def _read_scans(refs: list[str], kind: str, gazetted: str, officer: str,
                 on_progress=None, reuse_scope: str = "", page_keys: Optional[list[str]] = None,
-                specimens: Optional[list[dict]] = None) -> dict:
+                specimens: Optional[list[dict]] = None, into_case: str = "") -> dict:
     """Stages 1-5 -> facts -> an open case. Shared by the sync and the job path, so the
     two cannot drift into producing different cases from the same scans.
 
@@ -379,8 +379,12 @@ def _read_scans(refs: list[str], kind: str, gazetted: str, officer: str,
         cache = PageCache(DATA_DIR / "page_cache", reuse_scope)
     result = reading_pipeline.run(ingest_pages(refs), kind=kind, gazetted=gazetted,
                                   on_progress=on_progress, cache=cache, page_keys=page_keys)
+    # into_case: the module case the portal already holds for this claim. A resubmission is a
+    # second ROUND of one examination, not a second examination (H-19) -- see
+    # service.create_case_from_facts for what carries across and what does not.
     cid = service.create_case_from_facts(result.facts, meta={"label": f"{kind.title()} (from scans)"},
-                                         officer_id=officer)  # callers resolve _acting() first
+                                         officer_id=officer,   # callers resolve _acting() first
+                                         into=into_case or None)
     # The case's own pages, in reading order, so its evidence can be shown (30 Sep 2026: every
     # scanned claim's evidence images were blank -- the screen looked for them among the demo cases').
     save_page_refs(cid, refs)
@@ -415,7 +419,8 @@ async def create_case_from_scans(request: Request, kind: str = Form(...), gazett
 async def start_case_from_scans(request: Request, kind: str = Form(...), gazetted: str = Form("unknown"),
                                 officer: str = Form("ao"), files: list[UploadFile] = File(...),
                                 reuse_scope: str = Form(""), page_keys: str = Form(""),
-                                specimens: list[UploadFile] = File(default=[]), specimen_labels: str = Form("")):
+                                specimens: list[UploadFile] = File(default=[]), specimen_labels: str = Form(""),
+                                into_case: str = Form("")):
     """Same read, started on a worker thread. Returns a job to poll.
 
     The upload itself is consumed here, before returning, so the request body is fully
@@ -441,7 +446,8 @@ async def start_case_from_scans(request: Request, kind: str = Form(...), gazette
             raise HTTPException(status_code=422, detail="page_keys must name every page, in order")
     job = reading_jobs.start(
         lambda report: _read_scans(refs, kind, gazetted, _acting(request, officer), on_progress=report,
-                                   reuse_scope=reuse_scope, page_keys=keys, specimens=spec),
+                                   reuse_scope=reuse_scope, page_keys=keys, specimens=spec,
+                                   into_case=into_case),
         total=len(refs))
     return job.view()
 
