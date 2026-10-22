@@ -29,7 +29,8 @@ import { CaseDetail } from './screens/CaseDetail'
 import { RegisterHome } from './screens/RegisterHome'
 import { ReviewHome } from './screens/ReviewHome'
 import { ProductChooser } from './screens/ProductChooser'
-import { pageHasOwnNewCaseButton, registerView } from './screens/registerView'
+import { registerView } from './screens/registerView'
+import { productHref } from './screens/productSwitch'
 import { AdminHome } from './screens/admin/AdminHome'
 import { Users } from './screens/admin/Users'
 import { AuditLog } from './screens/admin/AuditLog'
@@ -146,9 +147,9 @@ function Shell({ config }: { config: PortalConfig }) {
   // Pension | GP Fund, then the views inside the chosen product; the administrator's pages after.
   const nav: ReactNode = (
     <nav className="portal-nav" aria-label="Products and views">
-      {/* Each product opens on its cases list, from wherever the officer is (30 Sep 2026). */}
-      <a href="#/pension/cases" className={product === 'PENSION' ? 'is-active' : ''}>Pension</a>
-      <a href="#/gpf/cases" className={product === 'GPF' ? 'is-active' : ''}>GP Fund</a>
+      {/* Switching product keeps the tab the officer is on (screens/productSwitch.ts). */}
+      <a href={productHref('PENSION', pr?.view, home)} className={product === 'PENSION' ? 'is-active' : ''}>Pension</a>
+      <a href={productHref('GPF', pr?.view, home)} className={product === 'GPF' ? 'is-active' : ''}>GP Fund</a>
       {slug && home === 'register' && <>
         <span className="nav-sep" aria-hidden="true" />
         {/* The cases have one address (12 Oct 2026); a bare #/{slug} still counts as this tab while it moves. */}
@@ -172,12 +173,11 @@ function Shell({ config }: { config: PortalConfig }) {
   // cases, with the dashboard on its own tab (screens/registerView.ts, 12 Oct 2026). Never both.
   const view = registerView(pr?.view, home)
 
-  // The department's dashboard and the form itself carry their own new-case button; the header's
-  // shortcut is for every other screen of a product, so the same action never shows twice.
-  const pageHasOwnButton = !product || pageHasOwnNewCaseButton(pr?.view, home)
-  const newCase = can.create_case && product && !pageHasOwnButton ? (
-    <button className="header-cta" onClick={() => navigate(`/${slug}/new`)}>{PRODUCT_WORDS[product].file}</button>
-  ) : null
+  // No case action in the header bar (22 Oct 2026). It carried "File a pension case" on every
+  // screen of a product that did not draw its own, which meant the one action sat in the bar on
+  // the Cases tab and in the page on the Dashboard tab, under two different names. The register
+  // draws it on both of its faces now, in the same place, and the bar is left to say who you
+  // are and where you are.
 
   // Back goes to the previous screen of this portal only; a case opened from a bookmark or a
   // new tab has no such screen, so it goes to that product's register instead of leaving the site.
@@ -228,7 +228,7 @@ function Shell({ config }: { config: PortalConfig }) {
 
   return (
     <>
-      <Header theme={theme} user={user} onLogout={logout} nav={nav} actions={newCase} />
+      <Header theme={theme} user={user} onLogout={logout} nav={nav} />
       <main className="page">{body}</main>
       <Footer />
     </>

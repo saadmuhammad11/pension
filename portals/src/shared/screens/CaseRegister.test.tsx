@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { CaseRegister } from './CaseRegister'
-import { pageHasOwnNewCaseButton, registerView } from './registerView'
+import { registerView } from './registerView'
 import type { Product } from '../api/cases'
 
 beforeAll(() => {
@@ -29,7 +29,7 @@ describe('the register draws one face at a time', () => {
       draw(product, 'cases')
       expect(screen.queryByTestId('charts')).toBeNull()
       expect(screen.getByRole('heading', { level: 1, name: 'Cases' })).toBeTruthy()
-      expect(screen.queryByRole('button', { name: 'New case' })).toBeNull()   // the header's shortcut covers it
+      expect(screen.getByRole('button', { name: 'New case' })).toBeTruthy()  // its own, not the header bar's
     })
     it(`${product}: the dashboard view has the figures and the new-case button, and no table`, () => {
       draw(product, 'dashboard')
@@ -57,10 +57,21 @@ describe('which face an address shows (registerView)', () => {
     expect(registerView('cases', 'review')).toBe('cases')
     expect(registerView(undefined, 'review')).toBe('dashboard')
   })
-  it("the header's new-case shortcut shows on a department's cases screen and not on its dashboard", () => {
-    expect(pageHasOwnNewCaseButton('cases', 'register')).toBe(false)
-    expect(pageHasOwnNewCaseButton('home', 'register')).toBe(false)
-    expect(pageHasOwnNewCaseButton('dashboard', 'register')).toBe(true)
-    expect(pageHasOwnNewCaseButton('new', 'register')).toBe(true)
+})
+
+describe('the new-case button is the page\'s, on either face (22 Oct 2026)', () => {
+  it('both faces draw it, once, in the same place', () => {
+    for (const view of ['cases', 'dashboard'] as const) {
+      draw('PENSION', view)
+      expect(screen.getAllByRole('button', { name: 'New case' })).toHaveLength(1)
+      cleanup()
+    }
+  })
+  it('the AG register, which cannot file, draws none', () => {
+    render(
+      <CaseRegister product="PENSION" rows={[]} title="Register" lead="lead" waitingOn={[]} onOpen={() => {}}
+                    role="AG_SENIOR_AUDITOR" view="cases" charts={null} />,
+    )
+    expect(screen.queryByRole('button', { name: /New case|File a/ })).toBeNull()
   })
 })

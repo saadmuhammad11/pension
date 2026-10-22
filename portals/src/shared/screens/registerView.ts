@@ -18,9 +18,7 @@ export function registerView(view: ProductView | undefined, home: Home): Registe
   return 'dashboard'
 }
 
-/** Whether the screen at this address draws its own "New case" button, so the header's shortcut
- *  stays away: the form itself, and a department's dashboard (the register's title row carries
- *  the button there). A department's cases screen has none of its own, so the header shows it. */
-export function pageHasOwnNewCaseButton(view: ProductView | undefined, home: Home): boolean {
-  return view === 'new' || (home === 'register' && view === 'dashboard')
-}
+/* pageHasOwnNewCaseButton lived here: it decided whether the header bar drew the new-case
+   shortcut, by answering whether the page below it had one of its own. Both faces of the
+   register draw their own button now and the bar draws none, so there is nothing to decide
+   (22 Oct 2026). */

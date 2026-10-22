@@ -216,7 +216,16 @@ export function CaseRegister(
       {charts}
       </>}
       {showCases && <>
-      {view === 'cases' ? <h1>Cases</h1> : <h2 style={{ margin: 'var(--s5) 0 0' }}>Cases</h2>}
+      {view === 'cases'
+        ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 'var(--s4)', flexWrap: 'wrap' }}>
+            <h1>Cases</h1>
+            {/* The same button the dashboard carries, in the same place on the page (22 Oct
+                2026). It used to be the header bar's, which put one action in two different
+                parts of the screen under two different names depending on the tab, and left
+                the empty state below pointing "above" at a button that was not on the page. */}
+            {onNew && <button className="primary big" onClick={onNew}>{newLabel ?? 'New case'}</button>}
+          </div>
+        : <h2 style={{ margin: 'var(--s5) 0 0' }}>Cases</h2>}
       <div className="row" style={{ marginTop: 'var(--s3)', gap: 'var(--s3)', alignItems: 'center' }}>
         <input placeholder={product === 'GPF' ? 'Search by case number, name or department' : 'Search by case number, name, department or case type'} value={q} onChange={e => { setQ(e.target.value); setPage(1) }}
                style={{ maxWidth: 420 }} aria-label="Search the cases" />
