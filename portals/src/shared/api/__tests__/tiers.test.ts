@@ -18,11 +18,20 @@ describe('tier moves', () => {
     expect(ACTION_META.RETURN_TIER.needsRemark).toBe('always')
     expect(ACTION_META.FORWARD_TIER.needsRemark).toBe('never')
   })
-  it('the next step for a Senior Auditor holding a verified case is to review and forward or return', () => {
+  it('a desk inside the wing draws no banner: the rail already shows forward and return', () => {
+    // It read "Review the findings, then forward or return / Clear each finding and check the
+    // documents. Forward the case to the next tier when every required document is present, or
+    // return it with the list of what is missing" -- the two buttons, as prose, in a band above
+    // the findings it was telling the officer to read (22 Oct 2026).
     const step = nextStep({ status: 'UNDER_REVIEW', allowed_actions: ['FORWARD_TIER', 'RETURN', 'REQUEST_DOCS'] }, 'AG_SENIOR_AUDITOR')
-    expect(step.title).toMatch(/forward or return/)
+    expect(step.quiet).toBe(true)
+    expect(step.action).toBeNull()
+  })
+  it('the Accounts Officer keeps a banner: it says what no button says', () => {
     const ao = nextStep({ status: 'UNDER_REVIEW', allowed_actions: ['APPROVE', 'REJECT', 'RETURN_TIER'] }, 'AG_AO')
     expect(ao.title).toBe('Findings await your decision')
+    expect(ao.quiet).toBeUndefined()
+    expect(ao.text).toMatch(/Nothing is approved or returned automatically/)
   })
 })
 

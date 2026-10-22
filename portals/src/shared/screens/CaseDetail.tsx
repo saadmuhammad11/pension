@@ -243,7 +243,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
 
       <CaseProgress status={c.status} holderTier={c.holder_tier} />
 
-      {/* What to do now. */}
+      {/* What to do now -- unless the step says the actions rail already shows it (api/cases.ts). */}
+      {!step.quiet && (
       <div className={`next${bannerTone}`}>
         <div className="next-body">
           <p className="next-title">{step.title}</p>
@@ -268,6 +269,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           </button>
         )}
       </div>
+      )}
 
       {error && <div className="banner bad" role="alert" style={{ marginTop: 'var(--s3)' }}><span className="mark">!</span><div className="sub">{error}</div></div>}
       {pendingReplace && (

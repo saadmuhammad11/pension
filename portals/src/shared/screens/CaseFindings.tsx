@@ -370,7 +370,7 @@ export function CaseFindings(
     <div className="findings">
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <p className="lead" style={{ marginTop: 0 }}>
-          {caseTypeLabel(report.case_type.case_type)}
+          {caseTypeLabel(declaredType(report))}
           {report.case_type.prescribed_form && ` · Form ${report.case_type.prescribed_form}`}
           {report.claimant_name && ` · claimant ${report.claimant_name}`}
           {report.forwarding_department && ` · ${titleCase(report.forwarding_department)}`}
@@ -412,7 +412,7 @@ export function CaseFindings(
       {tab === 'Summary' && (
         <div className="card">
           <table><tbody>
-            <Row k="Case type" v={report.case_type.case_type ? caseTypeLabel(report.case_type.case_type) : '— routed to human'} />
+            <Row k="Case type" v={declaredType(report) ? caseTypeLabel(declaredType(report)) : '— routed to human'} />
             <Row k="Confidence" v={confidenceWord(report.case_type.case_type_confidence)} title={`Model confidence ${report.case_type.case_type_confidence.toFixed(2)}`} />
             <Row k="Evidence" v={report.case_type.case_type_evidence} />
             <Row k="Documents identified" v={`${report.documents.length}`} />
@@ -667,6 +667,17 @@ export function CaseFindings(
     </div>
   )
 }
+
+/** The case type to print: the column the DDO picked at intake, in the office's own words.
+ *
+ *  report.case_type.case_type is the pipeline's path -- SUPERANNUATION_PENSION, read off the
+ *  papers or derived from the declaration -- and it is what the rules run on, but it is not
+ *  what anybody filed. A DDO who chose "Fresh - Self" saw the screen call the case
+ *  "Superannuation pension" and had to be told the two were the same thing (22 Oct 2026).
+ *  The column is report.case_variant, which is the checklist column the case was worked on.
+ *  Where there is none -- a legacy case, or one filed before the columns existed -- the path
+ *  is all there is, and it is better than nothing. */
+const declaredType = (report: CaseReport) => report.case_variant ?? report.case_type.case_type
 
 function Row({ k, v, mono, title }: { k: string; v: string; mono?: boolean; title?: string }) {
   return (

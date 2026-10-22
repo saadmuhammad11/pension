@@ -438,8 +438,12 @@ export const ACTION_META: Record<CaseAction, { label: string; tone: 'primary' | 
                  done: 'Case returned within the Pension Wing.' },
 }
 
-/** The one thing to do next on a case, for the big button. */
-export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] }, role: string): { action: CaseAction | null; title: string; text: string } {
+/** The one thing to do next on a case, for the big button.
+ *
+ *  `quiet` means the step has nothing to say that the actions rail does not already show, so
+ *  the screen draws no banner for it; the title and text are still filled in, because the
+ *  rest of the screen reads them. */
+export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] }, role: string): { action: CaseAction | null; title: string; text: string; quiet?: boolean } {
   // The register has no allowed_actions per row; there, assume the role's usual powers.
   const usual: Record<string, CaseAction[]> = {
     AG_SENIOR_AUDITOR: ['RUN_CHECK', 'FORWARD_TIER', 'RETURN'], AG_ASSISTANT_AO: ['FORWARD_TIER', 'RETURN_TIER'],
@@ -458,7 +462,12 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
   if (c.status === 'FORWARDED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: 'Received: verify the case with AI', text: 'The verification reads every document. Its findings, and any missing documents, come to you for a decision; nothing is approved or returned automatically.' }
   if (c.status === 'AI_FAILED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: m.label, text: m.ag }
   if (c.status === 'UNDER_REVIEW' && a.has('APPROVE')) return { action: null, title: 'Findings await your decision', text: m.ag }
-  if (c.status === 'UNDER_REVIEW' && a.has('FORWARD_TIER')) return { action: null, title: 'Review the findings, then forward or return', text: 'Clear each finding and check the documents. Forward the case to the next tier when every required document is present, or return it with the list of what is missing.' }
+  // No banner at a desk inside the office (22 Oct 2026). It read "Review the findings, then
+  // forward or return / Clear each finding and check the documents. Forward the case to the
+  // next tier when every required document is present, or return it with the list of what is
+  // missing" -- which is the two buttons in the actions rail, written out as prose, in a band
+  // across the top of the screen above the findings it was telling the officer to read.
+  if (c.status === 'UNDER_REVIEW' && a.has('FORWARD_TIER')) return { action: null, quiet: true, title: m.label, text: m.ag }
   return { action: null, title: m.label, text: m.ag }
 }
 
