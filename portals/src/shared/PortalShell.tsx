@@ -220,7 +220,7 @@ function Shell({ config }: { config: PortalConfig }) {
   } else if (pr && home === 'review') {
     body = <ReviewHome key={pr.product} product={pr.product} view={view} />
   } else if (pr) {
-    body = <RegisterHome key={pr.product} product={pr.product} title={`${PRODUCT_WORDS[pr.product].cases}, ${user.department_name ?? config.name}`}
+    body = <RegisterHome key={pr.product} product={pr.product} title={user.department_name ?? config.name}
                          lead={pr.product === 'PENSION'
                            ? 'Cases filed by this department, and the status of each at the Office of the Accountant General.'
                            : 'GP Fund claims filed by this department, and the status of each at the Office of the Accountant General.'}
