@@ -37,6 +37,7 @@ import asyncio
 from urllib.parse import quote
 import contextlib
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -206,6 +207,18 @@ class PortalApp:
         ]
         if (dist / "assets").is_dir():
             routes.append(Mount("/assets", StaticFiles(directory=dist / "assets"), name="assets"))
+        # Self-hosted type. page() below serves a file at the bundle ROOT only -- one segment, no
+        # slash -- so until this mount existed every /fonts/*.woff2 fell through to the catch-all,
+        # which answered index.html with HTTP 200 and content-type text/html. A browser rejects
+        # markup as a font silently, so the page simply drew in the fallback face and nothing in
+        # any log said why. That is the whole history of the Geist face this bundle declared for a
+        # month and never once rendered (22 Oct 2026). The office's type is served from here now,
+        # and the portal must reach the registry for no part of its own appearance.
+        # Python's table does not know woff2, and StaticFiles asks that table: without this the
+        # font goes out as application/octet-stream.
+        mimetypes.add_type("font/woff2", ".woff2")
+        if (dist / "fonts").is_dir():
+            routes.append(Mount("/fonts", StaticFiles(directory=dist / "fonts"), name="fonts"))
         routes.append(Route("/{path:path}", self.page, methods=["GET", "HEAD"]))
 
         @contextlib.asynccontextmanager

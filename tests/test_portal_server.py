@@ -24,6 +24,8 @@ class PortalServer(unittest.TestCase):
         (dist / "assets" / "index-abc.js").write_text("console.log('bundle')")
         (dist / "index.html").write_text("<!doctype html><html><head><title>x</title></head><body><div id=root></div></body></html>")
         (dist / "tmc-logo.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        (dist / "fonts").mkdir()
+        (dist / "fonts" / "IBMPlexSans-latin.woff2").write_bytes(b"wOF2")
         (dist / "credentials.html").write_text("SECRET")
         self.portal = portal_server.PortalApp(dist=dist, api="http://127.0.0.1:1", trust_port_header=True)
         self.portal.bound = [AG_PORTAL_PORT, 5182]
@@ -55,6 +57,13 @@ class PortalServer(unittest.TestCase):
         self.assertIn("__PORTAL__", r.text)
         self.assertEqual(self.client.get("/assets/index-abc.js").status_code, 200)
         self.assertEqual(self.client.get("/tmc-logo.png").status_code, 200)
+
+    def test_a_self_hosted_font_is_served_as_a_font_and_not_as_the_page(self) -> None:
+        """A miss here is silent in the browser: the page just draws in the fallback face."""
+        r = self.client.get("/fonts/IBMPlexSans-latin.woff2")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.content, b"wOF2")
+        self.assertEqual(r.headers.get("content-type"), "font/woff2")
 
     def test_every_response_carries_the_security_headers_and_the_config_script_its_nonce(self) -> None:
         r = self.client.get("/", headers={"X-Portal-Port": str(AG_PORTAL_PORT)})

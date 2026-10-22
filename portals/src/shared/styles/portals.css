@@ -342,7 +342,8 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
 @media (max-width: 980px) { .auth { grid-template-columns: 1fr; } }
 .auth-brand {
   position: relative; overflow: hidden; color: #EAF3EC;
-  display: flex; flex-direction: column; gap: clamp(12px, 2.2vh, 26px); padding: clamp(24px, 3.4vw, 56px);
+  display: flex; flex-direction: column; justify-content: space-between;
+  gap: clamp(12px, 2.2vh, 26px); padding: clamp(24px, 3.4vw, 56px);
   background:
     radial-gradient(900px 640px at 16% -12%, rgba(82,183,136,.32), transparent 60%),
     radial-gradient(760px 620px at 112% 118%, var(--accent-a18), transparent 55%),
@@ -372,23 +373,36 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
 .auth-org { display: flex; flex-direction: column; }
 .auth-org .org { font-size: 18px; font-weight: 800; color: #fff; line-height: 1.2; }
 .auth-org .org-sub { font-size: 13px; color: #A9C6B4; margin-top: 4px; }
-.auth-hero { position: relative; z-index: 1; margin: auto 0; max-width: 44ch; }
+/* The panel holds three blocks -- the office, the name, the maker -- and the room between them
+   is shared equally (22 Oct 2026). It was not: the hero carried auto margins top AND bottom and
+   the footer a third auto on top, so the slack divided three ways and two of the three shares
+   fell BELOW the name. On a 900px panel that left a 357px hole under "Secure, Transparent, and
+   Efficient." and 178px above it -- the panel looked top-heavy and half-empty at once.
+   space-between with no auto margins gives the hero the middle and the two gaps the same size. */
+.auth-hero { position: relative; z-index: 1; max-width: 44ch; }
 .auth-hero h1 { font-size: clamp(34px, 4.4vw, 54px); font-weight: 800; letter-spacing: -.02em; line-height: 1.06; text-wrap: balance; color: #fff; }
 .auth-hero .lead-line { margin: 34px 0 0; font-size: 21px; line-height: 1.38; color: #E3EEE8; max-width: 26ch; text-wrap: balance; }
 .auth-hero .lead-quiet { margin-top: 18px; font-size: 16px; color: #B9D3C6; max-width: 34ch; }
-/* The emblem, very faint, behind the panel. */
+/* The emblem, very faint, in the far corner of the panel -- the watermark a government letter
+   carries. It is sized to the panel, not fixed at 460px: at 460 it was a quarter of a phone's
+   whole screen and sat squarely behind "SERVE PUNJAB", a second copy of the crest that is
+   already at the top of the same short panel, and the one place it was unmistakably clutter.
+   Below 980px the panel is a band a few hundred pixels tall and the text fills it, so the
+   watermark simply goes (22 Oct 2026). */
 .auth-brand::after {
-  content: ""; position: absolute; right: -110px; bottom: -100px; width: 460px; height: 460px;
+  content: ""; position: absolute; right: -7%; bottom: -11%;
+  width: clamp(280px, 30vw, 520px); aspect-ratio: 1;
   /* ../ not ./ : this rule ships inside /assets/index-*.css, so a relative url resolves
      against /assets/, where the emblem is not -- public/ lands at the site root. */
   background: url("../state-emblem.png") center/contain no-repeat; opacity: .06;
   pointer-events: none; z-index: 0;
 }
+@media (max-width: 980px) { .auth-brand::after { content: none; } }
 .caps-warn {
   display: flex; align-items: center; gap: 6px; margin: 8px 0 0;
   font-size: var(--t-small); font-weight: 600; color: var(--amber);
 }
-.auth-foot { margin-top: auto; position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; }
+.auth-foot { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; }
 .pb-chip { display: inline-flex; align-items: center; background: #fff; border-radius: 8px; padding: 4px 8px; box-shadow: 0 4px 12px rgba(0,0,0,.20); }
 .pb-chip img { height: 24px; width: auto; display: block; }
 .pb-text { display: flex; flex-direction: column; line-height: 1.16; }
@@ -438,15 +452,16 @@ button.btn-primary:disabled { background: #E4EBE5; border-color: var(--line); co
    Geist type, sentence-case labels, flat surfaces with a hairline, one bold element (the KPI
    ledger strip), one green ramp in the figures, underline navigation, no decorative motion.
    ========================================================================================== */
-@font-face { font-family: "Geist"; src: url("./fonts/Geist.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
-/* Geist Mono was declared here and never shipped: portals/public/fonts/ does not exist, so
-   every page asked for /fonts/GeistMono.woff2, the SPA fallback answered index.html with
-   HTTP 200 and content-type text/html, and the browser rejected 1,039 bytes of markup as a
-   font before falling back to Consolas anyway (21 Oct 2026). Declaring a face we do not have
-   buys a wasted request and a console error on every load. Put the .woff2 in public/fonts/
-   and restore both lines to use it. */
+/* Geist and Geist Mono were declared here and neither was ever shipped: portals/public/fonts/
+   did not exist, so every page asked for /fonts/Geist.woff2 and /fonts/GeistMono.woff2, the
+   SPA fallback answered both with index.html at HTTP 200 and content-type text/html, and the
+   browser rejected the markup as a font before falling back to Segoe UI and Consolas anyway.
+   The type this layer was drawn in has therefore never once rendered (22 Oct 2026).
+
+   IBM Plex Sans takes its place, chosen by the office and SHIPPED -- see styles/fonts.css,
+   and note the ../fonts/ there, which is the mistake these two lines made. */
 :root {
-  --font: "Geist", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   --font-mono: Consolas, Menlo, ui-monospace, monospace;
   --t-body: 14.5px; --t-h1: 26px; --t-h2: 19px; --t-h3: 16px; --t-lead: 14.5px;
 }

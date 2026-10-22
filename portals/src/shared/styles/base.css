@@ -6,6 +6,8 @@
    space scale so the screens have rhythm, interaction states so controls feel like controls,
    focus rings because a government system is used with a keyboard, and print rules because
    an auditor puts the case report on paper before signing it. */
+
+@import "./fonts.css";
 :root {
   --green: #1B4332;  --green2: #2D6A4F; --green3: #40916C;
   --sage:  #EDF4EE;  --sage2:  #DCEADF; --gold:   #C9A227; --gold2: #E7C55B;
@@ -17,7 +19,9 @@
   --ok:    #1E7B4F;  --okbg:   #E9F6EF;
   --bg:    #F4F7F4;
 
-  --font: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  /* IBM Plex Sans is shipped with the portal (fonts.css); the rest is what a Windows
+     desktop in the office falls back to if the face has not loaded yet. */
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   --font-ur: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", "Urdu Typesetting", serif;
   --font-mono: Consolas, Menlo, monospace;
 
