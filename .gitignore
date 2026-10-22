@@ -121,4 +121,9 @@ portals/dist-demo/
 # 200, content-type text/html, and a broken image in the footer of every page. Vite copies
 # portals/public/ verbatim to the site root, so anything put there is by definition meant to be
 # published and belongs in the clone -- portals/dist/ stays ignored, being build output.
-!portals/public/*
+#
+# ** and not * (22 Oct 2026): a single star does not cross a slash, so `portals/public/*` let
+# in the three images sitting at the top of public/ and quietly left public/fonts/*.woff2
+# ignored. Self-hosted type would have reached the clone as a declaration with nothing behind
+# it -- which is precisely the failure the paragraph above is about.
+!portals/public/**
