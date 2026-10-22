@@ -23,9 +23,9 @@ declare global {
 const AG_FALLBACK: PortalConfig = {
   kind: 'ag', slug: 'ag', code: null, name: 'Accountant General Punjab', port: 5184,
   theme: {
-    // SERVE PUNJAB, named by the office 22 Oct 2026. The expansion is the subtitle so the
-    // acronym can lead: an officer reads the name at a glance and the words once.
-    title: 'SERVE PUNJAB', subtitle: 'Smart Electronic Review & Verification Engine · Government of the Punjab, Office of the Accountant General, Lahore',
+    // SERVE PUNJAB, named by the office 22 Oct 2026. The expansion is on the sign-in page and
+    // not here: this subtitle is the header's second line on every screen (api/themes.py).
+    title: 'SERVE PUNJAB', subtitle: 'Government of the Punjab, Office of the Accountant General, Lahore',
     primary: '#1B4332', primary2: '#2D6A4F', primary3: '#40916C', tint: '#EDF4EE', tint2: '#DCEADF',
     accent: '#C9A227', accent2: '#E7C55B', ink: '#17211C', muted: '#5F6B64', line: '#E3E7E4', bg: '#F5F6F4',
   },

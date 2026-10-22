@@ -18,10 +18,14 @@ THEMES: dict[str, dict] = {
     "ag": {"primary": "#1B4332", "primary2": "#2D6A4F", "primary3": "#40916C",
            "tint": "#EDF4EE", "tint2": "#DCEADF", "accent": "#C9A227", "accent2": "#E7C55B",
            **_GREYS,
-           # The system's name became SERVE PUNJAB on 22 Oct 2026; the words it stands for are
-           # the subtitle, so the acronym leads and the expansion is read once.
-           "subtitle": "Smart Electronic Review & Verification Engine · Government of the Punjab, "
-                       "Office of the Accountant General, Lahore"},
+           # The system's name became SERVE PUNJAB on 22 Oct 2026, and the words it stands for
+           # were put in this subtitle so the acronym could lead and the expansion be read once.
+           # Once was not what happened: this subtitle is the second line of the header on every
+           # screen of the portal, so the expansion was read on all of them, ahead of the office
+           # whose name the line is for -- and a DDO signing in at the single portal got it too.
+           # It belongs on the sign-in page, which says it in full under the name (Login.tsx),
+           # and nowhere after that. What a header says is whose office this is.
+           "subtitle": "Government of the Punjab, Office of the Accountant General, Lahore"},
     "police": {"primary": "#140D44", "primary2": "#0C2466", "primary3": "#2E3192",
                "tint": "#EEF0F8", "tint2": "#DCE0F2", "accent": "#D4A017", "accent2": "#E8BE4B",
                **_GREYS,

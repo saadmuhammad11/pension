@@ -25,12 +25,12 @@ const RIVERS = [
 
 function Brand({ theme, portal }: { theme: Theme; portal: PortalConfig }) {
   const dept = portal.kind === 'department'
-  // The office, and only the office. The subtitle carries the system's name as well -- "Smart
-  // Electronic Review & Verification Engine · Government of the Punjab, Office of the
-  // Accountant General, Lahore" -- and the heading above already says Government of the
-  // Punjab, so printing the whole of it here said that twice and the engine's name a second
-  // time (22 Oct 2026). Take the part after the last separator, then drop the government from
-  // the front of it: what is left is the office.
+  // The office, and only the office. The heading above already says Government of the Punjab,
+  // and the subtitle begins with it -- "Government of the Punjab, Office of the Accountant
+  // General, Lahore" -- so printing the whole of it here said that twice (22 Oct 2026). Take
+  // the part after the last separator, then drop the government from the front of it: what is
+  // left is the office. The split stays: a department's subtitle is written the other way
+  // round ("School Education Department · Government of the Punjab"), last segment first.
   const orgSub = (theme.subtitle.split('·').pop() ?? theme.subtitle)
     .trim()
     .replace(/^Government of the Punjab\s*[,·]\s*/, '')
