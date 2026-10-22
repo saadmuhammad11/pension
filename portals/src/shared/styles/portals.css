@@ -374,7 +374,20 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
 .auth-org .org-sub { font-size: 13px; color: #A9C6B4; margin-top: 4px; }
 .auth-hero { position: relative; z-index: 1; margin: auto 0; max-width: 44ch; }
 .auth-hero h1 { font-size: clamp(34px, 4.4vw, 54px); font-weight: 800; letter-spacing: -.02em; line-height: 1.06; text-wrap: balance; color: #fff; }
-.auth-hero .lead-line { margin: 42px 0 0; font-size: 20px; line-height: 1.5; color: #EAF3EC; max-width: 40ch; }
+.auth-hero .lead-line { margin: 34px 0 0; font-size: 21px; line-height: 1.38; color: #E3EEE8; max-width: 26ch; text-wrap: balance; }
+.auth-hero .lead-quiet { margin-top: 18px; font-size: 16px; color: #B9D3C6; max-width: 34ch; }
+/* The emblem, very faint, behind the panel. */
+.auth-brand::after {
+  content: ""; position: absolute; right: -110px; bottom: -100px; width: 460px; height: 460px;
+  /* ../ not ./ : this rule ships inside /assets/index-*.css, so a relative url resolves
+     against /assets/, where the emblem is not -- public/ lands at the site root. */
+  background: url("../state-emblem.png") center/contain no-repeat; opacity: .06;
+  pointer-events: none; z-index: 0;
+}
+.caps-warn {
+  display: flex; align-items: center; gap: 6px; margin: 8px 0 0;
+  font-size: var(--t-small); font-weight: 600; color: var(--amber);
+}
 .auth-foot { margin-top: auto; position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; }
 .pb-chip { display: inline-flex; align-items: center; background: #fff; border-radius: 8px; padding: 4px 8px; box-shadow: 0 4px 12px rgba(0,0,0,.20); }
 .pb-chip img { height: 24px; width: auto; display: block; }

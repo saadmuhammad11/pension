@@ -82,6 +82,14 @@ export function Login({ theme, portal }: { theme: Theme; portal: PortalConfig })
   const [show, setShow] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Caps Lock, said out loud. This portal locks a username for a minute after a few failures
+  // and an address for fifteen (api/auth.py), so a stuck Caps Lock does not merely annoy
+  // someone -- it locks them out, and the reason is invisible while they type into a field of
+  // dots. Read from the key event rather than kept in sync: there is no other way to know.
+  const [caps, setCaps] = useState(false)
+  const capsFrom = (e: { getModifierState?: (k: string) => boolean }) => {
+    if (e.getModifierState) setCaps(e.getModifierState('CapsLock'))
+  }
   const dept = portal.kind === 'department'
 
   async function submit(e: FormEvent) {
@@ -131,12 +139,23 @@ export function Login({ theme, portal }: { theme: Theme; portal: PortalConfig })
                   </svg>
                 </span>
                 <input id="p" type={show ? 'text' : 'password'} autoComplete="current-password" placeholder="Your password"
-                       value={password} onChange={e => setPassword(e.target.value)} aria-invalid={!!error} />
+                       value={password} onChange={e => setPassword(e.target.value)} aria-invalid={!!error}
+                       onKeyDown={capsFrom} onKeyUp={capsFrom} onBlur={() => setCaps(false)}
+                       aria-describedby={caps ? 'capslock' : undefined} />
                 <button type="button" className="pw-toggle" onClick={() => setShow(!show)} aria-pressed={show}
                         aria-label={show ? 'Hide password' : 'Show password'}>
                   {show ? 'Hide' : 'Show'}
                 </button>
               </div>
+              {caps && (
+                <p className="caps-warn" id="capslock" role="status">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 3l-8 9h5v5h6v-5h5z" /><path d="M9 21h6" />
+                  </svg>
+                  Caps Lock is on
+                </p>
+              )}
             </div>
             <button className="btn-primary" type="submit" disabled={busy || !username.trim() || !password}>
               {busy ? <><span className="spinner" aria-hidden="true" /> Signing in…</> : 'Sign in'}
