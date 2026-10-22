@@ -150,16 +150,20 @@ function Shell({ config }: { config: PortalConfig }) {
       {/* Switching product keeps the tab the officer is on (screens/productSwitch.ts). */}
       <a href={productHref('PENSION', pr?.view, home)} className={product === 'PENSION' ? 'is-active' : ''}>Pension</a>
       <a href={productHref('GPF', pr?.view, home)} className={product === 'GPF' ? 'is-active' : ''}>GP Fund</a>
-      {slug && home === 'register' && <>
+      {product && <>
         <span className="nav-sep" aria-hidden="true" />
-        {/* The cases have one address (12 Oct 2026); a bare #/{slug} still counts as this tab while it moves. */}
-        <a href={`#/${slug}/cases`} className={pr?.view === 'home' || pr?.view === 'cases' ? 'is-active' : ''}>Cases</a>
-        <a href={`#/${slug}/dashboard`} className={pr?.view === 'dashboard' ? 'is-active' : ''}>Dashboard</a>
-      </>}
-      {slug && home !== 'register' && <>
-        <span className="nav-sep" aria-hidden="true" />
-        <a href={`#/${slug}`} className={pr?.view === 'home' || pr?.view === 'dashboard' ? 'is-active' : ''}>Dashboard</a>
-        <a href={`#/${slug}/cases`} className={pr?.view === 'cases' ? 'is-active' : ''}>Cases</a>
+        {/* Cases, then Dashboard, on every portal (22 Oct 2026). The two sides had opposite
+            orders, each listing the tab that role opens on first: a department opens on its
+            cases, the Accountant General's desk and the administrator on the dashboard. One
+            order is easier to learn than two, and the cases are the work.
+            The addresses are productSwitch's, so the tabs and the product links cannot drift:
+            a department's dashboard has its own address because its bare one is its cases,
+            and for every other role the bare address IS the dashboard. A bare #/{slug} counts
+            as the tab it is about to become while it redirects (12 Oct 2026). */}
+        <a href={productHref(product, 'cases', home)}
+           className={pr?.view === 'cases' || (pr?.view === 'home' && home === 'register') ? 'is-active' : ''}>Cases</a>
+        <a href={productHref(product, 'dashboard', home)}
+           className={pr?.view === 'dashboard' || (pr?.view === 'home' && home !== 'register') ? 'is-active' : ''}>Dashboard</a>
       </>}
       {home === 'admin' && <>
         <span className="nav-sep" aria-hidden="true" />
@@ -216,7 +220,7 @@ function Shell({ config }: { config: PortalConfig }) {
   } else if (pr && home === 'review') {
     body = <ReviewHome key={pr.product} product={pr.product} view={view} />
   } else if (pr) {
-    body = <RegisterHome key={pr.product} product={pr.product} title={`${PRODUCT_WORDS[pr.product].cases} — ${user.department_name ?? config.name}`}
+    body = <RegisterHome key={pr.product} product={pr.product} title={`${PRODUCT_WORDS[pr.product].cases}, ${user.department_name ?? config.name}`}
                          lead={pr.product === 'PENSION'
                            ? 'Cases filed by this department, and the status of each at the Office of the Accountant General.'
                            : 'GP Fund claims filed by this department, and the status of each at the Office of the Accountant General.'}

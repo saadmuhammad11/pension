@@ -17,7 +17,14 @@ export function ReviewHome({ product, view }: { product: Product; view?: 'dashbo
   const dept = selected?.kind === 'department' ? counts.find(c => c.code === selected.code) : null
   const section = selected?.kind === 'section' ? selected.name : null
   const sectionWord = section === 'LEGACY' ? 'Legacy cases' : section
-  const title = dept ? dept.name : section ? `${PRODUCT_WORDS[product].cases} — ${sectionWord}` : `${PRODUCT_WORDS[product].cases} — all departments`
+  // No dash in the heading (22 Oct 2026). "Pension cases — all departments" set the register
+  // against the scope with a rule between them, and read as two headings sharing a line;
+  // LEGACY made it worse, since its own word is already "Legacy cases" and the title then said
+  // "Pension cases — Legacy cases". A comma, and Legacy standing on its own.
+  const title = dept ? dept.name
+    : section === 'LEGACY' ? sectionWord
+    : section ? `${PRODUCT_WORDS[product].cases}, ${sectionWord}`
+    : `${PRODUCT_WORDS[product].cases}, all departments`
   const lead = dept ? `Cases submitted by ${dept.name}${dept.digital ? '' : ' through the Pension Facilitation Centre'}.`
     : section === 'LEGACY' ? 'Cases run on the old single-case portal, before departments and logins existed.'
     : section ? `Cases submitted by the departments ${section} section works. Select a department on the left, or a case below.`

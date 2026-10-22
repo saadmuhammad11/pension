@@ -11,7 +11,9 @@ export function AdminHome({ product }: { product: Product }) {
   useEffect(() => { overview().then(setO).catch(e => setError(e instanceof Error ? e.message : String(e))) }, [])
   return (
     <div className="screen container" style={{ paddingTop: 22 }}>
-      <h1>System overview — {PRODUCT_WORDS[product].name}</h1>
+      {/* "System overview — Pension" put a rule between the two words of one title (22 Oct
+          2026); the product belongs in front of the thing it is an overview of. */}
+      <h1>{PRODUCT_WORDS[product].name} system overview</h1>
       <p className="lead">All departments, {PRODUCT_WORDS[product].cases.toLowerCase()} and users. Overrides and changes to user accounts are entered in the audit log.</p>
       {error && <div className="banner bad"><span className="mark">!</span><div className="sub">{error}</div></div>}
       {!o && !error && <div className="skeleton" style={{ height: 120, marginTop: 'var(--s4)' }} />}
