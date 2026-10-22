@@ -448,11 +448,14 @@ export function CaseFindings(
         <>
         {rows.length > 0 && (
           <div className="card">
+            {/* "24 values · each read twice and required to agree" stood beside this heading
+                (22 Oct 2026). The count is the length of the table under it, and the rest is
+                how the pipeline reads a page -- two passes that have to match -- which is a
+                fact about the machine and not about this case. What an officer needs from
+                this tab is the facts and the page each was read on, and both are in the
+                table. */}
             <div className="card-head">
               <h3>Facts read from the documents</h3>
-              <span className="muted" style={{ fontSize: 'var(--t-small)' }}>
-                {rows.length} values · each read twice and required to agree
-              </span>
             </div>
             <div className="table-wrap">
               <table>
