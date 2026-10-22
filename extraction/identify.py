@@ -70,6 +70,11 @@ IDENTIFY_INSTRUCTION = (
     "list every other one, by its own printed heading or layout, in other_documents_on_page. "
     "Leave it empty for a page with one document; never list a document the page only "
     "mentions, refers to or asks for.\n"
+    "A PHOTOGRAPH of the pensioner or claimant affixed to a page -- pasted, stapled, taped or "
+    "printed into a box on a form -- is PHOTOGRAPHS, and belongs in other_documents_on_page "
+    "even though it carries no heading of its own. Departments commonly attach it to the "
+    "descriptive roll rather than filing it on a sheet of its own, and a photograph on such a "
+    "page was reported nowhere at all until 22 Oct 2026.\n"
     "\n"
     "Answer document_type with the TOKEN on the left of these pairs:\n"
     + "\n".join(f"  {k} = {v}" for k, v in DOCUMENT_TYPE_GLOSS.items())
@@ -170,6 +175,60 @@ _FORM_NUMBER = {
     "FORM_B_III": ("B-III", "B3"), "FORM_B_IV": ("B-IV", "B4"),
     "FORM_D_I": ("D-I", "D1"), "FORM_D_II": ("D-II", "D2"),
 }
+
+
+#: How the page is cut up for the second look below: overlapping bands, so a heading sitting on
+#: a boundary is whole in one of them.
+_BANDS = ((0.0, 0.32), (0.26, 0.64), (0.58, 1.0))
+
+
+def _forms_in_bands(image: str | Path, page: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Form numbers and titles found by reading the page in bands rather than whole.
+
+    PaddleOCR does not always read a whole page. On the S&GAD bundles of 22 Oct 2026 it
+    returned 859 characters of a page carrying well over two thousand -- the order number, the
+    opening paragraph and the pay table -- and stopped, never reaching the title at the top
+    (partly under a sticky note) or the sanction clauses at the foot. The same page read in
+    bands gives up "FORM B-I" from the top band and the sanction wording from the bottom.
+
+    That is not a degenerate read, so ``looks_degenerate`` does not catch it, and a claim the
+    model had right was denied for want of corroboration that was on the page all along:
+    PC-2026-000037 p.3 became OTHER and PC-2026-000034 p.3 became POSTING_ORDER, taking AG-04
+    with them. Read only when the whole-page read found NOTHING -- no number and no title -- so
+    this costs three OCR calls on the pages that would otherwise be refused, and nothing
+    elsewhere. Still OCR corroborating, never the model's own account of itself.
+
+    The bands are ENLARGED before reading. A band is a third of a page, and at the rendered
+    188dpi the reader simply does not resolve a heading that small: the top band of
+    PC-2026-000037 p.3 came back 651 characters with no form number on two tries running, and
+    759 characters WITH "FORM B-I" on two tries at twice the size. The whole-page read is left
+    alone -- this only applies to the crops.
+    """
+    import tempfile
+    from PIL import Image
+    from .ocr import form_titles_on, forms_printed_on, looks_degenerate, ocr_page
+    forms: list[str] = []
+    titles: list[str] = []
+    try:
+        with Image.open(image) as im:
+            width, height = im.size
+            for top, bottom in _BANDS:
+                crop = im.crop((0, int(height * top), width, int(height * bottom)))
+                crop = crop.resize((crop.width * 2, crop.height * 2), Image.LANCZOS)
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
+                    crop.save(fh.name)
+                    band = fh.name
+                try:
+                    text = ocr_page(band, page)
+                except Exception:                     # noqa: BLE001 -- a band that fails says nothing
+                    continue
+                if looks_degenerate(text):
+                    continue
+                forms.extend(forms_printed_on(text))
+                titles.extend(form_titles_on(text))
+    except Exception:                                 # noqa: BLE001 -- no second look, not a denial
+        return (), ()
+    return tuple(dict.fromkeys(forms)), tuple(dict.fromkeys(titles))
 
 
 def _verify_form_claim(
@@ -518,11 +577,14 @@ def verify_with_ocr(
         # is the truth here. An empty tuple means "a reader looked and found no number", and
         # that is what withdrew a correct classification.
         unreadable = looks_degenerate(text)
-        verified = _verify_form_claim(
-            ident,
-            None if unreadable else forms_printed_on(text),
-            None if unreadable else form_titles_on(text),
-        )
+        ocr_forms = None if unreadable else forms_printed_on(text)
+        ocr_titles = None if unreadable else form_titles_on(text)
+        # The whole page read, and said nothing either way. Before refusing a claim on that
+        # silence, look again in bands: PaddleOCR stops partway down some pages, and the form
+        # number it did not reach is still printed on them (see _forms_in_bands).
+        if not unreadable and not ocr_forms and not ocr_titles:
+            ocr_forms, ocr_titles = _forms_in_bands(image_for(ident.page), ident.page)
+        verified = _verify_form_claim(ident, ocr_forms, ocr_titles)
         # A denial says what the page is NOT. Filing it as OTHER then drops it from the
         # bundle, so a correct rejection still costs the office a document: on the real
         # cases an "Application for Grant of Family Pension", an "Entitlement Declaration"
@@ -588,7 +650,14 @@ NO_INCOME_STATEMENT = (
 #: page as the proforma. The office's own sample prints "PERFORMA" and "SEVICE", and OCR read
 #: that heading back as "PERFORMANCE ... SERVICE" (12 Oct 2026), so the form's name and the word
 #: "service" are both matched loosely.
-PROFORMA_TITLE = r"(?:pro|per|pre)\s*form\w{0,5}\s+for\s+qualifying\s+se\w{0,6}\s+for\s+pension"
+#: "service" is allowed to arrive in two pieces. PaddleOCR read the S&GAD proforma's title as
+#: "PROPOSED PERFORMA FOR QUALIFYING SERV ICE FOR PENSION" -- one word, split by a space -- and
+#: `se\w{0,6}\s+for` could not span it, so three bundles of 22 Oct 2026 had a proforma the model
+#: had already recognised denied under them (PC-2026-000033 p.4, -38 p.4, -39 p.10). The words
+#: either side, "qualifying" before and "for pension" after, are what keep this from matching a
+#: form that merely MENTIONS qualifying service -- Form B-I's clause 3 does, and still does not
+#: match.
+PROFORMA_TITLE = r"(?:pro|per|pre)\s*form\w{0,5}\s+for\s+qualifying\s+se\w{0,3}\s*\w{0,4}\s+for\s+pension"
 
 #: The proforma identified by its STRUCTURE rather than its heading, because the heading is
 #: often not on the page at all. The copy filed with the case of 21 Oct 2026 (run b3b0e3f35d7c,
@@ -615,8 +684,23 @@ PROFORMA_SECTIONS = (
     r".{0,1500}?(?:service\s+record\s+summ\w{0,4}|pay\s+fixation|pension\s+contribut\w{0,3})"
 )
 
+#: The department's own pension sanction, by words only it prints: the operative clause that
+#: grants the pension, or a signature block naming the signer as the sanctioning authority.
+#:
+#: "The sanction accorded, as above" was in this pattern and is not, because a PPO refers to it
+#: in those words, and a PPO the identifier happened to call OTHER would then have been taken
+#: for the sanction itself. The clause that GRANTS a pension, and a designation followed by
+#: "Pension Sanctioning", are the two things only the sanction carries. Checked 22 Oct 2026
+#: against the five S&GAD sanctions and against a PPO, an Annex-A, two forwarding letters, a
+#: superannuation order, an NDC and a pension application: five matches, no false ones.
+SANCTION_ORDER_TITLE = (
+    r"sanction\s+for\s+(?:the\s+)?grant\s+of\s+pension"
+    r"|(?:secretary|officer|authority)[^.]{0,60}pension\s+sanction"
+)
+
 DOCUMENT_TITLES: tuple[tuple[str, str], ...] = (
     (PROFORMA_TITLE, "QUALIFYING_SERVICE_PROFORMA"),
+    (SANCTION_ORDER_TITLE, "PENSION_SANCTION_ORDER"),
     (PROFORMA_SECTIONS, "QUALIFYING_SERVICE_PROFORMA"),
     (r"list\s+of\s+family\s+members|descriptive\s+roll", "ANNEX_A"),
     (r"sole\s+(?:family|widow)\s+certificate|sole\s+and\s+lawful\s+widow"
@@ -643,6 +727,20 @@ GENERIC_LABELS = frozenset({"OTHER", "AFFIDAVIT"})
 #: "Option for commutation" line then read MISSING while the option sat on page 6 (Agriculture,
 #: 29 Sep 2026). The option is the pensioner's own declaration, not a mention of one, so an
 #: Annexure-A page printing it satisfies both lines it belongs to.
+#: What may be taken from the model's `other_documents_on_page` and made a document of.
+#:
+#: Deliberately one entry. Everything else this module adds to a bundle is corroborated by a
+#: second reader -- a title OCR found, a statement OCR matched -- because the model's own
+#: account of a page cannot check itself. A photograph is the case where no second reader is
+#: possible: OCR reads characters, and a photograph has none. So the model's word is all there
+#: is, and the alternative was what the S&GAD bundles of 22 Oct 2026 did -- report AG-03
+#: MISSING against departments that had attached the photograph to the descriptive roll
+#: (PC-2026-000033 p.8, PC-2026-000034 p.5).
+#:
+#: It stays one entry for that reason. Any type that OCR CAN corroborate belongs above, where
+#: it is corroborated.
+ALSO_ON_PAGE_TRUSTED = frozenset({"PHOTOGRAPHS"})
+
 STATEMENTS_ON_LABELLED_PAGES: dict[str, tuple[tuple[str, str], ...]] = {
     # A sworn sheet filed as one certificate often states, in its body, that the claimant has no
     # source of income: that statement is the no-income certificate (office rule, 30 Sep 2026).

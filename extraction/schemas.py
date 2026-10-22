@@ -669,6 +669,9 @@ DOCUMENT_TYPES = (
     # summary of the service record, certified by the office and verified by the AG/DAO, that
     # stands in for the service book on the checklist (decision S3).
     "QUALIFYING_SERVICE_PROFORMA",
+    # The sanction as a department issues it in its own order format, where no prescribed form
+    # is used (office decision, 22 Oct 2026). See the gloss.
+    "PENSION_SANCTION_ORDER",
     "PENSION_APPLICATION", "DEPARTMENTAL_CHECKLIST",
     # structural
     "FILE_COVER", "OTHER",
@@ -795,6 +798,19 @@ DOCUMENT_TYPE_GLOSS = {
     "CHARGE_REPORT":
         "'Charge Report' - the form on which an officer reports assuming or handing over "
         "charge of a post, giving the post, the office and the date",
+    "PENSION_SANCTION_ORDER":
+        "the department's own pension sanction, issued as a numbered office order or letter "
+        "rather than on a prescribed form. It carries the department's letterhead and an "
+        "'Order No:', runs as numbered clauses about the servant's pay, service, recoveries "
+        "and advances, and its operative clause reads 'Administrative and financial sanction "
+        "for grant of pension ... is hereby accorded in favour of ...'. It is signed by an "
+        "officer described as the Pension Sanctioning Authority -- 'ADDITIONAL SECRETARY "
+        "(ADMN), S&GAD/Pension Sanctioning Authority', 'DEPUTY SECRETARY (PERSONNEL) / PENSION "
+        "SANCTIONING AUTHORITY'. It often runs to two pages, the second carrying the later "
+        "clauses and the signature with no heading of its own; that page is this type too. "
+        "Where the SAME document also prints a prescribed form number -- 'FORM B-I' under the "
+        "letterhead -- answer with that form instead: the number is the better answer. This "
+        "type is for a sanction that prints no form number at all",
     "QUALIFYING_SERVICE_PROFORMA":
         "the one-page proforma whose NUMBERED SECTIONS are '1. PARTICULARS OF EMPLOYEE', "
         "'2. SERVICE RECORD SUMMARY' (ending in 'Net Qualifying Service'), '3. PAY FIXATION' and "

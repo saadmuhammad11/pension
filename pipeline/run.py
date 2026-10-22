@@ -287,7 +287,9 @@ def documents_named_by_their_own_heading(run: Path, rows: list[dict],
     Only ``OTHER`` and ``AFFIDAVIT`` pages are read this way; a page the identifier placed
     specifically is left exactly where it put it.
     """
-    from extraction.identify import GENERIC_LABELS, STATEMENTS_ON_LABELLED_PAGES, statements_on_page, titles_on_page
+    from extraction.identify import (ALSO_ON_PAGE_TRUSTED, GENERIC_LABELS,
+                                     STATEMENTS_ON_LABELLED_PAGES, statements_on_page,
+                                     titles_on_page)
     from pipeline.extract import page_ocr_text, prefetch_page_ocr
     from rules.caserecord import Document
 
@@ -330,6 +332,16 @@ def documents_named_by_their_own_heading(run: Path, rows: list[dict],
             text = (page_ocr_text(run, page) or "") + " " + str(row.get("evidence") or "")
             found = statements_on_page(label, text)
         else:
+            found = ()
+        # A photograph the identifier saw on ANOTHER document's page. The model's answer was
+        # carried this far and then dropped on the floor -- other_documents_on_page reached no
+        # document, on any page -- and departments that paste the photograph onto the
+        # descriptive roll had AG-03 reported missing against them. Only the types in
+        # ALSO_ON_PAGE_TRUSTED are taken this way, and only one type is in it: see there.
+        found = tuple(found) + tuple(
+            t for t in (row.get("other_documents_on_page") or ())
+            if t in ALSO_ON_PAGE_TRUSTED)
+        if not found:
             continue
         for doc_type in found:
             if (page, doc_type) in covered:

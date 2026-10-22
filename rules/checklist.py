@@ -557,22 +557,27 @@ ALL_VARIANTS: tuple[str, ...] = tuple(
 #: case (D-II), differing only in which family member is eligible. Form D-II asks for the
 #: "PPO / FPPO No" of the deceased, which only exists once someone has retired; Form D-I asks
 #: instead for the pay the servant "expired on while in service".
+#: The department's own sanction order answers AG-04 on every column: it prints no form number,
+#: so there is no column it can be the WRONG form for. The narrowing below is about telling one
+#: prescribed form from another, which is a question this document does not raise.
+_ANY_COLUMN = ("PENSION_SANCTION_ORDER",)
+
 FORM_FOR_VARIANT: dict[str, tuple[str, ...]] = {
-    "FRESH_SELF": ("FORM_B_I",),
-    "FRESH_INVALID": ("FORM_B_IV",),
+    "FRESH_SELF": ("FORM_B_I",) + _ANY_COLUMN,
+    "FRESH_INVALID": ("FORM_B_IV",) + _ANY_COLUMN,
     # No form in the compendium describes a revision, so the sheet's PSA-form line cannot be
     # narrowed for this variant: a revised case is a revision OF an earlier sanction, and the
     # governing form is whichever the original case used. Any prescribed form satisfies it,
     # and that looseness is recorded here rather than hidden.
-    "REVISED": ("FORM_B_I", "FORM_B_II", "FORM_B_III", "FORM_B_IV", "FORM_D_I", "FORM_D_II"),
-    "DEATH_IN_SERVICE": ("FORM_D_I",),
-    "WIDOW": ("FORM_D_II",),
-    "UNMARRIED_CHILD": ("FORM_D_II",),
-    "WD_DAUGHTER": ("FORM_D_II",),
-    "DIVORCED_DAUGHTER": ("FORM_D_II",),
-    "DISABLED_CHILD_SIBLING": ("FORM_D_II",),
-    "PARENT": ("FORM_D_II",),
-    "SISTER": ("FORM_D_II",),
+    "REVISED": ("FORM_B_I", "FORM_B_II", "FORM_B_III", "FORM_B_IV", "FORM_D_I", "FORM_D_II") + _ANY_COLUMN,
+    "DEATH_IN_SERVICE": ("FORM_D_I",) + _ANY_COLUMN,
+    "WIDOW": ("FORM_D_II",) + _ANY_COLUMN,
+    "UNMARRIED_CHILD": ("FORM_D_II",) + _ANY_COLUMN,
+    "WD_DAUGHTER": ("FORM_D_II",) + _ANY_COLUMN,
+    "DIVORCED_DAUGHTER": ("FORM_D_II",) + _ANY_COLUMN,
+    "DISABLED_CHILD_SIBLING": ("FORM_D_II",) + _ANY_COLUMN,
+    "PARENT": ("FORM_D_II",) + _ANY_COLUMN,
+    "SISTER": ("FORM_D_II",) + _ANY_COLUMN,
 }
 
 #: Scenarios the compendium prescribes a form for that the office sheet has no column for.
@@ -747,7 +752,19 @@ AG_OFFICE_2026: tuple[Requirement, ...] = (
     Requirement(
         "AG-04",
         "Pension Sanctioning Authority form for this case, signed by the PSA",
-        ("FORM_B_I", "FORM_B_II", "FORM_B_III", "FORM_B_IV", "FORM_D_I", "FORM_D_II",),
+        # PENSION_SANCTION_ORDER alongside the prescribed forms (office decision, 22 Oct 2026).
+        # Not every department sanctions on a form. S&GAD issues the sanction as a numbered
+        # office order on its own letterhead -- "Administrative and financial sanction for
+        # grant of pension ... is hereby accorded", signed by an Additional or Deputy Secretary
+        # described as the Pension Sanctioning Authority -- and nine bundles of 22 Oct 2026 had
+        # this line reported MISSING against a department that had filed the sanction.
+        #
+        # Where the same document ALSO prints a form number it is read as that form, so the
+        # per-variant narrowing below still decides those: a bundle carrying a Form D-II where
+        # Form B-I was wanted is still wrong. What this adds is the case where no form number
+        # is printed at all, and the only question left is whether the sanction is there.
+        ("FORM_B_I", "FORM_B_II", "FORM_B_III", "FORM_B_IV", "FORM_D_I", "FORM_D_II",
+         "PENSION_SANCTION_ORDER",),
         satisfied_by_for=FORM_FOR_VARIANT,
         applies_to=frozenset({"FRESH_SELF", "FRESH_INVALID", "REVISED", "DEATH_IN_SERVICE", "WIDOW", "UNMARRIED_CHILD", "WD_DAUGHTER", "DIVORCED_DAUGHTER", "DISABLED_CHILD_SIBLING", "PARENT", "SISTER"}),
     ),
