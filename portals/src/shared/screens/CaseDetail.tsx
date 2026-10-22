@@ -43,7 +43,9 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   { caseId: string; onBack: (product: Product) => void; initialTab?: Tab
     /** Told the case's product once it is known, so the address and the header can follow it. */
     onProduct?: (product: Product) => void }) {
-  const { can, user } = useSession()
+  // `can` is no longer read here: the only capability this screen asked for was
+  // correct_case_type, and the case-type panel stopped offering the correction (22 Oct 2026).
+  const { user } = useSession()
   const toast = useToast()
   const [c, setC] = useState<CaseFull | null>(null)
   const [report, setReport] = useState<CaseReport | null>(null)
@@ -399,7 +401,6 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           )}
           {c.product !== 'GPF' && (
             <CaseTypePanel c={c} busy={busy}
-                           mayCorrect={!!can?.correct_case_type}
                            mayDeclare={deptView && ['DRAFT', 'AI_CHECKED', 'RETURNED', 'DOCS_REQUESTED'].includes(c.status)}
                            onSet={async body => { setBusy(true); try { await setCaseType(caseId, body); seq.current += 1; await load(); toast('Case type recorded.') } finally { setBusy(false) } }} />
           )}

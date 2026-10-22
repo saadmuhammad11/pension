@@ -8,7 +8,7 @@
     {"id": "FRESH_INVALID", "label": "Fresh – Invalid", "family": "SELF_PENSION",
      "pipeline_types": ["INVALID_PENSION", "COMPULSORY_RETIREMENT_PENSION"], "prescribed_form": "B-IV",
      "hint": "Retirement on medical grounds or as a penalty; sanction on Form B-IV with the medical certificate."},
-    {"id": "REVISED", "label": "Revised", "family": "SELF_PENSION",
+    {"id": "REVISED", "label": "Restoration / Revised", "family": "SELF_PENSION",
      "pipeline_types": [], "prescribed_form": null,
      "hint": "Revision of a pension already sanctioned, on the order of retirement, obituary, death or revision."},
     {"id": "DEATH_IN_SERVICE", "label": "Death during service", "family": "FAMILY_PENSION",

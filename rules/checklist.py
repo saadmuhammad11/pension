@@ -520,7 +520,10 @@ CASE_FAMILY_VARIANTS: dict[str, tuple[str, ...]] = {
 VARIANT_LABELS: dict[str, str] = {
     "FRESH_SELF": "Fresh - Self",
     "FRESH_INVALID": "Fresh - Invalid",
-    "REVISED": "Revised",
+    # Restoration as well as revision: the office named the column on 22 Oct 2026. Restoration
+    # of the commuted portion after the commutation period runs out is filed on this column
+    # too, and a DDO looking for the word "restoration" found nothing in the list.
+    "REVISED": "Restoration / Revised",
     "DEATH_IN_SERVICE": "Death during service",
     "WIDOW": "Widow / Widower",
     "UNMARRIED_CHILD": "Unmarried daughter / son",
