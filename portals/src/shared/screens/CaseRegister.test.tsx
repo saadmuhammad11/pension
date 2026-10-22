@@ -31,10 +31,9 @@ describe('the register draws one face at a time', () => {
       expect(screen.getByRole('heading', { level: 1, name: 'Cases' })).toBeTruthy()
       expect(screen.getByRole('button', { name: 'New case' })).toBeTruthy()  // its own, not the header bar's
     })
-    it(`${product}: the dashboard view has the figures and the new-case button, and no table`, () => {
+    it(`${product}: the dashboard view has the figures and no table`, () => {
       draw(product, 'dashboard')
       expect(screen.getByTestId('charts')).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'New case' })).toBeTruthy()
       expect(screen.queryByRole('heading', { level: 1, name: 'Cases' })).toBeNull()
     })
   }
@@ -59,13 +58,13 @@ describe('which face an address shows (registerView)', () => {
   })
 })
 
-describe('the new-case button is the page\'s, on either face (22 Oct 2026)', () => {
-  it('both faces draw it, once, in the same place', () => {
-    for (const view of ['cases', 'dashboard'] as const) {
-      draw('PENSION', view)
-      expect(screen.getAllByRole('button', { name: 'New case' })).toHaveLength(1)
-      cleanup()
-    }
+describe('the new-case button belongs to the cases (22 Oct 2026)', () => {
+  it('the cases draw it once; the dashboard draws none', () => {
+    draw('PENSION', 'cases')
+    expect(screen.getAllByRole('button', { name: 'New case' })).toHaveLength(1)
+    cleanup()
+    draw('PENSION', 'dashboard')
+    expect(screen.queryByRole('button', { name: 'New case' })).toBeNull()
   })
   it('the AG register, which cannot file, draws none', () => {
     render(

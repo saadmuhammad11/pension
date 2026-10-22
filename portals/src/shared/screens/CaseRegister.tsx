@@ -187,7 +187,8 @@ export function CaseRegister(
           <h1 style={{ marginBottom: 2 }}>{title}</h1>
           <p className="lead" style={{ margin: 0 }}>{lead}</p>
         </div>
-        {onNew && <button className="primary big" onClick={onNew}>{newLabel ?? 'New case'}</button>}
+        {/* No new-case button here (22 Oct 2026). The dashboard is the figures; filing belongs
+            with the register of cases, which is the next tab and where the button now is. */}
       </div>
 
       <div className="tiles" role="tablist" aria-label="Filter the cases" onKeyDown={tileKeys}>
@@ -219,10 +220,10 @@ export function CaseRegister(
       {view === 'cases'
         ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 'var(--s4)', flexWrap: 'wrap' }}>
             <h1>Cases</h1>
-            {/* The same button the dashboard carries, in the same place on the page (22 Oct
-                2026). It used to be the header bar's, which put one action in two different
-                parts of the screen under two different names depending on the tab, and left
-                the empty state below pointing "above" at a button that was not on the page. */}
+            {/* The one place in the portal a case is filed from, besides the landing cards
+                (22 Oct 2026). It was the header bar's on this tab and the dashboard's own on
+                the other -- one action in two parts of the screen under two names, depending
+                on which tab you were on. It sits with the cases, which is what it adds to. */}
             {onNew && <button className="primary big" onClick={onNew}>{newLabel ?? 'New case'}</button>}
           </div>
         : <h2 style={{ margin: 'var(--s5) 0 0' }}>Cases</h2>}
