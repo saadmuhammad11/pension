@@ -148,11 +148,11 @@ async function scenario(): Promise<void> {
   const findingsTab = D.byText('.tab', 'AI findings'); if (findingsTab) { await D.hover(findingsTab); await D.sleep(600) }
   const checklistTab = D.byText('.tab', 'Checklist'); if (checklistTab) { await D.click(checklistTab, 1800) }
   window.scrollTo({ top: 0, behavior: 'smooth' }); await D.sleep(700)
-  await D.click(D.byText('button', 'Submit to Accountant General')!, 700)
+  await D.click(D.byText('button', "Submit to Accountant General's Office")!, 700)
   const remark = await D.waitFor(() => D.q<HTMLTextAreaElement>('aside textarea'))
   await D.type(remark, 'All documents verified and complete. Forwarded for sanction of family pension.', 38)
   await D.click((await D.waitFor(() => D.byText('aside button', 'Confirm'))), 900)
-  await D.waitFor(() => D.byText('.pill', 'Submitted to Accountant General'))
+  await D.waitFor(() => D.byText('.pill', "Submitted to Accountant General's Office"))
   await D.sleep(2200)
 
   // 6. The department's register: the case is with the Accountant General.
@@ -174,7 +174,7 @@ async function scenario(): Promise<void> {
   await D.click(D.byText('.dept-row', 'Punjab Police')!, 1300)
   await D.click(D.q('.portal-nav a[href="#/cases"]')!, 900)
   await D.click(await D.waitFor(() => D.byText('button.row-go', 'Take up')), 1200)
-  await D.waitFor(() => D.byText('.pill', 'Under review at Accountant General') || D.byText('.pill', 'Submitted to Accountant General'))
+  await D.waitFor(() => D.byText('.pill', 'Under review at AG Office') || D.byText('.pill', "Submitted to Accountant General's Office"))
   await D.click(D.byText('.tab', 'Documents')!, 1800)
   const doc = D.q('.card table a'); if (doc) { await D.hover(doc); await D.sleep(900) }
   await D.click(D.byText('.tab', 'AI findings')!, 1600)

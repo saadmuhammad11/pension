@@ -11,7 +11,15 @@ export type CaseAction =
 
 /** Who holds a case inside the AG (C3, 9 Oct 2026): the tier, not a status. */
 export type HolderTier = 'SENIOR_AUDITOR' | 'ASSISTANT_AO' | 'AO'
-export const TIER_LABELS: Record<HolderTier, string> = { SENIOR_AUDITOR: 'Senior Auditor', ASSISTANT_AO: 'Assistant AO', AO: 'AO' }
+export const TIER_LABELS: Record<HolderTier, string> = {
+  SENIOR_AUDITOR: 'Senior Auditor',
+  ASSISTANT_AO: 'Assistant Accounts Officer (AAO)',
+  AO: 'Accounts Officer (AO)',
+}
+/** The same three, short, for a progress step or a pill where the full title will not fit. */
+export const TIER_LABELS_SHORT: Record<HolderTier, string> = {
+  SENIOR_AUDITOR: 'Senior Auditor', ASSISTANT_AO: 'AAO', AO: 'AO',
+}
 const NEXT_TIER: Record<string, HolderTier | undefined> = { SENIOR_AUDITOR: 'ASSISTANT_AO', ASSISTANT_AO: 'AO' }
 const PREVIOUS_TIER: Record<string, HolderTier | undefined> = { AO: 'ASSISTANT_AO', ASSISTANT_AO: 'SENIOR_AUDITOR' }
 
@@ -352,9 +360,12 @@ export const STATUS_META: Record<CaseStatus, {
     dept: 'The Office of the Accountant General is verifying the case.', ag: 'The verification did not complete. Verify the case again.' },
   AI_CHECKED: { label: 'Verified, not yet submitted', pill: 'neutral', side: 'department', step: 0,
     dept: 'Submit the case to the Accountant General.', ag: 'Verified by the department; not yet submitted.' },
-  FORWARDED: { label: 'Submitted to Accountant General', pill: 'info', side: 'ag', step: 1,
+  FORWARDED: { label: "Submitted to Accountant General's Office", pill: 'info', side: 'ag', step: 1,
     dept: 'Received by the Pension Wing, Office of the Accountant General; awaiting verification.', ag: 'Newly received. Verify the case with AI: the findings and any missing documents are brought to you for a decision.' },
-  UNDER_REVIEW: { label: 'Under review at Accountant General', pill: 'info', side: 'ag', step: 2,
+  // "AG Office", not the full title: this label is printed under the active step of the
+  // progress bar and inside the status pill, where the full name crowded both (22 Oct 2026).
+  // FORWARDED keeps the full name -- it is read once, when the case arrives.
+  UNDER_REVIEW: { label: 'Under review at AG Office', pill: 'info', side: 'ag', step: 2,
     dept: 'The Pension Wing is reviewing the case.', ag: 'Verified: the case awaits your decision. Clear each finding, then approve, return (naming the missing documents) or reject the case with a remark. Nothing is approved or returned automatically.' },
   APPROVED: { label: 'Approved', pill: 'low', side: 'closed', step: 3,
     dept: 'The Accountant General has approved the case. No further action is required.', ag: 'Approved. The decision is on record.' },
@@ -366,12 +377,45 @@ export const STATUS_META: Record<CaseStatus, {
     dept: 'Attach the documents requested, then resubmit the case to the Accountant General.', ag: 'Awaiting additional documents from the department.' },
 }
 
-export const PROGRESS_STEPS = ['Documents filed', 'Accountant General', 'Verification', 'Decision']
+/** The steps a case passes through, as an officer would name them.
+ *
+ *  Two shapes, because two kinds of person read this bar.
+ *
+ *  Inside the office the review is not one step but three -- the Senior Auditor verifies and
+ *  forwards, the Assistant Accounts Officer approves and forwards, the Accounts Officer
+ *  decides -- and a bar that showed a single "Verification" never moved while a case travelled
+ *  between desks for days.
+ *
+ *  A department must not see those desks. api/v2.py:673 nulls holder_tier for a DDO on purpose
+ *  -- "the DDO sees 'with the Accountant General', not which desk" -- so when the desk is not
+ *  known, it is not shown, and the case sits on the office as it always did. That same silence
+ *  is the truth for an AG officer too whenever a case has been submitted and nobody has taken
+ *  it up yet, which is the state "Received" names.
+ */
+const OFFICE_STEPS = ['Documents filed', 'Office of the Accountant General', 'Under review', 'Decision']
+const DESK_STEPS = ['Documents filed', 'Received', 'Senior Auditor',
+                    'Assistant Accounts Officer (AAO)', 'Accounts Officer (AO)', 'Decision']
+
+export function progressSteps(holderTier?: HolderTier | null): string[] {
+  return holderTier ? DESK_STEPS : OFFICE_STEPS
+}
+
+/** Which step a case stands on. The STATUS_META step is the floor: a case not yet with the
+ *  office cannot be at a desk inside it, and a decided case is at the end whatever desk last
+ *  touched it. */
+export function progressStep(status: CaseStatus, holderTier?: HolderTier | null): number {
+  const base = STATUS_META[status].step
+  const steps = progressSteps(holderTier)
+  if (base <= 1) return base
+  if (base >= 3) return steps.length - 1
+  if (!holderTier) return 2                       // with the office; which desk is not shown
+  return { SENIOR_AUDITOR: 2, ASSISTANT_AO: 3, AO: 4 }[holderTier] ?? 2
+}
 
 export const ACTION_META: Record<CaseAction, { label: string; tone: 'primary' | 'gold' | 'danger' | 'plain'; needsRemark: 'always' | 'issues' | 'never'; prompt: string; done: string }> = {
   ADD_DOCS: { label: 'Attach documents', tone: 'plain', needsRemark: 'never', prompt: '', done: 'Documents attached to the case.' },
   RUN_CHECK: { label: 'Verify case with AI', tone: 'primary', needsRemark: 'never', prompt: '', done: 'Verification started. It takes 10 to 20 minutes; the outcome brings the case to you for a decision.' },
-  FORWARD: { label: 'Submit to Accountant General', tone: 'gold', needsRemark: 'never',
+  FORWARD: { label: "Submit to Accountant General's Office", tone: 'gold', needsRemark: 'never',
              prompt: 'Your remarks accompany the case and are read by the Pension Wing: say what was corrected or attached.',
              done: 'Case submitted to the Office of the Accountant General.' },
   TAKE_UP: { label: 'Take up for review', tone: 'primary', needsRemark: 'never', prompt: '', done: 'Case taken up for review.' },

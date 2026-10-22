@@ -56,9 +56,14 @@ input, select, textarea { font-size: 15px; }
 .next .next-body { flex: 1 1 320px; }
 
 /* The four-step progress bar. */
-.progress { display: flex; align-items: flex-start; margin-top: var(--s4); background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
-.progress-step { display: flex; align-items: flex-start; flex: 1 1 0; position: relative; }
-.progress-step:last-child { flex: 0 0 auto; }
+/* Wraps since 22 Oct 2026. The bar carries six steps now -- the three desks inside the office
+   are steps of their own -- and six full titles do not fit one row at any ordinary width:
+   "Assistant Accounts Officer (AAO)" alone is about 230px at 14px. Without wrapping the last
+   step was simply clipped off the right edge, so a case at the Decision step showed a bar that
+   did not contain it. */
+.progress { display: flex; flex-wrap: wrap; row-gap: 12px; align-items: flex-start; margin-top: var(--s4); background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
+.progress-step { display: flex; align-items: flex-start; flex: 1 1 auto; min-width: 232px; position: relative; }
+.progress-step:last-child { flex: 0 0 auto; min-width: 0; }
 .progress-dot {
   width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
   font-size: 14px; font-weight: 800; background: #fff; color: var(--muted); border: 2px solid var(--line);

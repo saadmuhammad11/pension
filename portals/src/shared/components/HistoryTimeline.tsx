@@ -8,7 +8,7 @@ const ACTION_WORDS: Record<string, string> = {
   CHECK_DONE: 'Verification complete: findings for the Accountant General', CHECK_FAILED: 'Verification incomplete',
   AUTO_RETURN: 'Returned by the verification: documents missing (automatic return, before 9 Oct 2026)', AUTO_APPROVE: 'Approved: nothing outstanding on the verification',
   GPF_RETURN: 'Returned after the GP Fund examination (automatic, before 9 Oct 2026)',
-  FORWARD: 'Submitted to Accountant General',
+  FORWARD: "Submitted to Accountant General's Office",
   TAKE_UP: 'Taken up for review', APPROVE: 'Approved', REJECT: 'Rejected', RETURN: 'Returned to department',
   REQUEST_DOCS: 'Additional documents requested', OVERRIDE: 'Decision overridden by the Deputy Accountant General',
   SET_CASE_TYPE: 'Case type changed',
@@ -18,21 +18,22 @@ const ACTION_WORDS: Record<string, string> = {
 
 const ROLE_WORDS: Record<string, string> = {
   DEPT_OFFICER: 'DDO', AG_REVIEWER: 'AG / senior officers', AG_DAG: 'Deputy AG (Pension)',
-  AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant AO', AG_AO: 'Accounts Officer',
+  AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant Accounts Officer (AAO)',
+  AG_AO: 'Accounts Officer (AO)',
   ADMIN: 'Administrator', SYSTEM: 'System',
 }
 const AG_ACTOR = ['AG_REVIEWER', 'AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG']
 
 /** What a row says: the tier moves name the tier and what the move meant (9 Oct 2026): the
- *  Senior Auditor verifies and forwards, the Assistant AO approves and forwards, the Accounts
+ *  Senior Auditor verifies and forwards, the Assistant Accounts Officer approves and forwards,
  *  Officer gives the final approval. */
 export function actionWords(e: { action: string; actor_role: string | null }): string {
   if (e.action === 'FORWARD_TIER') {
-    if (e.actor_role === 'AG_ASSISTANT_AO') return 'Approved by the Assistant AO and forwarded to the Accounts Officer'
-    if (e.actor_role === 'AG_SENIOR_AUDITOR') return 'Verified by the Senior Auditor and forwarded to the Assistant AO'
+    if (e.actor_role === 'AG_ASSISTANT_AO') return 'Approved by the Assistant Accounts Officer (AAO) and forwarded to the Accounts Officer (AO)'
+    if (e.actor_role === 'AG_SENIOR_AUDITOR') return 'Verified by the Senior Auditor and forwarded to the Assistant Accounts Officer (AAO)'
   }
-  if (e.action === 'APPROVE' && e.actor_role === 'AG_AO') return 'Approved by the Accounts Officer (final)'
-  if (e.action === 'REJECT' && e.actor_role === 'AG_AO') return 'Rejected by the Accounts Officer (final)'
+  if (e.action === 'APPROVE' && e.actor_role === 'AG_AO') return 'Approved by the Accounts Officer (AO) — final'
+  if (e.action === 'REJECT' && e.actor_role === 'AG_AO') return 'Rejected by the Accounts Officer (AO) — final'
   return ACTION_WORDS[e.action] ?? e.action
 }
 

@@ -367,7 +367,7 @@ def portals() -> dict:
     return {
         "single_portal": SINGLE_PORTAL,
         "ag": {"kind": "ag", "slug": AG_PORTAL_SLUG, "code": None, "name": "Accountant General Punjab",
-               "port": AG_PORTAL_PORT, "theme": theme_for("ag", title="AI Management Information System")},
+               "port": AG_PORTAL_PORT, "theme": theme_for("ag", title="SERVE PUNJAB")},
         "departments": [
             {"kind": "department", "slug": d.slug, "code": d.code, "name": d.name, "port": d.port,
              "is_police": d.is_police, "theme": theme_for(d.theme, title=f"{d.name} — Pension Portal")}

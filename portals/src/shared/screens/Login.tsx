@@ -25,7 +25,15 @@ const RIVERS = [
 
 function Brand({ theme, portal }: { theme: Theme; portal: PortalConfig }) {
   const dept = portal.kind === 'department'
-  const orgSub = theme.subtitle.replace(/^Government of the Punjab\s*·\s*/, '')
+  // The office, and only the office. The subtitle carries the system's name as well -- "Smart
+  // Electronic Review & Verification Engine · Government of the Punjab, Office of the
+  // Accountant General, Lahore" -- and the heading above already says Government of the
+  // Punjab, so printing the whole of it here said that twice and the engine's name a second
+  // time (22 Oct 2026). Take the part after the last separator, then drop the government from
+  // the front of it: what is left is the office.
+  const orgSub = (theme.subtitle.split('·').pop() ?? theme.subtitle)
+    .trim()
+    .replace(/^Government of the Punjab\s*[,·]\s*/, '')
   return (
       <section className="auth-brand" aria-labelledby="brandTitle">
         <svg className="auth-rivers" viewBox="0 0 600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -42,7 +50,8 @@ function Brand({ theme, portal }: { theme: Theme; portal: PortalConfig }) {
         </header>
         <div className="auth-hero">
           <h1 id="brandTitle">{theme.title}</h1>
-          <p className="lead-line">{dept ? 'AI Management Information System. ' : ''}Secure, Transparent, and Efficient.</p>
+          <p className="lead-line">Smart Electronic Review &amp; Verification Engine</p>
+          <p className="lead-line lead-quiet">Secure, Transparent, and Efficient.</p>
         </div>
         <footer className="auth-foot">
           <span className="pb-chip"><img src="./tmc-logo.png" alt="TallyMarks Consulting (TMC)" /></span>

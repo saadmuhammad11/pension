@@ -18,7 +18,10 @@ THEMES: dict[str, dict] = {
     "ag": {"primary": "#1B4332", "primary2": "#2D6A4F", "primary3": "#40916C",
            "tint": "#EDF4EE", "tint2": "#DCEADF", "accent": "#C9A227", "accent2": "#E7C55B",
            **_GREYS,
-           "subtitle": "Government of the Punjab · Accountant General Office, Lahore"},
+           # The system's name became SERVE PUNJAB on 22 Oct 2026; the words it stands for are
+           # the subtitle, so the acronym leads and the expansion is read once.
+           "subtitle": "Smart Electronic Review & Verification Engine · Government of the Punjab, "
+                       "Office of the Accountant General, Lahore"},
     "police": {"primary": "#140D44", "primary2": "#0C2466", "primary3": "#2E3192",
                "tint": "#EEF0F8", "tint2": "#DCE0F2", "accent": "#D4A017", "accent2": "#E8BE4B",
                **_GREYS,

@@ -88,7 +88,7 @@ def portal_config(port: int) -> dict:
     """What a browser on this port must know about itself."""
     if port == AG_PORTAL_PORT:
         return {"kind": "ag", "slug": AG_PORTAL_SLUG, "code": None, "name": "Accountant General Punjab",
-                "port": port, "single_portal": SINGLE_PORTAL, "theme": theme_for("ag", title="AI Management Information System")}
+                "port": port, "single_portal": SINGLE_PORTAL, "theme": theme_for("ag", title="SERVE PUNJAB")}
     d = BY_PORT.get(port)
     if d is None:
         return {"kind": "unknown", "slug": None, "code": None, "name": f"port {port}", "port": port,

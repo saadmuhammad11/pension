@@ -1,15 +1,17 @@
-// The labels of the moves between tiers name the tier they go to (C3, 9 Oct 2026).
+// The labels of the moves between tiers name the tier they go to (C3, 9 Oct 2026), by its
+// full title since 22 Oct 2026: the office asked for "Assistant Accounts Officer (AAO)" and
+// "Accounts Officer (AO)" wherever those desks are named.
 import { describe, expect, it } from 'vitest'
 import { ACTION_META, actionLabel, nextStep } from '../cases'
 import { CREATABLE_ROLES, ROLE_WORDS, needsDepartment, needsWing } from '../../screens/admin/Users'
 
 describe('tier moves', () => {
   it('forward names the next tier and return the previous one', () => {
-    expect(actionLabel('FORWARD_TIER', 'SENIOR_AUDITOR')).toBe('Forward to Assistant AO')
-    expect(actionLabel('FORWARD_TIER', 'ASSISTANT_AO')).toBe('Approve and forward to AO')   // the AAO's forward is their approval
-    expect(actionLabel('RETURN_TIER', 'AO')).toBe('Return to Assistant AO')
+    expect(actionLabel('FORWARD_TIER', 'SENIOR_AUDITOR')).toBe('Forward to Assistant Accounts Officer (AAO)')
+    expect(actionLabel('FORWARD_TIER', 'ASSISTANT_AO')).toBe('Approve and forward to Accounts Officer (AO)')   // the AAO's forward is their approval
+    expect(actionLabel('RETURN_TIER', 'AO')).toBe('Return to Assistant Accounts Officer (AAO)')
     expect(actionLabel('RETURN_TIER', 'ASSISTANT_AO')).toBe('Return to Senior Auditor')
-    expect(actionLabel('FORWARD_TIER', null)).toBe('Forward to Assistant AO')      // no holder recorded: the Senior Auditor's
+    expect(actionLabel('FORWARD_TIER', null)).toBe('Forward to Assistant Accounts Officer (AAO)')   // no holder recorded: the Senior Auditor's
     expect(actionLabel('APPROVE', 'AO')).toBe(ACTION_META.APPROVE.label)
   })
   it('a return within the wing needs a remark; a forward does not', () => {

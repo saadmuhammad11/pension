@@ -239,7 +239,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
 
       {approvals.length > 0 && <p className="muted" style={{ marginTop: 4, fontSize: 'var(--t-small)' }} aria-label="Approvals so far">{approvals.join(' · ')}</p>}
 
-      <CaseProgress status={c.status} />
+      <CaseProgress status={c.status} holderTier={c.holder_tier} />
 
       {/* What to do now. */}
       <div className={`next${bannerTone}`}>

@@ -10,7 +10,7 @@ describe('ActionPanel override', () => {
     const select = screen.getByLabelText('Set the case to') as HTMLSelectElement
     expect(Array.from(select.options).map(o => o.text)).toContain('Returned for correction')
     expect(Array.from(select.options).map(o => o.text)).not.toContain('RETURNED')
-    expect(screen.getByText(/Setting from Under review at Accountant General to Returned for correction\. This is audited\./)).toBeInTheDocument()
+    expect(screen.getByText(/Setting from Under review at AG Office to Returned for correction\. This is audited\./)).toBeInTheDocument()
     fireEvent.change(select, { target: { value: 'APPROVED' } })
     expect(screen.getByText(/to Approved\. This is audited\./)).toBeInTheDocument()
   })

@@ -18,7 +18,7 @@ const DEPT_NAME: Record<string, string> = Object.fromEntries(DEPTS.map(d => [d.c
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Awaiting AI verification', AI_CHECKING: 'AI verification in progress', AI_FAILED: 'AI verification incomplete',
-  AI_CHECKED: 'Verified, ready for submission', FORWARDED: 'Submitted to Accountant General', UNDER_REVIEW: 'Under review at Accountant General',
+  AI_CHECKED: 'Verified, ready for submission', FORWARDED: "Submitted to Accountant General's Office", UNDER_REVIEW: 'Under review at AG Office',
   APPROVED: 'Approved', REJECTED: 'Rejected', RETURNED: 'Returned for correction', DOCS_REQUESTED: 'Additional documents requested',
 }
 
