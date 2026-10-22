@@ -9,7 +9,7 @@ import { fetchReport } from '../api'
 import { ACTION_META, PRODUCT_WORDS, STATUS_META, act, addDocuments, replaceDocument, type RequestItem, getCase, gpfKindLabel, gpfState, nextStep, runCheck, setCaseType,
          type CaseAction, type CaseFull, type CaseStatus, type GpfState, type Product } from '../api/cases'
 import { CaseTypePanel } from '../components/CaseTypePanel'
-import { CASE_TYPE_SOURCE_WORDS, caseTypeSourceShort } from '../caseTypes'
+import { CASE_TYPE_SOURCE_WORDS } from '../caseTypes'
 import { useSession } from '../auth/AuthProvider'
 import { ActionPanel } from '../components/ActionPanel'
 import { isAgReader } from '../auth/session'
@@ -404,20 +404,13 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
                            mayDeclare={deptView && ['DRAFT', 'AI_CHECKED', 'RETURNED', 'DOCS_REQUESTED'].includes(c.status)}
                            onSet={async body => { setBusy(true); try { await setCaseType(caseId, body); seq.current += 1; await load(); toast('Case type recorded.') } finally { setBusy(false) } }} />
           )}
-          <div className="card">
-            <div className="label" style={{ marginBottom: 6 }}>Case particulars</div>
-            <table style={{ margin: 0 }}><tbody style={{ fontSize: 'var(--t-small)' }}>
-              {c.product !== 'GPF' && (
-                <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Case type</td>
-                    <td style={{ border: 0, padding: '3px 0' }}>{c.case_type ? caseTypeLabel(c.case_type) : 'not declared'}{c.case_type_source ? ` · ${caseTypeSourceShort(c.case_type_source)}` : ''}</td></tr>
-              )}
-              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Pension section</td><td style={{ border: 0, padding: '3px 0' }}>{c.pension_section ?? 'Legacy'}</td></tr>
-              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Filed</td><td style={{ border: 0, padding: '3px 0' }}>{fmtDateTime(c.created_at)}</td></tr>
-              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Last change</td><td style={{ border: 0, padding: '3px 0' }}>{fmtDateTime(c.updated_at)}</td></tr>
-              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Submission</td><td style={{ border: 0, padding: '3px 0' }}>submission {c.submission_no}</td></tr>
-              <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Verifications</td><td style={{ border: 0, padding: '3px 0' }}>{c.runs.length}</td></tr>
-            </tbody></table>
-          </div>
+          {/* The "Case particulars" card stood here and is gone (22 Oct 2026). Every line of it
+              was already on the screen: the case type on the panel above it and in the line
+              under the case number, the pension section beside the department on the register
+              row that opened the case, and when it was filed, when it last moved, which
+              submission this is and how many times it has been verified -- all of it in
+              Remarks and history, which is the tab that holds the case's dates and is the
+              record. A second, shorter copy in the corner is a second thing to keep true. */}
         </aside>
       </div>
     </div>

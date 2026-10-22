@@ -30,5 +30,6 @@ export const anyCaseTypeLabel = (id: string | null | undefined): string | undefi
 export const CASE_TYPE_SOURCE_WORDS: Record<string, string> = {
   DECLARED: 'Declared by the DDO', CORRECTED: 'Corrected by the Accountant General', DETECTED: 'Detected by the AI',
 }
-export const caseTypeSourceShort = (s: string | null | undefined) =>
-  s === 'DETECTED' ? 'Detected' : s === 'CORRECTED' ? 'Corrected' : s === 'DECLARED' ? 'Declared' : ''
+/* caseTypeSourceShort -- "Declared", "Detected", "Corrected" -- was written for the one-line
+   form the case particulars used, and the case particulars are gone (22 Oct 2026). The long
+   words above are what the case-type panel says and are the only form left. */
