@@ -9,8 +9,11 @@
 
 @import "./fonts.css";
 :root {
-  --green: #1B4332;  --green2: #2D6A4F; --green3: #40916C;
-  --sage:  #EDF4EE;  --sage2:  #DCEADF; --gold:   #C9A227; --gold2: #E7C55B;
+  /* The office's greens, off its sign-in mock-up of 22 Oct 2026 -- brand-900/700/600 there.
+     apply.ts overwrites these three from the theme the server sends, so what is written here
+     is the Accountant General's ramp and the value every other portal is measured against. */
+  --green: #0E3527;  --green2: #18573F; --green3: #1F6B4D;
+  --sage:  #EDF4EE;  --sage2:  #E2EEE8; --gold:   #C9A227; --gold2: #E7C55B;
   /* --muted darkened from #6B7280 on 21 Oct 2026: it measured 4.48:1 on --bg and 4.32:1
      on --sage, both under the 4.5 WCAG AA needs for 14px text. #656D76 is 4.86 on --bg,
      5.25 on white and 4.69 on --sage. */

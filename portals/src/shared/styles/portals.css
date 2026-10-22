@@ -340,30 +340,23 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
 .auth { min-height: 100vh; display: grid; grid-template-columns: 1.12fr .88fr; }
 @media (min-width: 981px) { .auth { height: 100vh; } .auth-brand { overflow: hidden; } .auth-signin { overflow-y: auto; } }
 @media (max-width: 980px) { .auth { grid-template-columns: 1fr; } }
+/* One flat colour, which is what the office's mock-up draws (22 Oct 2026).
+ *
+ *  This panel had three stacked gradients and, over them, a blurred aurora of two green blobs
+ *  and a gold one drifting on a sixteen-second loop. Between them they lightened the green by
+ *  a long way and laid a warm cast across the bottom right, so the live screen read as a
+ *  lighter, olive-tinted green where the sheet the office sent is a single deep forest green.
+ *  There is no gold anywhere on that sheet. The rivers stay, in a pale green rather than the
+ *  gold they were stroked in, and they are the motion the aurora used to supply. */
 .auth-brand {
   position: relative; overflow: hidden; color: #EAF3EC;
   display: flex; flex-direction: column; justify-content: space-between;
   gap: clamp(12px, 2.2vh, 26px); padding: clamp(24px, 3.4vw, 56px);
-  background:
-    radial-gradient(900px 640px at 16% -12%, rgba(82,183,136,.32), transparent 60%),
-    radial-gradient(760px 620px at 112% 118%, var(--accent-a18), transparent 55%),
-    linear-gradient(155deg, color-mix(in srgb, var(--green) 62%, #000) 0%, var(--green2) 55%, color-mix(in srgb, var(--green) 52%, #000) 100%);
+  background: var(--green);
 }
-/* The one motion on the page: a soft aurora behind the words. */
-.auth-brand::before {
-  content: ""; position: absolute; z-index: 0; pointer-events: none; top: -30%; left: -30%; width: 160%; height: 160%;
-  background:
-    radial-gradient(closest-side, color-mix(in srgb, var(--green3) 40%, transparent), transparent 72%) 22% 28% / 58% 56% no-repeat,
-    radial-gradient(closest-side, color-mix(in srgb, var(--gold) 26%, transparent), transparent 72%) 80% 74% / 50% 50% no-repeat,
-    radial-gradient(closest-side, color-mix(in srgb, var(--green3) 22%, transparent), transparent 72%) 58% 10% / 44% 44% no-repeat;
-  filter: blur(20px); animation: auth-glow 16s ease-in-out infinite alternate;
-}
-@keyframes auth-glow {
-  0% { transform: translate3d(0,0,0) scale(1); opacity: .85; }
-  50% { transform: translate3d(6%,4%,0) scale(1.12); opacity: 1; }
-  100% { transform: translate3d(-4%,-3%,0) scale(1.06); opacity: .8; }
-}
-.auth-rivers { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; opacity: .12; pointer-events: none; }
+/* .08, not .12: pale green on the flat panel carries further than the gold did, and the
+   office's sheet has nothing at all across this field. */
+.auth-rivers { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; opacity: .08; pointer-events: none; }
 .river { stroke-dasharray: 6 10; animation: river-flow 9s linear infinite; }
 .river:nth-child(2) { animation-duration: 11s; } .river:nth-child(3) { animation-duration: 13s; }
 .river:nth-child(4) { animation-duration: 15s; } .river:nth-child(5) { animation-duration: 17s; }
@@ -394,7 +387,7 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
   width: clamp(280px, 30vw, 520px); aspect-ratio: 1;
   /* ../ not ./ : this rule ships inside /assets/index-*.css, so a relative url resolves
      against /assets/, where the emblem is not -- public/ lands at the site root. */
-  background: url("../state-emblem.png") center/contain no-repeat; opacity: .06;
+  background: url("../state-emblem.png") center/contain no-repeat; opacity: .045;
   pointer-events: none; z-index: 0;
 }
 @media (max-width: 980px) { .auth-brand::after { content: none; } }
@@ -406,12 +399,14 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
 .pb-chip { display: inline-flex; align-items: center; background: #fff; border-radius: 8px; padding: 4px 8px; box-shadow: 0 4px 12px rgba(0,0,0,.20); }
 .pb-chip img { height: 24px; width: auto; display: block; }
 .pb-text { display: flex; flex-direction: column; line-height: 1.16; }
-.pb-by { font-size: 12px; font-weight: 600; color: var(--gold2); letter-spacing: .02em; }
+.pb-by { font-size: 12px; font-weight: 600; color: #B9D3C6; letter-spacing: .02em; }
 .pb-name { font-size: 13px; font-weight: 700; color: #fff; letter-spacing: .01em; }
 
 .auth-signin {
   position: relative; display: flex; align-items: center; justify-content: center; padding: clamp(24px, 4vw, 56px);
-  background: radial-gradient(640px 520px at 82% -8%, var(--sage), transparent 70%), var(--bg);
+  /* Flat, as the mock-up has it: the sage wash at the top right tinted the form side green
+     and the two halves of the page then disagreed about how green the page is. */
+  background: var(--bg);
 }
 .auth-inner { width: 100%; max-width: 380px; animation: enter .5s cubic-bezier(.22,.61,.36,1) both; }
 .auth-head { margin-bottom: var(--s4); }
@@ -445,7 +440,7 @@ button.btn-primary:disabled { background: #E4EBE5; border-color: var(--line); co
 .form-error svg { flex: none; margin-top: 1px; }
 .auth-note { margin: var(--s3) 0 0; padding-top: var(--s3); border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); line-height: 1.5; }
 @media (max-width: 620px) { .auth-top { flex-wrap: wrap; } .auth-hero .lead-line { margin-top: 24px; font-size: 17px; } }
-@media (prefers-reduced-motion: reduce) { .auth-brand::before, .river { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .river { animation: none !important; } }
 
 /* ==========================================================================================
    THE MODERN LAYER (28 Sep 2026, "pension-portal rd new"). Loads last and wins by order:

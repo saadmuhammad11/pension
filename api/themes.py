@@ -15,8 +15,14 @@ from __future__ import annotations
 _GREYS = {"ink": "#17211C", "muted": "#5F6B64", "line": "#E3E7E4", "bg": "#F5F6F4"}
 
 THEMES: dict[str, dict] = {
-    "ag": {"primary": "#1B4332", "primary2": "#2D6A4F", "primary3": "#40916C",
-           "tint": "#EDF4EE", "tint2": "#DCEADF", "accent": "#C9A227", "accent2": "#E7C55B",
+    # The greens are the office's own, read off the sign-in mock-up it sent on 22 Oct 2026
+    # (--brand-900/800/700/600 there, --brand-100 as the second tint). They are darker and
+    # cooler than the ramp they replace: #1B4332/#2D6A4F/#40916C was a brighter, more
+    # saturated green and the live screen did not look like the sheet the office drew.
+    # #40916C in particular measured 3.4:1 on the page background, under what AA asks of
+    # 14px text, and it was the colour of the sign-in kicker; #1F6B4D measures 5.9:1.
+    "ag": {"primary": "#0E3527", "primary2": "#18573F", "primary3": "#1F6B4D",
+           "tint": "#EDF4EE", "tint2": "#E2EEE8", "accent": "#C9A227", "accent2": "#E7C55B",
            **_GREYS,
            # The system's name became SERVE PUNJAB on 22 Oct 2026, and the words it stands for
            # were put in this subtitle so the acronym could lead and the expansion be read once.

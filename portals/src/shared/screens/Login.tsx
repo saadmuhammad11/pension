@@ -37,7 +37,8 @@ function Brand({ theme, portal }: { theme: Theme; portal: PortalConfig }) {
   return (
       <section className="auth-brand" aria-labelledby="brandTitle">
         <svg className="auth-rivers" viewBox="0 0 600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-          <g fill="none" stroke="var(--gold2)" strokeWidth="1.2" strokeOpacity=".5">
+          {/* Pale green, not gold: there is no gold on the office's mock-up (22 Oct 2026). */}
+          <g fill="none" stroke="#B9D3C6" strokeWidth="1.2" strokeOpacity=".5">
             {RIVERS.map(d => <path key={d} className="river" d={d} />)}
           </g>
         </svg>
