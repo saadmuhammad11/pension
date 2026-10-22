@@ -541,10 +541,14 @@ def declared_case_type_result(declared: str, detected: "CaseTypeResult | None" =
         path = read
     else:
         path = allowed[0]
+    # The office's own column, and nothing after it (22 Oct 2026). The sentence used to name
+    # the pipeline path it maps to as well -- "Declared by the DDO at intake: Fresh - Self
+    # (Superannuation pension)." -- which printed on the case summary directly under a row
+    # that already said "Case type: Superannuation pension". What this line is for is the
+    # declaration, in the words the DDO picked it in; the path is the row above it.
     return CaseTypeResult(
         case_type=path, confidence=1.0,
-        evidence=f"Declared by the DDO at intake: {OFFICE_CASE_TYPE_LABELS[key]}"
-                 + (f" ({case_type_label(path)})." if path else "."),
+        evidence=f"Declared by the DDO at intake: {OFFICE_CASE_TYPE_LABELS[key]}.",
         prescribed_form=PRESCRIBED_FORM.get(path) if path else None,
     )
 

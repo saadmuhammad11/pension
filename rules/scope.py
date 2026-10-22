@@ -128,7 +128,29 @@ def scrub_report(report: dict[str, Any] | None) -> dict[str, Any] | None:
     out["calculations_in_scope"] = CALCULATIONS_IN_SCOPE
     if isinstance(out.get("checklist"), dict):
         out["checklist"] = _without_retired_lines(out["checklist"])
+    if isinstance(out.get("case_type"), dict):
+        out["case_type"] = _declaration_without_the_path(out["case_type"])
     return out
+
+
+#: "Declared by the DDO at intake: Fresh - Self (Superannuation pension)." -- the tail the
+#: sentence carried until 22 Oct 2026, naming the pipeline path the column maps to.
+_DECLARED_TAIL = re.compile(r"^(Declared by the DDO at intake: .+?) \([^()]*\)\.$")
+
+
+def _declaration_without_the_path(case_type: dict[str, Any]) -> dict[str, Any]:
+    """A stored declaration as the sentence reads today: the office column, and nothing after.
+
+    Cases verified before 22 Oct 2026 carry the pipeline path in brackets at the end, which
+    repeated the row above it on the case summary. The report on disk is the record and is
+    never rewritten; this is the treatment the computed amounts and the retired checklist
+    lines get above. Idempotent, and a no-op on a report written since.
+    """
+    said = case_type.get("case_type_evidence")
+    if not isinstance(said, str):
+        return case_type
+    m = _DECLARED_TAIL.match(said.strip())
+    return case_type if not m else {**case_type, "case_type_evidence": m.group(1) + "."}
 
 
 def _without_retired_lines(checklist: dict[str, Any]) -> dict[str, Any]:

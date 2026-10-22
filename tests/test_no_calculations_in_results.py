@@ -161,5 +161,43 @@ class WhereItIsApplied(unittest.TestCase):
             self.assertNotIn("The determination shown is computed", src, path)
 
 
+class DeclarationSentence(unittest.TestCase):
+    """A stored declaration reads as today's sentence does (22 Oct 2026).
+
+    "Declared by the DDO at intake: Fresh - Self (Superannuation pension)." named the pipeline
+    path the column maps to, directly under a summary row that already said it. Reports on disk
+    are never rewritten, so the tail comes off on the way out, as the retired checklist lines
+    and the computed amounts do.
+    """
+
+    def _said(self, text: str) -> str:
+        out = scrub_report({"case_type": {"case_type_evidence": text}})
+        return out["case_type"]["case_type_evidence"]
+
+    def test_the_path_in_brackets_comes_off_and_stays_off(self) -> None:
+        once = self._said("Declared by the DDO at intake: Fresh \u2013 Self (Superannuation pension).")
+        self.assertEqual(once, "Declared by the DDO at intake: Fresh \u2013 Self.")
+        self.assertEqual(self._said(once), once)
+
+    def test_a_declaration_written_since_is_untouched(self) -> None:
+        for said in ("Declared by the DDO at intake: Widow / Widower.",
+                     "Declared by the DDO at intake: Restoration / Revised."):
+            self.assertEqual(self._said(said), said)
+
+    def test_brackets_in_evidence_read_off_the_papers_are_not_a_declaration(self) -> None:
+        """Only the declaration sentence is rewritten: the pattern is anchored on its opening."""
+        for said in ("Form D-II on p.1, signed (attested).",
+                     "No prescribed form and no death certificate",
+                     "Read as a family pension (death after retirement)."):
+            self.assertEqual(self._said(said), said)
+
+    def test_what_the_rules_write_today_needs_no_scrubbing(self) -> None:
+        from rules.case_type import declared_case_type_result
+        for variant in ("FRESH_SELF", "WIDOW", "REVISED"):
+            said = declared_case_type_result(variant).evidence
+            self.assertNotIn("(", said)
+            self.assertEqual(self._said(said), said)
+
+
 if __name__ == "__main__":
     unittest.main()
