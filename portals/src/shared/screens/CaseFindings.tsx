@@ -3,13 +3,13 @@
  *  Copied from the AI Pension Portal's Review screen. Who may act on a finding is decided by
  *  the signed-in user's capabilities (`can.dispose`), which the server enforces on its side. */
 import { fmtAmount, fmtDateTime } from '../fmt'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { ChecklistPanel } from '../components/ChecklistPanel'
 import { PagePreview } from '../components/PagePreview'
 import { type LapsedDisposition, fetchDispositions, postDisposition, signatureImageUrl, specimenImageUrl,
          type Disposition } from '../api'
 import {
-  caseTypeLabel, confidenceWord, documentLabel, findingLabel, hasId, maskIds, titleCase, verdictLabel,
+  caseTypeLabel, confidenceWord, documentLabel, findingLabel, maskIds, verdictLabel,
 } from '../labels'
 import type { CaseReport, Flag, Severity, SpecimenSideBySide } from '../types'
 import { imageRefused, useMediaTokenVersion } from '../auth/useMediaToken'
@@ -346,9 +346,11 @@ export function CaseFindings(
   const [lapsed, setLapsed] = useState<LapsedDisposition[]>([])
   const mayDecide = canDispose
   // National ID numbers read 35201-•••••••-2 until the officer asks for them (28 Sep 2026).
-  const [showIds, setShowIds] = useState(false)
-  const anyIds = useMemo(() => hasId(JSON.stringify(report)), [report])
-  const text = (s: string) => showIds ? s : maskIds(s)
+  //: Every string this screen prints that may carry a national identity number goes through
+  //: here. There was a "Show ID numbers" button that turned it off; it is gone (22 Oct 2026)
+  //: and the mask is now unconditional. Only the middle group is hidden, so a number can still
+  //: be matched against a paper -- which is what the mask was written for.
+  const text = maskIds
 
   useEffect(() => {
     let live = true
@@ -368,21 +370,16 @@ export function CaseFindings(
 
   return (
     <div className="findings">
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <p className="lead" style={{ marginTop: 0 }}>
-          {caseTypeLabel(declaredType(report))}
-          {report.case_type.prescribed_form && ` · Form ${report.case_type.prescribed_form}`}
-          {report.claimant_name && ` · claimant ${report.claimant_name}`}
-          {report.forwarding_department && ` · ${titleCase(report.forwarding_department)}`}
-        </p>
-        {anyIds && (
-          <button type="button" className="ghost" style={{ padding: '4px 10px', minHeight: 0, fontSize: 'var(--t-small)' }}
-                  onClick={() => setShowIds(!showIds)} aria-pressed={showIds} title="National ID numbers are masked on screen for privacy">
-            {showIds ? 'Hide ID numbers' : 'Show ID numbers'}
-          </button>
-        )}
-      </div>
+      {/* A line stood here (22 Oct 2026): "Fresh - Self · Form B-I · claimant <name> · OFFICE OF
+          THE PRINCIPAL Govt. Pilot Higher Secondary School, Wahdat Colony, Lahore". The type
+          is the first row of the Summary below it and is in the line under the case number;
+          the claimant is in that line too; the prescribed form is what AG-04 is about and is
+          read on the Checklist. What it added was the forwarding office, in the papers' own
+          shouting capitals, at the top of the findings.
 
+          Beside it stood "Show ID numbers". The button is gone and the masking it switched is
+          not: a national identity number on this screen reads 35201-•••••••-2, as it has
+          since the mask was written, and there is no longer a control that turns it off. */}
       <Verdict report={report} text={text} />
 
       <div className="tabs" role="tablist" style={{ marginTop: 'var(--s5)' }}>

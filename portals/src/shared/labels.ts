@@ -117,17 +117,16 @@ export const verdictLabel = (v: string) => VERDICTS[v] ?? humanise(v)
 export const caseTypeLabel = (t: string | null | undefined) =>
   anyCaseTypeLabel(t) ?? (t ? humanise(t) : 'not yet determined')
 
-/** A national identity number on a screen reads 35201-•••••••-2 unless the officer asks to see
- *  it. Only the middle group is hidden, so a number can still be matched against a paper. */
+/** A national identity number on a screen reads 35201-•••••••-2. Only the middle group is
+ *  hidden, so a number can still be matched against a paper, which is what this is for.
+ *
+ *  It said "unless the officer asks to see it" until 22 Oct 2026: the findings carried a
+ *  "Show ID numbers" button that turned the mask off, and the button is gone. The mask is
+ *  unconditional now. hasId went with it -- it existed only to decide whether to draw that
+ *  button -- and so did titleCase, whose only caller was the line of the findings header the
+ *  button sat beside. */
 export const maskIds = (text: string) => text.replace(/\b(\d{5})-\d{7}-(\d)\b/g, '$1-•••••••-$2')
-export const hasId = (text: string) => /\b\d{5}-\d{7}-\d\b/.test(text)
 
 /** Model confidence in words; the exact figure belongs in a tooltip, not in a column. */
 export const confidenceWord = (c: number) => c >= 0.9 ? 'High' : c >= 0.7 ? 'Medium' : 'Low'
 
-/** An office name a registry typed in capitals, in title case; acronyms stay as they are. */
-const ACRONYMS = new Set(['NADRA', 'CNIC', 'PPO', 'FPPO', 'FRC', 'SOP', 'AG', 'PSA', 'DDO', 'CTS', 'SAP', 'GPF', 'ID', 'PDF', 'DAO', 'C&W', 'S&GAD', 'P&D', 'IT'])
-export const titleCase = (s: string) =>
-  s === s.toUpperCase() && /[A-Z]{4,}/.test(s)
-    ? s.toLowerCase().replace(/[\p{L}&']+/gu, w => ACRONYMS.has(w.toUpperCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))
-    : s
