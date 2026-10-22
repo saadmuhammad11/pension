@@ -411,10 +411,6 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
                 <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Case type</td>
                     <td style={{ border: 0, padding: '3px 0' }}>{c.case_type ? caseTypeLabel(c.case_type) : 'not declared'}{c.case_type_source ? ` · ${caseTypeSourceShort(c.case_type_source)}` : ''}</td></tr>
               )}
-              {c.product !== 'GPF' && !deptView && c.detected_case_type && c.detected_case_type !== c.case_type && (
-                <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>AI read it as</td>
-                    <td style={{ border: 0, padding: '3px 0', color: 'var(--amber)' }}>{caseTypeLabel(c.detected_case_type)}</td></tr>
-              )}
               <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Pension section</td><td style={{ border: 0, padding: '3px 0' }}>{c.pension_section ?? 'Legacy'}</td></tr>
               <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Filed</td><td style={{ border: 0, padding: '3px 0' }}>{fmtDateTime(c.created_at)}</td></tr>
               <tr><td className="muted" style={{ border: 0, padding: '3px 0' }}>Last change</td><td style={{ border: 0, padding: '3px 0' }}>{fmtDateTime(c.updated_at)}</td></tr>

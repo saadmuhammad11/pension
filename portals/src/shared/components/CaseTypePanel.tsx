@@ -7,10 +7,16 @@
  *  in the audit log, the correction taking effect at the next verification. The office's
  *  decision is that the type is the department's to state: where the papers disagree with the
  *  declaration the officer says so to the DDO, or returns the case, rather than overwriting
- *  what the department filed. The AI's reading stays on the case beside the declaration and is
- *  what raises the question -- see the banner below. The server still accepts a correction
+ *  what the department filed. The server still accepts a correction
  *  (capabilities.correct_case_type, api/v2.py), so this is a screen that stopped offering it,
- *  not a door that was shut. */
+ *  not a door that was shut.
+ *
+ *  A banner stood here saying what the AI had read the papers as whenever that differed from
+ *  the declaration, and the case particulars carried the same reading on a row of their own.
+ *  Both are gone with the correction they used to prompt (22 Oct 2026): a warning an officer
+ *  cannot act on is a warning that teaches them to ignore warnings. detected_case_type is
+ *  still on the case and still in the API; what the AI made of the bundle is read in the AI
+ *  findings, which is the screen for it. */
 import { useState } from 'react'
 import type { CaseFull } from '../api/cases'
 import { CASE_TYPE_LIST, CASE_TYPE_SOURCE_WORDS } from '../caseTypes'
@@ -39,12 +45,6 @@ export function CaseTypePanel({ c, busy, mayDeclare, onSet }:
       <div className="label" style={{ marginBottom: 6 }}>Case type</div>
       <div style={{ fontWeight: 600 }}>{c.case_type ? caseTypeLabel(c.case_type) : 'Not declared'}</div>
       <div className="help">{CASE_TYPE_SOURCE_WORDS[c.case_type_source ?? ''] ?? 'No type on the case.'}</div>
-      {!deptSees(c) && c.detected_case_type && c.detected_case_type !== c.case_type && (
-        <div className="banner warn" style={{ marginTop: 8 }}><span className="mark" aria-hidden="true">!</span>
-          <div className="sub">The AI read the papers as <strong>{caseTypeLabel(c.detected_case_type)}</strong>.
-            The type on the case is the department's declaration: confirm it with the DDO, who can change it
-            once the case is back with them.</div></div>
-      )}
       {mayDeclare && !open && (
         <button type="button" style={{ marginTop: 10, width: '100%' }} disabled={busy} onClick={() => { setType(c.case_type ?? ''); setColumn(c.variant ?? ''); setOpen(true) }}>
           Change the case type
@@ -78,6 +78,3 @@ export function CaseTypePanel({ c, busy, mayDeclare, onSet }:
     </div>
   )
 }
-
-/** The AI's reading is the Accountant General's: the server sends none to a department. */
-const deptSees = (c: CaseFull) => c.detected_case_type == null
