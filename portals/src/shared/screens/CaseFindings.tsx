@@ -403,25 +403,23 @@ export function CaseFindings(
         })}
       </div>
 
+      {/* One box (22 Oct 2026). "Case" and "Source" stood side by side and Source held two
+          rows, one of which -- Pages -- was the page count a second time: "Pages read 28"
+          on the left and "Pages 28" on the right, two labels for one number, because the
+          pipeline reads every page of the bundle. They are one row now, and it says "27 of 28"
+          on the day they differ, which is the only day the distinction was ever worth a line.
+          The heading went with the split: the tab above already says Summary. */}
       {tab === 'Summary' && (
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div className="card" style={{ flex: '1 1 320px' }}>
-            <h3 style={{ marginTop: 0 }}>Case</h3>
-            <table><tbody>
-              <Row k="Case type" v={report.case_type.case_type ? caseTypeLabel(report.case_type.case_type) : '— routed to human'} />
-              <Row k="Evidence" v={report.case_type.case_type_evidence} />
-              <Row k="Confidence" v={confidenceWord(report.case_type.case_type_confidence)} title={`Model confidence ${report.case_type.case_type_confidence.toFixed(2)}`} />
-              <Row k="Documents identified" v={`${report.documents.length}`} />
-              <Row k="Pages read" v={`${report.pages.length}`} />
-            </tbody></table>
-          </div>
-          <div className="card" style={{ flex: '1 1 320px' }}>
-            <h3 style={{ marginTop: 0 }}>Source</h3>
-            <table><tbody>
-              <Row k="File" v={report.source.file} />
-              <Row k="Pages" v={`${report.source.source_pages}`} />
-            </tbody></table>
-          </div>
+        <div className="card">
+          <table><tbody>
+            <Row k="Case type" v={report.case_type.case_type ? caseTypeLabel(report.case_type.case_type) : '— routed to human'} />
+            <Row k="Confidence" v={confidenceWord(report.case_type.case_type_confidence)} title={`Model confidence ${report.case_type.case_type_confidence.toFixed(2)}`} />
+            <Row k="Evidence" v={report.case_type.case_type_evidence} />
+            <Row k="Documents identified" v={`${report.documents.length}`} />
+            <Row k="Pages read" v={report.pages.length === report.source.source_pages
+              ? `${report.pages.length}` : `${report.pages.length} of ${report.source.source_pages}`} />
+            <Row k="File" v={report.source.file} />
+          </tbody></table>
         </div>
       )}
 
