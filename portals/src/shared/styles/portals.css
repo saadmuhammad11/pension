@@ -391,6 +391,14 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
   pointer-events: none; z-index: 0;
 }
 @media (max-width: 980px) { .auth-brand::after { content: none; } }
+/* "Back to the register" is a control, so it is shaped like one (22 Oct 2026). It was a ghost
+   button -- no border, no background -- sitting beside the case number, where it read as a
+   stray line of green text rather than the way out. The default button already draws the box;
+   this only sizes it down, since it is not the thing to press on the screen, and gives it the
+   arrow. The arrow is a pseudo-element: it is decoration, and the label is the label. */
+.back { padding: 8px 14px; font-size: var(--t-small); color: var(--green2); }
+.back::before { content: "\2190"; margin-right: 8px; font-size: 15px; line-height: 1; }
+
 .caps-warn {
   display: flex; align-items: center; gap: 6px; margin: 8px 0 0;
   font-size: var(--t-small); font-weight: 600; color: var(--amber);

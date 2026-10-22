@@ -111,7 +111,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
 
   return (
     <div className="screen container" style={{ paddingTop: 22, maxWidth: 860 }}>
-      <button className="ghost" onClick={onCancel}>Back to the register</button>
+      <button className="back" onClick={onCancel}>Back to the register</button>
       <h1 style={{ marginTop: 8 }}>{PRODUCT_WORDS[product].file}</h1>
       <p className="lead">
         {gpf ? 'Attach every page of the GP Fund claim: the application or sanction, the pay slip, the CNIC, the nomination or death papers as the kind of claim requires. Filing submits the claim to the Office of the Accountant General, where the GP Fund module examines it and the reviewer decides; a missing document is asked for by the reviewer.'

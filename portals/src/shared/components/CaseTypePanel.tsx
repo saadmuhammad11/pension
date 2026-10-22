@@ -14,7 +14,7 @@
  *
  *  A banner stood here saying what the AI had read the papers as whenever that differed from
  *  the declaration, and the case particulars carried the same reading on a row of their own.
- *  Both are gone with the correction they used to prompt (22 Oct 2026): a warning an officer
+ *  Both are gone with the correction they once called for (22 Oct 2026): a warning an officer
  *  cannot act on is a warning that teaches them to ignore warnings. detected_case_type is
  *  still on the case and still in the API; what the AI made of the bundle is read in the AI
  *  findings, which is the screen for it. */

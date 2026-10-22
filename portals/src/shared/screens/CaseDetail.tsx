@@ -168,7 +168,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   if (!c || !step) {
     return (
       <div className="screen container" style={{ paddingTop: 22 }}>
-        <button className="ghost" onClick={() => onBack('PENSION')}>Back to the register</button>
+        <button className="back" onClick={() => onBack('PENSION')}>Back to the register</button>
         {error ? (
           <div className="banner bad" role="alert" style={{ marginTop: 12 }}><span className="mark">!</span>
             <div className="sub">Could not load the case. {error} <button type="button" style={{ marginLeft: 8 }} onClick={() => load()}>Retry</button>
@@ -227,7 +227,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
     <div className="screen container" style={{ paddingTop: 18 }}>
       <input ref={fileInput} type="file" multiple style={{ display: 'none' }} aria-label="Attach documents to the case" onChange={e => { doAdd(e.target.files); e.target.value = '' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button className="ghost" onClick={() => onBack(c.product)}>Back to the register</button>
+        <button className="back" onClick={() => onBack(c.product)}>Back to the register</button>
         <h1 style={{ margin: 0 }}>{c.product === 'GPF' ? 'GP Fund case' : 'Case'} <span className="mono">{c.case_no}</span></h1>
         <StatusPill status={c.status} />
       </div>
