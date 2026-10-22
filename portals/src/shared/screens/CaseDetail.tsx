@@ -399,9 +399,13 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
               <div className="help" style={{ marginTop: 8 }}>Reads the documents afresh; the outcome moves the case again.</div>
             </div>
           )}
-          {c.product !== 'GPF' && (
+          {/* Only where it can be acted on (22 Oct 2026): the department, while the case is on
+              its side. An officer saw a card that read "Case type / Fresh - Self / Declared by
+              the DDO" and could do nothing with it, and the same words are in the line under
+              the case number and again in the Summary. The panel is a control, so it is drawn
+              for the person holding the control and for nobody else. */}
+          {c.product !== 'GPF' && deptView && ['DRAFT', 'AI_CHECKED', 'RETURNED', 'DOCS_REQUESTED'].includes(c.status) && (
             <CaseTypePanel c={c} busy={busy}
-                           mayDeclare={deptView && ['DRAFT', 'AI_CHECKED', 'RETURNED', 'DOCS_REQUESTED'].includes(c.status)}
                            onSet={async body => { setBusy(true); try { await setCaseType(caseId, body); seq.current += 1; await load(); toast('Case type recorded.') } finally { setBusy(false) } }} />
           )}
           {/* The "Case particulars" card stood here and is gone (22 Oct 2026). Every line of it

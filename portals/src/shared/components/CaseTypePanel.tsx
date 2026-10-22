@@ -1,7 +1,8 @@
 /** The case type on a case, and the one person who sets it (29 Sep 2026; 22 Oct 2026).
  *
  *  The department declares it, and may change its own declaration while the case is on its
- *  side. That is all this panel does now.
+ *  side. That is all this panel does, and CaseDetail draws it only then: it is a control, and
+ *  an officer who cannot work it was being shown a label with a frame around it.
  *
  *  Until 22 Oct 2026 the Accountant General could also correct it here, with a remark entered
  *  in the audit log, the correction taking effect at the next verification. The office's
@@ -22,8 +23,8 @@ import type { CaseFull } from '../api/cases'
 import { CASE_TYPE_LIST, CASE_TYPE_SOURCE_WORDS } from '../caseTypes'
 import { caseTypeLabel } from '../labels'
 
-export function CaseTypePanel({ c, busy, mayDeclare, onSet }:
-  { c: CaseFull; busy: boolean; mayDeclare: boolean
+export function CaseTypePanel({ c, busy, onSet }:
+  { c: CaseFull; busy: boolean
     onSet: (body: { case_type: string; variant?: string }) => Promise<void> }) {
   const [open, setOpen] = useState(false)
   const [type, setType] = useState(c.case_type ?? '')
@@ -45,7 +46,7 @@ export function CaseTypePanel({ c, busy, mayDeclare, onSet }:
       <div className="label" style={{ marginBottom: 6 }}>Case type</div>
       <div style={{ fontWeight: 600 }}>{c.case_type ? caseTypeLabel(c.case_type) : 'Not declared'}</div>
       <div className="help">{CASE_TYPE_SOURCE_WORDS[c.case_type_source ?? ''] ?? 'No type on the case.'}</div>
-      {mayDeclare && !open && (
+      {!open && (
         <button type="button" style={{ marginTop: 10, width: '100%' }} disabled={busy} onClick={() => { setType(c.case_type ?? ''); setColumn(c.variant ?? ''); setOpen(true) }}>
           Change the case type
         </button>
