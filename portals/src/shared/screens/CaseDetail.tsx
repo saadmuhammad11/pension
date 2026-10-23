@@ -13,6 +13,7 @@ import { CASE_TYPE_SOURCE_WORDS } from '../caseTypes'
 import { useSession } from '../auth/AuthProvider'
 import { ActionPanel } from '../components/ActionPanel'
 import { isAgReader } from '../auth/session'
+import { returnedItems } from '../api/returnedItems'
 import { CaseProgress } from '../components/CaseProgress'
 import { DocumentList } from '../components/DocumentList'
 import { HistoryTimeline } from '../components/HistoryTimeline'
@@ -191,7 +192,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   // The documents the AG's return asked for, for this round (AUTO_RETURN / GPF_RETURN: rows from before 9 Oct 2026,
   // when the system still returned cases by itself).
   const sentBack = m.side === 'department' ? [...c.events].reverse().find(e => ['AUTO_RETURN', 'GPF_RETURN', 'RETURN', 'REQUEST_DOCS'].includes(e.action)) : undefined
-  const missingDocs = (sentBack?.payload as { missing_checklist?: { id: string; requirement: string; status?: string }[] } | undefined)?.missing_checklist ?? []
+  const missingDocs = returnedItems(sentBack?.payload)
   const agRemarks = c.events.filter(e => (isAgReader(e.actor_role ?? '') || e.actor_role === 'ADMIN') && e.remark && e.action !== 'CREATE' && e.action !== 'FORWARD')
   const lastAg = agRemarks[agRemarks.length - 1]
   // Who has signed the case off so far, tier by tier (9 Oct 2026): the DDO's history carries no tier moves.
@@ -258,7 +259,13 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
             <div style={{ marginTop: 8, color: 'var(--ink)' }}>
               <strong>Documents to attach{sentBack?.action === 'AUTO_RETURN' ? ' (found missing by the verification)' : ''}:</strong>
               <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-                {missingDocs.map(d => <li key={d.id}><strong>{d.id}</strong> {d.requirement}{d.status === 'DEFECTIVE' ? ' — the copy attached is defective' : ''}</li>)}
+                {missingDocs.map((d, i) => (
+                  <li key={`${d.id ?? d.label ?? ''}${i}`}>
+                    {d.id ? <><strong>{d.id}</strong> {d.requirement}</> : <>{d.label}{d.pages?.length ? ` — page ${d.pages.join(', ')}` : ''}</>}
+                    {d.status === 'DEFECTIVE' ? ' — the copy attached is defective' : ''}
+                    {d.note ? <> — {d.note}</> : null}
+                  </li>
+                ))}
               </ul>
             </div>
           )}
