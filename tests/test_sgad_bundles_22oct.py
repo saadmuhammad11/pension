@@ -164,13 +164,26 @@ class SgadKeywords(unittest.TestCase):
     each number below is a count from that sweep.
     """
 
-    def test_the_sgad_sanction_subject_line_names_the_sanction(self) -> None:
-        """On 6 of 1,383 pages, and all six are the PSA's sanction: three the identifier
-        called FORM_B_I (headed "Annex B-I", same subject) and three PENSION_SANCTION_ORDER.
-        No forwarding letter, PPO, Annex-A, NDC or departmental order carries it."""
+    def test_a_form_s_own_title_does_not_name_the_sanction(self) -> None:
+        """"ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF PENSIONARY BENEFITS" was
+        put in SANCTION_ORDER_TITLE on 23 Oct 2026 and taken out the same day.
+
+        It is on six of the 1,383 pages on the deployment machine and all six are the PSA's
+        sanction, which is what made it look like a find. Three of the six are pages the
+        identifier called FORM_B_I, and the reason is that the phrase IS Form B-I's printed
+        title. A form's title in the sanction's pattern makes every Form B-I answer to both,
+        and the sanction answer arrives first -- it took pages the form logic deliberately
+        leaves for a person. form_titles_on already knew that title.
+        """
         for text in ("Subject: ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF PENSIONARY BENEFITS.",
-                     "Subject: NOTIFICATION/ORDERS OF RETIREMENT ON SUPERANNUATION",
-                     "sanction of pensionary benefits"):
+                     "Subject: NOTIFICATION/ORDERS OF RETIREMENT ON SUPERANNUATION"):
+            self.assertNotIn("PENSION_SANCTION_ORDER", titles_on_page(text), text[:48])
+
+    def test_what_only_the_sanction_prints_still_names_it(self) -> None:
+        """PC-2026-000034 p.3 says it twice, and neither needed the phrase above."""
+        for text in ("8. Administrative and financial sanction for grant of pension with "
+                     "commutation @(25%) is hereby accorded in favour of Mr. Muhammad Tariq.",
+                     "DEPUTY SECRETARY (PERSONNEL) / PENSION SANCTIONING AUTHORITY"):
             self.assertIn("PENSION_SANCTION_ORDER", titles_on_page(text), text[:48])
 
     def test_the_covering_letter_is_named_but_an_endorsement_is_not(self) -> None:

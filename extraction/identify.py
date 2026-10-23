@@ -565,8 +565,16 @@ def _sanction_in_bands(ident: PageIdentity, image: str | Path, whole: "PageText"
     the same page reads "Descriptive Roll ... enclosed as Annex-A", and a page that LISTS its
     enclosures would otherwise be read as being them.
     """
-    from .ocr import looks_degenerate
+    from .ocr import form_rubric_on, form_titles_on, forms_printed_on, looks_degenerate
     if ident.document_type not in _ORDER_LABELS:
+        return ident
+    # A page that looks like a PRESCRIBED form is a form question, not a sanction question.
+    # Form B-I is headed "NOTIFICATION/ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF
+    # PENSION BENEFITS" and carries the sanction clauses too, so without this the sanction
+    # would answer for it -- and answer first, taking pages the form logic deliberately leaves
+    # alone: two form titles on one sheet, a model number naming a different form, a page with
+    # no rubric. Those are left for a person and must stay that way.
+    if form_rubric_on(whole) or form_titles_on(whole) or forms_printed_on(whole):
         return ident
     flat = re.sub(r"\s+", " ", (whole.text or "")).lower()
     if not re.search(SANCTION_ORDER_TITLE, flat):
@@ -795,18 +803,20 @@ PROFORMA_SECTIONS = (
 #: "Pension Sanctioning", are the two things only the sanction carries. Checked 22 Oct 2026
 #: against the five S&GAD sanctions and against a PPO, an Annex-A, two forwarding letters, a
 #: superannuation order, an NDC and a pension application: five matches, no false ones.
-#: The S&GAD subject line was added on 23 Oct 2026, read off the department's own sanctions:
-#: "Subject: ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF PENSIONARY BENEFITS".
-#: Swept over the 1,383 pages this machine holds, it appears on SIX, and all six are the PSA's
-#: sanction -- three the identifier called FORM_B_I (headed "Annex B-I", same subject) and
-#: three it called PENSION_SANCTION_ORDER. Not one forwarding letter, PPO, Annex-A, NDC or
-#: order carries it. The two halves are matched separately because departments print one or
-#: the other: Welfare-I writes both, P-II writes the notification alone.
+#: "ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF PENSIONARY BENEFITS" was added here
+#: on 23 Oct 2026 and taken out again the same day. It is on six of the 1,383 pages this
+#: machine holds and all six are the PSA's sanction, which is what made it look like a find --
+#: but three of the six are pages the identifier called FORM_B_I, and the reason is that the
+#: phrase IS Form B-I's own printed title. Putting a form's title in the sanction's pattern
+#: made every Form B-I page answer to both, and the sanction answer is the one that arrives
+#: first. form_titles_on already knows that title; it did not need saying twice.
+#:
+#: What is left is what only the sanction prints: the clause that GRANTS the pension, and a
+#: designation followed by "Pension Sanctioning". Both are on PC-2026-000034 p.3, which is
+#: what rescues it -- the phrase above was never needed for that page.
 SANCTION_ORDER_TITLE = (
     r"sanction\s+for\s+(?:the\s+)?grant\s+of\s+pension"
     r"|(?:secretary|officer|authority)[^.]{0,60}pension\s+sanction"
-    r"|sanction\s+of\s+pension\w{0,4}\s+benefit"
-    r"|orders?\s+of\s+retirement\s+on\s+superannuation"
 )
 
 #: The DDO's covering letter (AG-01), by the one word only it uses.
