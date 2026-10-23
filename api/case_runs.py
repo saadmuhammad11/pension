@@ -190,7 +190,18 @@ def _start_gpf(case, docs: list, intake: dict, user) -> dict:
             officer=gpf_bridge.OFFICER_FOR_ROLE.get(getattr(user, "role", ""), "ao"),
             work_dir=gpf_bridge.scratch_dir(case["id"], case["submission_no"]),
             # Every round of the case under one scope: a resubmission reads only its new pages.
-            reuse_scope=f"portal-case-{case['id']}",
+            # Sent only while carryover is switched on (rounds.carryover_allowed). Off by the
+            # office's decision of 23 Oct 2026 -- every verify reads every page of the bundle
+            # again -- which until now was honoured on the pension side alone: base_run_for
+            # passes a GP Fund case by, because its reading is the module's and not the
+            # pipeline's, so the same decision has to be made here. Without a scope the module
+            # reads every page, as it always did (gpf.api._read_scans).
+            #
+            # What it cost while it was on: re-examining a bundle whose pages were all in the
+            # cache finished in half a second without looking at one of them, so a fix to the
+            # reader never reached a case already read -- and the officer, told the examination
+            # takes ten to twenty minutes, saw no progress window at all (23 Oct 2026).
+            reuse_scope=(f"portal-case-{case['id']}" if rounds.carryover_allowed() else ""),
             # ...and re-read into the module case this portal case already holds, so the
             # officer's dispositions carry into the new round instead of being abandoned with
             # an examination the portal then stops pointing at (H-19).

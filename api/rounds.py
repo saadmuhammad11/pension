@@ -116,8 +116,15 @@ def request_items(action: str, payload: dict) -> list[dict]:
 
 # -- a verification in a round ------------------------------------------------------------------
 #: Whether a resubmission may reuse the earlier round's reading of the papers it has not
-#: changed (pipeline.carryover). OFF, by the office's decision of 23 Oct 2026: every verify
-#: reads every page of the bundle again.
+#: changed. OFF, by the office's decision of 23 Oct 2026: every verify reads every page of
+#: the bundle again.
+#:
+#: Both products answer to this one switch, by two different mechanisms. A pension run reuses
+#: the earlier round's report (pipeline.carryover, reached through base_run_for below). A GP
+#: Fund claim is read by the module, which keeps each page under a reuse_scope and skips any
+#: page key it has seen before; case_runs._start_gpf sends that scope only while this is on.
+#: The GP Fund half was missed when the decision was made and went on reusing pages until
+#: 23 Oct 2026, so "Examine the claim again" re-ran the rules over readings it never checked.
 #:
 #: What it was for: a case returned for one missing certificate came back with that
 #: certificate added and every other page byte-identical, and re-reading all of them spent
