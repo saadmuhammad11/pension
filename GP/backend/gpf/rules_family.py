@@ -305,6 +305,11 @@ def _adv_limit(F):
     L = ADV_LIMITS.get(s.get("limitClause"))
     b = balance_before(F)
     if not L:
+        v = verified(F, "ADV-LIMIT")
+        if v:
+            return verified_result(
+                v, "The clause relied on was identified and Rs " + fmt(s.get("amount")) + " is within its limit.",
+                "The clause relied on does not permit an advance of Rs " + fmt(s.get("amount")) + ".")
         return {"status": "conf",
                 "finding": ("The clause under which Rs " + fmt(s.get("amount")) + " was sanctioned ("
                             + (s.get("rule") or "not quoted") + ") could not be matched to a limit in the Rules."),
@@ -581,6 +586,10 @@ def _fp_oldac(F):
                 "finding": ("Field 16 is " + (cf.get("oldGpfNoState") or "blank") + ", but SAP holds no old number and the "
                             "SAP ledger opens at nil in " + first["start"] + " to " + first["end"]
                             + ", so there is no manual-era account to quote.")}
+    v = verified(F, "FP-OLDAC")
+    if v:
+        return verified_result(v, "The manual-era account number was settled from the AG ledger.",
+                               "The manual-era account number could not be settled from the AG ledger.")
     return {"status": "conf",
             "finding": ("Field 16 is " + (cf.get("oldGpfNoState") or "blank") + " and SAP holds no old number"
                         + (", but the SAP ledger opens with Rs " + fmt(first["opening"]) + ", so a manual-era account may exist."
@@ -719,6 +728,10 @@ def _death_heirs(F):
     heirs = D(F)["death"].get("heirs") or []
     miss = [h for h in heirs if not h.get("cnicCopy") and not h.get("minor")]
     if not heirs:
+        v = verified(F, "DEATH-HEIRS")
+        if v:
+            return verified_result(v, "The legal heirs were established on the record of the office.",
+                                   "The legal heirs could not be established.")
         return {"status": "conf", "finding": "The legal heirs could not be established from the case.",
                 "cure": {"kind": "verify", "vid": "DEATH-HEIRS"}}
     if not miss:
@@ -1025,9 +1038,15 @@ def _bt_proforma(F):
         recent = [r for r in rc["rows"][-2:] if r.get("tempAdvance") or r.get("permanentAdvance")]
         if recent:
             detail = "; ".join(r["start"] + " to " + r["end"] + " (Rs " + fmt((r.get("tempAdvance") or 0) + (r.get("permanentAdvance") or 0)) + ")" for r in recent)
-            out.append({"sub": "adv12", "status": "conf", "doc": "Advances in the last twelve months (column 7)",
-                        "finding": "SAP shows advances in " + detail + ". Carry any outstanding recovery with the transfer.",
-                        "cure": {"kind": "verify", "vid": "BT-ADV"}})
+            v = verified(F, "BT-ADV")
+            if v:
+                out.append({"sub": "adv12", "doc": "Advances in the last twelve months (column 7)",
+                            **verified_result(v, "The outstanding recovery is carried with the transfer.",
+                                              "The recovery outstanding on these advances is not carried with the transfer.")})
+            else:
+                out.append({"sub": "adv12", "status": "conf", "doc": "Advances in the last twelve months (column 7)",
+                            "finding": "SAP shows advances in " + detail + ". Carry any outstanding recovery with the transfer.",
+                            "cure": {"kind": "verify", "vid": "BT-ADV"}})
         else:
             out.append({"sub": "adv12", "status": "ok", "doc": "Advances in the last twelve months (column 7)", "finding": "Nil per SAP."})
     else:

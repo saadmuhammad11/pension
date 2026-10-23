@@ -138,6 +138,10 @@ def _death_claim(F):
     base = next((r for r in rows if re.search(r"30\.06\.2025", r["end"])), None)
     sub = (p and p.get("gpfSubscription")) or 1060
     if not base:
+        v = verified(F, "DEATH-CLAIM")
+        if v:
+            return verified_result(v, "The claim was tested against the SAP ledger by hand and agrees.",
+                                   "The claim does not agree with the SAP ledger.")
         return {"status": "conf", "finding": "The report has no row closing on 30-06-2025 to test the claim against.",
                 "cure": {"kind": "verify", "vid": "DEATH-CLAIM"}}
     expected = base["closing"] + 5 * sub
