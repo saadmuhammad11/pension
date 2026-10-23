@@ -74,6 +74,34 @@ class TheHeadingIsNotTheIdentification(unittest.TestCase):
         far_apart = "PARTICULARS OF EMPLOYEE" + " filler" * 400 + " SERVICE RECORD SUMMARY"
         self.assertIsNone(re.search(PROFORMA_SECTIONS, far_apart.lower()))
 
+    def test_the_heading_the_model_read_keeps_the_claim(self) -> None:
+        """The heading is enough, whoever read it (office's decision, 23 Oct 2026).
+
+        PC-2026-000042 p.8 carries "PERFORMA FOR QUALIFYING SERVICE FOR PENSION". OCR read 555
+        characters of the body and then looped on "OI - OZ - 2O26" without reaching the title
+        or section 2, so neither the title nor the sections could be matched in its text --
+        and a denial does not merely doubt the claim, it files the page as OTHER and drops the
+        document out of the bundle. AG-26 was reported missing against a department that had
+        filed it, twice.
+        """
+        from unittest import mock
+        from extraction import identify
+        from extraction.ocr import PageText
+        broken_ocr = ("1. PARTICULARS OF EMPLOYEE I. Name of Employee: IV. Nationality PAKISTANT "
+                      "XI. Date of Superauuantion OI - OZ - 2O26 OI - OZ - 2O26 OI - OZ - 2O26")
+        self.assertIsNone(re.search(PROFORMA_TITLE, broken_ocr.lower()))
+        self.assertIsNone(re.search(PROFORMA_SECTIONS, broken_ocr.lower()))
+
+        def claim(evidence: str) -> identify.PageIdentity:
+            return identify.PageIdentity(page=8, document_type="QUALIFYING_SERVICE_PROFORMA",
+                                         confidence=1.0, evidence=evidence, is_first_page=True)
+
+        with mock.patch("extraction.ocr.ocr_page",
+                        return_value=PageText(page=8, text=broken_ocr, model="t")):
+            kept = identify._verify_proforma_claim(claim("PERFORMA FOR QUALIFYING SERVICE FOR PENSION"), "p8.png")
+            self.assertEqual(kept.document_type, "QUALIFYING_SERVICE_PROFORMA")
+            self.assertIsNone(kept.downgraded_from)
+
     def test_a_read_that_drops_a_section_still_matches(self) -> None:
         """OCR is not deterministic. On the second run of the same page it skipped section 2
         and went straight from PARTICULARS OF EMPLOYEE to PAY FIXATION; requiring all three in

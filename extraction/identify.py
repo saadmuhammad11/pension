@@ -490,7 +490,7 @@ def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity,
 
 
 def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdentity:
-    """Keep a proforma claim only where OCR reads the proforma's title on the page.
+    """Keep a proforma claim where the form's heading was read, or its sections.
 
     A denied page is asked again, told what it is not, exactly as a denied form is; an OCR
     failure keeps the claim, as ``_deny_pay_claim_on_a_card`` does, because no second reading
@@ -501,11 +501,21 @@ def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdenti
     except Exception:                                   # noqa: BLE001
         return ident
     flat = re.sub(r"\s+", " ", text.text or "").lower()
-    # Either the printed title, or the sections that only this form prints. Requiring the title
-    # alone would have denied the proforma filed on 21 Oct 2026, whose title line is above the
-    # top of the scan -- and a denial here does not merely doubt the claim, it files the page as
-    # OTHER and drops the document from the bundle.
-    if re.search(PROFORMA_TITLE, flat) or re.search(PROFORMA_SECTIONS, flat):
+    # The heading is enough, whoever read it (office's decision, 23 Oct 2026). Three ways in:
+    # the printed title in the OCR, the sections that only this form prints, or the title in
+    # the identifier's own transcription of the page.
+    #
+    # The third is new and is a deliberate exception to this function's bar. "Performa for
+    # Qualifying Service for Pension" is not a conclusion about a page, it is a line of text
+    # copied off it, and no other paper in a pension bundle prints it. Weighed against what
+    # the denial costs: PC-2026-000042 p.8 carries that heading, OCR read 555 characters of
+    # the body and then looped on "OI - OZ - 2O26" without reaching the title or section 2, so
+    # neither of the other two ways could fire -- and a denial here does not merely doubt the
+    # claim, it files the page as OTHER and drops the document out of the bundle, which is how
+    # AG-26 came to be reported missing against a department that had filed it.
+    claimed = re.sub(r"\s+", " ", f"{ident.evidence or ''} {ident.printed_form_number or ''}").lower()
+    if re.search(PROFORMA_TITLE, flat) or re.search(PROFORMA_SECTIONS, flat) \
+            or re.search(PROFORMA_TITLE, claimed):
         return ident
     denied = PageIdentity(
         page=ident.page, document_type="OTHER", confidence=ident.confidence,
