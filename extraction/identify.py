@@ -703,14 +703,48 @@ PROFORMA_SECTIONS = (
 #: "Pension Sanctioning", are the two things only the sanction carries. Checked 22 Oct 2026
 #: against the five S&GAD sanctions and against a PPO, an Annex-A, two forwarding letters, a
 #: superannuation order, an NDC and a pension application: five matches, no false ones.
+#: The S&GAD subject line was added on 23 Oct 2026, read off the department's own sanctions:
+#: "Subject: ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF PENSIONARY BENEFITS".
+#: Swept over the 1,383 pages this machine holds, it appears on SIX, and all six are the PSA's
+#: sanction -- three the identifier called FORM_B_I (headed "Annex B-I", same subject) and
+#: three it called PENSION_SANCTION_ORDER. Not one forwarding letter, PPO, Annex-A, NDC or
+#: order carries it. The two halves are matched separately because departments print one or
+#: the other: Welfare-I writes both, P-II writes the notification alone.
 SANCTION_ORDER_TITLE = (
     r"sanction\s+for\s+(?:the\s+)?grant\s+of\s+pension"
     r"|(?:secretary|officer|authority)[^.]{0,60}pension\s+sanction"
+    r"|sanction\s+of\s+pension\w{0,4}\s+benefit"
+    r"|orders?\s+of\s+retirement\s+on\s+superannuation"
+)
+
+#: The DDO's covering letter (AG-01), by the one word only it uses.
+#:
+#: "Forwarded" or "forwarding" is on 12 of the 114 forwarding letters among the 1,383 pages
+#: this machine holds. Low reach and, with the exclusion below, perfect aim -- which is the
+#: trade this table is for: a pattern here is read only on a page the identifier could not
+#: name at all, so what it has to be is right rather than far-reaching.
+#:
+#: The exclusion is the endorsement block. Without it the word also catches "Copy to: A copy
+#: is forwarded for information and necessary action to:- The Accountant General, Punjab",
+#: which is on the rent clearance certificate at run a1900a44e70c p.21 and on government
+#: paper of every kind. AG-01 passing on a rent clearance certificate is worse than AG-01
+#: reading missing.
+#:
+#: What is NOT here, and why. "To the Accountant General" reaches 40 of the 114, more than
+#: three times as far, and catches four pages that are not forwarding letters. Three of those
+#: four are the S&GAD SANCTION, which that department issues as a letter to the Accountant
+#: General: run 6a9f7c438349 p.3 is addressed to it and signed "ADDITIONAL SECRETARY
+#: S&GAD/Pension Sanctioning" over the sanction note. A pattern that took that page for a
+#: covering letter would pass AG-01 on the strength of the sanction -- the one direction an
+#: audit must never fail in -- so the reach was left on the table.
+FORWARDING_LETTER_TITLE = (
+    r"(?<!copy\s)(?<!copy\sis\s)(?<!copies\s)(?<!copies\sare\s)forward(?:ed|ing)"
 )
 
 DOCUMENT_TITLES: tuple[tuple[str, str], ...] = (
     (PROFORMA_TITLE, "QUALIFYING_SERVICE_PROFORMA"),
     (SANCTION_ORDER_TITLE, "PENSION_SANCTION_ORDER"),
+    (FORWARDING_LETTER_TITLE, "FORWARDING_LETTER"),
     (PROFORMA_SECTIONS, "QUALIFYING_SERVICE_PROFORMA"),
     (r"list\s+of\s+family\s+members|descriptive\s+roll", "ANNEX_A"),
     (r"sole\s+(?:family|widow)\s+certificate|sole\s+and\s+lawful\s+widow"

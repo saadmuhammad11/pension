@@ -157,5 +157,45 @@ class ABandIsReadWhenTheWholePageSaidNothing(unittest.TestCase):
         self.assertEqual(_forms_in_bands("/nonexistent/page.png", 1), ((), ()))
 
 
+class SgadKeywords(unittest.TestCase):
+    """Keywords read off the S&GAD bundles themselves (23 Oct 2026).
+
+    Measured over the 1,383 pages of the 47 runs on the deployment machine, not invented:
+    each number below is a count from that sweep.
+    """
+
+    def test_the_sgad_sanction_subject_line_names_the_sanction(self) -> None:
+        """On 6 of 1,383 pages, and all six are the PSA's sanction: three the identifier
+        called FORM_B_I (headed "Annex B-I", same subject) and three PENSION_SANCTION_ORDER.
+        No forwarding letter, PPO, Annex-A, NDC or departmental order carries it."""
+        for text in ("Subject: ORDERS OF RETIREMENT ON SUPERANNUATION AND SANCTION OF PENSIONARY BENEFITS.",
+                     "Subject: NOTIFICATION/ORDERS OF RETIREMENT ON SUPERANNUATION",
+                     "sanction of pensionary benefits"):
+            self.assertIn("PENSION_SANCTION_ORDER", titles_on_page(text), text[:48])
+
+    def test_the_covering_letter_is_named_but_an_endorsement_is_not(self) -> None:
+        """"Forwarded" reaches 12 of the 114 forwarding letters and nothing else -- once the
+        endorsement block is excluded. Without that exclusion it also catches "Copy to: A copy
+        is forwarded for information and necessary action to:- The Accountant General", which
+        is on the rent clearance certificate of run a1900a44e70c p.21 and on government paper
+        of every kind. AG-01 passing on a rent clearance certificate is worse than AG-01
+        reading missing."""
+        self.assertEqual(titles_on_page("The pension case of Mr X is forwarded for sanction"),
+                         ("FORWARDING_LETTER",))
+        for endorsement in ("Copy to: A copy is forwarded for information and necessary action "
+                            "to:- The Accountant General, Punjab, Lahore.",
+                            "Copy forwarded to the Accountant General, Punjab",
+                            "Copies are forwarded to the Finance Department"):
+            self.assertEqual(titles_on_page(endorsement), (), endorsement[:44])
+
+    def test_a_letter_to_the_accountant_general_is_not_enough_on_its_own(self) -> None:
+        """S&GAD issues its SANCTION as a letter to the Accountant General, so being addressed
+        to the office says nothing about which paper this is. Run 6a9f7c438349 p.3 is addressed
+        to it and signed "ADDITIONAL SECRETARY S&GAD/Pension Sanctioning" over the sanction
+        note; a covering-letter pattern built on the address would pass AG-01 on it."""
+        self.assertNotIn("FORWARDING_LETTER",
+                         titles_on_page("To The Accountant General, Punjab, Lahore. Dated Lahore."))
+
+
 if __name__ == "__main__":
     unittest.main()

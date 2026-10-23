@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -396,6 +397,11 @@ class RoundsOverTheApi(unittest.TestCase):
             run.started_at = run.finished_at = "2026-09-30T10:00:00"
             run.emit("end", run.state, state=run.state)
         self._patches = [
+            # Carryover is off in the office (api.rounds.carryover_allowed, 23 Oct 2026): every
+            # verify re-reads every page. These tests are what keeps the machinery working for
+            # the day it is switched back on, so they switch it on. The default is tested by
+            # test_a_resubmission_rereads_the_whole_bundle_unless_carryover_is_on below.
+            mock.patch.dict(os.environ, {"PENSION_CARRYOVER": "1"}),
             mock.patch.object(db, "DB_PATH", root / "portal.sqlite3"),
             mock.patch.object(runs, "ARTIFACTS", artifacts),
             mock.patch.object(runs, "UPLOADS", artifacts / "uploads"),
@@ -474,6 +480,33 @@ class RoundsOverTheApi(unittest.TestCase):
         self.assertIsNone(self.started[0].base_run_id)
         rounds = self.client.get(f"/api/v2/cases/{case_id}/rounds", headers=ag).json()["rounds"]
         self.assertEqual(rounds[0]["checks"][0]["mode"], "FULL")
+
+    def test_a_resubmission_rereads_the_whole_bundle_unless_carryover_is_on(self) -> None:
+        """Every verify reads every page (office's decision, 23 Oct 2026).
+
+        A page carried over keeps the reading it was given the first time, right or wrong, and
+        the reader is not deterministic -- so a second look at a page is a second chance at it,
+        and a fix to the reader reaches an old page only on a run that re-reads it. The office
+        weighed the minutes a resubmission saves against the chances and chose the chances.
+        """
+        dept, ag = self.login("school-education"), self.sa("school-education")
+        case_id = self.file(dept)
+        first = self.verify(ag, case_id)
+        self.client.post(f"/api/v2/cases/{case_id}/return", headers=ag,
+                         json={"remark": "FRC missing.", "items": [{"id": "AG-06"}]})
+        self.client.post(f"/api/v2/cases/{case_id}/documents", headers=dept,
+                         files=[("files", ("frc.pdf", io.BytesIO(FRC), "application/pdf"))])
+        self.client.post(f"/api/v2/cases/{case_id}/forward", headers=dept, json={"remark": "FRC attached."})
+        self.report = FRC_ON_FILE
+        with mock.patch.dict(os.environ, {"PENSION_CARRYOVER": ""}):
+            self.verify(ag, case_id)
+        self.assertIsNone(self.started[-1].base_run_id, "round 2 must re-read the whole bundle")
+        rounds = self.client.get(f"/api/v2/cases/{case_id}/rounds", headers=ag).json()["rounds"]
+        self.assertEqual(rounds[1]["checks"][0]["mode"], "FULL")
+        self.assertIsNone(rounds[1]["checks"][0]["base_run_id"])
+        # Round 1 is untouched, and the FRC is still found: nothing about the JUDGEMENT changes.
+        self.assertEqual(rounds[0]["checks"][0]["run_id"], first)
+        self.assertEqual(rounds[1]["requests"][0]["items"][0]["id"], "AG-06")
 
     def test_return_for_a_missing_document_resubmit_it_and_the_item_is_resolved(self) -> None:
         dept, ag = self.login("school-education"), self.sa("school-education")

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -114,14 +115,36 @@ def request_items(action: str, payload: dict) -> list[dict]:
 
 
 # -- a verification in a round ------------------------------------------------------------------
+#: Whether a resubmission may reuse the earlier round's reading of the papers it has not
+#: changed (pipeline.carryover). OFF, by the office's decision of 23 Oct 2026: every verify
+#: reads every page of the bundle again.
+#:
+#: What it was for: a case returned for one missing certificate came back with that
+#: certificate added and every other page byte-identical, and re-reading all of them spent
+#: six to twelve minutes of the vision model on pages already read. What it costs: a page
+#: carried over keeps the reading it was given the FIRST time, right or wrong. PC-2026-000042
+#: page 8 is the Performa for Qualifying Service; round 1 read it as OTHER and round 2
+#: carried that OTHER across without looking at the page. The reader is not deterministic, so
+#: a second look at a page is a second chance at it -- and a fix to the reader reaches an old
+#: page only on a run that re-reads it.
+#:
+#: The office weighed the minutes against the chances and chose the chances. The machinery is
+#: untouched and tested; set PENSION_CARRYOVER=1 to have it back.
+def carryover_allowed() -> bool:
+    return (os.environ.get("PENSION_CARRYOVER") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def base_run_for(conn: db.Connection, case: db.Row) -> db.Row | None:
     """The earlier round's finished pension run a resubmission reuses, or None (a full run).
 
-    Round 1 has none, a GP Fund case has none (its reading is the GP Fund module's), and a
-    round whose earlier rounds never finished a check has none.
+    None unless carryover is switched on (see carryover_allowed). Otherwise: round 1 has none,
+    a GP Fund case has none (its reading is the GP Fund module's), and a round whose earlier
+    rounds never finished a check has none.
     """
     from api.case_runs import GPF_RUN_PREFIX
     from api.runs import ARTIFACTS
+    if not carryover_allowed():
+        return None
     if int(case["submission_no"]) <= 1:
         return None
     if (case["product"] if "product" in case.keys() else "PENSION") == "GPF":
