@@ -7,6 +7,7 @@ const WORDS: Record<string, string> = {
   CASE_OVERRIDE: 'Case decision overridden', CASE_TYPE_CORRECTED: 'Case type corrected',
   USER_CREATE: 'User created', USER_DISABLE: 'User disabled',
   USER_ENABLE: 'User enabled', USER_RESET_PASSWORD: 'Password reset',
+  USER_ROLE_CHANGE: 'Tier or wing changed', USER_RENAME: 'Username changed',
 }
 
 const brief = (v: unknown) => v == null ? '—' : typeof v === 'object' ? Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k}: ${String(x)}`).join(', ') : String(v)

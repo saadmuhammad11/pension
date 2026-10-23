@@ -259,6 +259,51 @@ class V2Test(unittest.TestCase):
                              headers={"X-Portal": "ag"})
         self.assertEqual(r.status_code, 200)
 
+    def test_an_account_can_be_renamed_and_signs_in_under_the_new_name(self) -> None:
+        """The administrator changes a username (23 Oct 2026). The account keeps everything else."""
+        admin = self.login("admin", "ag")
+        police = self.login("punjab-police", "punjab-police")
+        before = self.client.get("/api/v2/auth/me", headers=police).json()
+        r = self.client.post("/api/v2/admin/users/punjab-police/username", headers=admin,
+                             json={"username": "renamed.officer", "reason": "Login was the department, not the officer."})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["username"], "renamed.officer")
+        # Read before anything else is audited: a refused sign-in writes LOGIN_FAILED on top.
+        entry = self.client.get("/api/v2/admin/audit-log", headers=admin).json()[0]
+        self.assertEqual(entry["action"], "USER_RENAME")
+        self.assertEqual(entry["before"], {"username": "punjab-police"})
+        self.assertEqual(entry["after"], {"username": "renamed.officer"})
+        # The sessions end: the token named an account signing in as a username that is gone.
+        self.assertEqual(self.client.get("/api/v2/auth/me", headers=police).status_code, 401)
+        self.assertEqual(self.client.post("/api/v2/auth/login", headers={"X-Portal": "ag"},
+                                          json={"username": "punjab-police", "password": db.SEED_PASSWORD}).status_code, 401)
+        # The same account, under the new name: same id, role, department, display name.
+        again = self.login("renamed.officer", "punjab-police")
+        now = self.client.get("/api/v2/auth/me", headers=again).json()
+        for key in ("id", "role", "department_code", "display_name"):
+            self.assertEqual(now.get(key), before.get(key), key)
+
+    def test_a_rename_is_refused_where_it_would_be_wrong(self) -> None:
+        admin = self.login("admin", "ag")
+        reason = "Login was the department, not the officer."
+        def rename(body: dict) -> int:
+            return self.client.post("/api/v2/admin/users/punjab-police/username", headers=admin, json=body).status_code
+        self.assertEqual(rename({"username": "AB", "reason": reason}), 422)                    # too short
+        self.assertEqual(rename({"username": "has space", "reason": reason}), 422)             # not the alphabet
+        self.assertEqual(rename({"username": "punjab-police", "reason": reason}), 422)         # the name it has
+        self.assertEqual(rename({"username": "renamed.officer", "reason": "typo"}), 422)       # no reason worth the name
+        self.assertEqual(rename({"username": "tauqeer.ahmad", "reason": reason}), 409)         # an officer already has it
+        # Refused means refused: the account still signs in as it did.
+        self.assertEqual(self.client.post("/api/v2/auth/login", headers={"X-Portal": "ag"},
+                                          json={"username": "punjab-police", "password": db.SEED_PASSWORD}).status_code, 200)
+
+    def test_only_the_administrator_renames_an_account(self) -> None:
+        for who, portal in (("punjab-police", "punjab-police"), ("tauqeer.ahmad", "ag")):
+            headers = self.login(who, portal)
+            r = self.client.post("/api/v2/admin/users/school-education/username", headers=headers,
+                                 json={"username": "new.name", "reason": "Trying it on from the wrong desk."})
+            self.assertEqual(r.status_code, 403, f"{who}: {r.text}")
+
     # -- scoping ----------------------------------------------------------------------------
 
     def test_a_department_sees_only_its_own_cases(self) -> None:

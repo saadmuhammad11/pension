@@ -50,6 +50,10 @@ export interface WingCoverage {
   deputy_ag: number
 }
 export const wingCoverage = () => get<WingCoverage>('/api/v2/admin/wing-coverage')
+/** Rename an account. The word the officer signs in with changes and nothing else: every case
+ *  event, audit entry and signature names the account by its id. Ends the account's sessions. */
+export const setUsername = (id: string, username: string, reason: string) =>
+  post<AdminUser>(`/api/v2/admin/users/${id}/username`, { username, reason })
 export const disableUser = (id: string, reason: string) => post<AdminUser>(`/api/v2/admin/users/${id}/disable`, { reason })
 export const enableUser = (id: string) => post<AdminUser>(`/api/v2/admin/users/${id}/enable`)
 export const resetPassword = (id: string, password: string, reason: string) => post<{ ok: boolean }>(`/api/v2/admin/users/${id}/reset-password`, { password, reason })

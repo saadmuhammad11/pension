@@ -2304,6 +2304,48 @@ def set_user_role(request: Request, user_id: str, body: dict = Body(...), user: 
     return _public_user(_user_row(conn, row["id"]))
 
 
+@router.post("/admin/users/{user_id}/username")
+def set_username(request: Request, user_id: str, body: dict = Body(...), user: User = Depends(require_roles("ADMIN")),
+                 conn: db.Connection = Depends(get_conn)) -> dict:
+    """Rename an account (23 Oct 2026): the office mistypes a login, or an officer's name is
+    recorded wrongly and the login carries it (decision C1, a login is the officer's own name).
+
+    The account's history does not move with it. Every case event, every audit entry and every
+    signature names the account by its id, and the display name is a separate column, so what
+    changes is the word the officer types to sign in and nothing else -- an old case still
+    reads as the work of the same person.
+
+    Every session of the account ends, as a role change and a password reset end them. It is
+    not optional here: the token names the account the officer signed in as, and leaving a
+    session open under a username that no longer exists is a session nobody can account for.
+
+    An administrator may rename their own account. Renaming is not a privilege change -- which
+    is what the self-checks on role and disable are guarding -- and the cost of being wrong is
+    signing in again under the name you just chose. The audit entry names the actor either way.
+    """
+    row = _user_row(conn, user_id)
+    username = str(body.get("username", "")).strip().lower()
+    was = row["username"]
+    if not re.fullmatch(r"[a-z0-9._-]{3,40}", username):
+        raise HTTPException(422, "username: 3-40 characters, letters, digits, . _ -")
+    if username == was:
+        raise HTTPException(422, "that is the username the account already has")
+    if username in SHARED_LOGINS and settings.production():
+        raise HTTPException(422, "a login carries the officer's own name (decision C1)")
+    reason = " ".join(str(body.get("reason") or "").split())
+    if len(reason) < MIN_RESET_REASON:
+        raise HTTPException(422, f"a rename needs a reason of at least {MIN_RESET_REASON} characters")
+    if conn.execute("SELECT 1 FROM users WHERE username = ? AND id <> ?", (username, row["id"])).fetchone():
+        raise HTTPException(409, "that username is taken")
+    with db.transaction(conn):
+        conn.execute("UPDATE users SET username = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?",
+                     (username, db.now(), row["id"]))
+        workflow.audit(conn, actor=user, action="USER_RENAME", entity_type="user", entity_id=row["id"],
+                       ip=_client_address(request), before={"username": was}, after={"username": username},
+                       reason=reason)
+    return _public_user(_user_row(conn, row["id"]))
+
+
 @router.post("/admin/users/{user_id}/disable")
 def disable_user(request: Request, user_id: str, body: dict = Body(default={}), user: User = Depends(require_roles("ADMIN")),
                  conn: db.Connection = Depends(get_conn)) -> dict:

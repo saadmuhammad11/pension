@@ -1,7 +1,7 @@
 /** Users: create, disable or enable, reset a password, give an AG account its tier and wing (C4,
  *  9 Oct 2026). Every change is audited on the server. */
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { createUser, disableUser, enableUser, listUsers, resetPassword, setUserRole, wingCoverage, type AdminUser, type WingCoverage } from '../../api/admin'
+import { createUser, disableUser, enableUser, listUsers, resetPassword, setUserRole, setUsername, wingCoverage, type AdminUser, type WingCoverage } from '../../api/admin'
 import { departments, type Department } from '../../api/cases'
 import { useSession } from '../../auth/AuthProvider'
 import { PasswordField } from '../../components/PasswordField'
@@ -20,6 +20,10 @@ export const WINGS = ['Pension-I', 'Pension-II', 'Pension-III', 'Pension-IV', 'P
 export const needsWing = (role: string) => TIER_ROLES.includes(role)
 export const needsDepartment = (role: string) => role === 'DEPT_OFFICER'
 
+//: What a username may be, as api/v2.py's create_user and set_username both require it. Here
+//: so the form can refuse before the server does, not instead of it.
+const USERNAME = /^[a-z0-9._-]{3,40}$/
+
 export function Users() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [depts, setDepts] = useState<Department[]>([])
@@ -33,7 +37,7 @@ export function Users() {
   // Disable and reset used to go through window.prompt: a password typed into a browser prompt is
   // shown in clear, cannot be a password field, and the prompt is blocked by some browsers
   // (audit 6 Oct 2026, L9). They are ordinary forms now, with the password masked.
-  const [ask, setAsk] = useState<{ kind: 'disable' | 'reset' | 'enable' | 'role'; user: AdminUser } | null>(null)
+  const [ask, setAsk] = useState<{ kind: 'disable' | 'reset' | 'enable' | 'role' | 'rename'; user: AdminUser } | null>(null)
   // The shortest password the server accepts (one rule, told at sign-in; F14).
   const { passwordMinLength } = useSession()
   const [answer, setAnswer] = useState('')
@@ -81,10 +85,12 @@ export function Users() {
     const value = answer
     if (kind === 'reset' && (value.length < passwordMinLength || reason.trim().length < 10)) return
     if (kind === 'role' && reason.trim().length < 10) return
+    if (kind === 'rename' && (!USERNAME.test(value) || value === user.username || reason.trim().length < 10)) return
     setAsk(null); setAnswer(''); setReason('')
     run(() => kind === 'disable' ? disableUser(user.id, value)
       : kind === 'enable' ? enableUser(user.id)
       : kind === 'role' ? setUserRole(user.id, { role: newRole.role, pension_wing: needsWing(newRole.role) ? newRole.pension_wing : undefined, reason: reason.trim() })
+      : kind === 'rename' ? setUsername(user.id, value.trim().toLowerCase(), reason.trim())
       : resetPassword(user.id, value, reason.trim()))
   }
 
@@ -139,9 +145,11 @@ export function Users() {
 
       {ask && (
         <form className="card stack" style={{ marginTop: 'var(--s3)' }} onSubmit={answerAsk}
-              aria-label={ask.kind === 'disable' ? 'Disable account' : ask.kind === 'enable' ? 'Enable account' : ask.kind === 'role' ? 'Change role and wing' : 'Reset password'}>
+              aria-label={ask.kind === 'disable' ? 'Disable account' : ask.kind === 'enable' ? 'Enable account' : ask.kind === 'role' ? 'Change role and wing'
+                : ask.kind === 'rename' ? 'Change username' : 'Reset password'}>
           <h3 style={{ margin: 0 }}>{ask.kind === 'disable' ? `Disable ${ask.user.username}` : ask.kind === 'enable' ? `Enable ${ask.user.username}?`
-            : ask.kind === 'role' ? `Tier and wing of ${ask.user.username}` : `New password for ${ask.user.username}`}</h3>
+            : ask.kind === 'role' ? `Tier and wing of ${ask.user.username}`
+            : ask.kind === 'rename' ? `New username for ${ask.user.display_name}` : `New password for ${ask.user.username}`}</h3>
           {ask.kind === 'disable' && (
             <div className="field"><label className="label" htmlFor="ask-reason">Reason (goes on the audit trail)</label>
               <input id="ask-reason" autoFocus autoComplete="off" value={answer} onChange={e => setAnswer(e.target.value)} required /></div>
@@ -155,6 +163,22 @@ export function Users() {
                            minLength={passwordMinLength} username={ask.user.username} autoFocus />
             <div className="field"><label className="label" htmlFor="ask-reset-reason">Reason (at least 10 characters; goes on the audit trail)</label>
               <input id="ask-reset-reason" autoComplete="off" value={reason} onChange={e => setReason(e.target.value)} required minLength={10} /></div>
+          </>)}
+          {ask.kind === 'rename' && (<>
+            <div className="field"><label className="label" htmlFor="ask-username">Username</label>
+              <input id="ask-username" autoFocus autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                     value={answer} onChange={e => setAnswer(e.target.value.toLowerCase())}
+                     aria-describedby="ask-username-help" aria-invalid={!!answer && !USERNAME.test(answer)} required />
+              <p className="help" id="ask-username-help" style={{ margin: '6px 0 0' }}>
+                Signs in as <strong className="mono">{ask.user.username}</strong> today. 3 to 40 characters: letters,
+                digits, and . _ -
+              </p></div>
+            <div className="field"><label className="label" htmlFor="ask-rename-reason">Reason (at least 10 characters; goes on the audit trail)</label>
+              <input id="ask-rename-reason" autoComplete="off" value={reason} onChange={e => setReason(e.target.value)} required minLength={10} /></div>
+            <p className="help" style={{ margin: 0 }}>
+              The account's sessions end and the officer signs in with the new username. Its work does not move:
+              every case, decision and audit entry already names the account itself, not the word it signs in with.
+            </p>
           </>)}
           {ask.kind === 'role' && (<>
             <div className="field"><label className="label" htmlFor="ask-role">Role</label>
@@ -173,8 +197,10 @@ export function Users() {
           </>)}
           <div className="row" style={{ gap: 'var(--s2)' }}>
             <button className="primary" type="submit" disabled={busy || (ask.kind === 'reset' && (answer.length < passwordMinLength || reason.trim().length < 10))
-                                                                 || (ask.kind === 'role' && reason.trim().length < 10)}>
-              {ask.kind === 'disable' ? 'Disable account' : ask.kind === 'enable' ? 'Enable account' : ask.kind === 'role' ? 'Set tier and wing' : 'Set password'}
+                                                                 || (ask.kind === 'role' && reason.trim().length < 10)
+                                                                 || (ask.kind === 'rename' && (!USERNAME.test(answer) || answer === ask.user.username || reason.trim().length < 10))}>
+              {ask.kind === 'disable' ? 'Disable account' : ask.kind === 'enable' ? 'Enable account' : ask.kind === 'role' ? 'Set tier and wing'
+                : ask.kind === 'rename' ? 'Change username' : 'Set password'}
             </button>
             <button type="button" onClick={() => { setAsk(null); setAnswer(''); setReason('') }}>Cancel</button>
           </div>
@@ -203,6 +229,9 @@ export function Users() {
                     {' '}
                     <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
                             onClick={() => { setAsk({ kind: 'reset', user: u }); setAnswer(''); setReason('') }}>Reset password</button>
+                    {' '}
+                    <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
+                            onClick={() => { setAsk({ kind: 'rename', user: u }); setAnswer(u.username); setReason('') }}>Username</button>
                     {u.role !== 'DEPT_OFFICER' && u.role !== 'ADMIN' && <>
                       {' '}
                       <button disabled={busy} style={{ padding: '5px 10px', fontSize: 'var(--t-small)' }}
