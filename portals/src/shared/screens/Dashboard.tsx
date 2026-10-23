@@ -156,7 +156,11 @@ function MonthlyRegister({ product, department }: { product: Product; department
  *  A department never sees this card: the server sends it no by_desk at all, because a DDO is
  *  told the case is with the Office of the Accountant General and not which desk holds it. */
 function DesksCard({ stats }: { stats: Stats }) {
-  const desks = stats.by_desk ?? []
+  // The server sends by_desk to the oversight roles only (api/v2.py OVERSIGHT_ROLES), so its
+  // absence is the answer: a tier officer and a department are not shown the desks at all,
+  // rather than shown an empty chart of them.
+  const desks = stats.by_desk
+  if (!desks) return null
   const waiting = desks.reduce((n, d) => n + d.total, 0)
   const stuck = desks.reduce((n, d) => n + d.waiting_over_a_week, 0)
   const worst = desks.reduce<typeof desks[number] | null>((w, d) => d.oldest_days > (w?.oldest_days ?? -1) ? d : w, null)

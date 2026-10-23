@@ -340,8 +340,15 @@ class V2Test(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/v2/reports/monthly.csv?month={month}&department=SCHOOL_EDUCATION",
                                          headers=police).status_code, 403)
 
-    def test_where_cases_are_waiting_is_the_office_s_and_not_the_department_s(self) -> None:
-        """by_desk names the desk a case stands on, which a DDO is never told (api/v2.py)."""
+    def test_where_cases_are_waiting_is_shown_to_the_roles_that_supervise_the_desks(self) -> None:
+        """by_desk is the oversight roles' (23 Oct 2026): the Deputy AG, the AG's own desk and
+        the administrator, who reads every register anyway.
+
+        Not a tier officer. A Senior Auditor, an AAO and an AO each hold ONE desk, and a chart
+        of how long the others are taking is a view of colleagues' workload, not their own.
+        Not a department, which is told the case is with the Office of the Accountant General
+        and never which desk holds it.
+        """
         admin = self.login("admin", "ag")
         dept = self.login("punjab-police", "punjab-police")
         case = self.create(dept)["case"]
@@ -351,7 +358,14 @@ class V2Test(unittest.TestCase):
         self.assertEqual(len(standing), 1, desks)
         self.assertEqual(standing[0]["oldest_case"], case["case_no"])
         self.assertEqual(standing[0]["waiting_over_a_week"], 0)       # filed a moment ago
-        self.assertNotIn("by_desk", self.client.get("/api/v2/stats?product=PENSION", headers=dept).json())
+
+        for who, portal in (("punjab-police", "punjab-police"),            # the department
+                            ("tauqeer.ahmad", "ag")):                      # a tier officer
+            stats = self.client.get("/api/v2/stats?product=PENSION", headers=self.login(who, portal)).json()
+            self.assertNotIn("by_desk", stats, who)
+        for who in ("ag.reviewer",):                                       # the AG's own desk
+            stats = self.client.get("/api/v2/stats?product=PENSION", headers=self.login(who, "ag")).json()
+            self.assertIn("by_desk", stats, who)
 
     # -- scoping ----------------------------------------------------------------------------
 

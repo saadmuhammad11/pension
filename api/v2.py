@@ -407,6 +407,19 @@ def department_counts(product: str | None = None, user: User = Depends(require_r
 AGE_BUCKETS = (("0-3", 3), ("4-7", 7), ("8-14", 14), ("15+", None))
 
 
+#: Who is shown where the office's cases are standing, desk by desk (23 Oct 2026). The two
+#: roles that supervise the tiers rather than sit at one -- the Deputy Accountant General and
+#: the AG's own desk -- and the administrator, who already reads every register.
+#:
+#: Not a tier officer. A Senior Auditor, an Assistant Accounts Officer and an Accounts Officer
+#: each hold one desk; a chart of how long the OTHER desks are taking is a view of colleagues'
+#: workload, not of their own work, and they have "Pending decisions by age" for that. Not a
+#: department either, which is told the case is with the Office of the Accountant General and
+#: never which desk holds it (holder_tier is nulled for a DDO for the same reason).
+#:
+#: The same three roles as capabilities.all_departments: the ones that see across the office.
+OVERSIGHT_ROLES = ("AG_DAG", "AG_REVIEWER", "ADMIN")
+
 #: The desks a case stands on inside the office, in the order it passes them. "Received" is the
 #: case submitted and not yet taken up -- no tier holds it, which is a desk in its own right and
 #: the one where a case is most easily forgotten.
@@ -677,7 +690,6 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
         "scope": {"role": user.role, "department": user.department_code if user.role == "DEPT_OFFICER" else department,
                   "product": product},
         "ageing": ageing,
-        "by_desk": _by_desk(conn, where, args),
         "deficiencies": _deficiencies(conn, where, args),
         "total": sum(by_status.values()),
         "by_status": by_status,
@@ -693,10 +705,12 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
         "decision_target_days": DECISION_TARGET_DAYS,
         "decided_within_target": sum(1 for d in days if d <= DECISION_TARGET_DAYS),
     }
+    if user.role in OVERSIGHT_ROLES:
+        out["by_desk"] = _by_desk(conn, where, args)
     if user.role == "DEPT_OFFICER":
         # The engine's verdicts, its findings histogram and the papers it found missing across the
         # department's cases are AI output; a department sees none of it (28 Sep 2026).
-        for key in ("verdicts", "high_flags", "deficiencies", "by_desk"):
+        for key in ("verdicts", "high_flags", "deficiencies"):
             out.pop(key, None)
     if user.role == "ADMIN":
         out["users_by_role"] = {r["role"]: r["n"] for r in conn.execute("SELECT role, COUNT(*) n FROM users WHERE active = 1 GROUP BY role")}
