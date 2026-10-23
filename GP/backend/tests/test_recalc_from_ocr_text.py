@@ -166,3 +166,73 @@ class TestTheRowsThatCannotBeMended:
         # officer is told, because that one changes what the office decides.
         notes = rows[0].get("repairs") or []
         assert all(isinstance(n, str) for n in notes)
+
+
+class TestWhichReadIsTaken:
+    """The choice between the two readers, which is where this went wrong first.
+
+    PC-2026-000048's page 7 is a thirty-nine year ledger, and the OCR model fell into its
+    repeat-one-cell loop on the FIRST row -- so the OCR read was one year, and one year adds
+    up. Choosing by arithmetic alone took it over a complete thirty-nine year read with seven
+    years out, which is how a wrecked read can look like a perfect one.
+    """
+
+    from unittest import mock
+
+    def _client(self, ocr_text, vision_rows, *, truncated=False):
+        from gpf.clients.model_client import VllmModelClient
+        c = VllmModelClient.__new__(VllmModelClient)
+
+        def ocr(_ref):
+            c._ocr_table_truncated = truncated
+            return ocr_text
+
+        c.ocr_table_text = ocr
+        c._recalc_rows_from_vision = lambda _ref: (vision_rows, 0.95)
+        return c
+
+    def _rows(self, n, *, bad=0):
+        """n years that chain, the first `bad` of them not adding up."""
+        out, opening = [], 0.0
+        for i in range(n):
+            sub = 1000.0
+            closing = opening + sub + (500.0 if i < bad else 0.0)
+            out.append({"start": f"01.07.{2000 + i}", "end": f"30.06.{2001 + i}",
+                        "opening": opening, "subscription": sub, "adjustments": 0.0,
+                        "tempAdvance": 0.0, "recTempAdvance": 0.0, "permanentAdvance": 0.0,
+                        "interest": 0.0, "closing": closing})
+            opening = closing
+        return out
+
+    def test_a_complete_read_beats_a_short_one_that_adds_up(self) -> None:
+        client = self._client("01.07.2000 30.06.2001 0.00 1000.00 1000.00", self._rows(39, bad=7))
+        rows, _ = client._extract_recalc_rows("p.png")
+        assert len(rows) == 39, "one year must never beat thirty-nine"
+
+    def test_and_where_both_are_complete_the_one_that_adds_up_wins(self) -> None:
+        """PC-2026-000070's page 6: both readers returned all twenty-four years and only the
+        OCR read reconciled."""
+        ocr = "\n".join(f"01.07.{2000+i} 30.06.{2001+i} {i*1000}.00 1000.00 0.00 0.00 0.00 0.00 0.00 {i*1000+1000}.00"
+                        for i in range(24))
+        client = self._client(ocr, self._rows(24, bad=13))
+        rows, conf = client._extract_recalc_rows("p.png")
+        assert len(rows) == 24 and conf == 0.97
+
+    def test_a_cut_off_read_of_one_row_is_not_a_ledger(self) -> None:
+        """Even with nothing to compare it against: it would reach the officer looking whole."""
+        client = self._client("01.07.2000 30.06.2001 0.00 1000.00 1000.00", [], truncated=True)
+        rows, conf = client._extract_recalc_rows("p.png")
+        assert rows == [] and conf == 0.0
+
+    def test_but_a_cut_off_read_that_still_got_the_years_is_kept(self) -> None:
+        """Page 6's OCR text DID hit the ceiling -- the loop ate the end of it -- and still
+        carried every one of its twenty-four years."""
+        ocr = "\n".join(f"01.07.{2000+i} 30.06.{2001+i} {i*1000}.00 1000.00 0.00 0.00 0.00 0.00 0.00 {i*1000+1000}.00"
+                        for i in range(24))
+        client = self._client(ocr, [], truncated=True)
+        rows, _ = client._extract_recalc_rows("p.png")
+        assert len(rows) == 24
+
+    def test_neither_reader_getting_anything_is_no_rows(self) -> None:
+        client = self._client("Subject: a covering letter.", [])
+        assert client._extract_recalc_rows("p.png") == ([], 0.0)

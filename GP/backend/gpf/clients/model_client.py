@@ -347,7 +347,10 @@ class VllmModelClient:
             {"type": "text", "text": "Transcribe all printed text on this page, in reading order, "
                                      "preserving the table rows one per line. Output text only."}]}]
         out = self._chat(self.ocr_url, self.ocr_model, msg, temperature=0, max_tokens=8000)
-        return out["choices"][0]["message"]["content"] or ""
+        choice = (out.get("choices") or [{}])[0]
+        text = (choice.get("message") or {}).get("content") or ""
+        self._ocr_table_truncated = choice.get("finish_reason") == "length"
+        return text
 
     def _extract_recalc_rows(self, image_ref: str):  # pragma: no cover - needs Spark
         """Read the GPF re-calculation ledger table as rows (spec §4.2, §12).
@@ -371,20 +374,27 @@ class VllmModelClient:
         def misread(rows) -> int:
             return len({d["row"] for d in recalc_discrepancies({"rows": rows})})
 
-        best, best_bad, best_conf = [], None, 0.0
+        candidates = []
+        self._ocr_table_truncated = False
         try:
             rows = parse_recalc_rows(self.ocr_table_text(image_ref))
         except Exception:                                  # noqa: BLE001 -- the vision read stands
             rows = []
-        if rows:
-            bad = misread(rows)
-            if not bad:
-                return rows, 0.97
-            best, best_bad, best_conf = rows, bad, 0.6
+        # The OCR model can fall into a loop and repeat one nil cell for its whole budget. On
+        # PC-2026-000048's page 7 it did that on the FIRST row, so the read was one year of a
+        # thirty-nine year ledger -- and one year adds up, which is exactly how a wrecked read
+        # could look like a perfect one. A cut-off read of a single row is not a ledger.
+        if rows and not (self._ocr_table_truncated and len(rows) <= 1):
+            candidates.append((rows, 0.97 if not misread(rows) else 0.6))
         rows, conf = self._recalc_rows_from_vision(image_ref)
-        if rows and (best_bad is None or misread(rows) < best_bad):
-            return rows, conf
-        return best, best_conf
+        if rows:
+            candidates.append((rows, conf))
+        if not candidates:
+            return [], 0.0
+        # YEARS FIRST, then arithmetic. A ledger missing a year is missing the money in it, so
+        # a short read that happens to reconcile must never beat a complete one that does not:
+        # the complete one reaches the officer as a hard stop, and the short one would not.
+        return max(candidates, key=lambda c: (len(c[0]), -misread(c[0])))
 
     def _recalc_rows_from_vision(self, image_ref: str):  # pragma: no cover - needs Spark
         """The ledger as the vision model transcribes it. Kept as the second opinion."""
