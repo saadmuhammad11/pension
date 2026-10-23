@@ -1328,12 +1328,29 @@ def check_form_d_i_dates(record: CaseRecord, pack: RulePack) -> list[Flag]:
 def check_disputed_reads(record: CaseRecord, pack: RulePack) -> list[Flag]:
     """Two reads of a page disagreed on a figure or a date. ``EXTRACT-DISAGREE``, HIGH.
 
-    Every determination-critical page is read twice (extraction.client.extract_page_confirmed).
-    Until 7 Oct 2026 a disagreement was recorded in fields.json and the second read's figures
-    were used anyway; nothing read that record. Business decision H1: stop and raise. The
-    reader now blanks the page's figures and the disputed dates, and this finding names the
-    page and what differed, so the officer reads the original and transcribes it. HIGH, as an
-    unreadable page is: a check that silently did not run is worse than a missing field.
+    NOT IN THE BATTERY since 23 Oct 2026, by the office's decision: it is not shown.
+
+    What that does NOT change is what the system computes. The blanking is the reader's, not
+    this finding's (extraction.client.extract_page_confirmed): where two reads differ, the
+    page's pay lines are emptied, every *_rs field and each disputed date set to None, and
+    nothing from the page reaches the determination. That still happens on every run. The
+    disagreement is still recorded in fields.json and still reaches CaseRecord.disputed_reads,
+    so the report carries it and a later decision can be built on it.
+
+    What it changes is that nobody is told. The flag was the commonest HIGH finding on the
+    seven S&GAD cases re-verified that morning -- five of the seven -- and most of it was
+    spelling: 'Adhoc Rel AI 15% 22(PS17)' against 'Adhoc Rel Al 15% 22(PS17)', one stroke on
+    the page read two ways, with the amounts identical to the rupee. The fold in
+    extraction.client._fold_pay_label took that kind out; the office took the rest out.
+
+    The cost, recorded because it is real: a page whose figures were discarded for a genuine
+    disagreement now passes without saying so, and the checks that needed those figures did
+    not run. Put the function back in BATTERY to have the finding again.
+
+    Every determination-critical page is read twice. Until 7 Oct 2026 a disagreement was
+    recorded in fields.json and the second read's figures were used anyway; nothing read that
+    record. Business decision H1 was to stop and raise; the stopping stands, the raising does
+    not.
     """
     if not record.disputed_reads:
         return []
@@ -2304,7 +2321,8 @@ BATTERY: tuple[Callable[[CaseRecord, RulePack], list[Flag]], ...] = (
     check_unreadable_documents,
     check_cross_checks_ran,
     check_form_d_i_dates,
-    check_disputed_reads,
+    # check_disputed_reads is NOT in the battery (office's decision, 23 Oct 2026). See its
+    # docstring: the page's figures are still discarded, only the finding is not raised.
     check_ambiguous_dates,
     check_party_roles,
     check_frc_currency,

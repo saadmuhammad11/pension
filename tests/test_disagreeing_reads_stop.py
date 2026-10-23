@@ -154,8 +154,21 @@ class TheReport(unittest.TestCase):
         self.assertIn("date_of_birth", f.finding)
         self.assertEqual([(s.page, s.document) for s in f.asserted], [(41, "FORM_D_I")])
         self.assertIn("transcribe", f.required_action)
-        self.assertIn(EXTRACT_DISAGREE, [x.flag_class for x in run_battery(record, PACK)])
         self.assertEqual(check_disputed_reads(CaseRecord(case_ref="t", case_type="X"), PACK), [])
+
+    def test_the_finding_is_not_raised_on_a_case(self) -> None:
+        """Off the battery by the office's decision of 23 Oct 2026: it is not shown.
+
+        The blanking is the READER's and is untouched -- where two reads differ the page's pay
+        lines are emptied, every *_rs field and each disputed date set to None, and nothing
+        from the page reaches the determination. The disagreement is still recorded and still
+        reaches CaseRecord.disputed_reads. What has gone is the telling.
+        """
+        record = CaseRecord(case_ref="t", case_type="FAMILY_PENSION",
+                            disputed_reads=(("FORM_D_I", 41, ("pay line 'Basic Pay'",)),))
+        self.assertNotIn(EXTRACT_DISAGREE, [x.flag_class for x in run_battery(record, PACK)])
+        # Still computable, and still what it was, for the day the office wants it back.
+        self.assertEqual(len(check_disputed_reads(record, PACK)), 1)
 
     def test_the_class_is_curated_labelled_and_cited(self):
         from pipeline.report import _FLAG_QUERY
