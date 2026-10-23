@@ -110,6 +110,11 @@ function TimeToDecisionCard({ stats }: { stats: Stats }) {
   )
 }
 
+//: Off the screen for now, at the office's asking (23 Oct 2026). The endpoint is live and
+//: tested -- GET /api/v2/reports/monthly.csv -- and so is everything below; this is the one
+//: line that decides whether the control is drawn. Set it true to bring it back.
+const MONTHLY_REGISTER_ON_SCREEN = false
+
 /** The month's cases, as a spreadsheet, for whoever is signed in (23 Oct 2026).
  *
  *  Every officer and every DDO: the download is scoped by the same rule the register is, so a
@@ -213,7 +218,7 @@ export function Dashboard(
 
   if (variant === 'department') {
     return (<>
-      <MonthlyRegister product={product} />
+      {MONTHLY_REGISTER_ON_SCREEN && <MonthlyRegister product={product} />}
       <div className="chart-grid">
         {decisions}
         <FiledCard stats={s} />
@@ -224,7 +229,7 @@ export function Dashboard(
   }
   if (department) {
     return (<>
-      <MonthlyRegister product={product} department={department} />
+      {MONTHLY_REGISTER_ON_SCREEN && <MonthlyRegister product={product} department={department} />}
       <div className="chart-grid">
         {decisions}
         <FiledCard stats={s} />
@@ -235,7 +240,7 @@ export function Dashboard(
     </>)
   }
   return (<>
-    <MonthlyRegister product={product} />
+    {MONTHLY_REGISTER_ON_SCREEN && <MonthlyRegister product={product} />}
     <div className="chart-grid">
       {decisions}
       <FiledCard stats={s} />
