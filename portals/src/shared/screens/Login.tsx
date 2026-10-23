@@ -25,15 +25,11 @@ const RIVERS = [
 
 function Brand({ theme, portal }: { theme: Theme; portal: PortalConfig }) {
   const dept = portal.kind === 'department'
-  // The office, and only the office. The heading above already says Government of the Punjab,
-  // and the subtitle begins with it -- "Government of the Punjab, Office of the Accountant
-  // General, Lahore" -- so printing the whole of it here said that twice (22 Oct 2026). Take
-  // the part after the last separator, then drop the government from the front of it: what is
-  // left is the office. The split stays: a department's subtitle is written the other way
-  // round ("School Education Department · Government of the Punjab"), last segment first.
-  const orgSub = (theme.subtitle.split('·').pop() ?? theme.subtitle)
-    .trim()
-    .replace(/^Government of the Punjab\s*[,·]\s*/, '')
+  // The office names itself here, in its own words (23 Oct 2026). This line read "Government
+  // of the Punjab" with the office under it, pulled off the end of the theme's subtitle; the
+  // office asked for the office. One line, and no sub-line under it, because the sub-line said
+  // "Office of the Accountant General, Lahore" and would now be saying it twice. A department
+  // portal keeps a sub-line, which is the department whose address this is.
   return (
       <section className="auth-brand" aria-labelledby="brandTitle">
         <svg className="auth-rivers" viewBox="0 0 600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -45,8 +41,8 @@ function Brand({ theme, portal }: { theme: Theme; portal: PortalConfig }) {
         <header className="auth-top">
           <Crest size={56} />
           <div className="auth-org">
-            <span className="org">Government of the Punjab</span>
-            <span className="org-sub">{dept ? `${portal.name} · ${orgSub}` : orgSub}</span>
+            <span className="org">Office of the Accountant General Punjab</span>
+            {dept && <span className="org-sub">{portal.name}</span>}
           </div>
         </header>
         <div className="auth-hero">
