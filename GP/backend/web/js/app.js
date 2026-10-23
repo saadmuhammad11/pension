@@ -326,7 +326,7 @@ function renderTab(id, c) {
   $$('#subnav button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
   const el = $('#tabc');
   if (state.tab === 'overview') el.innerHTML = viewOverview(c);
-  else if (state.tab === 'sap') { el.innerHTML = viewSap(c); wireSap(id, c); }
+  else if (state.tab === 'sap') { el.innerHTML = viewSap(c); wireSap(id); }
   else if (state.tab === 'exam') { el.innerHTML = viewExam(c); wireExam(id, c); }
   else if (state.tab === 'disposal') { el.innerHTML = viewDisposal(c); wireDisposal(id, c); }
   else if (state.tab === 'issue') { renderIssue(id, el); }
@@ -347,66 +347,96 @@ function viewOverview(c) {
 }
 
 // ── SAP tab ───────────────────────────────────────────────────────────────────
+/** Where a half of the extract came from, in the officer's words. */
+function sapOrigin(source) {
+  if (source === 'upload') return 'pulled from SAP and uploaded by the section';
+  if (source === 'case') return 'read from the pages of the claim';
+  return source ? esc(source) : '';
+}
+
+/** A half that is not on the case says so, and says whose job it is to fetch it. The two
+ *  tables used to be drawn whatever the case held, so a missing pay slip showed as six rows
+ *  with nothing in them and read as "the extracts came through empty" (23 Oct 2026). */
+function sapMissing(what, persNo) {
+  return `<p class="muted small">No ${esc(what)} is on this case. Pull it from SAP against personnel
+    no. <span class="mono">${esc(persNo)}</span> and upload it below (R1). This is a section
+    action, not a defect in what the department sent.</p>`;
+}
+
 function viewSap(c) {
   const s = c.sap;
+  const persNo = s.personnelNo || (c.meta && c.meta.personnelNo) || '';
   if (s.present) {
-    const ps = s.payslip || {}, rc = s.recalc || {};
-    return `<div class="panel">
-      <div class="spread"><h2>SAP extracts</h2>${badge('ok', 'present · ' + esc(s.source))}</div>
-      <div class="row" style="margin-top:10px">
-        <div style="flex:1;min-width:260px"><h4>Pay slip</h4>
-          <table><tbody>
+    const ps = s.payslip, rc = s.recalc;
+    const payslip = ps ? `<table><tbody>
             <tr><td>Personnel no.</td><td class="mono">${esc(ps.persNo)}</td></tr>
             <tr><td>Name</td><td>${esc(ps.name)}</td></tr>
             <tr><td>Month</td><td>${esc(ps.month)}</td></tr>
             <tr><td>GPF balance</td><td>${rupees(ps.gpfBalance)}</td></tr>
             <tr><td>Loan balance</td><td>${rupees(ps.loanBalance)}</td></tr>
             <tr><td>Basic pay</td><td>${rupees(ps.basicPay)}</td></tr>
-          </tbody></table></div>
-        <div style="flex:1;min-width:260px"><h4>Re-calculation report</h4>
-          <table><tbody>
+          </tbody></table>` : sapMissing('SAP pay slip', persNo);
+    // The last row's period is printed with its figures. A ledger's final row is often the
+    // year still running, whose closing is nil and whose OPENING is the balance carried into
+    // it -- "Last closing: Rs 0" read as the fund being empty (PC-2026-000070, 23 Oct 2026).
+    const recalc = rc ? `<table><tbody>
             <tr><td>Report date</td><td>${esc(rc.reportDate || '')}</td></tr>
-            <tr><td>Rows</td><td>${rc.rows || 0}</td></tr>
-            <tr><td>Last closing</td><td>${rupees(rc.lastClosing)}</td></tr>
-          </tbody></table></div>
+            <tr><td>Years on the report</td><td>${rc.rows || 0}</td></tr>
+            ${rc.lastStart ? `<tr><td>Last period</td><td>${esc(rc.lastStart)} to ${esc(rc.lastEnd)}</td></tr>` : ''}
+            <tr><td>Opening that period</td><td>${rupees(rc.lastOpening)}</td></tr>
+            <tr><td>Closing that period</td><td>${rupees(rc.lastClosing)}</td></tr>
+          </tbody></table>` : sapMissing('GPF final re-calculation report', persNo);
+    const both = (s.payslipSource || 'case') === (s.recalcSource || 'case');
+    return `<div class="panel">
+      <div class="spread"><h2>SAP extracts</h2>${badge('ok', both ? 'present · ' + esc(s.payslipSource || s.recalcSource || s.source) : 'present')}</div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1;min-width:260px">
+          <h4>Pay slip</h4>
+          ${ps && s.payslipSource ? `<p class="muted small" style="margin:0 0 6px">${sapOrigin(s.payslipSource)}</p>` : ''}
+          ${payslip}</div>
+        <div style="flex:1;min-width:260px">
+          <h4>Re-calculation report</h4>
+          ${rc && s.recalcSource ? `<p class="muted small" style="margin:0 0 6px">${sapOrigin(s.recalcSource)}</p>` : ''}
+          ${recalc}</div>
       </div>
-      <hr class="hr"><p class="muted small">A fresher extract can replace this. Uploading re-evaluates the case.</p>
       <div id="sap-upload"></div>
     </div>`;
   }
   return `<div class="panel">
     <h2>SAP extracts</h2>
     <p class="muted">No SAP pay slip or re-calculation report is in the case. Pull them from SAP against
-      personnel no. <span class="mono">${esc(s.personnelNo)}</span> and upload here (R1). This is a section action, not a department defect.</p>
+      personnel no. <span class="mono">${esc(persNo)}</span> and upload here (R1). This is a section action, not a department defect.</p>
     <div id="sap-upload"></div>
   </div>`;
 }
 
-function wireSap(id, c) {
+function wireSap(id) {
   const box = $('#sap-upload');
+  // The button that filled this box from a sample saved beside the prototype is gone
+  // (23 Oct 2026): it put another employee's figures one click from the officer's own case.
   box.innerHTML = `
-    <div class="field"><label>Paste the SAP text export (pay slip + re-calculation report)</label>
+    <hr class="hr">
+    <div class="field">
       <textarea id="sap-text" placeholder="SAP EXTRACT: PAY SLIP&#10;Personnel No: ..."></textarea></div>
+    <div class="note-error small" id="sap-error" role="alert" hidden></div>
     <div class="row">
-      <button class="btn" id="sap-sample">Use the extract saved for this prototype</button>
       <button class="btn primary" id="sap-submit">Upload and re-check</button>
     </div>`;
-  $('#sap-sample').onclick = async () => {
-    try {
-      const res = await fetch(BASE + '/assets/sap-samples/SAP_EXTRACT_' + c.meta.personnelNo + '.txt');
-      if (!res.ok) return toast('No saved sample for this case', true);
-      $('#sap-text').value = await res.text();
-    } catch { toast('Could not load sample', true); }
-  };
+  const err = $('#sap-error');
+  // Why the refusal is shown here and not only as a toast: this frame is sized to its whole
+  // content inside the portal, so a toast fixed to the foot of it can be a screen or two
+  // below the officer's hands. A rejected extract looked like a button that did nothing.
+  const fail = (msg) => { err.textContent = msg; err.hidden = false; $('#sap-text').focus(); };
   $('#sap-submit').onclick = () => busy($('#sap-submit'), async () => {
     const text = $('#sap-text').value.trim();
-    if (!text) return toast('Paste the extract first', true);
+    if (!text) return fail('Paste the extract into the box first.');
+    err.hidden = true;
     try {
       const r = await api.sapText(id, 'extract.txt', text, state.officer);
       state.lastDiff = r.diff; state.tab = 'exam';
       toast('SAP extract accepted, case re-checked');
       refresh(id);
-    } catch (e) { toast(e.message, true); }
+    } catch (e) { fail(e.message || String(e)); }
   });
 }
 

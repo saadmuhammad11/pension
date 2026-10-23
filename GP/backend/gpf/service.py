@@ -225,11 +225,23 @@ class CaseService:
         if sap:
             ps = sap.get("payslip") or {}
             rc = sap.get("recalc") or {}
+            rows = rc.get("rows") or []
+            last = rows[-1] if rows else {}
             sap_view = {"present": True, "source": sap.get("source"), "file": sap.get("file"),
+                        # Where each half came from: the claim's own pages, or an extract the
+                        # section pulled and uploaded. They need not be the same (23 Oct 2026).
+                        "payslipSource": sap.get("payslipSource") or (sap.get("source") if ps else None),
+                        "recalcSource": sap.get("recalcSource") or (sap.get("source") if rows else None),
                         "payslip": {k: ps.get(k) for k in ("persNo", "name", "month", "bps",
                                     "gpfBalance", "loanBalance", "basicPay", "ddoCode")} if ps else None,
-                        "recalc": {"reportDate": rc.get("reportDate"), "rows": len(rc.get("rows") or []),
-                                   "lastClosing": (rc.get("rows") or [{}])[-1].get("closing")} if rc.get("rows") else None}
+                        # The last row's PERIOD travels with its closing. Without it "Last
+                        # closing: Rs 0" read as the fund balance, when on PC-2026-000070 it
+                        # was the year still open (01.07.2026 to 30.06.2027) and the balance
+                        # carried into it was Rs 883,646 (23 Oct 2026).
+                        "recalc": {"reportDate": rc.get("reportDate"), "rows": len(rows),
+                                   "lastStart": last.get("start"), "lastEnd": last.get("end"),
+                                   "lastOpening": last.get("opening"),
+                                   "lastClosing": last.get("closing")} if rows else None}
         return {
             "id": case_id, "template": s.k, "version": s.version, "issued": s.issued,
             "returns": s.returns, "withoutSap": s.without_sap,

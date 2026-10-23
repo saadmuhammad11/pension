@@ -54,6 +54,16 @@ class ManualUploadConnector:
         employee (this rejection is logged in production, spec §6.1).
         """
         parsed = parse_sap_file(name, text)
+        # Neither section recognised: whatever was pasted, it is not a SAP extract. This was
+        # ACCEPTED until 23 Oct 2026 -- nothing was raised because the identity gate below only
+        # checks a part that is there, and a part that is there is a part that parsed. So a
+        # stray paste was recorded as "SAP extract accepted" in the audit and, through
+        # apply_to_case, took the case's SAP facts with it.
+        if not parsed.get("payslip") and not parsed.get("recalc"):
+            raise ValueError(
+                "Nothing in this text reads as a SAP extract. It must carry a line "
+                "\"SAP EXTRACT: PAY SLIP\" or \"SAP EXTRACT: GPF FINAL RE-CALCULATION REPORT\", "
+                "with the fields under it as SAP exports them.")
         issues = check_sap_against_case(parsed, F)
         if issues:
             raise ValueError("Extract rejected: " + " ".join(issues))
@@ -63,8 +73,28 @@ class ManualUploadConnector:
         return extract
 
     def apply_to_case(self, F: dict, name: str, text: str) -> dict:
-        """Load an extract and merge it into the case facts, ready for re-evaluation."""
-        F["sap"] = self.load_extract(F, name, text)
+        """Load an extract and merge it into the case facts, ready for re-evaluation.
+
+        Merged part by part (23 Oct 2026). This assigned the whole extract over ``F["sap"]``,
+        so an upload carrying only a pay slip -- which is the usual upload, the section having
+        pulled the one thing the case was short of -- threw away a re-calculation report that
+        had been read off the claim's own pages. On PC-2026-000070 that would have been a
+        twenty-four year ledger read from page 6, replaced by nothing.
+
+        A part the upload carries replaces that part; a part it does not carry is left alone,
+        and each remembers where it came from so the screen can say so.
+        """
+        extract = self.load_extract(F, name, text)
+        old = F.get("sap") or {}
+        sap = dict(old)
+        for part in ("payslip", "recalc"):
+            if extract.get(part):
+                sap[part] = extract[part]
+                sap[part + "Source"] = "upload"
+            elif old.get(part):
+                sap.setdefault(part + "Source", old.get("source") or "case")
+        sap["source"], sap["file"] = "upload", name
+        F["sap"] = sap
         return F
 
     def get_payslip(self, pers_no, period=None):
