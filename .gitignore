@@ -103,6 +103,10 @@ portals/dist-demo/
 !config/*.json
 !GP/backend/gpf/fixtures/*.json
 !GP/backend/tests/ground_truth.json
+# The OCR model's own text for a real re-calculation report, which the ledger reader's tests
+# parse (23 Oct 2026). Kept because it is evidence, not a fixture someone wrote: what the
+# tests assert is what a real page really does, including the digits it gets wrong.
+!GP/backend/tests/data/*.txt
 !GP/agofficegpfund/prototype/sap-samples/*.txt
 !GP/prototype
 # ---- Rule packs, specimen register, GP corpus, model fingerprints (N12 reopened, 7 Oct 2026) ----

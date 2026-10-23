@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-data/
+# The module's runtime store, anchored to this directory. Written as "data/" until 23 Oct
+# 2026, which matches a directory of that name at ANY depth -- so tests/data/, which holds
+# the OCR text a ledger test reads, was silently untracked and that test could only pass on
+# the machine the fixture was made on.
+/data/
 logs/
 *.egg-info/
