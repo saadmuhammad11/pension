@@ -127,6 +127,50 @@ class ReclaimOnTheRubric(unittest.TestCase):
         self.assertEqual(_reclaim(_ident("SUPERANNUATION_ORDER", ""), both).document_type,
                          "SUPERANNUATION_ORDER")
 
+    def test_a_posting_order_can_be_reclaimed(self) -> None:
+        """PC-2026-000034 p.3 IS the PSA form; the office says so (23 Oct 2026).
+
+        The identifier filed it POSTING_ORDER at confidence 0.95 while itself transcribing
+        printed_form_number "FORM B-I" and signed_by_psa true, and nothing looked at the page
+        again, because a posting order was not among the labels a form may be reclaimed from.
+        AG-04 read missing against a department that had filed the sanction. Of the 63 posting
+        orders in the 47 runs on the deployment machine, 4 transcribe a prescribed form number
+        and all 4 say FORM B-I.
+        """
+        self.assertIn("POSTING_ORDER", I.PROMOTABLE_LABELS)
+        out = _reclaim(_ident("POSTING_ORDER", "FORM B-I"), NO_NUMBER_ANYWHERE)
+        self.assertEqual((out.document_type, out.promoted_from), ("FORM_B_I", "POSTING_ORDER"))
+
+    def test_a_posting_order_that_is_one_is_still_a_posting_order(self) -> None:
+        """The bar does not move: a page with no form number and no form title stays put."""
+        out = _reclaim(_ident("POSTING_ORDER", None),
+                       "GOVERNMENT OF THE PUNJAB SERVICES & GENERAL ADMINISTRATION DEPARTMENT "
+                       "SECTION (P-IV) Order No:NO.SOP-IV(S&GAD)1-5/2013 dated 03.06.2026 "
+                       "is hereby posted as Section Officer with immediate effect.")
+        self.assertEqual(out.document_type, "POSTING_ORDER")
+        self.assertIsNone(out.promoted_from)
+
+    def test_the_reclaim_reads_in_bands_when_the_whole_page_says_nothing(self) -> None:
+        """The same second look verify_with_ocr has had since 22 Oct 2026.
+
+        PaddleOCR stops partway down some of these scans -- on PC-2026-000042 p.8 it read 555
+        characters and then looped -- so a whole-page read that finds neither a number nor a
+        title is not evidence that the page prints none. The bands are tried before the label
+        is left alone; the bar they feed is unchanged.
+        """
+        seen: list[int] = []
+
+        def bands(image, page):
+            seen.append(page)
+            return ("FORM_B_I",), ("FORM_B_I",)
+
+        page = _page("a line of nothing in particular")
+        with unittest.mock.patch("extraction.ocr.ocr_page", lambda *a, **k: page), \
+                unittest.mock.patch.object(I, "_forms_in_bands", bands):
+            out = I._reclaim_form(_ident("POSTING_ORDER", None), "/img/p3.png")[0]
+        self.assertEqual(seen, [15])                       # the bands were consulted
+        self.assertEqual(out.document_type, "FORM_B_I")
+
     def test_a_reader_that_looped_reclaims_nothing(self) -> None:
         looped = RUBRIC + "\n" + "In terms of full pay\n" * 60
         self.assertEqual(_reclaim(_ident("SUPERANNUATION_ORDER", "FORM B-I"), looped).document_type,

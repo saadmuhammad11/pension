@@ -401,7 +401,15 @@ def _deny_pay_claim_on_a_card(ident: PageIdentity, image: str | Path) -> PageIde
 #: case fell to manual routing. The set is deliberately short: a forwarding letter or a file cover
 #: names the forms it encloses, and a pension application quotes their clauses, so a page under
 #: those labels is never reclaimed however plainly it mentions a form.
-PROMOTABLE_LABELS = frozenset({"ANNEX_A", "OTHER", "AFFIDAVIT", "SUPERANNUATION_ORDER"})
+#: Labels a prescribed form is commonly filed under, and so may be reclaimed from. POSTING_ORDER
+#: joined them on 23 Oct 2026: page 3 of PC-2026-000034 IS the PSA form -- the office says so --
+#: and the identifier filed it as a posting order at confidence 0.95 while itself transcribing
+#: printed_form_number "FORM B-I" and signed_by_psa true. Nothing looked at the page again,
+#: because a posting order could not be reclaimed, and AG-04 read missing against a department
+#: that had filed the sanction. Of the 63 posting orders in the 47 runs on this machine, 4
+#: transcribe a prescribed form number and all 4 say FORM B-I; the other 59 are untouched by
+#: this, and the 4 still have to get past _reclaim_form's bar.
+PROMOTABLE_LABELS = frozenset({"ANNEX_A", "OTHER", "AFFIDAVIT", "SUPERANNUATION_ORDER", "POSTING_ORDER"})
 
 
 def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity, str]:
@@ -423,6 +431,15 @@ def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity,
         return ident, ""
     titles = form_titles_on(text)
     numbers = tuple(dict.fromkeys(forms_printed_on(text)))
+    # The whole page read and said nothing either way. Look again in bands before concluding
+    # that the page prints no form number: PaddleOCR stops partway down some pages, and
+    # verify_with_ocr has done exactly this since the S&GAD bundles of 22 Oct 2026 -- the
+    # same weakness, the same remedy, wired into the branch that CONFIRMS a claim and not
+    # into this one, which overrules a label. The bar below is untouched; the bands only give
+    # OCR the second look the other branch already gets (23 Oct 2026).
+    if not numbers and not titles and not looks_degenerate(text):
+        numbers, titles = _forms_in_bands(image, ident.page)
+        numbers = tuple(dict.fromkeys(numbers))
 
     def promoted(name: str) -> tuple[PageIdentity, str]:
         return replace(ident, document_type=name, is_first_page=True,
