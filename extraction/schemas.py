@@ -859,9 +859,18 @@ PAGE_IDENTITY: dict[str, Any] = {
             "maxItems": 4,
             "items": {"type": "string",
                       "enum": [t for t in DOCUMENT_TYPES if t != "OTHER"]},
-            "description": "Every OTHER separate document printed on this same page, each "
-                           "with its own heading or its own card/certificate layout, besides "
-                           "the one in document_type. Empty if the page carries one "
+            # The photograph sentence is here as well as in the instruction (identify.py), and
+            # it has to be: this description said "each with its own heading or its own
+            # card/certificate layout", which is the one thing a pasted photograph does not
+            # have. The instruction told the model to list it; the schema, sitting against the
+            # field, told it not to, and the field came back empty on all twelve pages of
+            # PC-2026-000034 while AG-03 was reported missing against the department
+            # (23 Oct 2026). Two instructions that disagree are one instruction.
+            "description": "Every OTHER separate document printed on this same page besides "
+                           "the one in document_type, each with its own heading or its own "
+                           "card/certificate layout -- and a PHOTOGRAPH of the pensioner or "
+                           "claimant affixed anywhere on the page, which has no heading of "
+                           "its own and is still PHOTOGRAPHS. Empty if the page carries one "
                            "document. Never a document the page only mentions or asks for.",
         },
         "document_type": {
