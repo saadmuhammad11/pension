@@ -105,6 +105,55 @@ class WhichPagesAreReconsidered(unittest.TestCase):
             rows = self._run(tmp, [{"page": 6, "document_type": "ANNEX_A"}], {6: "Annexure-A descriptive roll, undertaking"})
             self.assertEqual(documents_named_by_their_own_heading(tmp, rows, (Document("ANNEX_A", (6,)),)), ())
 
+    def test_an_other_page_is_named_by_the_heading_the_model_quoted(self):
+        """PC-2026-000042 p.8, 23 Oct 2026: the proforma the office filed and the sheet missed.
+
+        OCR read 555 characters of the page's body -- "PARTICULARS OF EMPLOYEE" and the
+        numbered particulars under it -- then degenerated into "OI - OZ - 2O26" five times
+        over, never reaching the title line or section 2, so neither the proforma's title
+        pattern nor its section pattern could match. The identifier had answered OTHER and
+        quoted the title verbatim in its evidence. AG-26 was reported missing against a
+        department that had filed the document, twice.
+        """
+        import tempfile
+        from pipeline.run import documents_named_by_their_own_heading
+        ocr = ("1. PARTICULARS OF EMPLOYEE I. Name of Employee: II. Father's Name/Husband's Name: "
+               "MUHAMMAD IBRAHIM III. CNIC Number: 35102-0300 880-1 IV. Nationality PAKISTANT "
+               "XI. Date of Superauuantion OI - OZ - 2O26 OI - OZ - 2O26 OI - OZ - 2O26")
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            rows = self._run(tmp, [{"page": 8, "document_type": "OTHER",
+                                    "evidence": "PERFORMA FOR QUALIFYING SERVICE FOR PENSION"}],
+                             {8: ocr})
+            added = documents_named_by_their_own_heading(tmp, rows, ())
+        self.assertEqual([d.type for d in added], ["QUALIFYING_SERVICE_PROFORMA"])
+        self.assertEqual(added[0].pages, (8,))
+        self.assertTrue(added[0].present)
+
+    def test_the_ocr_alone_still_names_what_it_can_read(self):
+        """The quotation is a second reading, not a replacement: OCR on its own still counts."""
+        import tempfile
+        from pipeline.run import documents_named_by_their_own_heading
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            rows = self._run(tmp, [{"page": 8, "document_type": "OTHER", "evidence": ""}],
+                             {8: "PERFORMA FOR QUALIFYING SERVICE FOR PENSION. 1. PARTICULARS OF EMPLOYEE"})
+            added = documents_named_by_their_own_heading(tmp, rows, ())
+        self.assertEqual([d.type for d in added], ["QUALIFYING_SERVICE_PROFORMA"])
+
+    def test_a_page_the_model_merely_describes_gains_no_document(self):
+        """Evidence that talks ABOUT a page rather than quoting it must not name a document."""
+        import tempfile
+        from pipeline.run import documents_named_by_their_own_heading
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            rows = self._run(tmp, [{"page": 17, "document_type": "OTHER",
+                                    "evidence": "The page contains a stamped and signed document with Urdu "
+                                                "text, a QR code, and a reference number. There is no printed "
+                                                "form number (e.g., FORM B-I)."}],
+                             {17: "stamped page, urdu text"})
+            self.assertEqual(documents_named_by_their_own_heading(tmp, rows, ()), ())
+
     def test_a_specifically_labelled_page_is_left_alone(self):
         import tempfile
         from pipeline.run import documents_named_by_their_own_heading

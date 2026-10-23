@@ -323,7 +323,24 @@ def documents_named_by_their_own_heading(run: Path, rows: list[dict],
                                    "reason": "the page's printed heading could not be read: "
                                              "the OCR reader did not answer"})
                 continue
-            found = titles_on_page(text)
+            # The identifier's own account of the page counts as a second reading here too,
+            # for the same reason it does in the branch below: a poor scan whose OCR misses
+            # the title line is still credited when the model quoted it.
+            #
+            # PC-2026-000042 p.8 is the Performa for Qualifying Service. OCR read 555
+            # characters of its body -- "PARTICULARS OF EMPLOYEE", the numbered particulars --
+            # and then degenerated into "OI - OZ - 2O26" five times over, never reaching the
+            # title line or section 2, so neither PROFORMA_TITLE nor PROFORMA_SECTIONS could
+            # match. The model had answered OTHER with evidence "PERFORMA FOR QUALIFYING
+            # SERVICE FOR PENSION" -- the title, verbatim, which PROFORMA_TITLE matches on
+            # sight. The office filed the document, the reader read its heading, and AG-26
+            # was reported missing against the department twice (23 Oct 2026).
+            #
+            # Checked before trusting it: over every run on this machine there are 11 pages
+            # where the evidence and the OCR name the same document and 3 where the evidence
+            # names one the OCR did not -- two of them this proforma, the third a sanction
+            # order the OCR had already found. No page gained a document it does not carry.
+            found = titles_on_page(text + " " + str(row.get("evidence") or ""))
         elif label in STATEMENTS_ON_LABELLED_PAGES:
             # A specifically labelled page keeps its label; a statement it prints (the
             # commutation option on an Annexure-A) is added as the document it also is. The
