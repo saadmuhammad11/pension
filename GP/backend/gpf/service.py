@@ -282,6 +282,14 @@ class CaseService:
                 return {"action": a, "allowed": ok,
                         "reason": "" if ok else (f"Needs {who}." if who else "Not open to this desk.")}
             v["dispositionOptions"] = [_option(a) for a in ("uphold", "waive", "correct", "refer")]
+        # And the same for a verification, which the screen offered to every desk (23 Oct 2026).
+        # A Dealing Assistant is level 1 and may not verify, so "Record verified" answered 403 on
+        # every press; the officer kept pressing because nothing on the item said whose it was.
+        # The 13 Oct 2026 audit settled this for dispositions and the cure was left behind.
+        if viewer is not None and (r.get("cure") or {}).get("kind") == "verify":
+            ok = may("verify", None, viewer)
+            v["verifyOption"] = {"allowed": ok,
+                                 "reason": "" if ok else f"Needs {who_can('verify', None)}."}
         # The case pages the item rests on, beside any evidence the rule cut (reference_pages).
         from .reference_pages import reference_pages
         have = {e.get("page") for e in (v.get("evidence") or []) if isinstance(e, dict)}

@@ -74,7 +74,11 @@ class TheScreensAskForAReason(unittest.TestCase):
     def test_the_module_s_own_screen_asks_too(self):
         js = (ROOT / "GP/backend/web/js/app.js").read_text()
         self.assertNotIn("'uphold', '', ''", js)
-        self.assertIn("ground.text.length < MIN_REASON", js)       # the prompt's text, trimmed by noteFromPrompt (F1)
+        # The minimum is held by the panel the reason is typed into (ui.inlineNote), which the
+        # module's screen opens with `min: MIN_REASON`. It was a prompt() window until 23 Oct 2026.
+        self.assertIn("min: MIN_REASON", js)
+        ui = (ROOT / "GP/backend/web/js/ui.js").read_text()
+        self.assertIn("if (text.length < min)", ui)
         self.assertIn("const MIN_REASON = 10", js)
         self.assertIn("'Approve'", js)
         self.assertIn("'Reject'", js)

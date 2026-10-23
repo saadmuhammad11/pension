@@ -320,6 +320,14 @@ textarea { min-height: 90px; resize: vertical; font-family: var(--font-mono); fo
 .item-actions { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s3); }
 .disp-tag { font-size: var(--t-small); color: var(--ok); font-weight: 700; }
 
+/* The note a decision carries, asked for in the item itself rather than in a prompt() window
+   (23 Oct 2026). Ruled off from the finding above it the way the pension side rules off its
+   reason box, so it reads as part of the decision and not as a second item. */
+.note-panel { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px dashed var(--line); }
+.note-label { font-size: var(--t-small); color: var(--muted); margin-bottom: 6px; }
+.note-panel .note-box { width: 100%; min-height: 64px; margin-bottom: var(--s2); }
+.note-error { color: var(--red); margin-bottom: var(--s2); }
+
 /* --- tables ------------------------------------------------------------------------------ */
 .table-wrap { overflow-x: auto; margin: 0 calc(var(--s5) * -1); padding: 0 var(--s5); }
 table { width: 100%; border-collapse: collapse; }

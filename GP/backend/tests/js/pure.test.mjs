@@ -5,16 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  escapeHtml, encodeId, noteFromPrompt, formatRupees, formatNumber, throttle, pollBudget, sequence,
+  escapeHtml, encodeId, formatRupees, formatNumber, throttle, pollBudget, sequence,
   disposalConfirmText, itemHeading,
 } from '../../web/js/pure.js';
-
-test('F1: Cancel on a prompt aborts; text is trimmed', () => {
-  assert.deepEqual(noteFromPrompt(null), { cancelled: true, text: '' });
-  assert.deepEqual(noteFromPrompt(undefined), { cancelled: true, text: '' });
-  assert.deepEqual(noteFromPrompt(''), { cancelled: false, text: '' });        // OK with nothing typed is not Cancel
-  assert.deepEqual(noteFromPrompt('  verified in SAP  '), { cancelled: false, text: 'verified in SAP' });
-});
 
 test('F13: every value put into HTML is escaped, quotes included', () => {
   assert.equal(escapeHtml(`<img src=x onerror="alert('1')">`), '&lt;img src=x onerror=&quot;alert(&#39;1&#39;)&quot;&gt;');

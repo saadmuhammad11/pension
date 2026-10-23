@@ -1,7 +1,7 @@
 // GP Fund Pre-Audit — SPA controller. Buildless ES module.
 import { api, BASE, tellPortal } from './api.js';
-import { $, $$, esc, h, badge, toast, openModal, closeModal, trapModalFocus, confirmDialog, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
-import { noteFromPrompt, throttle, sequence, disposalConfirmText } from './pure.js';
+import { $, $$, esc, h, badge, toast, openModal, closeModal, trapModalFocus, confirmDialog, inlineNote, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
+import { throttle, sequence, disposalConfirmText } from './pure.js';
 
 /** Characters of reason a decision carries; the service holds the same minimum. */
 const MIN_REASON = 10;
@@ -477,8 +477,20 @@ function actionsHtml(r) {
     btns.push(`<button class="btn small" data-act="gosap">Go to SAP extracts</button>`);
   }
   if (cure.kind === 'verify') {
-    btns.push(`<button class="btn small primary" data-act="verify-ok">Record verified</button>`);
-    btns.push(`<button class="btn small" data-act="verify-no">Did not verify</button>`);
+    // Shown disabled with the reason when this desk may not verify, the way a disposition the
+    // officer may not record is shown (23 Oct 2026). Until now every desk was offered these,
+    // and a Dealing Assistant -- who may not verify -- got a 403 for an answer each time.
+    // Disabled and explained, never removed: the officer needs to know who to ask.
+    const vo = r.verifyOption || null;
+    const vok = !vo || vo.allowed !== false;
+    const vwhy = vok ? '' : (vo.reason || '');
+    btns.push(vok
+      ? `<button class="btn small primary" data-act="verify-ok">Record verified</button>`
+      : `<button class="btn small primary" data-act="verify-ok" disabled title="${esc(vwhy)}">Record verified</button>`);
+    btns.push(vok
+      ? `<button class="btn small" data-act="verify-no">Did not verify</button>`
+      : `<button class="btn small" data-act="verify-no" disabled title="${esc(vwhy)}">Did not verify</button>`);
+    if (!vok && vwhy) btns.push(`<span class="muted small">${esc(vwhy)}</span>`);
   }
   if (cure.kind === 'doc') {
     btns.push(`<button class="btn small primary" data-act="cure-doc">Upload document against this</button>`);
@@ -546,27 +558,37 @@ async function handleAction(id, c, r, act, btn) {
     if (act === 'gosap') { state.tab = 'sap'; refresh(id); return; }
     if (act === 'verify-ok' || act === 'verify-no') {
       const ok = act === 'verify-ok';
-      // Cancel on the note aborts and records nothing (F1): prompt() answers null for Cancel,
-      // and `|| ''` used to turn that into an empty note and carry on.
-      const note = noteFromPrompt(prompt(ok ? 'Note (what did you verify?)' : 'Note (why did it not verify?)', ''));
-      if (note.cancelled) return;
-      return busy(btn, async () => {
-        const res = await api.verify(id, r.cure.vid, ok, note.text, state.officer);
-        toast('Verification recorded'); await refresh(id, res.diff);
+      // The note is taken in the item itself (23 Oct 2026), as the pension side takes its
+      // reason. Cancel records nothing (F1); a failure is shown in the panel with the note
+      // still in the box, not as a toast over a window that has already closed.
+      inlineNote(btn, {
+        label: ok ? 'What did you verify, and against what?' : 'Why did it not verify?',
+        placeholder: 'Recorded against your name in the audit trail…',
+        submit: async (note) => {
+          const res = await api.verify(id, r.cure.vid, ok, note, state.officer);
+          toast('Verification recorded');
+          await refresh(id, res.diff);
+        },
       });
+      return;
     }
     if (act === 'disp-waive' || act === 'disp-uphold') {
       // One box, the reason, for both decisions (13 Oct 2026). It is recorded against the
       // officer's own name, which is why it is asked at all.
       const what = act === 'disp-waive' ? 'waive' : 'uphold';
       const word = what === 'waive' ? 'approving' : 'rejecting';
-      const ground = noteFromPrompt(prompt(`Reason for ${word} this observation (at least ${MIN_REASON} characters)`, ''));
-      if (ground.cancelled) return;
-      if (ground.text.length < MIN_REASON) { toast(`A reason of at least ${MIN_REASON} characters is required.`, true); return; }
-      return busy(btn, async () => {
-        await api.setDisposition(id, r.id, what, ground.text, '', state.officer);
-        toast(what === 'waive' ? 'Approved' : 'Rejected'); await refresh(id);
+      inlineNote(btn, {
+        label: `Reason for ${word} this observation (required, at least ${MIN_REASON} characters)`,
+        placeholder: 'Recorded against your name in the audit trail…',
+        min: MIN_REASON,
+        confirmLabel: what === 'waive' ? 'Approve' : 'Reject',
+        submit: async (ground) => {
+          await api.setDisposition(id, r.id, what, ground, '', state.officer);
+          toast(what === 'waive' ? 'Approved' : 'Rejected');
+          await refresh(id);
+        },
       });
+      return;
     }
     if (act === 'cure-doc') return cureDocModal(id, r);
   } catch (e) { toast(e.message, true); }
@@ -632,19 +654,19 @@ function wireDisposal(id, c) {
     // and sent once (F2). Cancel anywhere along the way records nothing (F1).
     const sure = await confirmDialog(label, disposalConfirmText(label, c.meta), label);
     if (!sure) return;
-    let note = '';
+    const send = async (note) => {
+      await api.dispose(id, action, note, state.officer);
+      toast(label + ' — done');
+      if (action === 'return' || action === 'pay' || action === 'part') { state.tab = 'issue'; }
+      await refresh(id);
+    };
     if (action === 'return' || action === 'refer' || action === 'hold') {
-      const answer = noteFromPrompt(prompt('Note (optional)', ''));
-      if (answer.cancelled) return;
-      note = answer.text;
+      inlineNote(b, { label: 'Note (optional)', confirmLabel: label,
+                      placeholder: 'Recorded against your name in the audit trail…', submit: send });
+      return;
     }
     await busy(b, async () => {
-      try {
-        await api.dispose(id, action, note, state.officer);
-        toast(label + ' — done');
-        if (action === 'return' || action === 'pay' || action === 'part') { state.tab = 'issue'; }
-        await refresh(id);
-      } catch (e) { toast(e.message, true); }
+      try { await send(''); } catch (e) { toast(e.message, true); }
     });
   });
 }

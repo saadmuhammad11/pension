@@ -13,16 +13,6 @@ export function encodeId(id) {
   return encodeURIComponent(String(id === undefined || id === null ? '' : id));
 }
 
-/**
- * What a `prompt()` answer means. The browser returns null for Cancel (and Escape), and the old
- * `prompt(...) || ''` turned that into an empty note and carried on, so Cancel still recorded
- * the action (F1). Returns {cancelled: true} for null, else the trimmed text.
- */
-export function noteFromPrompt(value) {
-  if (value === null || value === undefined) return { cancelled: true, text: '' };
-  return { cancelled: false, text: String(value).trim() };
-}
-
 /** Rupees the way the office writes them: "Rs 1,234,567" (Western grouping, as SAP prints). */
 export function formatRupees(n, { locale = 'en-PK', blank = '' } = {}) {
   if (n === null || n === undefined || n === '') return blank;

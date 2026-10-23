@@ -87,6 +87,61 @@ export function confirmDialog(title, bodyText, confirmLabel = 'Confirm') {
 }
 
 /**
+ * The note a decision carries, asked for where the decision is made (23 Oct 2026): a panel
+ * under the item's own buttons, holding the box, Record and Cancel, in place of window.prompt().
+ *
+ * prompt() was wrong here three times over. It is a window this page does not own, so it
+ * carries none of this screen's wording and cannot show a validation message of its own; it
+ * blocks the whole tab while it stands; and a browser that declines to draw it -- which one
+ * inside a frame may -- answers null, which is exactly what Cancel answers, so an officer's
+ * verification was dropped without a word said. The pension side asks for its reason inline
+ * and this now matches it.
+ *
+ * `submit` is awaited. If it throws, the message is shown in the panel and what was typed is
+ * kept, so the officer can correct and send again. Cancel records nothing (F1).
+ */
+export function inlineNote(anchor, { label, placeholder = '', min = 0, confirmLabel = 'Record', submit }) {
+  const host = anchor.closest('.item-body') || anchor.parentElement;
+  host.querySelectorAll('.note-panel').forEach(old => old.remove());
+  const panel = h(`<div class="note-panel">
+    <div class="note-label">${esc(label)}</div>
+    <textarea class="note-box" rows="2" placeholder="${esc(placeholder)}"></textarea>
+    <div class="note-error small" role="alert" hidden></div>
+    <div class="row">
+      <button type="button" class="btn small primary note-go">${esc(confirmLabel)}</button>
+      <button type="button" class="btn small note-cancel">Cancel</button>
+    </div>
+  </div>`);
+  host.appendChild(panel);
+  const box = panel.querySelector('.note-box');
+  const err = panel.querySelector('.note-error');
+  const go = panel.querySelector('.note-go');
+  const close = () => { if (panel.isConnected) panel.remove(); if (document.contains(anchor)) anchor.focus(); };
+  const fail = (msg) => { err.textContent = msg; err.hidden = false; box.focus(); };
+  const send = () => {
+    const text = box.value.trim();
+    if (text.length < min) return fail(`A reason of at least ${min} characters is required.`);
+    err.hidden = true;
+    return busy(go, async () => {
+      try { await submit(text); close(); }
+      catch (e) { fail(e.message || String(e)); }
+    });
+  };
+  go.onclick = send;
+  panel.querySelector('.note-cancel').onclick = close;
+  // Escape closes the panel, not the case; Ctrl/Cmd+Enter sends it without reaching for the mouse.
+  panel.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { close(); }
+    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
+  };
+  // The panel sits inside the item; a click in it must not reach the head and fold the item away.
+  panel.onclick = (e) => e.stopPropagation();
+  box.focus();
+  return panel;
+}
+
+/**
  * Run one request from a button (F2): the button is disabled and marked busy for the whole
  * request, so a second click cannot send it twice; it is re-enabled afterwards (on success the
  * caller usually re-renders, which replaces the button anyway).
