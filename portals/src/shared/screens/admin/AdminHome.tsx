@@ -1,7 +1,7 @@
 /** The administrator's overview: the system in numbers, and the way to each part. */
 import { useEffect, useState } from 'react'
 import { overview } from '../../api/admin'
-import { PRODUCT_SLUG, PRODUCT_WORDS, type Product } from '../../api/cases'
+import { PRODUCT_WORDS, type Product } from '../../api/cases'
 import { Dashboard, useStats } from '../Dashboard'
 
 export function AdminHome({ product }: { product: Product }) {
@@ -26,12 +26,11 @@ export function AdminHome({ product }: { product: Product }) {
             <div className="kpi card"><div className="label">Audit entries</div><div style={{ fontSize: 'var(--t-figure)', fontWeight: 700 }}>{o.audit_entries}</div></div>
           </div>
           <Dashboard stats={stats} error={statsError} variant="admin" product={product} />
-          <div className="row" style={{ gap: 10, marginTop: 'var(--s4)' }}>
-            <a className="btn" href={`#/${PRODUCT_SLUG[product]}/cases`} style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>All {PRODUCT_WORDS[product].cases.toLowerCase()}</a>
-            <a className="btn" href="#/users" style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>Users</a>
-            <a className="btn" href="#/audit" style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>Audit log</a>
-            <a className="btn" href="#/signatories" style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>Signing authorities</a>
-          </div>
+          {/* A row of links to the cases, Users, the Audit log and Signing authorities stood
+              here (23 Oct 2026). The header carries all four, on this screen and on every
+              other, which is where the administrator reaches them from the rest of the time;
+              a second copy at the foot of one page is a second thing to keep in step and
+              teaches nobody where the first one is. */}
         </>
       )}
     </div>
