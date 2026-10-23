@@ -13,7 +13,7 @@
  *  and the papers cannot be attached before it is chosen. The server has always refused a claim
  *  without a kind it knows (api/v2.create_case). */
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { GPF_KINDS, PRODUCT_WORDS, createCase, departments, fetchCaseTypes, newIdempotencyKey, type CaseTypeInfo, type Department, type Product } from '../api/cases'
+import { GPF_KINDS, PRODUCT_WORDS, createCase, departments, fetchCaseTypes, fetchGpfClaimKinds, newIdempotencyKey, type CaseTypeInfo, type Department, type GpfKindInfo, type Product } from '../api/cases'
 import { checkFiles, progressWords } from '../upload/limits'
 import { useSession } from '../auth/AuthProvider'
 import { CASE_TYPE_LIST } from '../caseTypes'
@@ -43,6 +43,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
   const [caseType, setCaseType] = useState('')
   const [column, setColumn] = useState('')            // who is claiming, where the type has several columns
   const [typeInfo, setTypeInfo] = useState<CaseTypeInfo[]>([])
+  const [gpfInfo, setGpfInfo] = useState<GpfKindInfo[]>([])
   const [typeError, setTypeError] = useState<string | null>(null)
   const [pay, setPay] = useState<Record<string, string>>({})
   const [commutation, setCommutation] = useState('')
@@ -72,6 +73,16 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
     Promise.all(jobs).catch(e => setLoadError(e instanceof Error ? e.message : String(e)))
   }, [pickDept, gpf, loadTry])
 
+  // The GP Fund papers, asked for again when the subscriber's status changes: a missing-credits
+  // claim needs the DDO's deduction certificate for a non-gazetted period and the AG office's
+  // for a gazetted one, so the list is not the same list. Its own effect, so saying "gazetted"
+  // does not re-fetch the department list with it.
+  useEffect(() => {
+    if (!gpf) return
+    fetchGpfClaimKinds(gazetted).then(setGpfInfo)
+      .catch(e => setLoadError(e instanceof Error ? e.message : String(e)))
+  }, [gpf, gazetted, loadTry])
+
   // Leaving the page mid-upload would abandon it; the browser asks first (F8).
   useEffect(() => {
     if (!busy) return
@@ -80,6 +91,9 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
     return () => window.removeEventListener('beforeunload', guard)
   }, [busy])
 
+  const gpfKindInfo = gpfInfo.find(k => k.id === gpfKind)
+  const gpfRequired = (gpfKindInfo?.documents ?? []).filter(d => d.always)
+  const gpfWhenItApplies = (gpfKindInfo?.documents ?? []).filter(d => !d.always)
   const typeDef = CASE_TYPE_LIST.find(t => t.id === caseType)
   const info = typeInfo.find(t => t.id === caseType)
   const columns = info?.variants ?? []
@@ -230,6 +244,34 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
               </select>
               <div className="hint">Optional. Some of the office's checks differ for a gazetted subscriber.</div>
             </div>
+            {gpfKind && (
+              <div className="banner good" style={{ marginTop: 10, alignItems: 'flex-start' }}>
+                <span className="mark" aria-hidden="true">i</span>
+                <div className="sub" style={{ color: 'var(--ink)' }}>
+                  {/* The label from the module's answer if it has arrived, else this side's own:
+                      the heading should not go blank while the list is still loading. */}
+                  <strong>Documents required for {gpfKindInfo?.label ?? GPF_KINDS.find(k => k.id === gpfKind)?.label ?? ''}:</strong>
+                  {gpfRequired.length > 0 ? (
+                    <ol style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+                      {gpfRequired.map(d => <li key={d.id}>{d.requirement}</li>)}
+                    </ol>
+                  ) : (
+                    <div style={{ marginTop: 4 }}>{gpfInfo.length ? 'The office keeps no document list for this kind of claim; attach every page of it.' : 'Loading the document list…'}</div>
+                  )}
+                  {gpfWhenItApplies.length > 0 && (
+                    <>
+                      {/* Kept apart from the list above (23 Oct 2026). A widow's affidavit is
+                          needed when a widow claims and not otherwise, and a list that asks
+                          every family for one is a list the department stops reading. */}
+                      <div style={{ marginTop: 8 }}>And where it applies:</div>
+                      <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+                        {gpfWhenItApplies.map(d => <li key={d.id}>{d.requirement}</li>)}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

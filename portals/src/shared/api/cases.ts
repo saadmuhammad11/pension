@@ -286,6 +286,20 @@ export function recentMonths(now = new Date()): { value: string; label: string }
 
 export const fetchCaseTypes = () => get<{ case_types: CaseTypeInfo[] }>('/api/v2/case-types').then(r => r.case_types)
 
+/** A kind of GP Fund claim with the papers the office checks it for, read off the module's own
+ *  checks. `item` is the code in the office's circular (A.1 advances, A.2 final payment, A.3
+ *  balance transfer, A.4 missing credits); `always` is false for a paper wanted only when it
+ *  applies -- the widow's affidavit on a death claim -- which is listed apart so the list of
+ *  papers every claim needs stays short enough to be read. */
+export interface GpfKindInfo {
+  id: string; label: string
+  documents: { id: string; item: string; requirement: string; always: boolean }[]
+}
+/** `gazetted` narrows the list where it bears on it: a missing-credits claim needs the DDO's
+ *  certificate for a non-gazetted period and the AG office's for a gazetted one. */
+export const fetchGpfClaimKinds = (gazetted: string) =>
+  get<{ kinds: GpfKindInfo[] }>(`/api/v2/gpf-claim-kinds?gazetted=${encodeURIComponent(gazetted)}`).then(r => r.kinds)
+
 export const runCheck = (caseId: string) =>
   post<{ run_id: string; resumed: boolean; documents: number }>(`/api/v2/cases/${encodeURIComponent(caseId)}/check`)
 

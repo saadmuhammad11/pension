@@ -18,6 +18,25 @@ vi.mock('../../api/cases', async (importOriginal) => ({
   fetchCaseTypes: () => Promise.resolve([]),
   departments: () => Promise.resolve([]),
   createCase: vi.fn(),
+  fetchGpfClaimKinds: (gazetted: string) => Promise.resolve([
+    {
+      id: 'death', label: 'Final payment — death', documents: [
+        { id: 'COVER', item: 'A2-i', requirement: 'Covering / forwarding letter', always: true },
+        { id: 'DEATH-HEIRS', item: 'A2-iv', requirement: 'CNIC copies of all legal heirs', always: true },
+        { id: 'DEATH-AFFIDAVIT', item: 'A2-vi', requirement: 'Original affidavit for lawful widow', always: false },
+      ],
+    },
+    {
+      id: 'missing_credits', label: 'Missing credits', documents: [
+        { id: 'MC-PERIOD', item: 'A4-ii', requirement: 'Period of missing months', always: true },
+        // The certificate that depends on what the department said about the subscriber.
+        ...(gazetted === 'gazetted'
+          ? [{ id: 'MC-AG-CERT', item: 'A4-iv', requirement: 'Manual deduction certificate by AG Office (gazetted period)', always: true }]
+          : [{ id: 'MC-DDO-CERT', item: 'A4-iii', requirement: 'Manual deduction certificate by DDO, with bills and acquaintance roll (non-gazetted period)', always: true }]),
+      ],
+    },
+    { id: 'refundable', label: 'Refundable advance', documents: [] },
+  ]),
 }))
 vi.mock('../../auth/AuthProvider', () => ({
   useSession: () => ({ can: { pick_department: false, intake_choices: false }, user: { department_name: 'S&GAD' } }),
@@ -34,7 +53,8 @@ const steps = () => screen.getAllByRole('heading', { level: 3 }).map(h => h.text
 /** The card a step heading belongs to. The heading carries its number in a span, so it is
  *  found by its own text rather than by an accessible name. */
 const card = (heading: string) =>
-  screen.getAllByRole('heading', { level: 3 }).find(h => h.textContent === heading)!.closest('.card')!
+  screen.getAllByRole('heading', { level: 3 })
+    .find(h => h.textContent === heading)!.closest('.card') as HTMLElement
 
 describe('both products are filed in the same four steps', () => {
   it('a GP Fund claim: the claim type, the papers, the subscriber, file it', () => {
@@ -83,6 +103,47 @@ describe('the kind of claim is chosen before anything is attached', () => {
     expect(screen.getByRole('button', { name: 'File case and submit' })).toHaveProperty('disabled', true)
     fireEvent.click(screen.getByText('Select the case type first'))
     expect(screen.getByRole('alert').textContent).toBe('Select the case type before attaching documents.')
+  })
+})
+
+describe('choosing the kind shows what the office checks it for', () => {
+  it('lists the papers, as a pension case type lists its documents', async () => {
+    draw('GPF')
+    fireEvent.change(screen.getByLabelText(/Kind of claim/), { target: { value: 'death' } })
+    expect(await screen.findByText('Documents required for Final payment — death:')).toBeTruthy()
+    const required = within(card('1Claim type')).getAllByRole('list')[0].textContent ?? ''
+    expect(required).toContain('Covering / forwarding letter')
+    expect(required).toContain('CNIC copies of all legal heirs')
+  })
+
+  it('a paper wanted only sometimes is listed apart, not among the rest', async () => {
+    draw('GPF')
+    fireEvent.change(screen.getByLabelText(/Kind of claim/), { target: { value: 'death' } })
+    expect(await screen.findByText('And where it applies:')).toBeTruthy()
+    const lists = within(card('1Claim type')).getAllByRole('list')
+    // The ordered list is what every death claim needs; the affidavit is in the second list.
+    expect(lists[0].textContent).not.toContain('affidavit')
+    expect(lists[1].textContent).toContain('Original affidavit for lawful widow')
+  })
+
+  it('the list follows the subscriber, where the papers differ', async () => {
+    draw('GPF')
+    fireEvent.change(screen.getByLabelText(/Kind of claim/), { target: { value: 'missing_credits' } })
+    expect(await screen.findByText(/certificate by DDO/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Subscriber'), { target: { value: 'gazetted' } })
+    expect(await screen.findByText(/certificate by AG Office/)).toBeTruthy()
+    expect(screen.queryByText(/certificate by DDO/)).toBeNull()
+  })
+
+  it('a kind the module lists no papers for says so rather than showing an empty list', async () => {
+    draw('GPF')
+    fireEvent.change(screen.getByLabelText(/Kind of claim/), { target: { value: 'refundable' } })
+    expect(await screen.findByText(/keeps no document list for this kind/)).toBeTruthy()
+  })
+
+  it('nothing is listed until a kind is chosen', () => {
+    draw('GPF')
+    expect(screen.queryByText(/Documents required for/)).toBeNull()
   })
 })
 

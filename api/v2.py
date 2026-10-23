@@ -1422,6 +1422,30 @@ def case_types(user: User = Depends(current_user)) -> dict:
     return {"case_types": out}
 
 
+@router.get("/gpf-claim-kinds")
+def gpf_claim_kinds(gazetted: str = "unknown", user: User = Depends(current_user)) -> dict:
+    """The kinds of GP Fund claim a DDO files under, each with the papers the office checks it
+    for -- so the department knows what to attach before it attaches anything, as it does for a
+    pension case type (23 Oct 2026).
+
+    The papers come from the module's own checks (gpf.intake), never a copy kept here: a check
+    added there is asked for here without anyone remembering to. The labels are this side's
+    (gpf_bridge.KINDS), which is also what decides the kinds a DDO may file -- the module knows
+    a residual claim, which the office raises on a final payment rather than the department
+    filing one.
+    """
+    try:
+        docs = gpf_bridge.intake_checklists(gazetted).get("kinds") or {}
+    except gpf_bridge.GpfError as exc:
+        # The screen has a retry for this (F12). Better an honest "the module did not answer"
+        # than a filing screen quietly showing no requirements at all.
+        raise HTTPException(exc.status if exc.status in (502, 503, 504) else 502,
+                            f"the GP Fund module could not be asked what each kind of claim needs: {exc.detail}")
+    return {"gazetted": gazetted,
+            "kinds": [{"id": k, "label": label, "documents": docs.get(k) or []}
+                      for k, label in gpf_bridge.KINDS.items()]}
+
+
 @router.post("/cases/{case_id}/case-type")
 def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
                   user: User = Depends(require_roles("DEPT_OFFICER", *workflow.AG_SIDE)),

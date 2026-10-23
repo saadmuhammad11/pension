@@ -285,6 +285,18 @@ def rules():
     return rules_in_force()
 
 
+@app.get("/api/intake/checklists")
+def intake_checklists(gazetted: str = "unknown"):
+    """The papers the department is asked to attach, per kind of claim, so the portal's filing
+    screen can show them the way a pension case shows its type's documents (23 Oct 2026).
+
+    Read off the checks themselves (gpf.intake), never a second copy of the list. ``gazetted``
+    is what the department has said about the subscriber: on a missing-credits claim it decides
+    which manual deduction certificate is wanted, and "unknown" asks for both."""
+    from .intake import checklists
+    return {"gazetted": gazetted, "kinds": checklists(gazetted)}
+
+
 @app.get("/api/doa")
 def doa():
     return service.doa_register()

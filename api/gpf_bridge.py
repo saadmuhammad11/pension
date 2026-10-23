@@ -268,6 +268,15 @@ def job(job_id: str) -> dict:
     return _request("GET", f"/api/reading/jobs/{job_id}", timeout=10)
 
 
+def intake_checklists(gazetted: str = "unknown") -> dict:
+    """The papers the department attaches, per kind of claim, read off the module's own checks
+    (gpf.intake). ``{kind: [{id, item, requirement, always}]}``, unlabelled: the kinds a DDO may
+    file, and what they are called, are KINDS above."""
+    from urllib.parse import quote
+    g = gazetted if gazetted in GAZETTED else "unknown"
+    return _request("GET", f"/api/intake/checklists?gazetted={quote(g)}", timeout=15)
+
+
 def case(gpf_case_id: str) -> dict:
     """The module's own view of its case: lists of hard stops, observations, verification
     tasks, SAP items; the live position; the officer's disposal."""
