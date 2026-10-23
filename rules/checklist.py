@@ -613,7 +613,7 @@ def frc_reference_date(record: CaseRecord) -> tuple[date, str] | None:
     """The date an FRC's age is measured to: receipt at the AG, else the forwarding date."""
     received = record.event("RECEIVED_AT_AG")
     if received is not None:
-        return received.date, "receipt at the Accountant General"
+        return received.date, "receipt at the Office of the Accountant General"
     if record.submitted_date is not None:
         return record.submitted_date, "the date the department forwarded the case"
     return None

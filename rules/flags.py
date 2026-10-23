@@ -1125,7 +1125,7 @@ def check_sla(record: CaseRecord, pack: RulePack) -> list[Flag]:
         tail = ""
         if received is not None:
             tail = (
-                f" The file reached the Accountant General on "
+                f" The file reached the Office of the Accountant General on "
                 f"{received.date.isoformat()}, {(received.date - start.date).days} days "
                 f"after {_event_label(event.sla_from)}."
             )

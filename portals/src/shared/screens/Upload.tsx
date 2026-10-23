@@ -149,7 +149,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
               </select>
               {typeError
                 ? <div id="case-type-error" className="form-error" role="alert">{typeError}</div>
-                : <div id="case-type-hint" className="hint">{typeDef ? typeDef.hint : 'Required. The kinds of case on the Accountant General\'s document sheet; the choice decides which documents are asked for and which rules apply.'}</div>}
+                : <div id="case-type-hint" className="hint">{typeDef ? typeDef.hint : 'Required. The kinds of case on the Office of the Accountant General\'s document sheet; the choice decides which documents are asked for and which rules apply.'}</div>}
             </div>
             {columns.length > 1 && (
               <div className="field">
@@ -158,7 +158,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
                   <option value="">— choose —</option>
                   {columns.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>
-                <div className="hint">This picks the checklist the Accountant General will apply. A widow's case and a son's case are checked against different lists.</div>
+                <div className="hint">This picks the checklist the Office of the Accountant General will apply. A widow's case and a son's case are checked against different lists.</div>
               </div>
             )}
             {caseType && (
@@ -295,7 +295,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <span className="num" style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--green)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800 }}>{num()}</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>File the {gpf ? 'claim' : 'case'} and submit it to the Accountant General</div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>File the {gpf ? 'claim' : 'case'} and submit it to the Office of the Accountant General</div>
             <div className="help">{hint}</div>
           </div>
           <button className="primary big" type="submit" disabled={blocked}

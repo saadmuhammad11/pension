@@ -737,7 +737,7 @@ DOCUMENT_TYPE_GLOSS = {
     "DEPUTATION_CHALLANS": "treasury challans proving deposit of pension contributions during deputation",
     "PPO": "Pension Payment Order",
     "FPPO": "Family Pension Payment Order",
-    "FORWARDING_LETTER": "ONLY the covering letter that transmits this pension case to the Accountant General. A departmental order about the servant is a POSTING_ORDER, not a forwarding letter, however letter-like it looks",
+    "FORWARDING_LETTER": "ONLY the covering letter that transmits this pension case to the Office of the Accountant General. A departmental order about the servant is a POSTING_ORDER, not a forwarding letter, however letter-like it looks",
     "DEATH_OFFICE_ORDER": "departmental office order or obituary notifying a death",
     "NDC": "'No Demand Certificate' / No Enquiry / No Audit Para / No Punishment certificate",
     "COMPULSORY_RETIREMENT_ORDER": "orders imposing compulsory retirement as a penalty",
@@ -790,7 +790,7 @@ DOCUMENT_TYPE_GLOSS = {
     "PENSION_APPLICATION":
         "printed 'FORM 3 (PEN)' or headed 'APPLICATION FOR PENSION AND / OR GRATUITY' - the "
         "application the retiring servant fills in and signs themselves, addressed to the "
-        "Accountant General. It is an APPLICATION, not a sanction: the prescribed forms "
+        "Office of the Accountant General. It is an APPLICATION, not a sanction: the prescribed forms "
         "(B-I, B-II, B-III, B-IV, D-I, D-II) are issued by the PSA, this one is not",
     "DEPARTMENTAL_CHECKLIST":
         "the department's own 'CHECK LIST FOR PENSION CASES' - a list of the papers the "
@@ -815,7 +815,7 @@ DOCUMENT_TYPE_GLOSS = {
         "the one-page proforma whose NUMBERED SECTIONS are '1. PARTICULARS OF EMPLOYEE', "
         "'2. SERVICE RECORD SUMMARY' (ending in 'Net Qualifying Service'), '3. PAY FIXATION' and "
         "'4. PENSION CONTRIBUTION / PENSIONARY SHARE', with a 'Pension Sanction Authority' stamp "
-        "and, at the foot, a block headed 'For Use in the Accountant General/District Accounts "
+        "and, at the foot, a block headed 'For Use in the Office of the Accountant General/District Accounts "
         "Office' where an Accounts Officer verifies the years, months and days served. Those "
         "sections ARE the identification. It is often headed 'PERFORMA FOR QUALIFYING SERVICE FOR "
         "PENSION' (or 'PROPOSED PERFORMA ...', sometimes spelt 'PROFORMA') -- but frequently the "
@@ -1059,7 +1059,7 @@ QUALIFYING_SERVICE_PROFORMA = _envelope(
         },
         "ag_verification_signed": {
             "type": ["boolean", "null"],
-            "description": "Whether the block 'For Use in the Accountant General/District "
+            "description": "Whether the block 'For Use in the Office of the Accountant General/District "
                            "Accounts Office' is filled in and signed by the Accounts Officer / "
                            "District Accounts Officer. false where it is blank.",
         },

@@ -32,7 +32,7 @@ DEFAULT_MODEL = "qwen3-vl-30b-a3b-fp8"
 PROMPT_VERSION = "AGPB-EXTRACT-PROMPT-1.0"
 
 SYSTEM = (
-    "You read scanned Pakistani government pension documents for the Accountant General, Punjab.\n"
+    "You read scanned Pakistani government pension documents for the Office of the Accountant General, Punjab.\n"
     "You extract and you report. You never calculate an amount and you never guess a value.\n"
     "An illegible value is null with a reason in `unreadable`; a plausible reconstruction is worse "
     "than an honest gap, because a gap gets checked and a plausible number gets paid.\n"

@@ -103,7 +103,7 @@ function TimeToDecisionCard({ stats }: { stats: Stats }) {
     <ChartCard title="Time to decision" sub={`average against the ${target}-day target`}
                table={{ head: ['Measure', 'Value'], rows: [['Average days, filing to decision', avg ?? '—'], ['Cases decided', stats.decided_total], [`Decided within ${target} days`, within ?? '—']] }}>
       {avg == null
-        ? <div className="empty">The Accountant General has not decided a case yet.</div>
+        ? <div className="empty">The Office of the Accountant General has not decided a case yet.</div>
         : <Gauge value={avg} max={target} unit="days avg" color={color} label={`Average ${avg} days to decision against a ${target}-day target`}
                  big={pct == null ? '—' : `${pct}%`} bigLabel={`decided within ${target} days`} note={`Target: ${target} days from filing · ${plural(stats.decided_total, 'case')} decided`} />}
     </ChartCard>
@@ -134,9 +134,9 @@ export function Dashboard(
   ]
   const decisionsFooter = approved + rejected
     ? `${approved} approved and ${rejected} rejected so far${s.avg_days_to_decision != null ? `; on average ${s.avg_days_to_decision} days from filing to decision` : ''}.`
-    : 'The Accountant General has not decided a case yet.'
+    : 'The Office of the Accountant General has not decided a case yet.'
   const decisions = (
-    <ChartCard title={variant === 'department' ? 'Your cases and the Accountant General\'s decisions' : department ? 'This department\'s cases' : 'Decisions of the Accountant General'}
+    <ChartCard title={variant === 'department' ? 'Your cases and the Office of the Accountant General\'s decisions' : department ? 'This department\'s cases' : 'Decisions of the Office of the Accountant General'}
                sub={`${plural(s.total, 'case')} in all`} footer={s.total ? decisionsFooter : undefined}
                table={{ head: ['Standing', 'Cases'], rows: decisionParts.map(p => [p.label, p.value]) }}>
       {s.total ? <Donut parts={decisionParts} centreLabel="cases" countUp /> : <div className="empty">No case filed yet.</div>}
@@ -149,7 +149,7 @@ export function Dashboard(
         {decisions}
         <FiledCard stats={s} />
         <AgeCard ageing={s.ageing?.with_department} title="Waiting on you, by age" waitingWord="to submit or correct" />
-        <AgeCard ageing={s.ageing?.with_ag} title="With the Accountant General, by age" waitingWord="awaiting the Pension Wing" />
+        <AgeCard ageing={s.ageing?.with_ag} title="With the Office of the Accountant General, by age" waitingWord="awaiting the Pension Wing" />
       </div>
     )
   }

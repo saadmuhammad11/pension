@@ -21,7 +21,7 @@ declare global {
 }
 
 const AG_FALLBACK: PortalConfig = {
-  kind: 'ag', slug: 'ag', code: null, name: 'Accountant General Punjab', port: 5184,
+  kind: 'ag', slug: 'ag', code: null, name: 'Office of the Accountant General Punjab', port: 5184,
   theme: {
     // SERVE PUNJAB, named by the office 22 Oct 2026. The expansion is on the sign-in page and
     // not here: this subtitle is the header's second line on every screen (api/themes.py).

@@ -353,13 +353,13 @@ export const STATUS_META: Record<CaseStatus, {
   step: number
 }> = {
   DRAFT: { label: 'Not yet submitted', pill: 'neutral', side: 'department', step: 0,
-    dept: 'Attach the documents, then submit the case to the Accountant General.', ag: 'The department has not yet submitted this case.' },
+    dept: 'Attach the documents, then submit the case to the Office of the Accountant General.', ag: 'The department has not yet submitted this case.' },
   AI_CHECKING: { label: 'Verification in progress', pill: 'info', side: 'ag', step: 2,
     dept: 'The Office of the Accountant General is verifying the case.', ag: 'Verification takes 10 to 20 minutes. You may leave this page and return; the outcome brings the case to you for a decision. Nothing is approved or returned automatically.' },
   AI_FAILED: { label: 'Verification incomplete', pill: 'medium', side: 'ag', step: 2,
     dept: 'The Office of the Accountant General is verifying the case.', ag: 'The verification did not complete. Verify the case again.' },
   AI_CHECKED: { label: 'Verified, not yet submitted', pill: 'neutral', side: 'department', step: 0,
-    dept: 'Submit the case to the Accountant General.', ag: 'Verified by the department; not yet submitted.' },
+    dept: 'Submit the case to the Office of the Accountant General.', ag: 'Verified by the department; not yet submitted.' },
   FORWARDED: { label: "Submitted to Accountant General's Office", pill: 'info', side: 'ag', step: 1,
     dept: 'Received by the Pension Wing, Office of the Accountant General; awaiting verification.', ag: 'Newly received. Verify the case with AI: the findings and any missing documents are brought to you for a decision.' },
   // "AG Office", not the full title: this label is printed under the active step of the
@@ -368,13 +368,13 @@ export const STATUS_META: Record<CaseStatus, {
   UNDER_REVIEW: { label: 'Under review at AG Office', pill: 'info', side: 'ag', step: 2,
     dept: 'The Pension Wing is reviewing the case.', ag: 'Verified: the case awaits your decision. Clear each finding, then approve, return (naming the missing documents) or reject the case with a remark. Nothing is approved or returned automatically.' },
   APPROVED: { label: 'Approved', pill: 'low', side: 'closed', step: 3,
-    dept: 'The Accountant General has approved the case. No further action is required.', ag: 'Approved. The decision is on record.' },
+    dept: 'The Office of the Accountant General has approved the case. No further action is required.', ag: 'Approved. The decision is on record.' },
   REJECTED: { label: 'Rejected', pill: 'high', side: 'closed', step: 3,
-    dept: 'The Accountant General has rejected the case. The reason is in the remarks.', ag: 'Rejected. The decision is on record.' },
+    dept: 'The Office of the Accountant General has rejected the case. The reason is in the remarks.', ag: 'Rejected. The decision is on record.' },
   RETURNED: { label: 'Returned for correction', pill: 'medium', side: 'department', step: 3,
-    dept: 'Attach the documents listed below, then resubmit the case to the Accountant General.', ag: 'Returned to the department for correction.' },
+    dept: 'Attach the documents listed below, then resubmit the case to the Office of the Accountant General.', ag: 'Returned to the department for correction.' },
   DOCS_REQUESTED: { label: 'Additional documents requested', pill: 'medium', side: 'department', step: 3,
-    dept: 'Attach the documents requested, then resubmit the case to the Accountant General.', ag: 'Awaiting additional documents from the department.' },
+    dept: 'Attach the documents requested, then resubmit the case to the Office of the Accountant General.', ag: 'Awaiting additional documents from the department.' },
 }
 
 /** The steps a case passes through, as an officer would name them.
@@ -455,7 +455,7 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
   const m = STATUS_META[c.status]
   const dept = role === 'DEPT_OFFICER'
   if (dept) {
-    if ((c.status === 'DRAFT' || c.status === 'AI_CHECKED') && a.has('FORWARD')) return { action: 'FORWARD', title: 'Not yet submitted', text: 'The documents are attached. Submit the case to the Accountant General, where it is verified with AI.' }
+    if ((c.status === 'DRAFT' || c.status === 'AI_CHECKED') && a.has('FORWARD')) return { action: 'FORWARD', title: 'Not yet submitted', text: 'The documents are attached. Submit the case to the Office of the Accountant General, where it is verified with AI.' }
     if ((c.status === 'RETURNED' || c.status === 'DOCS_REQUESTED') && a.has('ADD_DOCS')) return { action: 'ADD_DOCS', title: m.label, text: m.dept }
     return { action: null, title: m.label, text: m.dept }
   }

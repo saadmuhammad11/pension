@@ -154,7 +154,7 @@ function Shell({ config }: { config: PortalConfig }) {
         <span className="nav-sep" aria-hidden="true" />
         {/* Cases, then Dashboard, on every portal (22 Oct 2026). The two sides had opposite
             orders, each listing the tab that role opens on first: a department opens on its
-            cases, the Accountant General's desk and the administrator on the dashboard. One
+            cases, the Office of the Accountant General's desk and the administrator on the dashboard. One
             order is easier to learn than two, and the cases are the work.
             The addresses are productSwitch's, so the tabs and the product links cannot drift:
             a department's dashboard has its own address because its bare one is its cases,

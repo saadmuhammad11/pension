@@ -366,7 +366,7 @@ def portals() -> dict:
     development server reads. Public -- it holds nothing but names, ports and colours."""
     return {
         "single_portal": SINGLE_PORTAL,
-        "ag": {"kind": "ag", "slug": AG_PORTAL_SLUG, "code": None, "name": "Accountant General Punjab",
+        "ag": {"kind": "ag", "slug": AG_PORTAL_SLUG, "code": None, "name": "Office of the Accountant General Punjab",
                "port": AG_PORTAL_PORT, "theme": theme_for("ag", title="SERVE PUNJAB")},
         "departments": [
             {"kind": "department", "slug": d.slug, "code": d.code, "name": d.name, "port": d.port,
@@ -631,7 +631,7 @@ _RUN_PUBLIC = ("id", "case_id", "run_id", "submission_no", "started_at", "finish
 #: What a department reads in place of the verification's own summary line, which states the engine's
 #: verdict and its count of findings (28 Sep 2026: departments see no AI output).
 _DEPT_REMARKS = {
-    "CHECK_DONE": "The verification is complete; the case is with the Accountant General.",
+    "CHECK_DONE": "The verification is complete; the case is with the Office of the Accountant General.",
 }
 
 
@@ -670,8 +670,8 @@ def _redact(d: dict, user: User) -> dict:
     if d.get("last_event") and d["last_event"].get("action") in workflow.INTERNAL_ACTIONS:
         visible = d.get("events") or []
         d["last_event"] = visible[-1] if visible else None
-    d["holder_tier"] = None                               # the DDO sees "with the Accountant General", not which desk
-    d["holder_label"] = "With the Accountant General" if d.get("status") in workflow.AG_HOLDS else None
+    d["holder_tier"] = None                               # the DDO sees "with the Office of the Accountant General", not which desk
+    d["holder_label"] = "With the Office of the Accountant General" if d.get("status") in workflow.AG_HOLDS else None
     for e in d.get("events") or []:
         _redact_event(e)
     if d.get("last_event"):
@@ -1327,7 +1327,7 @@ def set_case_type(case_id: str, body: dict = Body(...), request: Request = None,
     if user.role == "DEPT_OFFICER":
         _own_side_or_403(user, row)
         if row["status"] not in workflow.CASE_TYPE_EDITABLE_BY_DEPARTMENT:
-            raise HTTPException(409, "the case is with the Accountant General; the case type can no longer "
+            raise HTTPException(409, "the case is with the Office of the Accountant General; the case type can no longer "
                                      "be changed by the department")
         source = "DECLARED"
     else:
@@ -1871,7 +1871,7 @@ def case_gpf_page(case_id: str, page: int, user: User = Depends(current_user_q),
     import json as _json
     from fastapi.responses import FileResponse
     if user.role not in workflow.AG_READERS:
-        raise HTTPException(403, "the GP Fund examination is the Accountant General's")
+        raise HTTPException(403, "the GP Fund examination is the Office of the Accountant General's")
     row = _case_or_404(conn, case_id, user)
     work = gpf_bridge.scratch_dir(row["id"], row["submission_no"])
     listing = work / "pages.json"
@@ -1944,7 +1944,7 @@ def _run_for(conn: db.Connection, user: User, case_id: str, run_id: str, *, acti
         # any of its runs while another tier held it, and the Senior Auditor's forward gate
         # trusted those waivers (audit of 12 Oct 2026).
         if row["status"] != workflow.UNDER_REVIEW:
-            raise HTTPException(409, "findings can be acted on only while the case is under the Accountant General's review")
+            raise HTTPException(409, "findings can be acted on only while the case is under the Office of the Accountant General's review")
         if run_id != row["current_run_id"]:
             raise HTTPException(409, "this run is not the case's current examination; findings are acted on in the current one")
         try:

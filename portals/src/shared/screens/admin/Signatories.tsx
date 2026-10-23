@@ -88,7 +88,7 @@ export function Signatories() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 'var(--s4)', flexWrap: 'wrap' }}>
         <div>
           <h1>Signing authorities</h1>
-          <p className="lead">Who may sign a sanction or a GP Fund paper, and their specimen signatures. Entries are closed with an end date, never deleted; every change is audited. Specimens are shown to the Accountant General&apos;s desk only.</p>
+          <p className="lead">Who may sign a sanction or a GP Fund paper, and their specimen signatures. Entries are closed with an end date, never deleted; every change is audited. Specimens are shown to the Office of the Accountant General&apos;s desk only.</p>
         </div>
         <div className="row" style={{ gap: 8 }}>
           {provisional > 0 && (

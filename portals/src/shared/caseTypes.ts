@@ -28,7 +28,7 @@ export const anyCaseTypeLabel = (id: string | null | undefined): string | undefi
 
 /** Where the type came from, in the words the screens use. */
 export const CASE_TYPE_SOURCE_WORDS: Record<string, string> = {
-  DECLARED: 'Declared by the DDO', CORRECTED: 'Corrected by the Accountant General', DETECTED: 'Detected by the AI',
+  DECLARED: 'Declared by the DDO', CORRECTED: 'Corrected by the Office of the Accountant General', DETECTED: 'Detected by the AI',
 }
 /* caseTypeSourceShort -- "Declared", "Detected", "Corrected" -- was written for the one-line
    form the case particulars used, and the case particulars are gone (22 Oct 2026). The long

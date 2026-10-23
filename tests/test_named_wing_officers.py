@@ -170,7 +170,7 @@ class TheSignInSheet(unittest.TestCase):
         html = self._render()
         groups = re.findall(r'<tr class="grp"><th colspan="5">(.*?)</th>', html)
         self.assertEqual(groups[:5], ["Pension-I", "Pension-II", "Pension-III", "Pension-IV", "Pension-V"])
-        self.assertIn("Accountant General Punjab", groups)
+        self.assertIn("Office of the Accountant General Punjab", groups)
         self.assertGreater(len(groups), 10, "the department groups are still listed")
 
     def test_the_closed_desk_logins_are_off_the_sheet(self) -> None:

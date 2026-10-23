@@ -55,7 +55,7 @@ class DepartmentView(unittest.TestCase):
         for key in ("verdicts", "high_flags", "deficiencies"):
             self.assertNotIn(key, seen["stats"])
         done = next(e for e in seen["case"]["events"] if e["action"] == "CHECK_DONE")
-        self.assertEqual(done["remark"], "The verification is complete; the case is with the Accountant General.")
+        self.assertEqual(done["remark"], "The verification is complete; the case is with the Office of the Accountant General.")
         self.assertEqual(seen["case"]["status"], "UNDER_REVIEW")
 
 

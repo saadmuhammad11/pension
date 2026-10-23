@@ -157,7 +157,7 @@ async function scenario(): Promise<void> {
 
   // 6. The department's register: the case is with the Accountant General.
   await D.click(D.byText('button', 'Back to the register')!, 900)
-  await D.click(D.byText('.tile', 'With the Accountant General') ?? D.byText('.tile', '1')!, 700)
+  await D.click(D.byText('.tile', 'With the Office of the Accountant General') ?? D.byText('.tile', '1')!, 700)
   await D.waitFor(() => D.byText('.pill', 'Submitted'))
   await D.hover(D.byText('.pill', 'Submitted')!)
   await D.sleep(2600)

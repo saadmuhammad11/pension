@@ -511,7 +511,7 @@ def _insert_ag_officers(conn: Connection, shared: str | None, *, must_change: in
             "VALUES (?, ?, ?, ?, ?, NULL, ?, 1, 1, ?, ?, ?)",
             (new_id(), o["username"], o["display_name"], hash_password(password), o["role"],
              o["pension_wing"], must_change, stamp, stamp))
-        created.append({"portal": "ag", "department": f"Accountant General Punjab \u00b7 {o['pension_wing']}",
+        created.append({"portal": "ag", "department": f"Office of the Accountant General Punjab \u00b7 {o['pension_wing']}",
                         "username": o["username"], "password": password, "role": o["role"],
                         "department_code": ""})
     return created
@@ -589,7 +589,7 @@ def _role_words(role: str) -> str:
 
 def _dept_name(conn: Connection, code: str | None) -> str:
     if not code:
-        return "Accountant General Punjab"
+        return "Office of the Accountant General Punjab"
     row = conn.execute("SELECT name FROM departments WHERE code = ?", (code,)).fetchone()
     return row["name"] if row else code
 
@@ -746,7 +746,7 @@ tr.grp th{{background:#1B4332;color:#fff;font-size:12px;letter-spacing:.06em;cur
 <main>
 <input id="q" placeholder="Search a name, wing, role or username" autofocus> <span class="n" id="count"></span>
 <div class="warn">Everyone signs in at the same address with their own account; what they see follows from the account. Passwords can be reset with <code>python3 -m api.db reset-department-password &lt;username&gt;</code>; this file is regenerated from <code>credentials.csv</code>.</div>
-<div class="warn"><strong>How a case moves (pension and GP Fund).</strong> The department's DDO files the case and submits it. The Accountant General's reviewer verifies it with AI, reads the findings and the list of any missing or defective documents, and decides: approve, return to the department with the documents named, ask for documents, or reject &mdash; each with a remark. <strong>Nothing is approved or returned automatically</strong> (decisions of 7 and 9 October 2026); a return made inside the GP Fund module's screens is recorded there, and the case itself is returned by the reviewer.</div>
+<div class="warn"><strong>How a case moves (pension and GP Fund).</strong> The department's DDO files the case and submits it. The Office of the Accountant General's reviewer verifies it with AI, reads the findings and the list of any missing or defective documents, and decides: approve, return to the department with the documents named, ask for documents, or reject &mdash; each with a remark. <strong>Nothing is approved or returned automatically</strong> (decisions of 7 and 9 October 2026); a return made inside the GP Fund module's screens is recorded there, and the case itself is returned by the reviewer.</div>
 <table><thead><tr><th>Name</th><th>Role</th><th>Username</th><th>Password</th><th>Portal</th></tr></thead>
 <tbody id="rows">
 {tr}

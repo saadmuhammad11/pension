@@ -40,7 +40,7 @@ export function PortalWall({ list, stepMs, focus, onPick }: { list: Tile[]; step
                onClick={onPick ? () => onPick(t.slug) : undefined} onKeyDown={onPick ? e => { if (e.key === 'Enter') onPick(t.slug) } : undefined}>
             <div className="wall-crest"><Crest /></div>
             <div className="wall-name">{t.name}</div>
-            <div className="wall-kind">{t.kind === 'ag' ? 'Accountant General' : t.kind === 'admin' ? 'System administration' : 'Department portal'}</div>
+            <div className="wall-kind">{t.kind === 'ag' ? 'Office of the Accountant General' : t.kind === 'admin' ? 'System administration' : 'Department portal'}</div>
           </div>
         ))}
       </div>

@@ -252,7 +252,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           <p className="next-text">{step.text}</p>
           {lastAg && deptSide && (c.status === 'RETURNED' || c.status === 'DOCS_REQUESTED' || c.status === 'REJECTED') && (
             <p className="next-text" style={{ marginTop: 8, color: 'var(--ink)' }}>
-              <strong>Remarks of the Accountant General:</strong> “{lastAg.remark}” <span className="muted">— {lastAg.actor_name}, {fmtDateTime(lastAg.at)}</span>
+              <strong>Remarks of the Office of the Accountant General:</strong> “{lastAg.remark}” <span className="muted">— {lastAg.actor_name}, {fmtDateTime(lastAg.at)}</span>
             </p>
           )}
           {missingDocs.length > 0 && (
@@ -326,7 +326,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
               {c.allowed_actions.includes('ADD_DOCS') && (
                 <div className="row" style={{ gap: 12, marginTop: 'var(--s4)', alignItems: 'center' }}>
                   <button onClick={() => fileInput.current?.click()} disabled={busy}>Add documents</button>
-                  <span className="help">After attaching the documents, submit the case to the Accountant General.</span>
+                  <span className="help">After attaching the documents, submit the case to the Office of the Accountant General.</span>
                 </div>
               )}
             </div>

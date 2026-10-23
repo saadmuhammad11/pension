@@ -31,7 +31,7 @@ CLEAN = PageText(page=23, text=("Office of the District Education Officer, Lahor
                                 "the government servant named below, who retired on "
                                 "superannuation. Signed, Deputy District Education Officer, "
                                 "dated December 30 2025, for onward submission to the office "
-                                "of the Accountant General Punjab for further necessary action."),
+                                "of the Office of the Accountant General Punjab for further necessary action."),
                  model=OCR_MODEL)
 
 

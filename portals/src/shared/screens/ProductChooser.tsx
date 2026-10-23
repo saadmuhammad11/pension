@@ -15,11 +15,11 @@ const WITH_AG: CaseStatus[] = ['FORWARDED', 'AI_CHECKING', 'AI_FAILED', 'UNDER_R
 const CARDS: { product: Product; kicker: string; title: string; text: string; steps: string[]; file: string; register: string }[] = [
   { product: 'PENSION', kicker: 'Pension', title: 'Pension case',
     text: 'Retirement or family pension: the sanction on the prescribed form with the pension papers.',
-    steps: ['Choose the case type and attach every paper', 'Verification at the Accountant General against the checklist for that type', 'Decision; returned with the list if anything is missing'],
+    steps: ['Choose the case type and attach every paper', 'Verification at the Office of the Accountant General against the checklist for that type', 'Decision; returned with the list if anything is missing'],
     file: 'File a pension case', register: 'Pension register' },
   { product: 'GPF', kicker: 'GP Fund', title: 'GP Fund claim',
     text: 'An advance, a final payment, missing credits or a balance transfer from the subscriber\'s fund.',
-    steps: ['Choose the kind of claim and attach every page', 'Pre-audit in the GP Fund module at the Accountant General', 'Cure, disposal and the issue pack'],
+    steps: ['Choose the kind of claim and attach every page', 'Pre-audit in the GP Fund module at the Office of the Accountant General', 'Cure, disposal and the issue pack'],
     file: 'File a GP Fund claim', register: 'GP Fund register' },
 ]
 

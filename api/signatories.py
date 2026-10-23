@@ -523,13 +523,13 @@ def start_up(conn: db.Connection | None = None) -> dict[str, int]:
 
 def _viewer(user: User = Depends(current_user)) -> User:
     if user.role not in viewer_roles():
-        raise HTTPException(403, "specimen signatures are for the Accountant General's desk, not the filing department")
+        raise HTTPException(403, "specimen signatures are for the Office of the Accountant General's desk, not the filing department")
     return user
 
 
 def _viewer_q(user: User = Depends(current_user_q)) -> User:
     if user.role not in viewer_roles():
-        raise HTTPException(403, "specimen signatures are for the Accountant General's desk, not the filing department")
+        raise HTTPException(403, "specimen signatures are for the Office of the Accountant General's desk, not the filing department")
     return user
 
 

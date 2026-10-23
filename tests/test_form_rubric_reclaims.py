@@ -56,7 +56,7 @@ TITLE_UNRECOGNISABLE = (
 
 #: run-53fbf89a8c6c p.2. Prints a form NUMBER and is a covering letter.
 FORWARDING_LETTER = (
-    "To\nThe Accountant General Punjab, Lahore.\nPension case of Mr. Safdar Ali received in "
+    "To\nThe Office of the Accountant General Punjab, Lahore.\nPension case of Mr. Safdar Ali received in "
     "this office through District Education Officer (SE) Lahore. The same case alongwith all "
     "relevant papers is hereby submitted.\nDocuments Details are as under:\n1. Annex-A "
     "(Form).\n2. Annex-B-I (Form).\n3. Retirement Notification.\n4. Copy if CNIC.")

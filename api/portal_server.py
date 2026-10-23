@@ -88,7 +88,7 @@ _HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authoriz
 def portal_config(port: int) -> dict:
     """What a browser on this port must know about itself."""
     if port == AG_PORTAL_PORT:
-        return {"kind": "ag", "slug": AG_PORTAL_SLUG, "code": None, "name": "Accountant General Punjab",
+        return {"kind": "ag", "slug": AG_PORTAL_SLUG, "code": None, "name": "Office of the Accountant General Punjab",
                 "port": port, "single_portal": SINGLE_PORTAL, "theme": theme_for("ag", title="SERVE PUNJAB")}
     d = BY_PORT.get(port)
     if d is None:
@@ -398,7 +398,7 @@ class PortalApp:
     @staticmethod
     def _gpf_refused() -> Response:
         return HTMLResponse("<!doctype html><meta charset=utf-8><title>Sign in</title><p style='font-family:sans-serif'>"
-                            "The GP Fund module opens from a case in the pension portal, for the Accountant General's "
+                            "The GP Fund module opens from a case in the pension portal, for the Office of the Accountant General's "
                             "desk. Sign in at the portal and open the case there.</p>", status_code=401)
 
     async def gpf_root(self, request: Request) -> Response:

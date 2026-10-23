@@ -99,7 +99,6 @@ export function Users() {
   return (
     <div className="screen container" style={{ paddingTop: 22 }}>
       <h1>Users</h1>
-      <p className="lead">One account per officer. A disabled account is signed out immediately; a password reset ends its sessions. An AG officer belongs to one pension wing and one tier; the wing is not a department.</p>
       {error && <div className="banner bad"><span className="mark">!</span><div className="sub">{error}</div></div>}
 
       {/* Wing coverage (C4): a tier with no active officer stops that wing's cases there. */}

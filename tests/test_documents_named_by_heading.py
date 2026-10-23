@@ -185,7 +185,7 @@ class TheForwardingLetterNamesTheClaimant(unittest.TestCase):
     certificate and a non-remarriage certificate on a claim by two disabled children.
     """
 
-    SUBJECT = ("To: Accountant General Punjab Lahore. Subject: FAMILY PENSION PAPERS OF "
+    SUBJECT = ("To: Office of the Accountant General Punjab Lahore. Subject: FAMILY PENSION PAPERS OF "
                "MISS. ASIA BIBI QURESHI (MENTALLY DISABLE DAUGHTER) AND MR. MUHAMMAD "
                "HARIS QURESHI (MENTALLY DISABLED SON)")
 

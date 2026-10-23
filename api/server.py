@@ -563,7 +563,7 @@ def specimen_image(request: Request, specimen_id: str, name: str) -> FileRespons
     from api.signatories import viewer_roles
     user = getattr(request.state, "user", None)
     if user is None or user.role not in viewer_roles():
-        raise HTTPException(403, "specimen signatures are for the Accountant General's desk")
+        raise HTTPException(403, "specimen signatures are for the Office of the Accountant General's desk")
     from rules import specimens
     spec = next((s for s in specimens.load() if s.id == specimen_id), None)
     path = next((p for p in (spec.images if spec else ()) if p.name == name), None)

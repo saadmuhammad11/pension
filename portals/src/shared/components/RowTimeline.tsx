@@ -13,11 +13,11 @@ export function timelineFor(r: CaseSummary): Step[] {
   const last = r.last_event?.at ?? r.updated_at
   const sent = r.submission_no > 1 ? `Resubmitted ${fmt(last)}` : `Sent ${fmt(r.created_at)}`
   if (s === 'DRAFT' || s === 'AI_CHECKED')
-    return [{ label: 'Not yet sent', state: 'active', tone: 'wait', sub: 'Submit to the Accountant General' },
+    return [{ label: 'Not yet sent', state: 'active', tone: 'wait', sub: 'Submit to the Office of the Accountant General' },
             { label: 'Processing', state: 'todo' }, { label: 'Outcome', state: 'todo' }]
   if (s === 'FORWARDED' || s === 'AI_CHECKING' || s === 'AI_FAILED' || s === 'UNDER_REVIEW')
     return [{ label: 'Sent', state: 'done', sub: sent },
-            { label: 'Processing', state: 'active', tone: 'wait', sub: 'At the Accountant General' },
+            { label: 'Processing', state: 'active', tone: 'wait', sub: 'At the Office of the Accountant General' },
             { label: 'Outcome', state: 'todo' }]
   if (s === 'RETURNED' || s === 'DOCS_REQUESTED')
     return [{ label: 'Sent', state: 'done', sub: sent }, { label: 'Processed', state: 'done' },

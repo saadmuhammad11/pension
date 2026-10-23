@@ -288,9 +288,9 @@ class Tiers(unittest.TestCase):
         self.verify(self.sa(), case_id)
         self.client.post(f"/api/v2/cases/{case_id}/forward-tier", headers=self.sa(), json={})
         seen = self._status(case_id, ddo)
-        self.assertEqual((seen["holder_tier"], seen["holder_label"]), (None, "With the Accountant General"))
+        self.assertEqual((seen["holder_tier"], seen["holder_label"]), (None, "With the Office of the Accountant General"))
         rows = self.client.get("/api/v2/cases", headers=ddo).json()
-        self.assertEqual(rows[0]["holder_label"], "With the Accountant General")
+        self.assertEqual(rows[0]["holder_label"], "With the Office of the Accountant General")
 
     # -- maker-checker across tiers ---------------------------------------------------------------
     def test_one_account_acts_at_one_tier_on_a_case(self) -> None:
@@ -356,7 +356,7 @@ class Tiers(unittest.TestCase):
         self.verify(desk, agri_case)
         self.escalate(agri_case, "agriculture")
         r = self.client.post(f"/api/v2/cases/{agri_case}/override", headers=desk,
-                             json={"to_status": "RETURNED", "reason": "Returned on the Accountant General's direction."})
+                             json={"to_status": "RETURNED", "reason": "Returned on the Office of the Accountant General's direction."})
         self.assertEqual(r.status_code, 200, r.text)
         from api import gpf_bridge
         self.assertEqual(gpf_bridge.OFFICER_FOR_ROLE["AG_REVIEWER"], "dag")

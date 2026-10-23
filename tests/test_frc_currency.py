@@ -71,7 +71,7 @@ class WhichCertificatesAreStale(unittest.TestCase):
         from rules.checklist import stale_frcs
         stale = stale_frcs(_record({8: date(2025, 11, 10)}, date(2026, 3, 1),
                                    received=date(2026, 7, 6)))
-        self.assertEqual(stale[0]["reference_label"], "receipt at the Accountant General")
+        self.assertEqual(stale[0]["reference_label"], "receipt at the Office of the Accountant General")
 
     def test_a_certificate_issued_after_submission_is_not_stale(self):
         from rules.checklist import stale_frcs

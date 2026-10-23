@@ -610,7 +610,7 @@ def _plain_failure(error: str | None) -> str:
 
 def _clean_remark() -> str:
     return ("AI verification complete: every required document present and no finding. "
-            "The case awaits the Accountant General's decision; nothing is approved automatically.")
+            "The case awaits the Office of the Accountant General's decision; nothing is approved automatically.")
 
 
 def _summary_line(issues: dict) -> str:
@@ -624,7 +624,7 @@ def _summary_line(issues: dict) -> str:
                      f"return the case to the department for them if required")
     if issues.get("unidentified_pages"):
         parts.append(f"{issues['unidentified_pages']} page(s) could not be identified — name them before returning the case")
-    return "AI verification complete, for the Accountant General's decision: " + (", ".join(parts) if parts else "no issues found") + "."
+    return "AI verification complete, for the Office of the Accountant General's decision: " + (", ".join(parts) if parts else "no issues found") + "."
 
 
 _SYNC_THREAD: threading.Thread | None = None

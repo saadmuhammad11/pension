@@ -12,7 +12,7 @@ describe('productHref', () => {
     expect(productHref('PENSION', 'dashboard', 'register')).toBe('#/pension/dashboard')
   })
 
-  it("the Accountant General's dashboard is the bare address, and it is kept too", () => {
+  it("the Office of the Accountant General's dashboard is the bare address, and it is kept too", () => {
     expect(productHref('GPF', 'home', 'review')).toBe('#/gpf')
     expect(productHref('PENSION', 'dashboard', 'review')).toBe('#/pension')
     expect(productHref('GPF', 'home', 'admin')).toBe('#/gpf')

@@ -5,7 +5,7 @@ import { statusLabelOf } from './StatusPill'
 
 const ACTION_WORDS: Record<string, string> = {
   CREATE: 'Case filed', ADD_DOCS: 'Documents attached', RUN_CHECK: 'Verification started',
-  CHECK_DONE: 'Verification complete: findings for the Accountant General', CHECK_FAILED: 'Verification incomplete',
+  CHECK_DONE: 'Verification complete: findings for the Office of the Accountant General', CHECK_FAILED: 'Verification incomplete',
   AUTO_RETURN: 'Returned by the verification: documents missing (automatic return, before 9 Oct 2026)', AUTO_APPROVE: 'Approved: nothing outstanding on the verification',
   GPF_RETURN: 'Returned after the GP Fund examination (automatic, before 9 Oct 2026)',
   FORWARD: "Submitted to Accountant General's Office",

@@ -171,10 +171,10 @@ export function CaseRegister(
   // Left/Right on the tiles move between them (F15).
   const tileKeys = (e: React.KeyboardEvent) => { const n = nextTabFor(BUCKETS, bucket, e.key); if (n) { e.preventDefault(); pickBucket(n); (e.currentTarget.querySelector(`[data-bucket="${n}"]`) as HTMLElement | null)?.focus() } }
 
-  const theirsLabel = isDept ? 'With the Accountant General' : 'With the departments'
+  const theirsLabel = isDept ? 'With the Office of the Accountant General' : 'With the departments'
   const theirsDesc = isDept ? 'Submitted; awaiting the Pension Wing.' : 'Not yet submitted, or returned for correction.'
   const bucketLabel: Record<Bucket, string> = { mine: isDept ? 'Action required' : 'Awaiting decision', theirs: theirsLabel, done: 'Disposed', all: 'All cases' }
-  const showAi = !isDept                                   // the AI's reading is the Accountant General's
+  const showAi = !isDept                                   // the AI's reading is the Office of the Accountant General's
   const showTimeline = isDept                              // where every case stands, on its row
   const cols = 5 + (showDepartment ? 1 : 0) + (showAi ? 1 : 0) + (showTimeline ? 1 : 0)
   const filterWords = [group ? GROUPS.find(g => g.key === group)![isDept ? 'dept' : 'ag'] : null, section || null, dept || null, kind ? (kinds.find(k => k[0] === kind)?.[1] ?? kind) : null].filter(Boolean).join(' · ')
@@ -324,7 +324,7 @@ export function CaseRegister(
                 : run.state === 'done' ? (cleared
                     ? { text: 'Cleared', pill: 'low', title: 'Every finding was cleared and every required document present; the case was approved by an officer.' }
                   : run.high_flags
-                    ? { text: `${run.high_flags} finding${run.high_flags === 1 ? '' : 's'}`, pill: 'medium', title: `The verification found ${run.high_flags} finding${run.high_flags === 1 ? '' : 's'} for the Accountant General to clear.` }
+                    ? { text: `${run.high_flags} finding${run.high_flags === 1 ? '' : 's'}`, pill: 'medium', title: `The verification found ${run.high_flags} finding${run.high_flags === 1 ? '' : 's'} for the Office of the Accountant General to clear.` }
                     : incomplete
                       ? { text: 'Documents missing', pill: 'medium', title: 'No deficiencies in the papers read, but required documents are missing; the engine advises return for correction.' }
                       : { text: 'No deficiencies', pill: 'low', title: 'The latest verification found no deficiencies and every required document.' })
