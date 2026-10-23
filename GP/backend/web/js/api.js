@@ -121,11 +121,8 @@ export const api = {
 
   verify: (caseId, vid, ok, note, officer) =>
     j('POST', `${BASE}/api/cases/${id(caseId)}/verify`, { vid, ok, note, officer }),
-  dispose: (caseId, disposal, note, officer) =>
-    j('POST', `${BASE}/api/cases/${id(caseId)}/dispose`, { disposal, note, officer }),
   setDisposition: (caseId, resultId, action, ground, authority, officer) =>
     j('POST', `${BASE}/api/cases/${id(caseId)}/dispositions`, { resultId, action, ground, authority, officer }),
-  issuePack: (caseId) => j('GET', `${BASE}/api/cases/${id(caseId)}/issue-pack`),
 
   // cure is multipart (optional file) — send FormData directly
   cure: async (caseId, resultId, values, officer, file) => {

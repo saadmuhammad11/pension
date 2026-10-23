@@ -1,7 +1,7 @@
 // GP Fund Pre-Audit — SPA controller. Buildless ES module.
 import { api, BASE, tellPortal } from './api.js';
 import { $, $$, esc, h, badge, toast, openModal, openImageModal, closeModal, trapModalFocus, confirmDialog, inlineNote, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
-import { throttle, sequence, disposalConfirmText, pollBudget } from './pure.js';
+import { throttle, sequence, pollBudget } from './pure.js';
 
 /** Characters of reason a decision carries; the service holds the same minimum. */
 const MIN_REASON = 10;
@@ -305,13 +305,12 @@ async function renderCase(app, id, seq = ROUTE.current) {
       </div>
       <div class="statstrip" style="margin-top:12px">
         ${stat('hard', p.hard, 'Hard stops')}${stat('adv', p.adv, 'Observations')}
-        ${stat('conf', p.conf, 'Verify')}${stat('sap', p.sap, 'SAP items')}
-        ${stat('ok', c.lists.ok.length, 'Satisfied')}
+        ${stat('conf', p.conf, 'Verify')}${stat('ok', c.lists.ok.length, 'Satisfied')}
       </div>
     </div>
     <div class="subnav" id="subnav">
       ${tabBtn('overview', 'Overview')}${tabBtn('sap', 'SAP extracts')}
-      ${tabBtn('exam', 'Examination')}${tabBtn('disposal', 'Disposal')}${tabBtn('issue', 'Issue pack')}
+      ${tabBtn('exam', 'Examination')}
     </div>
     <div id="tabc"></div>`;
   $$('#subnav button').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; renderTab(id, c); });
@@ -328,19 +327,58 @@ function renderTab(id, c) {
   if (state.tab === 'overview') el.innerHTML = viewOverview(c);
   else if (state.tab === 'sap') { el.innerHTML = viewSap(c); wireSap(id); }
   else if (state.tab === 'exam') { el.innerHTML = viewExam(c); wireExam(id, c); }
-  else if (state.tab === 'disposal') { el.innerHTML = viewDisposal(c); wireDisposal(id, c); }
-  else if (state.tab === 'issue') { renderIssue(id, el); }
 }
 
 // ── overview ──────────────────────────────────────────────────────────────────
+/** One line of the summary, as the pension side draws its own (CaseFindings.tsx Row). */
+const sumRow = (k, v) => `<tr><td class="muted" style="width:230px">${esc(k)}</td><td>${v}</td></tr>`;
+
+/** What the office holds of a SAP extract, said in a line rather than left blank. */
+function sapLine(c) {
+  const s = c.sap || {};
+  if (!s.present) return '<span class="muted">Not on the case; the section pulls it from SAP (R1).</span>';
+  const parts = [];
+  if (s.payslip) parts.push('pay slip');
+  if (s.recalc) parts.push(`re-calculation report, ${s.recalc.rows} year${s.recalc.rows === 1 ? '' : 's'}`);
+  if (!parts.length) return '<span class="muted">Nothing readable on the case.</span>';
+  const bad = (s.recalc || {}).doNotReconcile;
+  return esc(parts.join(' · ')) + (bad ? ` <span class="note-error">— ${bad} year${bad === 1 ? '' : 's'} do not add up</span>` : '');
+}
+
+/**
+ * The case in a dozen lines, the way a pension case opens on its Summary (23 Oct 2026).
+ *
+ * This tab was headed "What the reading stage lifted" and was the reading record and nothing
+ * else: a four-column table of fields, sources and model confidences. That is the machine's
+ * account of itself, and it is worth having -- it is kept below -- but it is not what an
+ * officer opening a claim wants first. What they want is whose claim it is, of what kind, how
+ * much of it was read and what the office is holding, which is what the pension side's
+ * Summary gives and this had nowhere at all.
+ */
 function viewOverview(c) {
+  const m = c.meta || {};
   const rec = (c.record || []).map(r => `<tr>
     <td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td class="small muted">${esc(r[2])}</td>
     <td class="small num">${r[3] != null ? (r[3] * 100).toFixed(0) + '%' : ''}</td></tr>`).join('');
+  const pages = m.pages ? String(m.pages) : (c.pageIndex || []).length || '';
   return `
     <div class="panel">
+      <h2>Summary</h2>
+      ${m.note ? `<p class="muted">${esc(m.note)}</p>` : ''}
+      <table><tbody>
+        ${sumRow('Kind of claim', esc(m.kind || '—'))}
+        ${sumRow('Subscriber', esc(m.subject || '—') + (m.nameNote ? ` <span class="muted small">${esc(m.nameNote)}</span>` : ''))}
+        ${sumRow('Personnel no.', `<span class="mono">${esc(m.personnelNo || '—')}</span>`)}
+        ${sumRow('Department', esc(m.dept || '—'))}
+        ${sumRow('Subscriber status', esc(m.gazetted || 'not stated'))}
+        ${sumRow('Pages read', esc(String(pages || '—')))}
+        ${sumRow('SAP extracts', sapLine(c))}
+        ${sumRow('Examination', `version ${esc(String(c.version))}` + (c.issued ? ` · ${esc(c.caseDisp || 'issued')}` : ''))}
+        ${m.diary ? sumRow('Diary no.', esc(m.diary)) : ''}
+      </tbody></table>
+    </div>
+    <div class="panel">
       <h2>What the reading stage lifted</h2>
-      ${c.meta.note ? `<p class="muted">${esc(c.meta.note)}</p>` : ''}
       <div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th><th>Source</th><th class="num">Conf.</th></tr></thead>
         <tbody>${rec || '<tr><td colspan=4 class="muted">No reading record.</td></tr>'}</tbody></table></div>
     </div>`;
@@ -704,81 +742,6 @@ function fieldSelect(f, opts) {
     <select data-k="${esc(f.k)}">${opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}</select></div>`;
 }
 
-
-// ── disposal ──────────────────────────────────────────────────────────────────
-const DISPOSAL_LABEL = {
-  return: 'Return to the department', pay: 'Pass for payment',
-  part: 'Pass for part payment', refer: 'Refer to the DAG (Funds)', hold: 'Hold pending verification',
-};
-
-function viewDisposal(c) {
-  const opts = c.disposalOptions.map(o => `
-    <div class="item"><div class="item-head" style="cursor:default">
-      <span class="item-title">${esc(DISPOSAL_LABEL[o.action] || o.action)}</span>
-      ${o.allowed ? badge('ok', 'available') : `<span class="muted small">${esc(o.reason || 'not available')}</span>`}
-      <button class="btn small primary" data-disp="${esc(o.action)}" ${o.allowed ? '' : 'disabled'}>Do this</button>
-    </div></div>`).join('');
-  return `<div class="panel">
-    <h2>Disposal</h2>
-    <p class="muted small">No case may be disposed while an observation is undisposed, a verification task or SAP item is open,
-      or the re-calculation report does not reconcile. A second return needs the DAG (Funds).</p>
-    ${opts}
-    ${c.issued ? `<div class="banner good" style="margin-top:14px">This case has been ${esc(c.caseDisp || 'issued')} (returns so far: ${c.returns}).</div>` : ''}
-  </div>`;
-}
-
-function wireDisposal(id, c) {
-  $$('#tabc [data-disp]').forEach(b => b.onclick = async () => {
-    const action = b.dataset.disp;
-    const label = DISPOSAL_LABEL[action] || action;
-    // A disposal is the case's outcome: it is confirmed first, naming the case and the outcome,
-    // and sent once (F2). Cancel anywhere along the way records nothing (F1).
-    const sure = await confirmDialog(label, disposalConfirmText(label, c.meta), label);
-    if (!sure) return;
-    const send = async (note) => {
-      await api.dispose(id, action, note, state.officer);
-      toast(label + ' — done');
-      if (action === 'return' || action === 'pay' || action === 'part') { state.tab = 'issue'; }
-      await refresh(id);
-    };
-    if (action === 'return' || action === 'refer' || action === 'hold') {
-      inlineNote(b, { label: 'Note (optional)', confirmLabel: label,
-                      placeholder: 'Recorded against your name in the audit trail…', submit: send });
-      return;
-    }
-    await busy(b, async () => {
-      try { await send(''); } catch (e) { toast(e.message, true); }
-    });
-  });
-}
-
-// ── issue pack ────────────────────────────────────────────────────────────────
-async function renderIssue(id, el) {
-  el.innerHTML = '<div class="panel"><p class="muted">Building the pack…</p></div>';
-  const pk = await api.issuePack(id);
-  const list = (arr) => arr.length ? '<ul>' + arr.map(r =>
-    `<li><b>${esc(r.code || r.ref || '')}</b> — ${esc(r.finding)}${r.remedy ? ` <span class="muted">(${esc(r.remedy)})</span>` : ''}</li>`).join('') + '</ul>'
-    : '<p class="muted small">None.</p>';
-  el.innerHTML = `
-    <div class="panel">
-      <div class="spread"><h2>Issue pack</h2><span class="muted small">generated ${esc(pk.generatedAt)} · version ${pk.version}</span></div>
-      <p class="muted small">${esc(pk.case.label)} · ${esc(pk.case.subject)} · personnel no. ${esc(pk.case.personnelNo)}
-        ${pk.caseDisposal ? '· <span class="pill">' + esc(pk.caseDisposal) + '</span>' : ''}</p>
-      <h3>Claim rejection form (hard stops)</h3>${list(pk.rejectionForm)}
-      <h3>Advisory memorandum</h3>${list(pk.advisoryMemo)}
-      <h3>Waived / settled in office</h3>${list(pk.waivedAndSettled)}
-      <hr class="hr">
-      <h3>Employee Service Portal comment (single instance)</h3>
-      <pre class="small mono" style="white-space:pre-wrap;background:var(--na-bg);padding:12px;border-radius:8px">${esc(pk.portalComment)}</pre>
-      <h3>Documents on file</h3>
-      <div class="table-wrap"><table><thead><tr><th>Kind</th><th>File</th><th>SHA-256</th><th>By</th></tr></thead>
-      <tbody>${[...pk.sapExtracts, ...pk.uploadedDocuments].map(u => `<tr>
-        <td>${esc(u.kind)}</td><td>${esc(u.name)}</td><td class="mono small">${esc((u.hash||'').slice(0,16))}…</td><td>${esc(u.by||'')}</td>
-      </tr>`).join('') || '<tr><td colspan=4 class="muted">None.</td></tr>'}</tbody></table></div>
-      <h3>Payment register entry (circular C(i))</h3>
-      <pre class="small mono" style="white-space:pre-wrap;background:var(--na-bg);padding:12px;border-radius:8px">${esc(JSON.stringify(pk.paymentRegisterEntry, null, 1))}</pre>
-    </div>`;
-}
 
 // ── DOA register ──────────────────────────────────────────────────────────────
 async function renderDoa(app, seq = ROUTE.current) {

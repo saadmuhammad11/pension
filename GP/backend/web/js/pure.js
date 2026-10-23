@@ -74,7 +74,6 @@ export function sequence() {
   };
 }
 
-/** The confirmation text before a disposal (F2): the case and the outcome, in words. */
 /** The heading of a result row: the check's title, and under it the document and signatory the
  *  row is about ("Sanctioning authority, Form A (page 3)"), so six rows of one check do not read
  *  as six copies of the same line (F17). A row with no title is headed by its document. */
@@ -82,10 +81,4 @@ export function itemHeading(r) {
   const title = (r && (r.title || r.doc || r.id)) || '';
   const sub = r && r.title && r.doc && r.doc !== r.title ? r.doc : '';
   return { title, sub };
-}
-
-export function disposalConfirmText(label, kase) {
-  const who = [kase && kase.label, kase && kase.personnelNo ? 'personnel no. ' + kase.personnelNo : '']
-    .filter(Boolean).join(', ');
-  return `${label} — ${who || 'this case'}. This is recorded on the case under your name and cannot be undone here.`;
 }

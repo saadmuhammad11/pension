@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import {
   escapeHtml, encodeId, formatRupees, formatNumber, throttle, pollBudget, sequence,
-  disposalConfirmText, itemHeading,
+  itemHeading,
 } from '../../web/js/pure.js';
 
 test('F13: every value put into HTML is escaped, quotes included', () => {
@@ -60,12 +60,6 @@ test('F13: a slower earlier render is stale once a newer one has started', () =>
   const second = s.next();
   assert.equal(s.isStale(first), true);
   assert.equal(s.isStale(second), false);
-});
-
-test('F2: the disposal confirmation names the outcome and the case', () => {
-  const text = disposalConfirmText('Pass for payment', { label: 'Final payment — Ahmed', personnelNo: '90000227' });
-  assert.match(text, /^Pass for payment — Final payment — Ahmed, personnel no\. 90000227\./);
-  assert.match(disposalConfirmText('Return to the department', null), /this case/);
 });
 
 test('F17: a result row names its document and signatory under the check title', () => {
