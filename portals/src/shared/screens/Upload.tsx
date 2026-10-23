@@ -1,10 +1,17 @@
-/** A new case, in numbered steps: the case type, the papers, whose case it is, save. A pension
- *  case or a GP Fund claim (28 Sep 2026), which needs the kind of claim the GP Fund module will
- *  read it as.
+/** A new case, in numbered steps: the type of case, the papers, whose case it is, file it. A
+ *  pension case or a GP Fund claim (28 Sep 2026), which needs the kind of claim the GP Fund
+ *  module will read it as.
  *
  *  The case type (29 Sep 2026) comes first and is mandatory for a pension case: it decides which
  *  documents the office asks for, so the list is shown as soon as the type is chosen, before
- *  anything is attached. The list of types is config/case_types.json, shared with the rules. */
+ *  anything is attached. The list of types is config/case_types.json, shared with the rules.
+ *
+ *  A GP Fund claim is filed the same way (23 Oct 2026). Its kind sat in the third step, below
+ *  the papers, and defaulted to Final payment -- so a claim could be attached and filed without
+ *  the kind ever being looked at, and a refundable advance filed as a final payment is examined
+ *  against the wrong checks. It is now the first step and starts empty, as the case type does,
+ *  and the papers cannot be attached before it is chosen. The server has always refused a claim
+ *  without a kind it knows (api/v2.create_case). */
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { GPF_KINDS, PRODUCT_WORDS, createCase, departments, fetchCaseTypes, newIdempotencyKey, type CaseTypeInfo, type Department, type Product } from '../api/cases'
 import { checkFiles, progressWords } from '../upload/limits'
@@ -12,6 +19,20 @@ import { useSession } from '../auth/AuthProvider'
 import { CASE_TYPE_LIST } from '../caseTypes'
 
 const kb = (n: number) => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`
+
+/** What each kind of GP Fund claim is, in the office's terms. The pension side shows the
+ *  documents the chosen type requires, from config/case_types.json; the GP Fund module keeps
+ *  its checks to itself and publishes no such list, so this says what the kind MEANS and does
+ *  not pretend to list the papers. Labels are GPF_KINDS, shared with the module (gpf_bridge). */
+const GPF_KIND_HINT: Record<string, string> = {
+  final: 'The balance paid to the subscriber on retirement.',
+  death: 'The balance paid to the family. The heirs and the death papers are examined as well as the balance.',
+  dismissal: 'The balance paid where service ended in dismissal or removal.',
+  refundable: 'An advance recovered from the subscriber\'s pay in instalments.',
+  nonrefundable: 'An advance that is not recovered.',
+  missing_credits: 'Subscriptions deducted from pay but not credited to the account.',
+  balance_transfer: 'The balance moved to another account or another government.',
+}
 
 export function Upload({ product, onCreated, onCancel }: { product: Product; onCreated: (caseId: string) => void; onCancel: () => void }) {
   const { can, user } = useSession()
@@ -25,7 +46,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
   const [typeError, setTypeError] = useState<string | null>(null)
   const [pay, setPay] = useState<Record<string, string>>({})
   const [commutation, setCommutation] = useState('')
-  const [gpfKind, setGpfKind] = useState('final')
+  const [gpfKind, setGpfKind] = useState('')
   const [gazetted, setGazetted] = useState('unknown')
   const gpf = product === 'GPF'
   const [more, setMore] = useState(false)
@@ -64,12 +85,16 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
   const columns = info?.variants ?? []
   const chosenColumn = columns.find(v => v.id === column)
   const required = chosenColumn ? chosenColumn.documents : (info?.documents ?? [])
-  const typeMissing = !gpf && !caseType
+  // Step one, whichever product this is: the pension case's type, or the GP Fund claim's kind.
+  // Both decide what the office checks the papers against, so neither may be skipped and
+  // nothing is attached until one is chosen.
+  const typeMissing = gpf ? !gpfKind : !caseType
+  const typeWord = gpf ? 'kind of claim' : 'case type'
   const columnMissing = !gpf && !!caseType && columns.length > 1 && !column
 
   const add = (list: FileList | null) => {
     if (!list) return
-    if (typeMissing) { setTypeError('Select the case type before attaching documents.'); return }
+    if (typeMissing) { setTypeError(`Select the ${typeWord} before attaching documents.`); return }
     const { accepted, refused: left } = checkFiles(files, Array.from(list))
     setFiles(accepted); setRefused(left)
     attemptKey.current = null                              // the papers changed: a new attempt
@@ -83,7 +108,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (typeMissing) { setTypeError('Select the case type before submitting the case.'); return }
+    if (typeMissing) { setTypeError(`Select the ${typeWord} before filing.`); return }
     if (columnMissing) { setTypeError('Say who is claiming before submitting the case.'); return }
     setBusy(true); setError(null); setProgress(null)
     attemptKey.current ??= newIdempotencyKey()
@@ -106,7 +131,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
   }
 
   const blocked = busy || files.length === 0 || (pickDept && !department) || typeMissing || columnMissing
-  const hint = typeMissing ? 'Select the case type.' : columnMissing ? 'Say who is claiming.' : files.length === 0 ? 'Attach at least one document.' : pickDept && !department ? 'Select the department.'
+  const hint = typeMissing ? `Select the ${typeWord}.` : columnMissing ? 'Say who is claiming.' : files.length === 0 ? 'Attach at least one document.' : pickDept && !department ? 'Select the department.'
     : `${files.length} document${files.length === 1 ? '' : 's'} attached${user?.department_name ? ` · ${user.department_name}` : ''}.`
 
   return (
@@ -114,7 +139,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
       <button className="back" onClick={onCancel}>Back to the register</button>
       <h1 style={{ marginTop: 8 }}>{PRODUCT_WORDS[product].file}</h1>
       <p className="lead">
-        {gpf ? 'Attach every page of the GP Fund claim: the application or sanction, the pay slip, the CNIC, the nomination or death papers as the kind of claim requires. Filing submits the claim to the Office of the Accountant General, where the GP Fund module examines it and the reviewer decides; a missing document is asked for by the reviewer.'
+        {gpf ? 'Choose the kind of claim, then attach every page of it: the application or sanction, the pay slip, the CNIC, the nomination or death papers as that kind requires. Filing submits the claim to the Office of the Accountant General, where the GP Fund module examines it and the reviewer decides; a missing document is asked for by the reviewer.'
              : 'Choose the case type, then attach every document in the pension file. Filing submits the case to the Office of the Accountant General, where it is verified with AI against the checklist for that type and the reviewer decides; a missing document is asked for by the reviewer.'}
       </p>
       {loadError && (
@@ -181,14 +206,41 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
           </div>
         )}
 
+        {gpf && (
+          <div className="card">
+            <h3 className="step-h"><span className="num">{num()}</span>Claim type</h3>
+            <div className="field">
+              <label className="label" htmlFor="gpf-kind">Kind of claim <span style={{ color: 'var(--red)' }} aria-hidden="true">*</span></label>
+              <select id="gpf-kind" value={gpfKind} onChange={e => { setGpfKind(e.target.value); setTypeError(null) }}
+                      required aria-required="true" aria-invalid={!!typeError}
+                      aria-describedby={typeError ? 'gpf-kind-error' : 'gpf-kind-hint'} style={{ fontSize: 16 }}>
+                <option value="">— choose —</option>
+                {GPF_KINDS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select>
+              {typeError
+                ? <div id="gpf-kind-error" className="form-error" role="alert">{typeError}</div>
+                : <div id="gpf-kind-hint" className="hint">{GPF_KIND_HINT[gpfKind] ?? 'Required. It decides which of the office\'s checks the claim is examined against.'}</div>}
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="gazetted">Subscriber</label>
+              <select id="gazetted" value={gazetted} onChange={e => setGazetted(e.target.value)} style={{ fontSize: 16 }}>
+                <option value="unknown">Not stated</option>
+                <option value="gazetted">Gazetted</option>
+                <option value="non-gazetted">Non-gazetted</option>
+              </select>
+              <div className="hint">Optional. Some of the office's checks differ for a gazetted subscriber.</div>
+            </div>
+          </div>
+        )}
+
         <div className="card" style={typeMissing ? { opacity: .6 } : undefined} aria-disabled={typeMissing || undefined}>
           <h3 className="step-h"><span className="num">{num()}</span>Attach the documents</h3>
           <label className="drop" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); add(e.dataTransfer.files) }}
-                 onClick={e => { if (typeMissing) { e.preventDefault(); setTypeError('Select the case type before attaching documents.') } }}>
+                 onClick={e => { if (typeMissing) { e.preventDefault(); setTypeError(`Select the ${typeWord} before attaching documents.`) } }}>
             <input type="file" multiple style={{ display: 'none' }} disabled={typeMissing} onChange={e => { add(e.target.files); e.target.value = '' }}
                    accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.gif,.webp,.doc,.docx,.odt,.rtf,.txt,.xls,.xlsx,.csv,.zip"
                    aria-label="Select the documents" />
-            <div style={{ fontWeight: 800, fontSize: 17 }}>{typeMissing ? 'Select the case type first' : 'Select files, or drag them here'}</div>
+            <div style={{ fontWeight: 800, fontSize: 17 }}>{typeMissing ? `Select the ${typeWord} first` : 'Select files, or drag them here'}</div>
             <button type="button" className="primary" style={{ marginTop: 10 }} disabled={typeMissing}
                     onClick={e => { (e.currentTarget.closest('label')?.querySelector('input[type=file]') as HTMLInputElement | null)?.click() }}>
               Choose files
@@ -224,30 +276,11 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
         </div>
 
         <div className="card">
-          <h3 className="step-h"><span className="num">{num()}</span>{gpf ? 'Claim' : 'Claimant'}</h3>
+          <h3 className="step-h"><span className="num">{num()}</span>{gpf ? 'Subscriber' : 'Claimant'}</h3>
           <div className="field">
             <label className="label" htmlFor="claimant">{gpf ? 'Subscriber\'s name' : 'Claimant\'s name'}</label>
             <input id="claimant" value={claimant} onChange={e => setClaimant(e.target.value)} placeholder="Optional; extracted from the documents if left blank" style={{ fontSize: 16 }} />
           </div>
-          {gpf && (
-            <div className="row" style={{ gap: 12, marginTop: 10, alignItems: 'flex-start' }}>
-              <div className="field" style={{ flex: '1 1 260px' }}>
-                <label className="label" htmlFor="gpf-kind">Kind of claim</label>
-                <select id="gpf-kind" value={gpfKind} onChange={e => setGpfKind(e.target.value)} style={{ fontSize: 16 }}>
-                  {GPF_KINDS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
-                </select>
-                <div className="hint">Decides which of the office's checks apply.</div>
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="label" htmlFor="gazetted">Subscriber</label>
-                <select id="gazetted" value={gazetted} onChange={e => setGazetted(e.target.value)} style={{ fontSize: 16 }}>
-                  <option value="unknown">Not stated</option>
-                  <option value="gazetted">Gazetted</option>
-                  <option value="non-gazetted">Non-gazetted</option>
-                </select>
-              </div>
-            </div>
-          )}
           {!gpf && can?.intake_choices && (
             <>
               <button type="button" className="ghost" style={{ marginTop: 10 }} onClick={() => setMore(!more)}>
@@ -299,8 +332,8 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
             <div className="help">{hint}</div>
           </div>
           <button className="primary big" type="submit" disabled={blocked}
-                  onClick={e => { if (typeMissing) { e.preventDefault(); setTypeError('Select the case type before submitting the case.') } }}>
-            {busy ? 'Filing…' : 'File case and submit'}
+                  onClick={e => { if (typeMissing) { e.preventDefault(); setTypeError(`Select the ${typeWord} before filing.`) } }}>
+            {busy ? 'Filing…' : `File ${gpf ? 'claim' : 'case'} and submit`}
           </button>
         </div>
       </form>
