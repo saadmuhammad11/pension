@@ -35,7 +35,10 @@ export function applyTheme(theme: Theme): void {
   set('--accent-a18', rgba(theme.accent, 0.18))
   set('--accent-a55', rgba(theme.accent, 0.55))
   set('--overlay', rgba(theme.primary, 0.72))
-  document.title = `${theme.title} — Government of the Punjab`
+  // The tab says what the header says: the portal, then whose office runs it (23 Oct 2026).
+  // It was "SERVE PUNJAB — Government of the Punjab", the one place the phrase outlived the
+  // header bar, and the one a bookmark keeps.
+  document.title = `${theme.title} — ${theme.subtitle}`
   let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
   if (!meta) {
     meta = document.createElement('meta')

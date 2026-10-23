@@ -25,7 +25,7 @@ const AG_FALLBACK: PortalConfig = {
   theme: {
     // SERVE PUNJAB, named by the office 22 Oct 2026. The expansion is on the sign-in page and
     // not here: this subtitle is the header's second line on every screen (api/themes.py).
-    title: 'SERVE PUNJAB', subtitle: 'Government of the Punjab, Office of the Accountant General, Lahore',
+    title: 'SERVE PUNJAB', subtitle: 'Office of the Accountant General Punjab',
     primary: '#0E3527', primary2: '#18573F', primary3: '#1F6B4D', tint: '#EDF4EE', tint2: '#E2EEE8',
     accent: '#C9A227', accent2: '#E7C55B', ink: '#17211C', muted: '#5F6B64', line: '#E3E7E4', bg: '#F5F6F4',
   },

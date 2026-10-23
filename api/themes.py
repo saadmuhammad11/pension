@@ -14,6 +14,14 @@ from __future__ import annotations
 # The text, line and page greys of the 28 Sep 2026 modern layer, shared by every palette.
 _GREYS = {"ink": "#17211C", "muted": "#5F6B64", "line": "#E3E7E4", "bg": "#F5F6F4"}
 
+#: Whose office runs this system: the second line of the header bar, on every screen of every
+#: portal (23 Oct 2026). Every portal's, because every portal is the Accountant General's -- a
+#: department signs in here to file WITH this office, and its own name is the title on the line
+#: directly above. It said "Government of the Punjab", alone or after the department's name,
+#: and the government is not the thing an officer needs naming at the top of a pension case.
+#: The sign-in page says the same words (screens/Login.tsx); nothing else reads this.
+_OFFICE = {"subtitle": "Office of the Accountant General Punjab"}
+
 THEMES: dict[str, dict] = {
     # The greens are the office's own, read off the sign-in mock-up it sent on 22 Oct 2026
     # (--brand-900/800/700/600 there, --brand-100 as the second tint). They are darker and
@@ -23,47 +31,37 @@ THEMES: dict[str, dict] = {
     # 14px text, and it was the colour of the sign-in kicker; #1F6B4D measures 5.9:1.
     "ag": {"primary": "#0E3527", "primary2": "#18573F", "primary3": "#1F6B4D",
            "tint": "#EDF4EE", "tint2": "#E2EEE8", "accent": "#C9A227", "accent2": "#E7C55B",
-           **_GREYS,
-           # The system's name became SERVE PUNJAB on 22 Oct 2026, and the words it stands for
-           # were put in this subtitle so the acronym could lead and the expansion be read once.
-           # Once was not what happened: this subtitle is the second line of the header on every
-           # screen of the portal, so the expansion was read on all of them, ahead of the office
-           # whose name the line is for -- and a DDO signing in at the single portal got it too.
-           # It belongs on the sign-in page, which says it in full under the name (Login.tsx),
-           # and nowhere after that. What a header says is whose office this is.
-           "subtitle": "Government of the Punjab, Office of the Accountant General, Lahore"},
+           **_GREYS, **_OFFICE},
     "police": {"primary": "#140D44", "primary2": "#0C2466", "primary3": "#2E3192",
                "tint": "#EEF0F8", "tint2": "#DCE0F2", "accent": "#D4A017", "accent2": "#E8BE4B",
-               **_GREYS,
-               "subtitle": "Punjab Police · Government of the Punjab"},
+               **_GREYS, **_OFFICE},
     "education": {"primary": "#032B2B", "primary2": "#053739", "primary3": "#4A968D",
                   "tint": "#EAF4F2", "tint2": "#D6E8E4", "accent": "#D5A316", "accent2": "#E9BE45",
-                  **_GREYS,
-                  "subtitle": "School Education Department · Government of the Punjab"},
+                  **_GREYS, **_OFFICE},
     "health": {"primary": "#0B4F6C", "primary2": "#136F8C", "primary3": "#2B8FAE",
                "tint": "#EAF3F7", "tint2": "#D5E7EE", "accent": "#C9A227", "accent2": "#E7C55B",
-               **_GREYS, "subtitle": "Health · Government of the Punjab"},
+               **_GREYS, **_OFFICE},
     "hospital": {"primary": "#0F5E5A", "primary2": "#177D78", "primary3": "#2E9C96",
                  "tint": "#E9F5F4", "tint2": "#D2ECEA", "accent": "#C9A227", "accent2": "#E7C55B",
-                 **_GREYS, "subtitle": "Specialized Healthcare & Medical Education · Government of the Punjab"},
+                 **_GREYS, **_OFFICE},
     "rescue": {"primary": "#7F1D1D", "primary2": "#A32A2A", "primary3": "#C64545",
                "tint": "#FBEEEE", "tint2": "#F4D9D9", "accent": "#1F3A5F", "accent2": "#3C5F8F",
-               **_GREYS, "subtitle": "Punjab Emergency Service · Government of the Punjab"},
+               **_GREYS, **_OFFICE},
     "justice": {"primary": "#4A1C2B", "primary2": "#6B2437", "primary3": "#8E3A50",
                 "tint": "#F6EEF0", "tint2": "#EBD9DE", "accent": "#C9A227", "accent2": "#E7C55B",
-                **_GREYS, "subtitle": "Government of the Punjab"},
+                **_GREYS, **_OFFICE},
     "finance": {"primary": "#0F2A4A", "primary2": "#16406E", "primary3": "#2D5F95",
                 "tint": "#ECF1F7", "tint2": "#D8E3F0", "accent": "#C9A227", "accent2": "#E7C55B",
-                **_GREYS, "subtitle": "Government of the Punjab"},
+                **_GREYS, **_OFFICE},
     "agriculture": {"primary": "#245C2E", "primary2": "#357F41", "primary3": "#4F9E5A",
                     "tint": "#ECF4EC", "tint2": "#D7E9D8", "accent": "#C9A227", "accent2": "#E7C55B",
-                    **_GREYS, "subtitle": "Government of the Punjab"},
+                    **_GREYS, **_OFFICE},
     "infrastructure": {"primary": "#263B57", "primary2": "#35527A", "primary3": "#4E71A0",
                        "tint": "#EEF2F7", "tint2": "#DCE4EE", "accent": "#C9A227", "accent2": "#E7C55B",
-                       **_GREYS, "subtitle": "Government of the Punjab"},
+                       **_GREYS, **_OFFICE},
     "secretariat": {"primary": "#1E3D34", "primary2": "#2C5A4C", "primary3": "#3F7A67",
                     "tint": "#EDF3F1", "tint2": "#DAE8E3", "accent": "#C9A227", "accent2": "#E7C55B",
-                    **_GREYS, "subtitle": "Government of the Punjab"},
+                    **_GREYS, **_OFFICE},
 }
 
 SLOTS = ("primary", "primary2", "primary3", "tint", "tint2", "accent", "accent2", "ink", "muted", "line", "bg")
