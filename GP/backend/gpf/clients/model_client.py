@@ -312,7 +312,15 @@ class VllmModelClient:
                                                field_class=fm[name].field_class)
         # The re-calculation report is a ledger TABLE — read its rows in a second call.
         if art is Artefact.SAP_GPF_RECALC_REPORT:
-            rows, conf = self._extract_recalc_rows(image_ref)
+            # The rows are an enrichment -- every caller below guards on `if rows` -- so a
+            # ledger that cannot be read costs the office the table, never the examination.
+            # The fund-block read ten lines above has been wrapped this way since 30 Sep 2026
+            # ("the vision read stands"); this one was not, and a JSONDecodeError out of it
+            # failed the whole case.
+            try:
+                rows, conf = self._extract_recalc_rows(image_ref)
+            except Exception:                              # noqa: BLE001 -- the rest of the read stands
+                rows, conf = [], 0.0
             if rows:
                 res["rows"] = ExtractedField(value=rows, confidence=conf, field_class="financial")
         return res
@@ -341,10 +349,26 @@ class VllmModelClient:
                 {"type": "text", "text": "Extract all ledger rows as JSON."},
                 {"type": "image_url", "image_url": {"url": self._image_url(image_ref)}}]},
         ]
-        out = self._chat(self.vision_url, self.vision_model, msg, temperature=0, max_tokens=4000,
+        # 12000, not 4000. The ledger is one row a year with ten numeric columns, so a long
+        # service history is a long answer: at roughly two characters a token for dense
+        # numeric JSON, 4000 tokens ran out around 7,700 characters. PC-2026-000050 hit it
+        # twice on 23 Oct 2026 -- "Expecting ',' delimiter: line 1 column 7681" and then
+        # "Expecting value: line 1 column 7740", two generations stopping 59 characters apart,
+        # which is a ceiling rather than a coincidence.
+        out = self._chat(self.vision_url, self.vision_model, msg, temperature=0, max_tokens=12000,
                          response_format={"type": "json_schema",
                                           "json_schema": {"name": "recalc", "schema": schema}})
-        data = json.loads(out["choices"][0]["message"]["content"])
+        # A reply that ran out of room is not a reply. vLLM says so in finish_reason, and
+        # nothing here read it: the JSON came back cut mid-number and json.loads raised, which
+        # is how a page the office could not read became a case the office could not examine.
+        choice = (out.get("choices") or [{}])[0]
+        content = (choice.get("message") or {}).get("content") or ""
+        if choice.get("finish_reason") == "length":
+            return [], 0.0
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            return [], 0.0
         return data.get("rows", []), float(data.get("confidence", 0.8))
 
     def phrase_observation(self, result: dict) -> str:
