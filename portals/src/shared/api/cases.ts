@@ -483,6 +483,13 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
   }
   if (c.status === 'FORWARDED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: 'Received: verify the case with AI', text: 'The verification reads every document. Its findings, and any missing documents, come to you for a decision; nothing is approved or returned automatically.' }
   if (c.status === 'AI_FAILED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: m.label, text: m.ag }
+  // No banner while the examination is on the screen (23 Oct 2026). It read "Verification in
+  // progress / Verification takes 10 to 20 minutes. You may leave this page and return; the
+  // outcome brings the case to you for a decision. Nothing is approved or returned
+  // automatically." -- above a live bar, a running clock, the page being read and the stage
+  // being worked, all of which say it better and say it as it happens. The department keeps
+  // its own line above: a DDO has no analysis screen, only the fact that the office is on it.
+  if (c.status === 'AI_CHECKING') return { action: null, quiet: true, title: m.label, text: m.ag }
   if (c.status === 'UNDER_REVIEW' && a.has('APPROVE')) return { action: null, title: 'Findings await your decision', text: m.ag }
   // No banner at a desk inside the office (22 Oct 2026). It read "Review the findings, then
   // forward or return / Clear each finding and check the documents. Forward the case to the

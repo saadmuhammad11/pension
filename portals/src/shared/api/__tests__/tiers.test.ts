@@ -27,6 +27,16 @@ describe('tier moves', () => {
     expect(step.quiet).toBe(true)
     expect(step.action).toBeNull()
   })
+  it('the examination draws no banner over itself', () => {
+    // "Verification in progress / Verification takes 10 to 20 minutes..." sat above a live
+    // bar, a running clock and the page being read, all of which say it as it happens.
+    const ag = nextStep({ status: 'AI_CHECKING', allowed_actions: [] }, 'AG_SENIOR_AUDITOR')
+    expect(ag.quiet).toBe(true)
+    // The department has no analysis screen, only the fact that the office is on it.
+    const dept = nextStep({ status: 'AI_CHECKING', allowed_actions: [] }, 'DEPT_OFFICER')
+    expect(dept.quiet).toBeUndefined()
+    expect(dept.text).toMatch(/Office of the Accountant General is verifying/)
+  })
   it('the Accounts Officer keeps a banner: it says what no button says', () => {
     const ao = nextStep({ status: 'UNDER_REVIEW', allowed_actions: ['APPROVE', 'REJECT', 'RETURN_TIER'] }, 'AG_AO')
     expect(ao.title).toBe('Findings await your decision')
