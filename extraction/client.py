@@ -553,7 +553,11 @@ def extract_page_confirmed(
                 _identifier_digits(second.data.get("identity_number")) != \
                 _identifier_digits(first.data.get("identity_number")):
             second.data["identity_number"] = None
-    a, b = _figures_that_matter(first.data), _figures_that_matter(second.data)
+    # Pay lines are compared on their folded label and their amount: see _fold_pay_label for
+    # why the label is folded and for what survives the folding.
+    a_rows, b_rows = _figures_that_matter(first.data), _figures_that_matter(second.data)
+    a = [(_fold_pay_label(label), amount) for label, amount in a_rows]
+    b = [(_fold_pay_label(label), amount) for label, amount in b_rows]
     printed_a, printed_b = _printed_figures(first.data), _printed_figures(second.data)
     dates_a, dates_b = _dated_fields(first.data), _dated_fields(second.data)
     agree = a == b and printed_a == printed_b and dates_a == dates_b
@@ -577,8 +581,8 @@ def extract_page_confirmed(
             f"{rejected[0]}"
         )
     if not agree:
-        only_a = [x for x in a if x not in b]
-        only_b = [x for x in b if x not in a]
+        only_a = [raw for raw, folded in zip(a_rows, a) if folded not in b]
+        only_b = [raw for raw, folded in zip(b_rows, b) if folded not in a]
         disputed = sorted(
             {f"pay line '{label}'" for label, _ in (*only_a, *only_b)}
             | {k for k in set(printed_a) | set(printed_b) if printed_a.get(k) != printed_b.get(k)}
@@ -659,6 +663,32 @@ def _figures_that_matter(data: dict[str, Any]) -> list[tuple[str, Any]]:
             continue
         rows.append((label, c.get("amount_rs")))
     return rows
+
+
+#: The shapes a page reader confuses, folded together before two reads are compared: capital I,
+#: lowercase l, the digit one and a bare pipe are one stroke in most printed payrolls, and the
+#: letter O and the digit zero are one ring.
+_ONE_STROKE = str.maketrans({"i": "l", "1": "l", "|": "l", "0": "o"})
+
+
+def _fold_pay_label(label: str) -> str:
+    """A pay line's printed label, reduced to what two reads must actually agree on.
+
+    Two reads of PC-2026-000038 p.18 returned 'Adhoc Rel AI 15% 22(PS17)' and 'Adhoc Rel Al
+    15% 22(PS17)' -- a capital I against a lowercase l, the same stroke on the page -- and
+    because the comparison below was list equality over (label, amount), the page was recorded
+    as unusable, its figures were blanked, and a HIGH flag returned the case to the department.
+    The amounts were identical. Across the seven S&GAD cases re-verified on 23 Oct 2026 this
+    was the most common HIGH flag on the sheet, and most of it was spelling: 'Integrated All.',
+    'Adhoc Relief', 'Basic Pay', 'Conveyance', 'House Rent', 'Medical'.
+
+    A label is how the payroll names a row; the AMOUNT is what the determination uses, and the
+    amount is still compared to the rupee. What is folded here is case, spacing, punctuation
+    and the two sets of characters that share a shape -- nothing that distinguishes one pay
+    line from another. 'Adhoc Relief 2010' and 'Adhoc Relief 2020' stay different, and a row
+    present in one read and absent from the other is still a disagreement.
+    """
+    return "".join(ch for ch in label.lower().translate(_ONE_STROKE) if ch.isalnum())
 
 
 def _printed_figures(data: dict[str, Any]) -> dict[str, Any]:

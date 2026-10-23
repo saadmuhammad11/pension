@@ -39,6 +39,14 @@ FORM_A = {"date_of_birth": {"value": "1966-06-30", "confidence": 0.9}, "date_of_
 FORM_B_SAME = {**FORM_A, "pay_components": [dict(c) for c in FORM_A["pay_components"]]}
 FORM_B_FIGURE = {**FORM_A, "pay_components": [{"printed_label": "Basic Pay", "amount_rs": 178400}, {"printed_label": "Personal Pay", "amount_rs": 13590}]}
 FORM_B_DATE = {**FORM_A, "date_of_birth": {"value": "1956-06-30", "confidence": 0.9}}
+#: PC-2026-000038 p.18, 23 Oct 2026: the same two pay lines to the rupee, one label carrying a
+#: capital I where the other read saw a lowercase l, the other differing in case and a full
+#: stop. Both spellings of each are line items -- what is tested here is the comparison, not
+#: the classifier.
+LABEL_A = {**FORM_A, "pay_components": [{"printed_label": "Adhoc Rel AI 15% 22(PS17)", "amount_rs": 7500},
+                                        {"printed_label": "Basic Pay", "amount_rs": 178440}]}
+LABEL_B = {**FORM_A, "pay_components": [{"printed_label": "Adhoc Rel Al 15% 22(PS17)", "amount_rs": 7500},
+                                        {"printed_label": "BASIC  PAY.", "amount_rs": 178440}]}
 
 
 class TheReader(unittest.TestCase):
@@ -49,6 +57,42 @@ class TheReader(unittest.TestCase):
         self.assertNotIn("disputed", agreement)
         self.assertEqual(ext.data["total_pay_printed_rs"], 192030)
         self.assertEqual(len(ext.data["pay_components"]), 2)
+
+    def test_a_label_spelled_differently_is_not_a_disagreement(self):
+        """Two reads that differ only in how a pay line is SPELLED agree (23 Oct 2026).
+
+        'Adhoc Rel AI 15% 22(PS17)' against 'Adhoc Rel Al 15% 22(PS17)' -- one stroke on the
+        page read two ways -- blanked the figures of PC-2026-000038 p.18 and returned the case
+        to the department, with every amount identical. Across the seven S&GAD cases
+        re-verified that morning this was the commonest HIGH flag on the sheet, and most of it
+        was spelling. The amount is what the determination uses and is still compared exactly.
+        """
+        with _reads(LABEL_A, LABEL_B):
+            ext, agreement = client.extract_page_confirmed("p041.png", schema_name="FORM_D_I")
+        self.assertTrue(agreement["agree"], agreement.get("disputed"))
+        self.assertNotIn("disputed", agreement)
+        self.assertEqual(len(ext.data["pay_components"]), 2)             # nothing blanked
+        self.assertEqual(ext.data["total_pay_printed_rs"], 192030)
+
+    def test_the_same_label_with_a_different_amount_still_stops_the_page(self):
+        """The fold is on the label only: a rupee apart is still a disagreement."""
+        changed = {**FORM_A, "pay_components": [{"printed_label": "BasIc  Pay", "amount_rs": 178441},
+                                                {"printed_label": "Personal Pay", "amount_rs": 13590}]}
+        with _reads(FORM_A, changed):
+            ext, agreement = client.extract_page_confirmed("p041.png", schema_name="FORM_D_I")
+        self.assertFalse(agreement["agree"])
+        self.assertEqual(sorted(agreement["disputed"]),
+                         sorted(["pay line 'Basic Pay'", "pay line 'BasIc  Pay'"]))
+        self.assertEqual(ext.data["pay_components"], [])
+
+    def test_a_pay_line_only_one_read_saw_is_still_a_disagreement(self):
+        """Folding merges spellings, not rows: a line in one read and not the other stands."""
+        extra = {**FORM_A, "pay_components": [*[dict(c) for c in FORM_A["pay_components"]],
+                                              {"printed_label": "Conveyance", "amount_rs": 5000}]}
+        with _reads(FORM_A, extra):
+            _, agreement = client.extract_page_confirmed("p041.png", schema_name="FORM_D_I")
+        self.assertFalse(agreement["agree"])
+        self.assertIn("pay line 'Conveyance'", agreement["disputed"])
 
     def test_a_differing_pay_line_blanks_the_page_s_figures(self):
         with _reads(FORM_A, FORM_B_FIGURE):
