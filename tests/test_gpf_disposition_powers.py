@@ -42,13 +42,24 @@ class ThePermissionTable(unittest.TestCase):
                 self.assertTrue(may("uphold", sev, by[band]), (band, sev))
         self.assertEqual(by["dag"]["level"], 3)
 
-    def test_what_the_bands_still_decide(self):
-        """Not everything is open: these two still follow the band."""
+    def test_every_examining_tier_records_a_verification(self):
+        """Office decision of 23 Oct 2026. Verifying wanted level 2, which refused the Dealing
+        Assistant band -- and that is the band a Senior Auditor arrives in (OFFICER_FOR_ROLE),
+        whose own work the tier design has called verifying since 9 Oct 2026 (C3, capabilities).
+        """
         from gpf.engine import OFFICERS, may
         by = {o["id"]: o for o in OFFICERS}
-        self.assertFalse(may("verify", None, by["da"]))      # a verification needs the AO or above
-        self.assertTrue(may("verify", None, by["ao"]))
+        from api.gpf_bridge import OFFICER_FOR_ROLE
+        for band in ("da", "ao", "dag"):
+            self.assertTrue(may("verify", None, by[band]), band)
+        self.assertEqual(OFFICER_FOR_ROLE.get("AG_SENIOR_AUDITOR"), "da")
+
+    def test_what_the_bands_still_decide(self):
+        """Not everything is open: referring still follows the band."""
+        from gpf.engine import OFFICERS, may
+        by = {o["id"]: o for o in OFFICERS}
         self.assertFalse(may("refer", "hard", by["dag"]))    # nothing above the DAG to refer to
+        self.assertTrue(may("refer", "hard", by["da"]))
 
     def test_the_pension_side_maps_the_deputy_ag_to_the_dag_band(self):
         from api.gpf_bridge import OFFICER_FOR_ROLE

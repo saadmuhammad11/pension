@@ -174,7 +174,14 @@ def may(action: str, sev: Optional[str], officer: dict) -> bool:
         # corrected is still the Deputy AG's.
         return True
     if action == "verify":
-        return L >= 2
+        # Every examining tier records a verification (office decision, 23 Oct 2026). The tier
+        # design the portal has carried since 9 Oct 2026 reads "the Senior Auditor verifies and
+        # talks to the department; the Accounts Officer decides" (api/v2.capabilities, C3), and
+        # this module wanted level 2 -- so it refused the very desk whose work verifying is. A
+        # Senior Auditor arrives here in the "da" band (api/gpf_bridge.OFFICER_FOR_ROLE) and was
+        # answered 403 on every press. Verifying now sits with waive, correct and upload: the
+        # officer's name, designation and note go on the record, and the rule reads it back.
+        return True
     if action == "upload":
         return True
     return False
@@ -184,7 +191,7 @@ def who_can(action: str, sev: Optional[str]) -> str:
     if action == "correct":
         return "any examining officer, with written grounds"
     if action == "verify":
-        return "the Accounts Officer or above"
+        return "any examining officer, who signs the verification with their note"
     if action == "refer":
         # Only upward, and the DAG (Funds) is the top of the chain.
         return "an officer below the Deputy Accountant General (Funds), who has someone to refer to"

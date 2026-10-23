@@ -6,16 +6,24 @@ branches do not upload anything:
 
   * ``kind == "verify"`` records the officer's own verification -- the DOA signature check,
     the thumb impression, the death-claim check -- which the dedicated ``verify`` route
-    reserves to the Accounts Officer or above.
+    gated separately.
   * ``kind == "qr"`` marks the sanction's QR code decoded and agreeing, which clears the
     sanction check.
 
 Both also defaulted their result to "it passed": ``values.get("ok", True)`` and
 ``values.get("agrees", True)``, so a caller that sent nothing at all recorded a pass.
 
-Together that is a Dealing Assistant clearing a hard stop with an empty payload, through a
-route the UI does not even use for these kinds -- app.js calls api.verify for a verify item.
-The audit recorded "No test covers this path." This is that test.
+Together that is an officer clearing a hard stop with an empty payload, through a route the
+UI does not even use for these kinds -- app.js calls api.verify for a verify item. The audit
+recorded "No test covers this path." This is that test.
+
+WHO may verify changed on 23 Oct 2026: every examining tier records a verification, the
+Dealing Assistant band included, because that band is where a Senior Auditor arrives and
+verifying is the Senior Auditor's own work (see test_verify_button_matches_the_band.py). The
+audit's finding is not retired by that. Its substance was that each branch must be gated by
+the permission ITS OWN action needs rather than by the route's ``may("upload")``, which is
+true for any answer ``may("verify")`` gives -- so that guarantee is tested here against a
+stand-in rule, not against today's policy.
 """
 import copy
 from pathlib import Path
@@ -60,22 +68,27 @@ def case_with_verify_item(svc):
     return cid, _a_verify_item(svc, cid)
 
 
-class TestTheDealingAssistantMayNotVerify:
-    def test_not_through_the_cure_route(self, svc, case_with_verify_item):
+class TestTheCureRouteIsGatedByTheActionNotTheDoor:
+    """H-14's substance, stated so that it outlives any decision about who may verify."""
+
+    def test_a_refused_verification_is_refused_at_the_cure_door_too(
+            self, svc, case_with_verify_item, monkeypatch):
+        """``may("upload")`` is True for every band, so if the cure route leaned on that alone,
+        a desk barred from verifying could record a verification through it. Verifying is open
+        to every tier today; this holds the route to the rule whatever the rule says."""
+        from gpf import service as service_mod
+        monkeypatch.setattr(service_mod, "may",
+                            lambda action, sev, officer: action != "verify")
         cid, item = case_with_verify_item
         with pytest.raises(ServiceError) as e:
             svc.cure(cid, item["id"], {"ok": True, "note": "looks fine"}, officer_id="da")
         assert e.value.status == 403
-        assert "Accounts Officer" in str(e.value)
+        assert "verification" in str(e.value)
 
-    def test_nor_through_the_route_that_always_checked(self, svc, case_with_verify_item):
-        """The dedicated route's guard is the one being matched; it must still hold."""
-        cid, item = case_with_verify_item
-        with pytest.raises(ServiceError) as e:
-            svc.verify(cid, item["cure"]["vid"], True, "looks fine", officer_id="da")
-        assert e.value.status == 403
-
-    def test_and_nothing_was_recorded_by_the_refused_attempt(self, svc, case_with_verify_item):
+    def test_and_the_refused_attempt_records_nothing(self, svc, case_with_verify_item, monkeypatch):
+        from gpf import service as service_mod
+        monkeypatch.setattr(service_mod, "may",
+                            lambda action, sev, officer: action != "verify")
         cid, item = case_with_verify_item
         before = svc.view(cid)["version"]
         with pytest.raises(ServiceError):
@@ -83,6 +96,20 @@ class TestTheDealingAssistantMayNotVerify:
         after = svc.view(cid)
         assert after["version"] == before, "a refused cure must not advance the case"
         assert not any("Cure by upload" in a["what"] for a in after["audit"][-3:])
+
+
+class TestEveryExaminingTierVerifies:
+    """Office decision of 23 Oct 2026. Both doors, since app.js uses one and the API the other."""
+
+    def test_through_the_dedicated_route(self, svc, case_with_verify_item):
+        cid, item = case_with_verify_item
+        svc.verify(cid, item["cure"]["vid"], True, "seen against the original", officer_id="da")
+        assert any(a["what"] == "Verification recorded" for a in svc.view(cid)["audit"])
+
+    def test_and_through_the_cure_route(self, svc, case_with_verify_item):
+        cid, item = case_with_verify_item
+        svc.cure(cid, item["id"], {"ok": True, "note": "looks fine"}, officer_id="da")
+        assert any("Cure by upload" in a["what"] for a in svc.view(cid)["audit"])
 
 
 class TestTheAccountsOfficerStillMay:
@@ -111,13 +138,13 @@ class TestAResultIsStatedNotDefaulted:
 
 
 class TestUploadingIsStillEveryonesToDo:
-    def test_the_band_gate_did_not_spread_to_document_cures(self, svc):
-        """Only the two branches that verify are gated. A Dealing Assistant still sends the
-        document a remedy asks for -- that is the clerk's job, and the point of `cure`."""
+    def test_sending_the_document_a_remedy_asks_for_is_the_clerks_job(self, svc):
+        """The point of `cure`, and never gated by band. Verifying joined it on 23 Oct 2026;
+        what the two still do NOT share is the gate itself -- see the class above."""
         from gpf.engine import may
         da = {"id": "da", "level": 1}
         assert may("upload", None, da) is True
-        assert may("verify", None, da) is False
+        assert may("verify", None, da) is True
 
 
 class TestTheQrCureIsAVerificationToo:
