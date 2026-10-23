@@ -24,6 +24,7 @@ from .engine import (CaseState, OFFICERS, disposition_in_force, fingerprint, is_
                      who_can)
 from .fixtures import CASES, all_case_keys, load_case
 from .rules_family import CURES, fund_position
+from .sap import recalc_discrepancies
 from .store import CaseRepository, DocumentStore
 
 
@@ -238,10 +239,14 @@ class CaseService:
                         # closing: Rs 0" read as the fund balance, when on PC-2026-000070 it
                         # was the year still open (01.07.2026 to 30.06.2027) and the balance
                         # carried into it was Rs 883,646 (23 Oct 2026).
+                        # Whether the table adds up, on the page the officer reads it from. A
+                        # misread ledger looked exactly like a read one until 23 Oct 2026.
                         "recalc": {"reportDate": rc.get("reportDate"), "rows": len(rows),
                                    "lastStart": last.get("start"), "lastEnd": last.get("end"),
                                    "lastOpening": last.get("opening"),
-                                   "lastClosing": last.get("closing")} if rows else None}
+                                   "lastClosing": last.get("closing"),
+                                   "doNotReconcile": len({d["row"] for d in recalc_discrepancies(rc)}),
+                                   } if rows else None}
         return {
             "id": case_id, "template": s.k, "version": s.version, "issued": s.issued,
             "returns": s.returns, "withoutSap": s.without_sap,

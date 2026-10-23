@@ -72,6 +72,10 @@
       [
         "SAP-RECALC",
         "ok"
+      ],
+      [
+        "RECALC-ADDS-UP",
+        "ok"
       ]
     ],
     "withoutSap": [
@@ -222,6 +226,10 @@
       [
         "THUMB:gpf10",
         "conf"
+      ],
+      [
+        "RECALC-ADDS-UP",
+        "ok"
       ]
     ],
     "withoutSap": [
@@ -375,6 +383,10 @@
       ],
       [
         "SAP-RECALC",
+        "ok"
+      ],
+      [
+        "RECALC-ADDS-UP",
         "ok"
       ]
     ],
@@ -572,6 +584,10 @@
       [
         "SAP-RECALC",
         "ok"
+      ],
+      [
+        "RECALC-ADDS-UP",
+        "ok"
       ]
     ],
     "withoutSap": [
@@ -694,6 +710,10 @@
       [
         "SIG-CNIC",
         "conf"
+      ],
+      [
+        "RECALC-ADDS-UP",
+        "ok"
       ]
     ],
     "withoutSap": [
@@ -832,6 +852,10 @@
       [
         "SIG-CNIC",
         "conf"
+      ],
+      [
+        "RECALC-ADDS-UP",
+        "ok"
       ]
     ],
     "withoutSap": [

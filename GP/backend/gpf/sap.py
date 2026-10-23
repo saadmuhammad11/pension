@@ -108,6 +108,69 @@ def check_sap_against_case(ex: dict, F: dict) -> list[str]:
     return issues
 
 
+#: Rupees a row may be out by and still be called right: the report prints whole rupees, so
+#: anything above this is a figure read wrongly, not a rounding.
+RECALC_TOLERANCE = 1.0
+
+
+def _n(row: dict, key: str) -> float:
+    v = row.get(key)
+    return float(v) if isinstance(v, (int, float)) else 0.0
+
+
+def row_should_close_at(row: dict) -> float:
+    """What a year's closing balance has to be, from the year's own movements.
+
+    The report's columns are an equation, and it is the only check on the reading that needs
+    nothing but the page itself: the fund is opened, subscribed to and credited with interest,
+    an advance drawn comes out of it and a recovery goes back in.
+    """
+    return (_n(row, "opening") + _n(row, "subscription") + _n(row, "adjustments")
+            - _n(row, "tempAdvance") + _n(row, "recTempAdvance")
+            - _n(row, "permanentAdvance") + _n(row, "interest"))
+
+
+def recalc_discrepancies(recalc: Optional[dict]) -> list[dict]:
+    """The years of a re-calculation report that do not add up, and the breaks in its chain.
+
+    Added 23 Oct 2026, after PC-2026-000070. The report is a table of ten columns, several of
+    them nil down most of their length, and the reader lost its place in them: on that claim
+    thirteen of twenty-four years did not add up, an advance of Rs 80,000 sat against the wrong
+    year, and the last year closed at nil when the balance was Rs 883,646. Nothing noticed. The
+    examination ran on those figures, the balance tests with them, and the case reached the
+    officer reading as though the report had been understood.
+
+    A misread ledger is not a rare event to be designed around later: it is what a sparse
+    printed table does to a reader. The page carries its own proof and this is it.
+    """
+    rows = (recalc or {}).get("rows") or []
+    out: list[dict] = []
+    for i, row in enumerate(rows):
+        want = row_should_close_at(row)
+        got = _n(row, "closing")
+        # The last year of a report struck for payment shows the interest computed to the date
+        # of payment WITHOUT crediting it to the closing balance -- fp-dismissal closes at its
+        # own opening with Rs 2,239 interest beside it, and the residual case is out by exactly
+        # its Rs 20,807. Every other year on every fixture credits it, and so does the last year
+        # where the payout itself is in the report (fp-non-gazetted draws Rs 74,178 through the
+        # permanent advance column and balances). So the carve-out is this one row and this one
+        # amount, and it is narrow on purpose: PC-2026-000070's last year is out by Rs 883,646
+        # against nil interest and is still caught.
+        last_year_interest_not_credited = (
+            i == len(rows) - 1 and abs(want - _n(row, "interest") - got) <= RECALC_TOLERANCE)
+        if abs(want - got) > RECALC_TOLERANCE and not last_year_interest_not_credited:
+            out.append({"row": i + 1, "kind": "does-not-add-up", "start": row.get("start"),
+                        "end": row.get("end"), "expected": want, "found": got})
+        # Each year opens where the year before it closed. A reader that drops a figure keeps
+        # the chain intact while shifting every row after it, so this catches what the sum
+        # above does not and the sum catches what this does not; both are cheap.
+        if i and abs(_n(row, "opening") - _n(rows[i - 1], "closing")) > RECALC_TOLERANCE:
+            out.append({"row": i + 1, "kind": "does-not-follow-on", "start": row.get("start"),
+                        "end": row.get("end"), "expected": _n(rows[i - 1], "closing"),
+                        "found": _n(row, "opening")})
+    return out
+
+
 def recalc_summary(recalc: Optional[dict]) -> Optional[dict]:
     if not recalc or not recalc.get("rows"):
         return None

@@ -65,6 +65,57 @@ check(id="SAP-RECALC", group="sap", ref="R1 · R11", checklist="SAP",
       title="GPF Final Re-calculation Report from SAP", applies=lambda F: True, run=_sap_recalc)
 
 
+def _recalc_adds_up(F):
+    """The report's own arithmetic, checked before anything is computed from it (23 Oct 2026).
+
+    PC-2026-000070: thirteen of twenty-four years did not add up, an advance of Rs 80,000 stood
+    against the wrong year, and the final year closed at nil when the balance was Rs 883,646.
+    The reader had lost its place among ten columns that are nil down most of their length. The
+    case reached the officer with every balance test run on those figures and nothing said.
+
+    A hard stop, because what rests on these figures is a payment: fund_position, the advance
+    limits and the claim reconciliation all read this table. The officer who has checked it
+    against the original records that, and the examination goes on with the report trusted.
+    """
+    from .sap import recalc_discrepancies
+    rc = (F.get("sap") or {}).get("recalc") or {}
+    rows = rc.get("rows") or []
+    bad = recalc_discrepancies(rc)
+    page = rc.get("page")
+    if not bad:
+        return {"status": "ok",
+                "finding": ("Every one of the " + str(len(rows)) + " years on the re-calculation report "
+                            "adds up, and each opens where the year before it closed."),
+                "evidence": [ev(page, "Re-calculation report")] if page else []}
+    v = verified(F, "RECALC-ADDS-UP")
+    if v:
+        return verified_result(
+            v, "The re-calculation report was checked against the original and the figures stand.",
+            "The re-calculation report does not reconcile and the figures on the case are not the report's.")
+    shown = "; ".join(
+        (d["start"] or "?") + " to " + (d["end"] or "?") +
+        (" should close at Rs " + fmt(d["expected"]) + " but reads Rs " + fmt(d["found"])
+         if d["kind"] == "does-not-add-up"
+         else " opens at Rs " + fmt(d["found"]) + " but the year before closed at Rs " + fmt(d["expected"]))
+        for d in bad[:3])
+    more = "" if len(bad) <= 3 else " and " + str(len(bad) - 3) + " more"
+    return {"status": "hard", "code": "R11",
+            "finding": (str(len({d["row"] for d in bad})) + " of the " + str(len(rows))
+                        + " years on the re-calculation report do not reconcile: " + shown + more
+                        + ". The table has been read wrongly, so the balances on this case are not "
+                          "the report's and nothing computed from them can be relied on."),
+            "remedy": ("Read the report against the original page and correct the figures, or pull it "
+                       "from SAP again and upload it on the SAP extracts step."),
+            "cure": {"kind": "verify", "vid": "RECALC-ADDS-UP"},
+            "evidence": [ev(page, "Re-calculation report")] if page else []}
+
+
+check(id="RECALC-ADDS-UP", group="sap", ref="R11", code="R11",
+      title="The re-calculation report reconciles with itself",
+      applies=lambda F: bool(((F.get("sap") or {}).get("recalc") or {}).get("rows")),
+      run=_recalc_adds_up)
+
+
 def _sap_identity(F):
     want = digits(F.get("personnelNo"))
     bad = []

@@ -385,7 +385,11 @@ function viewSap(c) {
             ${rc.lastStart ? `<tr><td>Last period</td><td>${esc(rc.lastStart)} to ${esc(rc.lastEnd)}</td></tr>` : ''}
             <tr><td>Opening that period</td><td>${rupees(rc.lastOpening)}</td></tr>
             <tr><td>Closing that period</td><td>${rupees(rc.lastClosing)}</td></tr>
-          </tbody></table>` : sapMissing('GPF final re-calculation report', persNo);
+          </tbody></table>
+          ${rc.doNotReconcile ? `<p class="note-error small" role="alert">${rc.doNotReconcile} of these
+            ${rc.rows} years do not add up, so the table has been read wrongly and these figures are
+            not the report's. The examination says which years; the remedy is on the item.</p>` : ''}` 
+      : sapMissing('GPF final re-calculation report', persNo);
     const both = (s.payslipSource || 'case') === (s.recalcSource || 'case');
     return `<div class="panel">
       <div class="spread"><h2>SAP extracts</h2>${badge('ok', both ? 'present · ' + esc(s.payslipSource || s.recalcSource || s.source) : 'present')}</div>
