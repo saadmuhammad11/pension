@@ -231,6 +231,37 @@ def _forms_in_bands(image: str | Path, page: int) -> tuple[tuple[str, ...], tupl
     return tuple(dict.fromkeys(forms)), tuple(dict.fromkeys(titles))
 
 
+def _text_in_bands(image: str | Path, page: int) -> str:
+    """The page's text, read in bands and joined. _forms_in_bands's twin.
+
+    That one reads the same three strips and keeps only the form numbers and titles it finds,
+    which is all it needs. This keeps the words, because the S&GAD sanction is not marked with
+    a form number at all -- see _sanction_in_bands.
+    """
+    import tempfile
+    from PIL import Image
+    from .ocr import looks_degenerate, ocr_page
+    out: list[str] = []
+    try:
+        with Image.open(image) as im:
+            width, height = im.size
+            for top, bottom in _BANDS:
+                crop = im.crop((0, int(height * top), width, int(height * bottom)))
+                crop = crop.resize((crop.width * 2, crop.height * 2), Image.LANCZOS)
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
+                    crop.save(fh.name)
+                    band = fh.name
+                try:
+                    text = ocr_page(band, page)
+                except Exception:                     # noqa: BLE001 -- a band that fails says nothing
+                    continue
+                if not looks_degenerate(text):
+                    out.append(text.text or "")
+    except Exception:                                 # noqa: BLE001
+        return ""
+    return "\n".join(out)
+
+
 def _verify_form_claim(
     ident: PageIdentity,
     ocr_forms: tuple[str, ...] | None = None,
@@ -502,8 +533,52 @@ def _reclaim_form(ident: PageIdentity, image: str | Path) -> tuple[PageIdentity,
             if not distinct and len(claimed) == 1:
                 return promoted(claimed[0])
     if len(numbers) != 1 or numbers[0] not in titles:
-        return ident, text.text or ""
+        return _sanction_in_bands(ident, image, text), text.text or ""
     return promoted(numbers[0])
+
+
+#: Labels the S&GAD sanction arrives under. It is not a printed form: it is the department's
+#: own ORDER on its letterhead, and the identifier describes it accurately as an order.
+_ORDER_LABELS = frozenset({"POSTING_ORDER", "SUPERANNUATION_ORDER"})
+
+
+def _sanction_in_bands(ident: PageIdentity, image: str | Path, whole: "PageText") -> PageIdentity:
+    """The department's pension sanction, on a page the identifier filed as an order.
+
+    PC-2026-000034 p.3 is the S&GAD sanction. The office says so, and the page says so twice:
+
+        8. Administrative and financial SANCTION FOR GRANT OF PENSION with commutation
+           @(25%) ... is hereby accorded in favour of Mr. Muhammad Tariq
+                        DEPUTY SECRETARY (PERSONNEL) / PENSION SANCTIONING AUTHORITY
+
+    Both of those have matched SANCTION_ORDER_TITLE since 22 Oct 2026. Neither ever reached it.
+    The whole-page OCR stopped at 796 characters -- about two fifths down, in the middle of a
+    Finance Department circular number -- and then looped on single letters, which
+    looks_degenerate does not catch; clause 8 and the signature block are in the part it never
+    read. So the page kept the label POSTING_ORDER, and AG-04 reported the sanction missing
+    against a department that had filed it.
+
+    Read in bands, the bottom third gives up 998 characters and the clause and the designation
+    with it. Measured on that page, 23 Oct 2026.
+
+    Only the sanction is taken from the bands, never every title the matcher knows. Clause 7 of
+    the same page reads "Descriptive Roll ... enclosed as Annex-A", and a page that LISTS its
+    enclosures would otherwise be read as being them.
+    """
+    from .ocr import looks_degenerate
+    if ident.document_type not in _ORDER_LABELS:
+        return ident
+    flat = re.sub(r"\s+", " ", (whole.text or "")).lower()
+    if not re.search(SANCTION_ORDER_TITLE, flat):
+        # The whole page said nothing. If it was read in full and still said nothing, that is
+        # an answer; a read that stopped partway down is not, and these pages stop.
+        if not looks_degenerate(whole) and len(flat) > 1800:
+            return ident
+        banded = re.sub(r"\s+", " ", _text_in_bands(image, ident.page)).lower()
+        if not re.search(SANCTION_ORDER_TITLE, banded):
+            return ident
+    return replace(ident, document_type="PENSION_SANCTION_ORDER",
+                   is_first_page=True, promoted_from=ident.document_type)
 
 
 def _verify_proforma_claim(ident: PageIdentity, image: str | Path) -> PageIdentity:
