@@ -31,6 +31,6 @@ export function RegisterHome(
                   showDepartment={showDepartment} onOpen={id => navigate(caseHref(product, id))} onNew={onNew}
                   statusCounts={inv.data?.counts.by_status} total={inv.data?.counts.total}
                   error={error} stale={stale} loading={loading} role={user?.role ?? ''} view={view}
-                  charts={charts ? <Dashboard stats={stats} error={statsError} variant={charts} department={department} /> : null} />
+                  charts={charts ? <Dashboard stats={stats} error={statsError} variant={charts} department={department} product={product} /> : null} />
   )
 }

@@ -173,6 +173,25 @@ export async function openProtected(url: string, filename?: string): Promise<voi
   }
 }
 
+/** Fetch a file this session is entitled to and save it. openProtected's sibling: that one
+ *  opens a tab first because a PDF may be VIEWED, and closes it again for anything that is
+ *  only ever saved. A spreadsheet is only ever saved, so there is no tab to open and no
+ *  pop-up blocker to argue with. */
+export async function downloadProtected(url: string, filename: string): Promise<void> {
+  const token = getToken()
+  begin()
+  let r: Response
+  try { r = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} }) }
+  catch { throw new ApiError(0, SLOW_OR_BUSY) }
+  finally { finish() }
+  if (r.status === 401) { unauthorised(); throw new ApiError(401, await detailOf(r)) }
+  if (!r.ok) throw new ApiError(r.status, await detailOf(r))
+  const href = URL.createObjectURL(await r.blob())
+  const a = Object.assign(document.createElement('a'), { href, download: filename })
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(href), 60_000)
+}
+
 export const get = <T,>(url: string) => request<T>('GET', url)
 export const post = <T,>(url: string, json?: unknown) => request<T>('POST', url, { json: json ?? {} })
 export const postForm = <T,>(url: string, form: FormData) => request<T>('POST', url, { form })

@@ -13,13 +13,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import csv
+import io
 import os
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Request, UploadFile, Response
 from fastapi.responses import JSONResponse
 
 from api import case_runs, db, gpf_bridge, inventory, settings, workflow
@@ -405,6 +407,51 @@ def department_counts(product: str | None = None, user: User = Depends(require_r
 AGE_BUCKETS = (("0-3", 3), ("4-7", 7), ("8-14", 14), ("15+", None))
 
 
+#: The desks a case stands on inside the office, in the order it passes them. "Received" is the
+#: case submitted and not yet taken up -- no tier holds it, which is a desk in its own right and
+#: the one where a case is most easily forgotten.
+_DESKS = (("RECEIVED", "Received"), ("SENIOR_AUDITOR", "Senior Auditor"),
+          ("ASSISTANT_AO", "Assistant Accounts Officer"), ("AO", "Accounts Officer"))
+
+
+def _by_desk(conn: db.Connection, where: str, args: list) -> list[dict]:
+    """Where the office's pending cases are standing, desk by desk, and for how long.
+
+    The same clock _ageing uses -- the last event that CHANGED the status, falling back to when
+    the case was filed -- so "14 days" means fourteen days on that desk, not fourteen days in
+    the building. Each desk carries its oldest case by number, because "three cases stuck at the
+    AAO" is a fact an officer can do nothing with until they know which three.
+
+    Not for a department. api/v2.py nulls holder_tier for a DDO on purpose -- it sees "with the
+    Office of the Accountant General", not which desk -- and this would say it in a chart.
+    """
+    from datetime import datetime
+    marks = ",".join("?" * len(workflow.AG_HOLDS))
+    rows = conn.execute(
+        f"SELECT c.case_no, c.holder_tier, COALESCE((SELECT MAX(e.at) FROM case_events e "
+        f"WHERE e.case_id = c.id AND e.to_status = c.status "
+        f"AND (e.from_status IS NULL OR e.from_status != e.to_status)), c.created_at) AS since "
+        f"FROM cases c WHERE {where} AND c.status IN ({marks})", args + sorted(workflow.AG_HOLDS)).fetchall()
+    now = datetime.now()
+    tally: dict[str, dict] = {k: {"desk": k, "label": label, "total": 0, "waiting_over_a_week": 0,
+                                  "oldest_days": 0, "oldest_case": None} for k, label in _DESKS}
+    for r in rows:
+        desk = r["holder_tier"] or "RECEIVED"
+        if desk not in tally:
+            continue
+        try:
+            days = max(0.0, (now - datetime.fromisoformat(r["since"])).total_seconds() / 86400)
+        except ValueError:
+            continue
+        cell = tally[desk]
+        cell["total"] += 1
+        if days > 7:
+            cell["waiting_over_a_week"] += 1
+        if days >= cell["oldest_days"]:
+            cell["oldest_days"], cell["oldest_case"] = round(days, 1), r["case_no"]
+    return [tally[k] for k, _ in _DESKS]
+
+
 def _ageing(conn: db.Connection, where: str, args: list, statuses) -> dict:
     """Pending cases by days at their present stage: bucket counts, the oldest, and its case number."""
     from datetime import datetime
@@ -469,6 +516,69 @@ def _deficiencies(conn: db.Connection, where: str, args: list, top: int = 6) -> 
 
 # Days from filing to the Accountant General's decision that count as on time (dashboard gauge).
 DECISION_TARGET_DAYS = 7
+
+
+#: Columns of the monthly register, in the order the office reads them.
+_MONTHLY_COLUMNS = (
+    ("case_no", "Case"), ("department_name", "Department"), ("pension_section", "Pension section"),
+    ("claimant_name", "Claimant"), ("case_type_label", "Case type"), ("status_label", "Status"),
+    ("where", "Where it is"), ("filed", "Filed"), ("decided", "Decided"),
+    ("days_to_decision", "Days to decision"), ("submissions", "Submissions"), ("verifications", "Verifications"),
+)
+
+
+@router.get("/reports/monthly.csv")
+def monthly_register(month: str, product: str | None = None, department: str | None = None,
+                     pension_section: str | None = None, user: User = Depends(current_user),
+                     conn: db.Connection = Depends(get_conn)):
+    """The month's cases as a spreadsheet, for whoever is signed in (23 Oct 2026).
+
+    A month is the month a case was FILED in, which is the month its case number belongs to and
+    the only reading of "this month's cases" that does not change as the office works. A case
+    filed in March and decided in April appears in March, and its decision date says April.
+
+    Scoped exactly as the register is -- api.inventory.scope -- so a DDO downloads their own
+    department and an officer their wing. No new sight of anything: the same redaction the
+    register applies is applied here, which is what keeps the AI's reading out of a
+    department's copy.
+    """
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month or ""):
+        raise HTTPException(422, "month: YYYY-MM")
+    rows = _inventory_rows(conn, user, product=product, department=department, pension_section=pension_section)
+    wanted = [r for r in rows if str(r.get("created_at") or "").startswith(month)]
+
+    def decided_at(case: dict) -> str:
+        for e in reversed(case.get("events") or []):
+            if e.get("action") in ("APPROVE", "REJECT"):
+                return str(e.get("at") or "")[:19].replace("T", " ")
+        return ""
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow([title for _, title in _MONTHLY_COLUMNS])
+    for r in sorted(wanted, key=lambda x: str(x.get("case_no") or "")):
+        filed = str(r.get("created_at") or "")[:19].replace("T", " ")
+        done = decided_at(r)
+        days = ""
+        if filed and done:
+            try:
+                days = str(round((datetime.fromisoformat(done) - datetime.fromisoformat(filed)).total_seconds() / 86400, 1))
+            except ValueError:
+                days = ""
+        values = {
+            "case_no": r.get("case_no") or "", "department_name": r.get("department_name") or "",
+            "pension_section": r.get("pension_section") or "", "claimant_name": r.get("claimant_name") or "",
+            "case_type_label": r.get("case_type") or "", "status_label": r.get("status") or "",
+            # holder_label is already None for a department (it must not learn which desk).
+            "where": r.get("holder_label") or "", "filed": filed, "decided": done,
+            "days_to_decision": days, "submissions": r.get("submission_no") or "",
+            "verifications": len(r.get("runs") or []),
+        }
+        writer.writerow([values[key] for key, _ in _MONTHLY_COLUMNS])
+    name = f"cases-{month}.csv"
+    return Response(out.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"',
+                             "Cache-Control": "no-store"})
 
 
 @router.get("/stats")
@@ -567,6 +677,7 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
         "scope": {"role": user.role, "department": user.department_code if user.role == "DEPT_OFFICER" else department,
                   "product": product},
         "ageing": ageing,
+        "by_desk": _by_desk(conn, where, args),
         "deficiencies": _deficiencies(conn, where, args),
         "total": sum(by_status.values()),
         "by_status": by_status,
@@ -585,7 +696,7 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
     if user.role == "DEPT_OFFICER":
         # The engine's verdicts, its findings histogram and the papers it found missing across the
         # department's cases are AI output; a department sees none of it (28 Sep 2026).
-        for key in ("verdicts", "high_flags", "deficiencies"):
+        for key in ("verdicts", "high_flags", "deficiencies", "by_desk"):
             out.pop(key, None)
     if user.role == "ADMIN":
         out["users_by_role"] = {r["role"]: r["n"] for r in conn.execute("SELECT role, COUNT(*) n FROM users WHERE active = 1 GROUP BY role")}

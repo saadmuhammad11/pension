@@ -304,6 +304,55 @@ class V2Test(unittest.TestCase):
                                  json={"username": "new.name", "reason": "Trying it on from the wrong desk."})
             self.assertEqual(r.status_code, 403, f"{who}: {r.text}")
 
+    def test_the_month_s_register_downloads_as_a_spreadsheet(self) -> None:
+        """Every user may take the month's cases away (23 Oct 2026), scoped as the register is."""
+        import csv as _csv
+        import io as _io
+        dept = self.login("punjab-police", "punjab-police")
+        case = self.create(dept)["case"]
+        month = case["created_at"][:7]
+        r = self.client.get(f"/api/v2/reports/monthly.csv?month={month}", headers=dept)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("text/csv", r.headers["content-type"])
+        self.assertEqual(r.headers["content-disposition"], f'attachment; filename="cases-{month}.csv"')
+        rows = list(_csv.DictReader(_io.StringIO(r.text)))
+        self.assertEqual([x["Case"] for x in rows], [case["case_no"]])
+        self.assertEqual(rows[0]["Department"], "Punjab Police")
+        # A month with nothing filed in it is a spreadsheet of headings, not a 404: the office
+        # asked for that month and the answer is that the month was empty.
+        empty = self.client.get("/api/v2/reports/monthly.csv?month=2001-01", headers=dept)
+        self.assertEqual(empty.status_code, 200)
+        self.assertEqual(list(_csv.DictReader(_io.StringIO(empty.text))), [])
+        self.assertTrue(empty.text.startswith("Case,Department,"))
+        self.assertEqual(self.client.get("/api/v2/reports/monthly.csv?month=2026-13", headers=dept).status_code, 422)
+        self.assertEqual(self.client.get("/api/v2/reports/monthly.csv?month=october", headers=dept).status_code, 422)
+
+    def test_a_department_downloads_its_own_cases_and_no_others(self) -> None:
+        police = self.login("punjab-police", "punjab-police")
+        edu = self.login("school-education", "school-education")
+        mine = self.create(police)["case"]
+        theirs = self.create(edu)["case"]
+        month = mine["created_at"][:7]
+        text = self.client.get(f"/api/v2/reports/monthly.csv?month={month}", headers=police).text
+        self.assertIn(mine["case_no"], text)
+        self.assertNotIn(theirs["case_no"], text)
+        # And it may not ask for another department's by naming it.
+        self.assertEqual(self.client.get(f"/api/v2/reports/monthly.csv?month={month}&department=SCHOOL_EDUCATION",
+                                         headers=police).status_code, 403)
+
+    def test_where_cases_are_waiting_is_the_office_s_and_not_the_department_s(self) -> None:
+        """by_desk names the desk a case stands on, which a DDO is never told (api/v2.py)."""
+        admin = self.login("admin", "ag")
+        dept = self.login("punjab-police", "punjab-police")
+        case = self.create(dept)["case"]
+        desks = self.client.get("/api/v2/stats?product=PENSION", headers=admin).json()["by_desk"]
+        self.assertEqual([d["desk"] for d in desks], ["RECEIVED", "SENIOR_AUDITOR", "ASSISTANT_AO", "AO"])
+        standing = [d for d in desks if d["total"]]
+        self.assertEqual(len(standing), 1, desks)
+        self.assertEqual(standing[0]["oldest_case"], case["case_no"])
+        self.assertEqual(standing[0]["waiting_over_a_week"], 0)       # filed a moment ago
+        self.assertNotIn("by_desk", self.client.get("/api/v2/stats?product=PENSION", headers=dept).json())
+
     # -- scoping ----------------------------------------------------------------------------
 
     def test_a_department_sees_only_its_own_cases(self) -> None:

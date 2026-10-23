@@ -25,7 +25,7 @@ export function AdminHome({ product }: { product: Product }) {
             <div className="kpi card"><div className="label">Users</div><div style={{ fontSize: 'var(--t-figure)', fontWeight: 700 }}>{o.users}</div></div>
             <div className="kpi card"><div className="label">Audit entries</div><div style={{ fontSize: 'var(--t-figure)', fontWeight: 700 }}>{o.audit_entries}</div></div>
           </div>
-          <Dashboard stats={stats} error={statsError} variant="admin" />
+          <Dashboard stats={stats} error={statsError} variant="admin" product={product} />
           <div className="row" style={{ gap: 10, marginTop: 'var(--s4)' }}>
             <a className="btn" href={`#/${PRODUCT_SLUG[product]}/cases`} style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>All {PRODUCT_WORDS[product].cases.toLowerCase()}</a>
             <a className="btn" href="#/users" style={{ textDecoration: 'none', padding: '11px 22px', border: '1px solid var(--line)', borderRadius: 10, fontWeight: 600, color: 'var(--ink)', background: '#fff' }}>Users</a>

@@ -14,7 +14,7 @@
  *  red = rejected, amber = sent back, slate = still with the department.
  */
 import { useEffect, useState } from 'react'
-import { fetchStats, type Ageing, type Product, type Stats } from '../api/cases'
+import { downloadMonthlyRegister, fetchStats, recentMonths, type Ageing, type Product, type Stats } from '../api/cases'
 import { useInventoryTick } from '../data/inventory'
 import { Bars, ChartCard, Columns, Donut, Gauge, SplitBars } from '../charts/Charts'
 
@@ -110,9 +110,77 @@ function TimeToDecisionCard({ stats }: { stats: Stats }) {
   )
 }
 
+/** The month's cases, as a spreadsheet, for whoever is signed in (23 Oct 2026).
+ *
+ *  Every officer and every DDO: the download is scoped by the same rule the register is, so a
+ *  department gets its own cases and an officer their wing's, and nobody is shown anything the
+ *  register would not show them. A month is the month a case was FILED in -- the month its
+ *  case number belongs to, and the one reading that does not change as the office works. */
+function MonthlyRegister({ product, department }: { product: Product; department?: string | null }) {
+  const months = recentMonths()
+  const [month, setMonth] = useState(months[0].value)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  async function go() {
+    setBusy(true); setError(null)
+    try { await downloadMonthlyRegister(month, product, department) }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
+  return (
+    <div className="row" style={{ gap: 'var(--s2)', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 'var(--s3)' }}>
+      <div className="field" style={{ margin: 0 }}>
+        <label className="label" htmlFor="month-register">Monthly register</label>
+        <select id="month-register" value={month} onChange={e => setMonth(e.target.value)} style={{ minWidth: 190 }}>
+          {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+      </div>
+      <button type="button" onClick={go} disabled={busy}>{busy ? 'Preparing…' : 'Download spreadsheet'}</button>
+      {error && <span className="help" style={{ color: 'var(--red)' }}>{error}</span>}
+    </div>
+  )
+}
+
+/** Where the office's pending cases are standing, and the oldest at each desk.
+ *
+ *  "Three cases at the Assistant Accounts Officer" is a fact an officer can do nothing with
+ *  until they know which three and since when, so each desk carries its oldest case by number
+ *  and the number that have been there over a week. The bar is the whole desk; the darker part
+ *  is the share of it that has waited more than a week, which is what "stuck" means here.
+ *
+ *  A department never sees this card: the server sends it no by_desk at all, because a DDO is
+ *  told the case is with the Office of the Accountant General and not which desk holds it. */
+function DesksCard({ stats }: { stats: Stats }) {
+  const desks = stats.by_desk ?? []
+  const waiting = desks.reduce((n, d) => n + d.total, 0)
+  const stuck = desks.reduce((n, d) => n + d.waiting_over_a_week, 0)
+  const worst = desks.reduce<typeof desks[number] | null>((w, d) => d.oldest_days > (w?.oldest_days ?? -1) ? d : w, null)
+  return (
+    <ChartCard title="Where cases are waiting" className="span-2"
+               sub={waiting ? `${plural(waiting, 'case')} with the office · ${stuck} waiting over a week` : 'No case is with the office'}
+               footer={worst?.oldest_case ? `Longest wait: ${worst.oldest_case}, ${plural(worst.oldest_days, 'day')} at the ${worst.label}.` : undefined}
+               table={{ head: ['Desk', 'Cases', 'Over a week', 'Oldest'],
+                        rows: desks.map(d => [d.label, d.total, d.waiting_over_a_week,
+                                              d.oldest_case ? `${d.oldest_case} (${d.oldest_days}d)` : '—']) }}>
+      {waiting
+        ? <SplitBars series={[{ name: 'Waiting over a week', color: 'var(--viz-warn)' },
+                              { name: 'Waiting up to a week', color: 'var(--viz-await)' }]}
+                    rows={desks.map(d => ({
+                      label: d.label,
+                      values: [d.waiting_over_a_week, Math.max(0, d.total - d.waiting_over_a_week)],
+                      sub: d.oldest_case ? `oldest ${d.oldest_case}, ${plural(d.oldest_days, 'day')} here` : undefined,
+                    }))} />
+        : <div className="empty">No case is with the office.</div>}
+    </ChartCard>
+  )
+}
+
 export function Dashboard(
-  { stats, error, variant, department }:
-  { stats: Stats | null; error?: string | null; variant: 'department' | 'review' | 'admin'; department?: string | null },
+  { stats, error, variant, department, product = 'PENSION' }:
+  { stats: Stats | null; error?: string | null; variant: 'department' | 'review' | 'admin'
+    department?: string | null
+    /** Which register the monthly download is of; the charts themselves are already scoped. */
+    product?: Product },
 ) {
   if (!stats && error) return <div className="banner bad" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">The statistics could not be loaded: {error}</div></div>
   if (!stats) return <div className="skeleton" style={{ height: 120, marginTop: 'var(--s4)' }} />
@@ -144,32 +212,37 @@ export function Dashboard(
   )
 
   if (variant === 'department') {
-    return (
+    return (<>
+      <MonthlyRegister product={product} />
       <div className="chart-grid">
         {decisions}
         <FiledCard stats={s} />
         <AgeCard ageing={s.ageing?.with_department} title="Waiting on you, by age" waitingWord="to submit or correct" />
         <AgeCard ageing={s.ageing?.with_ag} title="With the Office of the Accountant General, by age" waitingWord="awaiting the Pension Wing" />
       </div>
-    )
+    </>)
   }
   if (department) {
-    return (
+    return (<>
+      <MonthlyRegister product={product} department={department} />
       <div className="chart-grid">
         {decisions}
         <FiledCard stats={s} />
+        <DesksCard stats={s} />
         <AgeCard ageing={s.ageing?.with_ag} title="Pending decisions by age" waitingWord="awaiting decision" />
         <TimeToDecisionCard stats={s} />
       </div>
-    )
+    </>)
   }
-  return (
+  return (<>
+    <MonthlyRegister product={product} />
     <div className="chart-grid">
       {decisions}
       <FiledCard stats={s} />
+      <DesksCard stats={s} />
       <DepartmentsCard stats={s} />
       <AgeCard ageing={s.ageing?.with_ag} title="Pending decisions by age" waitingWord="awaiting decision" />
       <TimeToDecisionCard stats={s} />
     </div>
-  )
+  </>)
 }

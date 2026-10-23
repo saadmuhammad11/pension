@@ -84,7 +84,7 @@ export function Login({ theme, portal }: { theme: Theme; portal: PortalConfig })
   // someone -- it locks them out, and the reason is invisible while they type into a field of
   // dots. Read from the key event rather than kept in sync: there is no other way to know.
   const [caps, setCaps] = useState(false)
-  const capsFrom = (e: { getModifierState?: (k: string) => boolean }) => {
+  const capsFrom = (e: { getModifierState?: (k: 'CapsLock') => boolean }) => {
     if (e.getModifierState) setCaps(e.getModifierState('CapsLock'))
   }
   const dept = portal.kind === 'department'

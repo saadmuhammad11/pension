@@ -1,5 +1,5 @@
 /** The case-level API: /api/v2/cases and /api/v2/departments. Shapes mirror api/v2.py. */
-import { get, newIdempotencyKey, post, postForm, upload, type UploadProgress } from './client'
+import { downloadProtected, get, newIdempotencyKey, post, postForm, upload, type UploadProgress } from './client'
 
 export type CaseStatus =
   | 'DRAFT' | 'AI_CHECKING' | 'AI_FAILED' | 'AI_CHECKED' | 'FORWARDED' | 'UNDER_REVIEW'
@@ -262,6 +262,28 @@ export interface CaseTypeInfo {
   /** What every column of the type demands: the list to show before the claimant is known. */
   documents: { id: string; requirement: string }[]
 }
+/** The month's cases as a spreadsheet, scoped to whatever this officer may see. */
+export function downloadMonthlyRegister(month: string, product: Product, department?: string | null) {
+  const q = new URLSearchParams({ month, product })
+  if (department) q.set('department', department)
+  return downloadProtected(`/api/v2/reports/monthly.csv?${q}`, `cases-${month}.csv`)
+}
+
+/** The months a register can be asked for: this one back through the last eleven. Built from
+ *  the browser's clock rather than fetched, because a month with no case in it is still a
+ *  month the office may ask for and be told, in a spreadsheet of headings, that it is empty. */
+export function recentMonths(now = new Date()): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = []
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    out.push({
+      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
+    })
+  }
+  return out
+}
+
 export const fetchCaseTypes = () => get<{ case_types: CaseTypeInfo[] }>('/api/v2/case-types').then(r => r.case_types)
 
 export const runCheck = (caseId: string) =>
@@ -492,6 +514,9 @@ export interface Stats {
   audit_by_day?: { day: string; n: number }[]
   /** Pending cases by days at their present stage (optional until the API restarts). */
   ageing?: { with_department: Ageing; with_ag: Ageing }
+  /** Where the office's pending cases are standing, desk by desk. Absent for a department:
+   *  a DDO is told "with the Office of the Accountant General", never which desk (api/v2.py). */
+  by_desk?: { desk: string; label: string; total: number; waiting_over_a_week: number; oldest_days: number; oldest_case: string | null }[]
   /** Checklist items most often missing or defective on the latest verification of each case. */
   deficiencies?: { verified_cases: number; items: { id: string; requirement: string; missing: number; defective: number }[] }
 }
