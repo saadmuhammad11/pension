@@ -53,7 +53,8 @@ NOT_REQUIRED_ANYWHERE = frozenset({"AG-09", "AG-10", "AG-12", "AG-19", "AG-23", 
 #: and `satisfied` by the same number and leaves `missing` alone: no stored result changes.
 RETIRED_LINES = frozenset({"AG-09", "AG-10", "AG-12", "AG-19"})
 NOT_REQUIRED_FOR: dict[str, frozenset[str]] = {
-    # Unmarried daughter / son: there is no widow, so there is no sole-widow certificate to ask for.
+    # Unmarried daughter / Underage son: there is no widow, so there is no sole-widow
+    # certificate to ask for.
     "AG-16": frozenset({"UNMARRIED_CHILD"}),
 }
 
@@ -526,7 +527,9 @@ VARIANT_LABELS: dict[str, str] = {
     "REVISED": "Restoration / Revised",
     "DEATH_IN_SERVICE": "Death during service",
     "WIDOW": "Widow / Widower",
-    "UNMARRIED_CHILD": "Unmarried daughter / son",
+    # "Underage son", not "son": a daughter's claim turns on her not having married, a son's
+    # on his age, and the column was printing the daughter's test over both (23 Oct 2026).
+    "UNMARRIED_CHILD": "Unmarried daughter / Underage son",
     "WD_DAUGHTER": "Widowed / divorced daughter",
     "DIVORCED_DAUGHTER": "Divorced daughter",
     "DISABLED_CHILD_SIBLING": "Disabled son / daughter / sister",

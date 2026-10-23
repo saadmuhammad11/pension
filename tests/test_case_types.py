@@ -109,7 +109,7 @@ class MismatchFinding(unittest.TestCase):
         flags = check_declared_case_type(_record(declared="WIDOW", detected="FAMILY_PENSION_DEATH_AFTER_RETIREMENT",
                                                  detected_variant="UNMARRIED_CHILD"), self.pack)
         self.assertEqual(flags[0].severity, MEDIUM)
-        self.assertIn("Unmarried daughter / son", flags[0].finding)
+        self.assertIn("Unmarried daughter / Underage son", flags[0].finding)
         self.assertEqual(check_declared_case_type(_record(declared="WIDOW", detected="FAMILY_PENSION_DEATH_AFTER_RETIREMENT",
                                                           detected_variant="WIDOW"), self.pack), [])
 
