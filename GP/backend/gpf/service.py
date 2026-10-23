@@ -336,6 +336,47 @@ class CaseService:
         return self._diff_view(diff)
 
     @_per_case
+    def apply_sap_scan(self, case_id: str, found: dict, filename: str, *,
+                       officer_id: str = "ao") -> dict:
+        """Put a scanned SAP page's reading on the case, and examine the case again.
+
+        23 Oct 2026. ``found`` is what gpf.sap_scan read off the upload -- a pay slip, a
+        re-calculation report, or neither. It is merged the way an uploaded text extract is
+        (sap_connector.apply_to_case): the part that arrived replaces that part, a part that
+        did not is left alone, and each remembers where it came from. A scan that turns out
+        to be neither is refused rather than recorded as an extract that changed nothing.
+        """
+        s = self._require(case_id)
+        officer = _officer(officer_id)
+        s.officer = officer
+        payslip, recalc = found.get("payslip"), found.get("recalc")
+        if not payslip and not recalc:
+            seen = ", ".join(sorted({str(p.get("artefact") or "?") for p in found.get("pages") or []}))
+            s.log_audit("SAP scan rejected", {"file": filename, "read as": seen})
+            self.repo.save(case_id, s)
+            raise ServiceError(
+                "Neither a SAP pay slip nor a GPF re-calculation report could be read on "
+                + (f"{filename} (read as: {seen.lower().replace('_', ' ')}). " if seen else f"{filename}. ")
+                + "Check the right page was uploaded, and that the scan is straight and legible.",
+                400)
+        old = s.F.get("sap") or {}
+        sap = dict(old)
+        for part, value in (("payslip", payslip), ("recalc", recalc)):
+            if value:
+                sap[part] = value
+                sap[part + "Source"] = "upload"
+            elif old.get(part):
+                sap.setdefault(part + "Source", old.get("source") or "case")
+        sap["source"], sap["file"] = "upload", filename
+        s.F["sap"] = sap
+        what = " and ".join(w for w, v in (("pay slip", payslip), ("re-calculation report", recalc)) if v)
+        diff = run_case(s, reason=f"SAP {what} read from a scan ({filename})")
+        s.log_audit("SAP scan read", {"file": filename, "read": what,
+                                      "pages": found.get("pages") or []})
+        self.repo.save(case_id, s)
+        return self._diff_view(diff)
+
+    @_per_case
     def refresh_payslip_balances(self, case_id: str, gpf_balance, loan_balance, *, basis: str,
                                  officer_id: str = "ao") -> dict:
         """Fill the pay slip's fund and advance balances where the first reading left them empty.

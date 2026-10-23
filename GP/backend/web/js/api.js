@@ -107,6 +107,18 @@ export const api = {
     if (!res.ok) { refused(res); throw new Error(data.detail || 'The extract was not accepted'); }
     return data;
   },
+  // A scanned or PDF pay slip / re-calculation report. Reading is a vision call per page, so
+  // this answers with a job and the screen polls it like the examination's (23 Oct 2026).
+  sapScan: async (caseId, files, officer) => {
+    const fd = new FormData();
+    fd.append('officer', officer);
+    for (const f of files) fd.append('files', f);
+    const res = await fetch(`${BASE}/api/cases/${id(caseId)}/sap-scan`, { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { refused(res); throw new Error(data.detail || 'The scan could not be read'); }
+    return data;
+  },
+  readingJob: (jobId) => j('GET', `${BASE}/api/reading/jobs/${encodeURIComponent(jobId)}`),
   sapTemplate: (caseId) => j('GET', `${BASE}/api/cases/${id(caseId)}/sap-template`),
 
   verify: (caseId, vid, ok, note, officer) =>

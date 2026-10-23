@@ -24,6 +24,20 @@ from typing import Any, Callable, Optional
 TTL_SECONDS = 15 * 60
 
 
+class ReadingRefused(Exception):
+    """A refusal written for the officer, not a crash.
+
+    Anything else a runner raises is reported as "TypeName: message", because an unexpected
+    failure needs to be diagnosable. A deliberate refusal -- this page is not a pay slip, this
+    PDF has nothing in it -- is already in the officer's words, and the class name in front of
+    it only makes it look like a fault in the system (23 Oct 2026).
+    """
+
+    def __init__(self, detail: str, status_code: int = 400):
+        super().__init__(detail)
+        self.status_code = status_code
+
+
 @dataclass
 class Job:
     id: str
@@ -103,6 +117,8 @@ class JobRegistry:
                 with timing.bind(job.id):
                     result = runner(report)
                     timing.record("stage", "reading", started=started, ended=time.time(), pages=job.total or None)
+            except ReadingRefused as e:
+                self._fail(job, str(e), e.status_code)
             except NotImplementedError as e:
                 self._fail(job, "Reading the scans needs the vision model. Set GPF_VLLM_URLS "
                                 "to the DGX Spark's vLLM server. (" + str(e) + ")", 503)

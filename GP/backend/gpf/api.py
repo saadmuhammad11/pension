@@ -603,6 +603,43 @@ class PayslipBalancesBody(BaseModel):
     officer: str = "ao"
 
 
+@app.post("/api/cases/{case_id}/sap-scan")
+async def upload_sap_scan(request: Request, case_id: str, officer: str = Form("ao"),
+                          files: list[UploadFile] = File(...)):
+    """A scanned or PDF SAP pay slip / re-calculation report, read and put on the case.
+
+    The text export goes to /sap and /sap-file; this is for the paper. Reading is a vision
+    call per page, so it answers with a job the screen polls at /api/reading/jobs/{id}, as
+    the examination does. The job's result carries the diff and the case, so the screen
+    shows what changed without asking again.
+    """
+    view = service.view(case_id)                      # 404s here if the case is not ours
+    acting = _acting(request, officer)
+    payload = [(f.filename or "page", await f.read()) for f in files]
+    if not payload:
+        raise HTTPException(status_code=422, detail="No file was uploaded.")
+
+    def run(report):
+        from .reading.jobs import ReadingRefused
+        from .sap_scan import ScanError, read_upload
+        try:
+            found = read_upload(reading_pipeline, payload, kind=view["meta"].get("kind") or "",
+                                gazetted=view["meta"].get("gazetted") or "unknown",
+                                on_progress=report)
+        except ScanError as exc:
+            raise ReadingRefused(str(exc)) from None
+        name = payload[0][0] if len(payload) == 1 else f"{len(payload)} files"
+        try:
+            diff = service.apply_sap_scan(case_id, found, name, officer_id=acting)
+        except ServiceError as exc:
+            # "Neither a pay slip nor a report could be read on this page" is the officer's
+            # answer, and it reaches them through the job rather than the response.
+            raise ReadingRefused(str(exc), exc.status) from None
+        return {"diff": diff, "case": service.view(case_id), "read": found.get("pages") or []}
+
+    return reading_jobs.start(run, total=len(payload)).view()
+
+
 @app.post("/api/cases/{case_id}/payslip-balances")
 def payslip_balances(request: Request, case_id: str, body: PayslipBalancesBody):
     """Fill the pay slip balances the first reading missed (service.refresh_payslip_balances)."""

@@ -1,7 +1,7 @@
 // GP Fund Pre-Audit — SPA controller. Buildless ES module.
 import { api, BASE, tellPortal } from './api.js';
 import { $, $$, esc, h, badge, toast, openModal, openImageModal, closeModal, trapModalFocus, confirmDialog, inlineNote, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
-import { throttle, sequence, disposalConfirmText } from './pure.js';
+import { throttle, sequence, disposalConfirmText, pollBudget } from './pure.js';
 
 /** Characters of reason a decision carries; the service holds the same minimum. */
 const MIN_REASON = 10;
@@ -414,6 +414,42 @@ function viewSap(c) {
   </div>`;
 }
 
+/** A file the SAP text parser can read, as against a picture of the same thing. */
+function isTextExtract(file) {
+  return /\.(txt|csv|json)$/i.test(file.name || '');
+}
+
+/**
+ * A scanned pay slip or re-calculation report, read by the module's own page reader
+ * (23 Oct 2026). One vision call per page, so the route hands back a job and this watches it
+ * the way the examination screen watches its own -- an officer given a dead screen cannot
+ * tell a slow model from a hung one.
+ */
+async function readSapScan(id, files) {
+  const panel = $('#sap-progress');
+  const started = await api.sapScan(id, files, state.officer);
+  panel.hidden = false;
+  const draw = (j) => {
+    const of = j.total ? ` ${j.done} of ${j.total}` : '';
+    panel.innerHTML = `<div class="reading"><div class="spinner" aria-hidden="true"></div>
+      <div><b>Reading the scan${of}</b><div class="muted small">${esc(j.message || 'Starting')}
+      &middot; ${esc(String(j.elapsed || 0))}s</div></div></div>`;
+  };
+  draw(started);
+  const budget = pollBudget();
+  try {
+    for (let job = started; ; ) {
+      if (job.state === 'done') return job.result;
+      if (job.state === 'error') throw new Error(job.detail || job.message || 'The scan could not be read');
+      if (budget.tick()) throw new Error('The scan is taking longer than this screen will wait. Reload the case to see whether it finished.');
+      await new Promise(r => setTimeout(r, 1000));
+      try { job = await api.readingJob(started.jobId); budget.ok(); }
+      catch (e) { if (budget.failed()) throw e; continue; }
+      draw(job);
+    }
+  } finally { panel.hidden = true; panel.innerHTML = ''; }
+}
+
 function wireSap(id) {
   const box = $('#sap-upload');
   // The button that filled this box from a sample saved beside the prototype is gone
@@ -421,12 +457,17 @@ function wireSap(id) {
   box.innerHTML = `
     <hr class="hr">
     <div class="row" style="gap:var(--s3);align-items:center">
-      <input type="file" id="sap-file" accept=".txt,.csv,.json,text/plain,text/csv,application/json">
-      <span class="muted small">or paste it below</span>
+      <input type="file" id="sap-file" multiple
+             accept=".txt,.csv,.json,.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp">
+      <span class="muted small">or paste the text below</span>
     </div>
+    <p class="help small">The text SAP exports, or a scan or PDF of the pay slip or the
+      re-calculation report &mdash; a scan is read the way the claim's own pages are, which
+      takes a little while per page.</p>
     <div class="field" style="margin-top:var(--s3)">
       <textarea id="sap-text" placeholder="SAP EXTRACT: PAY SLIP&#10;Personnel No: ..."></textarea></div>
     <div class="note-error small" id="sap-error" role="alert" hidden></div>
+    <div id="sap-progress" hidden></div>
     <div class="row">
       <button class="btn primary" id="sap-submit">Upload and re-check</button>
     </div>`;
@@ -436,16 +477,18 @@ function wireSap(id) {
   // below the officer's hands. A rejected extract looked like a button that did nothing.
   const fail = (msg) => { err.textContent = msg; err.hidden = false; $('#sap-text').focus(); };
   $('#sap-submit').onclick = () => busy($('#sap-submit'), async () => {
-    const file = $('#sap-file').files[0];
+    const files = Array.from($('#sap-file').files);
     const text = $('#sap-text').value.trim();
-    if (!file && !text) return fail('Choose the extract file, or paste the extract into the box.');
+    if (!files.length && !text) return fail('Choose the extract or the scan, or paste the extract into the box.');
     err.hidden = true;
     try {
-      // The file wins where both are given: it is the thing the officer went and fetched.
-      // Either route parses the extract, merges it into the case's SAP facts and examines
-      // the whole case again (service.upload_sap), so both end in the same place.
-      const r = file ? await api.sapFile(id, file, state.officer)
-                     : await api.sapText(id, 'extract.txt', text, state.officer);
+      // Three doors, one destination: the extract is parsed or read, merged into the case's
+      // SAP facts part by part, and the whole case examined again. A file wins over the box
+      // where both are given -- it is the thing the officer went and fetched.
+      const r = files.length ? (files.every(isTextExtract)
+                                  ? await api.sapFile(id, files[0], state.officer)
+                                  : await readSapScan(id, files))
+                             : await api.sapText(id, 'extract.txt', text, state.officer);
       state.lastDiff = r.diff; state.tab = 'exam';
       toast('SAP extract accepted, case re-checked');
       refresh(id);
