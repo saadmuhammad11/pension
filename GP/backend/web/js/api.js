@@ -94,8 +94,6 @@ export const api = {
     }
   },
 
-  sapText: (caseId, filename, text, officer) =>
-    j('POST', `${BASE}/api/cases/${id(caseId)}/sap`, { filename, text, officer }),
   // The extract as a file, for a section that exports it from SAP rather than copying it out
   // of the window (23 Oct 2026). Multipart, like the document cure; the case is re-examined
   // on the server either way, so the two routes end in the same place.

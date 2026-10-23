@@ -334,8 +334,60 @@ class VllmModelClient:
         out = self._chat(self.ocr_url, self.ocr_model, msg, temperature=0, max_tokens=2048)
         return out["choices"][0]["message"]["content"] or ""
 
+    def ocr_table_text(self, image_ref: str) -> str:  # pragma: no cover - needs the OCR service
+        """The page's text with its table rows kept one to a line.
+
+        ocr_text asks for reading order and 2,048 tokens, which is right for a form and far
+        too little for a ledger: PC-2026-000070's twenty-four years run past 8,000 characters.
+        The budget here is what the server will take -- 20,000 is refused outright (HTTP 400)
+        and 8,000 carries that page -- and a line per row is what makes the rows parseable.
+        """
+        msg = [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": self._image_url(image_ref)}},
+            {"type": "text", "text": "Transcribe all printed text on this page, in reading order, "
+                                     "preserving the table rows one per line. Output text only."}]}]
+        out = self._chat(self.ocr_url, self.ocr_model, msg, temperature=0, max_tokens=8000)
+        return out["choices"][0]["message"]["content"] or ""
+
     def _extract_recalc_rows(self, image_ref: str):  # pragma: no cover - needs Spark
-        """Read the GPF re-calculation ledger table as rows (spec §4.2, §12)."""
+        """Read the GPF re-calculation ledger table as rows (spec §4.2, §12).
+
+        The OCR model first, the vision model second (23 Oct 2026). Asking the vision model to
+        transcribe a table of twenty-four years over ten columns does not work: two independent
+        reads of PC-2026-000070's page 6 were both wrong and in different ways -- thirteen and
+        fourteen of twenty-four years did not add up, an Rs 80,000 advance landed a year early,
+        and a final row was invented. The OCR model returns the same page row by row with the
+        digits right, because transcribing characters is what it is for, and reading.recalc_text
+        settles the rest against the report's own arithmetic. It is the lesson the fund block
+        ten lines above learned on 30 Sep 2026, applied to the table the money rests on.
+
+        Whichever read reconciles is the one taken; where neither does, the one that fails on
+        fewer years. A ledger nobody can make add up still reaches the officer as a hard stop
+        (rules_common.RECALC-ADDS-UP), which is where that decision belongs.
+        """
+        from ..reading.recalc_text import parse_recalc_rows
+        from ..sap import recalc_discrepancies
+
+        def misread(rows) -> int:
+            return len({d["row"] for d in recalc_discrepancies({"rows": rows})})
+
+        best, best_bad, best_conf = [], None, 0.0
+        try:
+            rows = parse_recalc_rows(self.ocr_table_text(image_ref))
+        except Exception:                                  # noqa: BLE001 -- the vision read stands
+            rows = []
+        if rows:
+            bad = misread(rows)
+            if not bad:
+                return rows, 0.97
+            best, best_bad, best_conf = rows, bad, 0.6
+        rows, conf = self._recalc_rows_from_vision(image_ref)
+        if rows and (best_bad is None or misread(rows) < best_bad):
+            return rows, conf
+        return best, best_conf
+
+    def _recalc_rows_from_vision(self, image_ref: str):  # pragma: no cover - needs Spark
+        """The ledger as the vision model transcribes it. Kept as the second opinion."""
         from ..reading.schemas import recalc_rows_json_schema
         schema = recalc_rows_json_schema()
         msg = [

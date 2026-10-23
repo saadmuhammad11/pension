@@ -459,13 +459,10 @@ function wireSap(id) {
     <div class="row" style="gap:var(--s3);align-items:center">
       <input type="file" id="sap-file" multiple
              accept=".txt,.csv,.json,.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp">
-      <span class="muted small">or paste the text below</span>
     </div>
-    <p class="help small">The text SAP exports, or a scan or PDF of the pay slip or the
-      re-calculation report &mdash; a scan is read the way the claim's own pages are, which
-      takes a little while per page.</p>
-    <div class="field" style="margin-top:var(--s3)">
-      <textarea id="sap-text" placeholder="SAP EXTRACT: PAY SLIP&#10;Personnel No: ..."></textarea></div>
+    <p class="help small">The pay slip or the re-calculation report: the text SAP exports, or a
+      scan or PDF of it. A scan is read the way the claim's own pages are, which takes a little
+      while per page.</p>
     <div class="note-error small" id="sap-error" role="alert" hidden></div>
     <div id="sap-progress" hidden></div>
     <div class="row">
@@ -475,20 +472,18 @@ function wireSap(id) {
   // Why the refusal is shown here and not only as a toast: this frame is sized to its whole
   // content inside the portal, so a toast fixed to the foot of it can be a screen or two
   // below the officer's hands. A rejected extract looked like a button that did nothing.
-  const fail = (msg) => { err.textContent = msg; err.hidden = false; $('#sap-text').focus(); };
+  const fail = (msg) => { err.textContent = msg; err.hidden = false; $('#sap-file').focus(); };
   $('#sap-submit').onclick = () => busy($('#sap-submit'), async () => {
     const files = Array.from($('#sap-file').files);
-    const text = $('#sap-text').value.trim();
-    if (!files.length && !text) return fail('Choose the extract or the scan, or paste the extract into the box.');
+    if (!files.length) return fail('Choose the extract or the scan to upload.');
     err.hidden = true;
     try {
-      // Three doors, one destination: the extract is parsed or read, merged into the case's
-      // SAP facts part by part, and the whole case examined again. A file wins over the box
-      // where both are given -- it is the thing the officer went and fetched.
-      const r = files.length ? (files.every(isTextExtract)
-                                  ? await api.sapFile(id, files[0], state.officer)
-                                  : await readSapScan(id, files))
-                             : await api.sapText(id, 'extract.txt', text, state.officer);
+      // The box the extract could be pasted into is gone (23 Oct 2026): the section has the
+      // file, and copying a ledger out of a window by hand is how a figure goes astray.
+      // Both routes end in the same place -- the extract is parsed or read, merged into the
+      // case's SAP facts part by part, and the whole case examined again.
+      const r = files.every(isTextExtract) ? await api.sapFile(id, files[0], state.officer)
+                                           : await readSapScan(id, files);
       state.lastDiff = r.diff; state.tab = 'exam';
       toast('SAP extract accepted, case re-checked');
       refresh(id);
