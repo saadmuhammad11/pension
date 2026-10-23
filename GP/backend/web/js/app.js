@@ -285,17 +285,29 @@ function readingProgress(pageCount) {
 }
 
 // ── single case ───────────────────────────────────────────────────────────────
+/** The parts there are, with a separator only between two of them. */
+const dotted = (...parts) => parts.map(x => (x === null || x === undefined) ? '' : String(x).trim())
+  .filter(Boolean).join(' \u00b7 ');
+
 async function renderCase(app, id, seq = ROUTE.current) {
   const c = await api.getCase(id);
   if (ROUTE.isStale(seq)) return;
   const p = c.position;
+  // A case read from scans is labelled by its kind -- "Refundable (from scans)" -- and carries
+  // no family, subject or department, so this header drew the word "refundable" above a heading
+  // that already said it and then a line holding nothing but a separator (23 Oct 2026). A part
+  // the heading already states is not said again, and a line with nothing in it is not drawn.
+  const label = String(c.meta.label || '').toLowerCase();
+  const kindLine = dotted(...[c.meta.family, c.meta.kind]
+    .filter(x => x && !label.includes(String(x).toLowerCase())));
+  const whoLine = dotted(c.meta.subject, c.meta.dept);
   app.innerHTML = `
     <div class="panel">
       <div class="spread">
         <div>
-          <div class="kind muted small">${esc(c.meta.family || '')} · ${esc(c.meta.kind || '')}</div>
+          ${kindLine ? `<div class="kind muted small">${esc(kindLine)}</div>` : ''}
           <h2 style="margin-bottom:2px">${esc(c.meta.label)}</h2>
-          <div class="muted small">${esc(c.meta.subject || '')} · ${esc(c.meta.dept || '')}</div>
+          ${whoLine ? `<div class="muted small">${esc(whoLine)}</div>` : ''}
           <div class="muted small">Personnel no. <span class="mono">${esc(c.meta.personnelNo)}</span>
             · ${esc(c.meta.gazetted)} · version ${c.version}
             ${c.withoutSap ? '· <span class="pill">received without SAP</span>' : ''}
@@ -564,7 +576,12 @@ function itemHtml(c, r, collapsed) {
     const url = e.url ? `${BASE}/${e.url}` : e.crop ? evidenceUrl(c.template, e.crop) : pageUrl(c.template, e.page, c);
     return `<figure><img loading="lazy" src="${esc(url)}" data-zoom="${esc(url)}"><figcaption>${esc(e.label ? (e.reference || !e.page || /page/i.test(e.label) ? e.label : e.label + ' · page ' + e.page) : ('page ' + e.page))}</figcaption></figure>`;
   }).join('')}</div>` : '';
-  const calc = r.calc ? `<pre class="small mono" style="white-space:pre-wrap;background:var(--na-bg);padding:10px;border-radius:8px">${esc(JSON.stringify(r.calc, null, 1))}</pre>` : '';
+  // The rule's working used to be printed here as its raw JSON -- {"byPct":121738,"officePct":80}
+  // and so on, under a finding that already says it in words: "allows the lesser of 80% of the
+  // balance and 24 months' pay (Rs 25,450 a month): Rs 121,738". The same arithmetic twice, once
+  // in the office's language and once in the machine's, and only one of them is for the officer
+  // reading it (23 Oct 2026). The figures stay on the result for any caller that wants them.
+  const calc = '';
   // Specimens on file for the signing authority, beside the signature as read (C1, 9 Oct 2026). The
   // comparison is the officer's; the images come from the shared master store, never cached.
   const specs = Array.isArray(r.specimens) ? r.specimens.filter(sp => sp && sp.url) : [];

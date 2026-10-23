@@ -99,3 +99,90 @@ class TestTheOverviewReadsLikeAPensionSummary:
 
     def test_a_ledger_that_does_not_add_up_says_so_here_too(self) -> None:
         assert "do not add up" in self.OVERVIEW or "doNotReconcile" in self.OVERVIEW
+
+
+class TestTheOfficerIsNotShownTheMachinesWorking:
+    """A rule that computes a limit carries its working as `calc`, and the item view printed
+    it as raw JSON under a finding that already said the same thing in words:
+
+        Rs 108,000 is within the limit. Rule 1.14(1)(d)(i) (temporary advance for a plot or
+        house) allows the lesser of 80% of the balance and 24 months' pay (Rs 25,450 a
+        month): Rs 121,738.
+
+        {"amount": 108000, "balance": 152173, "byPct": 121738, "officePct": 80, ...}
+
+    The same arithmetic twice, once in the office's language and once in the machine's.
+    """
+
+    def test_no_result_prints_its_working_as_json(self) -> None:
+        item = APP[APP.index("const calc ="):APP.index("function wireExam")]
+        assert "JSON.stringify" not in item
+
+    def test_the_finding_is_what_says_the_figures(self) -> None:
+        """The words the officer reads are built by the rule, not by the screen, so taking the
+        dump away takes nothing with it."""
+        rules = (pathlib.Path(__file__).resolve().parent.parent / "gpf" / "rules_family.py").read_text()
+        assert '"% of the balance"' in rules or "% of the balance" in rules
+        assert "allows " in rules
+
+    def test_the_figures_are_still_on_the_result_for_a_caller_that_wants_them(self) -> None:
+        service = (pathlib.Path(__file__).resolve().parent.parent / "gpf" / "service.py").read_text()
+        assert '"calc"' in service, "the API keeps the working; only the screen stopped printing it"
+
+
+class TestTheHeaderSaysEachThingOnce:
+    """A case read from scans is labelled by its kind -- "Refundable (from scans)" -- and
+    carries no family, subject or department. The header drew "refundable" above a heading
+    that already said it, and then a line holding nothing but a separator:
+
+        refundable
+        Refundable (from scans)
+        ·
+        Personnel no. 30000002 · non-gazetted · version 1
+    """
+
+    #: "async function renderCase" is a prefix of "async function renderCases", which comes
+    #: first in the file -- the signature disambiguates them.
+    CASE_FN = "async function renderCase(app, id"
+    HEAD = APP[APP.index(CASE_FN):APP.index('<div class="statstrip"')]
+    HELPER = APP[APP.index("const dotted ="):APP.index(CASE_FN)]
+
+    def test_a_part_the_heading_already_states_is_not_said_again(self) -> None:
+        assert "!label.includes(String(x).toLowerCase())" in self.HEAD
+
+    def test_a_line_with_nothing_in_it_is_not_drawn(self) -> None:
+        for line in ("${kindLine ? ", "${whoLine ? "):
+            assert line in self.HEAD, line
+
+    def test_the_separator_goes_between_the_parts_there_are(self) -> None:
+        assert ".filter(Boolean)" in self.HELPER and ".join(" in self.HELPER
+
+    def test_neither_line_is_built_by_hand_any_more(self) -> None:
+        """Both were a template with a literal separator in the middle of it, which is what
+        printed a dot with nothing on either side."""
+        assert "${esc(c.meta.family || \'\')} · " not in self.HEAD
+        assert "${esc(c.meta.subject || \'\')} · " not in self.HEAD
+
+    def test_the_rule_applied_to_the_case_that_showed_it(self) -> None:
+        """The same rule in Python, against that case's own meta."""
+        def dotted(*parts):
+            return " \u00b7 ".join(p for p in ("" if x is None else str(x).strip() for x in parts) if p)
+
+        meta = {"label": "Refundable (from scans)", "kind": "refundable", "family": "",
+                "subject": "", "dept": "", "personnelNo": "30000002"}
+        label = meta["label"].lower()
+        kind_line = dotted(*[x for x in (meta["family"], meta["kind"])
+                             if x and x.lower() not in label])
+        assert kind_line == "", "nothing above a heading that already says it"
+        assert dotted(meta["subject"], meta["dept"]) == "", "and no bare separator under it"
+
+    def test_but_a_family_the_heading_does_not_say_is_still_shown(self) -> None:
+        def dotted(*parts):
+            return " \u00b7 ".join(p for p in ("" if x is None else str(x).strip() for x in parts) if p)
+
+        meta = {"label": "Refundable advance — Mr A B Sample", "kind": "refundable",
+                "family": "advances", "subject": "Mr A B Sample", "dept": "S&GAD"}
+        label = meta["label"].lower()
+        assert dotted(*[x for x in (meta["family"], meta["kind"])
+                        if x and x.lower() not in label]) == "advances"
+        assert dotted(meta["subject"], meta["dept"]) == "Mr A B Sample \u00b7 S&GAD"

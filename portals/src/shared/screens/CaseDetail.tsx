@@ -578,14 +578,17 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
       </div>
     )
   }
-  const counts = state.case?.counts ?? {}
   return (
     <div style={{ marginTop: 'var(--s4)' }}>
       <div className="row" style={{ gap: 12, marginBottom: 10, alignItems: 'baseline' }}>
+        {/* The counts stood here too -- "0 hard stops · 3 to verify · 0 SAP items · 2
+            observations" -- directly above a frame whose own first row is those same figures,
+            larger and with the satisfied checks as well (23 Oct 2026). Two tallies of one
+            examination a centimetre apart, and the one here went on counting SAP items after
+            the module's stopped. What is left is the only thing this line can say that the
+            frame cannot: which of the module's cases is open in it. */}
         <span className="muted" style={{ fontSize: 'var(--t-small)' }}>
           GP Fund module · case <span className="mono">{state.gpf_case_id}</span>
-          {state.case?.caseDisp ? ` · ${state.case.caseDisp}` : ''}
-          {' · '}{counts.hard ?? 0} hard stop{counts.hard === 1 ? '' : 's'} · {counts.conf ?? 0} to verify · {counts.sap ?? 0} SAP item{counts.sap === 1 ? '' : 's'} · {counts.adv ?? 0} observation{counts.adv === 1 ? '' : 's'}
         </span>
         {/* No "Open in the module" (removed 5 Oct 2026): the module's full page shows every GP Fund
             case and its own intake, outside the portal's register and workflow. The frame is the way in. */}
