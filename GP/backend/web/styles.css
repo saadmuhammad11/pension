@@ -458,6 +458,19 @@ tr.total td { background: var(--sage); font-weight: 700; border-bottom-color: va
 .modal-head h3 { margin: 0; }
 .modal-body { padding: var(--s5); }
 .modal-body img { max-width: 100%; border-radius: 10px; }
+
+/* The page viewer (23 Oct 2026): rotate and zoom, as the pension side has. The box is wider
+   than an ordinary dialog because the thing in it is a scanned page. */
+.modal-box:has(.imgview) { max-width: 1100px; }
+.imgview-tools { margin-bottom: var(--s3); flex-wrap: wrap; }
+.imgview-pane { overflow: auto; background: var(--bg); padding: 16px; max-height: 72vh; border: 1px solid var(--line); border-radius: 10px; }
+.imgview-frame { position: relative; margin: 0 auto; min-height: 40px; }
+/* Hidden until it has been measured and sized: an absolutely positioned image with no size
+   yet draws at its natural width, which on a 300dpi scan is a flash of something enormous. */
+.imgview-img { position: absolute; left: 50%; top: 50%; max-width: none; visibility: hidden;
+  transform: translate(-50%, -50%); transition: transform .2s ease;
+  border: 1px solid var(--line); background: #fff; border-radius: 0; }
+.imgview-error { color: var(--red); margin: var(--s3) 0 0; }
 @keyframes enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* --- toast ---------------------------------------------------------------------------------------- */

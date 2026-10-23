@@ -1,6 +1,6 @@
 // GP Fund Pre-Audit — SPA controller. Buildless ES module.
 import { api, BASE, tellPortal } from './api.js';
-import { $, $$, esc, h, badge, toast, openModal, closeModal, trapModalFocus, confirmDialog, inlineNote, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
+import { $, $$, esc, h, badge, toast, openModal, openImageModal, closeModal, trapModalFocus, confirmDialog, inlineNote, busy, fmt, rupees, evidenceUrl, pageUrl, itemHeading } from './ui.js';
 import { throttle, sequence, disposalConfirmText } from './pure.js';
 
 /** Characters of reason a decision carries; the service holds the same minimum. */
@@ -416,7 +416,11 @@ function wireSap(id) {
   // (23 Oct 2026): it put another employee's figures one click from the officer's own case.
   box.innerHTML = `
     <hr class="hr">
-    <div class="field">
+    <div class="row" style="gap:var(--s3);align-items:center">
+      <input type="file" id="sap-file" accept=".txt,.csv,.json,text/plain,text/csv,application/json">
+      <span class="muted small">or paste it below</span>
+    </div>
+    <div class="field" style="margin-top:var(--s3)">
       <textarea id="sap-text" placeholder="SAP EXTRACT: PAY SLIP&#10;Personnel No: ..."></textarea></div>
     <div class="note-error small" id="sap-error" role="alert" hidden></div>
     <div class="row">
@@ -428,11 +432,16 @@ function wireSap(id) {
   // below the officer's hands. A rejected extract looked like a button that did nothing.
   const fail = (msg) => { err.textContent = msg; err.hidden = false; $('#sap-text').focus(); };
   $('#sap-submit').onclick = () => busy($('#sap-submit'), async () => {
+    const file = $('#sap-file').files[0];
     const text = $('#sap-text').value.trim();
-    if (!text) return fail('Paste the extract into the box first.');
+    if (!file && !text) return fail('Choose the extract file, or paste the extract into the box.');
     err.hidden = true;
     try {
-      const r = await api.sapText(id, 'extract.txt', text, state.officer);
+      // The file wins where both are given: it is the thing the officer went and fetched.
+      // Either route parses the extract, merges it into the case's SAP facts and examines
+      // the whole case again (service.upload_sap), so both end in the same place.
+      const r = file ? await api.sapFile(id, file, state.officer)
+                     : await api.sapText(id, 'extract.txt', text, state.officer);
       state.lastDiff = r.diff; state.tab = 'exam';
       toast('SAP extract accepted, case re-checked');
       refresh(id);
@@ -551,7 +560,7 @@ function wireExam(id, c) {
     // An evidence image that fails to load drops out of the grid. Bound here, not inline: the
     // portal's CSP allows no inline handlers under /gpf/ (F13).
     img.addEventListener('error', () => { const f = img.closest('figure'); if (f) f.remove(); });
-    img.onclick = e => { e.stopPropagation(); openModal('Evidence', `<img src="${esc(img.dataset.zoom)}" alt="Evidence">`); };
+    img.onclick = e => { e.stopPropagation(); openImageModal(img.alt || 'Evidence', img.dataset.zoom, img.alt || 'Evidence'); };
   });
   $$('#tabc .item').forEach(item => {
     const rid = item.dataset.id;

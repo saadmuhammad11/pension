@@ -87,6 +87,77 @@ export function confirmDialog(title, bodyText, confirmLabel = 'Confirm') {
 }
 
 /**
+ * A page or a crop, with the tools the pension side gives the same picture (23 Oct 2026):
+ * turn it left or right, and switch between fitting the pane and actual size. Until now this
+ * module opened the image and nothing else, and scans arrive as they were fed -- a landscape
+ * table, a CNIC copied sideways, a form upside down -- so a page the officer could not read
+ * was a page the officer could not check. Turning is for their eyes: nothing in the case
+ * file changes, and the next open starts straight again.
+ *
+ * A CSS rotation does not change the space an element takes up, so a page turned on its side
+ * spills out of the pane. The frame is sized to the TURNED shape and the image centred inside
+ * it, which is what the pension viewer does (portals components/PagePreview.tsx).
+ */
+export function openImageModal(title, src, alt = 'Page') {
+  openModal(title, `<div class="imgview">
+      <div class="row imgview-tools">
+        <button type="button" class="btn small" data-tool="left" title="Rotate left (L)">Rotate left</button>
+        <button type="button" class="btn small" data-tool="right" title="Rotate right (R)">Rotate right</button>
+        <button type="button" class="btn small" data-tool="zoom">Actual size</button>
+        <a class="btn small" href="${esc(src)}" target="_blank" rel="noreferrer">Open full page &#8599;</a>
+      </div>
+      <div class="imgview-pane"><div class="imgview-frame">
+        <img class="imgview-img" src="${esc(src)}" alt="${esc(alt)}">
+      </div></div>
+      <p class="imgview-error small" role="alert" hidden>This page could not be loaded.</p>
+    </div>`);
+  const modal = $('#modal');
+  const pane = $('.imgview-pane'), frame = $('.imgview-frame'), img = $('.imgview-img');
+  const zoomBtn = $('[data-tool="zoom"]');
+  let turn = 0, zoom = false, nat = null;
+
+  function layout() {
+    if (!nat || !pane.clientWidth) return;
+    const sideways = turn % 180 === 90;
+    const room = pane.clientWidth - 32;
+    const scale = zoom ? 1 : room / (sideways ? nat.h : nat.w);
+    const w = nat.w * scale, h = nat.h * scale;
+    frame.style.width = (sideways ? h : w) + 'px';
+    frame.style.height = (sideways ? w : h) + 'px';
+    img.style.width = w + 'px';
+    img.style.height = h + 'px';
+    img.style.transform = `translate(-50%, -50%) rotate(${turn}deg)`;
+    img.style.visibility = 'visible';
+    img.alt = alt + (turn ? `, turned ${turn}\u00b0` : '');
+  }
+  const rotate = (by) => { turn = (turn + by + 360) % 360; layout(); };
+
+  img.onload = () => { nat = { w: img.naturalWidth, h: img.naturalHeight }; layout(); };
+  img.onerror = () => { $('.imgview-error').hidden = false; frame.style.height = '0px'; };
+  $('[data-tool="left"]').onclick = () => rotate(-90);
+  $('[data-tool="right"]').onclick = () => rotate(90);
+  zoomBtn.onclick = () => {
+    zoom = !zoom;
+    zoomBtn.textContent = zoom ? 'Fit to width' : 'Actual size';
+    layout();
+  };
+  // L and R turn the page, as they do on the pension side. Escape is the modal's own, and
+  // a key pressed in a field is the field's -- these are not shortcuts worth stealing a
+  // keystroke for.
+  const onKey = (e) => {
+    if (!modal.classList.contains('on')) { document.removeEventListener('keydown', onKey); return; }
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.key === 'r' || e.key === 'R') rotate(90);
+    else if (e.key === 'l' || e.key === 'L') rotate(-90);
+  };
+  document.addEventListener('keydown', onKey);
+  // The pane's width decides the fitted size, so it is measured again when the window changes.
+  const ro = new ResizeObserver(() => { if (modal.classList.contains('on')) layout(); else ro.disconnect(); });
+  ro.observe(pane);
+  if (img.complete && img.naturalWidth) img.onload();
+}
+
+/**
  * The note a decision carries, asked for where the decision is made (23 Oct 2026): a panel
  * under the item's own buttons, holding the box, Record and Cancel, in place of window.prompt().
  *

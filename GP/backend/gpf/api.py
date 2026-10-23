@@ -569,9 +569,29 @@ def upload_sap(request: Request, case_id: str, body: SapTextBody):
     return {"diff": diff, "case": service.view(case_id)}
 
 
+#: What a file begins with when it is not text. A SAP extract uploaded here is the export SAP
+#: writes, not a picture of one, and decoding a PDF as UTF-8 produces a page of replacement
+#: characters that reads as "nothing here is a SAP extract" -- true, but no help at all.
+_NOT_TEXT = {b"%PDF": "a PDF", b"\x89PNG": "a PNG image", b"\xff\xd8\xff": "a JPEG image",
+             b"II*\x00": "a TIFF image", b"MM\x00*": "a TIFF image", b"PK\x03\x04": "a zip or Office file"}
+
+
 @app.post("/api/cases/{case_id}/sap-file")
 async def upload_sap_file(request: Request, case_id: str, officer: str = Form("ao"), file: UploadFile = File(...)):
-    text = (await file.read()).decode("utf-8", errors="replace")
+    """The extract as a file. Same destination as the pasted text: parsed, merged into the
+    case's SAP facts part by part, and the whole case examined again (service.upload_sap)."""
+    raw = await file.read()
+    for magic, what in _NOT_TEXT.items():
+        if raw.startswith(magic):
+            raise HTTPException(status_code=400, detail=(
+                f"{file.filename} is {what}. The SAP extract is uploaded here as the text SAP "
+                "exports -- a .txt or .csv file, or the text pasted into the box. A scanned or "
+                "printed pay slip is read as a page of the claim, not here."))
+    if b"\x00" in raw[:4096]:
+        raise HTTPException(status_code=400, detail=(
+            f"{file.filename} does not look like text. Upload the extract as SAP exports it "
+            "(.txt or .csv), or paste it into the box."))
+    text = raw.decode("utf-8", errors="replace")
     diff = service.upload_sap(case_id, file.filename, text, officer_id=_acting(request, officer))
     return {"diff": diff, "case": service.view(case_id)}
 

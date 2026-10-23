@@ -96,6 +96,17 @@ export const api = {
 
   sapText: (caseId, filename, text, officer) =>
     j('POST', `${BASE}/api/cases/${id(caseId)}/sap`, { filename, text, officer }),
+  // The extract as a file, for a section that exports it from SAP rather than copying it out
+  // of the window (23 Oct 2026). Multipart, like the document cure; the case is re-examined
+  // on the server either way, so the two routes end in the same place.
+  sapFile: async (caseId, file, officer) => {
+    const fd = new FormData();
+    fd.append('officer', officer); fd.append('file', file);
+    const res = await fetch(`${BASE}/api/cases/${id(caseId)}/sap-file`, { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { refused(res); throw new Error(data.detail || 'The extract was not accepted'); }
+    return data;
+  },
   sapTemplate: (caseId) => j('GET', `${BASE}/api/cases/${id(caseId)}/sap-template`),
 
   verify: (caseId, vid, ok, note, officer) =>
