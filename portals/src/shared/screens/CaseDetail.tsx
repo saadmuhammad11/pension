@@ -392,6 +392,15 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
         </div>
 
         <aside className="stack">
+          {/* Nothing to decide while the examination is still on screen (23 Oct 2026).
+              The run finishes a few seconds before the analysis does: the server moves the
+              case to UNDER_REVIEW the moment the pipeline ends, the case reloads with
+              approve/return/reject in allowed_actions, and the rail drew them beside a bar
+              still climbing and a LIVE pill. An officer was offered a decision on findings
+              the screen had not finished showing them. `verifying` is what holds the analysis
+              up (it stays true until the bar reaches the end), so it holds the actions back
+              with it, and they appear together with the findings. */}
+          {!verifying && <>
           <ActionPanel actions={c.allowed_actions} hasIssues={hasIssues} busy={busy} onAct={doAct} status={c.status} holderTier={c.holder_tier}
                        checklist={(report?.checklist?.items ?? []).map(i => ({ id: i.id, requirement: i.requirement, status: i.status }))}
                        open={pendingAction} onOpenChange={setPendingAction} />
@@ -401,6 +410,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
               <div className="help">Approve, reject, return and request-documents open once the AI examination of these papers has completed.</div>
             </div>
           )}
+          </>}
           {c.allowed_actions.includes('RUN_CHECK') && !verifying && step.action !== 'RUN_CHECK' && (
             <div className="card">
               <div className="label" style={{ marginBottom: 8 }}>Verification</div>

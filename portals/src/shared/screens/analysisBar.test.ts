@@ -61,3 +61,40 @@ describe('the analysis bar (12 Oct 2026: stuck in the seventies, then a new scre
     expect(nextShown(60, 50, null)).toBe(60)
   })
 })
+
+describe('the bar does not stall when the count under-reads (23 Oct 2026)', () => {
+  // Stage 4 is 46% of the bar, [48, 94]. Its denominator is a guess -- 0.55 of the assembled
+  // documents -- and a case that states its facts in fewer documents than that ENDS the stage
+  // with the count well short. The bar sat in the sixties and then climbed 30% in seconds.
+  const facts = (over: Partial<BarFacts> = {}): BarFacts => ({
+    stage: 4, stageAt: 0, stageStepAt: 0, lastPageAt: 0, totalPages: 12,
+    placed: {}, docs: 40, facts6: 3, extracts: 0, ...over,
+  })
+
+  it('keeps climbing while the count stands still', () => {
+    const f = facts({ stageAt: 0, stageStepAt: 60_000 })
+    const at2min = barTarget(f, 120_000, null)
+    const at6min = barTarget(f, 360_000, null)
+    const at12min = barTarget(f, 720_000, null)
+    expect(at6min).toBeGreaterThan(at2min + 2)
+    expect(at12min).toBeGreaterThan(at6min + 2)
+  })
+
+  it('still never leaves its own stage', () => {
+    const f = facts({ stageAt: 0, stageStepAt: 0 })
+    expect(barTarget(f, 60 * 60_000, null)).toBeLessThan(94)
+    expect(barTarget(f, 1000, null)).toBeGreaterThanOrEqual(48)
+  })
+
+  it('leaves a case the count reads correctly where it was: the count is ahead', () => {
+    // Nine of ten documents cross-checked a few seconds ago: the count says ~0.9 of the way,
+    // far beyond the clock's 1 - 1/(1 + 20/400).
+    const f = facts({ docs: 20, facts6: 10, stageAt: 0, stageStepAt: 19_000 })
+    const byClock = 48 + (94 - 48) * (1 - 1 / (1 + 20 / 400))
+    expect(barTarget(f, 20_000, null)).toBeGreaterThan(byClock + 10)
+  })
+
+  it('finishing still takes it to the end', () => {
+    expect(barTarget(facts(), 120_000, 'done')).toBe(100)
+  })
+})

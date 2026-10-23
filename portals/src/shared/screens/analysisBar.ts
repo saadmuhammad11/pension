@@ -82,7 +82,19 @@ export function barTarget(facts: BarFacts, now: number, finished: string | null)
     const perDoc = n > 1 ? Math.max(8, (facts.stageStepAt - facts.stageAt) / 1000 / (n - 1)) : TAU[facts.stage] / 3
     const onThis = (now - facts.stageStepAt) / 1000
     const between = onThis / (onThis + perDoc)          // never reaches 1, never stops
-    frac = Math.min(0.985, (Math.max(0, n - 1) + between) / of)
+    // Whichever evidence is further along: the count, or the clock (23 Oct 2026).
+    //
+    // The count alone could stall. Its denominator is a guess -- SHARE_OF_DOCUMENTS_CROSS_
+    // CHECKED of the assembled documents -- and where a case states its facts in fewer
+    // documents than that, the stage ENDS with the count well short of its denominator. Stage
+    // 4 is 46% of the bar, so the bar sat in the sixties for minutes and then climbed 30% in
+    // seconds when the next stage started: "stuck at a percent and suddenly spikes till the
+    // end very fast". The clock cannot stall -- 1 - 1/(1 + t/TAU) rises forever -- so taking
+    // the larger of the two keeps the bar moving on a case the count under-reads, and leaves
+    // it exactly as it was on a case the count reads correctly, where the count is ahead.
+    const byCount = (Math.max(0, n - 1) + between) / of
+    const byClock = 1 - 1 / (1 + since / TAU[facts.stage])
+    frac = Math.min(0.985, Math.max(byCount, byClock))
   } else {
     // No count to go by: forward on a curve that slows but never stops.
     frac = 1 - 1 / (1 + since / TAU[facts.stage])
