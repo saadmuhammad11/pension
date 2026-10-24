@@ -24,7 +24,8 @@ from pathlib import Path
 
 from api import db, gpf_bridge, rounds, workflow
 from api.artefacts import report_dict
-from api.runs import RUNS, adopt_from_disk, disk_shortfall, past_deadline, prune_registry, start_run, sweep_disk
+from api.runs import (RUNS, adopt_from_disk, disk_shortfall, link_duplicates, past_deadline,
+                      prune_registry, start_run, sweep_disk)
 
 #: A GP Fund examination is a reading job of the GP Fund module, not a pipeline run; its id on
 #: case_runs carries this prefix so the reconciler knows whom to ask.
@@ -667,6 +668,13 @@ def start_reconciler(interval_s: float = 3.0) -> None:
                         if removed["runs"] or removed["staging"]:
                             print(f"[case_runs] swept {len(removed['runs'])} orphan run(s), "
                                   f"{len(removed['staging'])} stale upload(s)")
+                        # And the other half of what the disk holds: the same case PDF under
+                        # four or five names (api.runs.link_duplicates, 24 Oct 2026). Nothing
+                        # is removed; the copies become one file.
+                        linked = link_duplicates()
+                        if linked["linked"]:
+                            print(f"[case_runs] linked {linked['linked']} duplicate artefact(s) "
+                                  f"in {linked['groups']} group(s), {linked['bytes'] >> 20} MB")
                 finally:
                     conn.close()
             except Exception as exc:                        # noqa: BLE001

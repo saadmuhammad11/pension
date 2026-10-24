@@ -7,6 +7,7 @@ that swap to one function.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -213,6 +214,100 @@ def sweep_disk(referenced: set[str], now: datetime | None = None) -> dict[str, l
             except OSError:
                 continue
     return removed
+
+
+#: The smallest file worth linking. Below this the inode costs as much as the bytes, and the
+#: tree holds thousands of small JSON artefacts whose paths are their meaning.
+_DEDUPE_MIN_BYTES = 1 << 20
+
+#: Only where artefacts are written once and never rewritten. A hardlink is one file under
+#: several names: anything that opened one of these for writing in place would silently change
+#: the others. Nothing does -- a bundle, an upload and a stored document are written at
+#: creation and read thereafter -- and this list is what keeps that true, so a new writer under
+#: one of these folders has to come and read this note first.
+_DEDUPE_DIRS = ("cases", "uploads")
+
+
+def link_duplicates(now: datetime | None = None) -> dict[str, int]:
+    """Replace byte-identical artefacts with hardlinks to one copy (24 Oct 2026).
+
+    A case submitted as one PDF is stored four and five times over: the department's upload
+    (``uploads/<run>-case.pdf``), the document as filed (``cases/...``), and three more inside
+    the run -- ``bundle/case.pdf``, ``bundle/parts/<name>`` and ``bundle/pdf/<nnn>-<name>``,
+    which for a single-PDF case are the same bytes as each other and as the original. Measured
+    on 24 Oct 2026 across 57 runs: 67 distinct PDFs over a megabyte, and 178 redundant copies
+    of them. At ~35 MB a case that is the larger half of what the artefact tree holds.
+
+    The copies are not wrong -- each has a reader that expects a file at that path -- so this
+    does not remove any of them. It makes them one file with several names, which every reader
+    sees exactly as before. One filesystem (``/dev/vda1``), so the links are possible; written
+    once and read thereafter, so they are safe.
+
+    Skips anything touched in the last hour, which is a run still being written. Returns what
+    it did, for the log.
+    """
+    now = now or datetime.now()
+    settled = (now - timedelta(hours=1)).timestamp()
+    done = {"groups": 0, "linked": 0, "bytes": 0}
+    if not ARTIFACTS.is_dir():
+        return done
+
+    roots = [ARTIFACTS / d for d in _DEDUPE_DIRS] + sorted(ARTIFACTS.glob("run-*/bundle"))
+    by_size: dict[int, list[Path]] = {}
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for f in root.rglob("*"):
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            if not f.is_file() or f.is_symlink() or st.st_size < _DEDUPE_MIN_BYTES or st.st_mtime > settled:
+                continue
+            by_size.setdefault(st.st_size, []).append(f)
+
+    for size, files in by_size.items():
+        if len(files) < 2:
+            continue
+        digests: dict[str, list[Path]] = {}
+        for f in files:
+            try:
+                h = hashlib.sha256()
+                with f.open("rb") as fh:
+                    for chunk in iter(lambda: fh.read(1 << 20), b""):
+                        h.update(chunk)
+            except OSError:
+                continue
+            digests.setdefault(h.hexdigest(), []).append(f)
+        for same in digests.values():
+            if len(same) < 2:
+                continue
+            keep, *rest = sorted(same, key=lambda p: str(p))
+            try:
+                keep_ino = keep.stat().st_ino
+            except OSError:
+                continue
+            group_linked = 0
+            for other in rest:
+                try:
+                    if other.stat().st_ino == keep_ino:      # already one file
+                        continue
+                    # Link beside it and rename over, so the name is never missing: a reader
+                    # that opens it between the two steps gets the old file or the new one.
+                    tmp = other.with_name(other.name + ".linking")
+                    tmp.unlink(missing_ok=True)
+                    os.link(keep, tmp)
+                    tmp.replace(other)
+                    group_linked += 1
+                    done["bytes"] += size
+                except OSError:
+                    with contextlib.suppress(OSError):
+                        other.with_name(other.name + ".linking").unlink()
+                    continue
+            if group_linked:
+                done["groups"] += 1
+                done["linked"] += group_linked
+    return done
 
 
 def prune_registry(now: datetime | None = None) -> list[str]:
