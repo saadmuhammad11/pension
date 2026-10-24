@@ -29,39 +29,80 @@ from gpf.api import app
 client = TestClient(app, headers={apikey.HEADER: apikey.api_key() or ""})
 
 #: Every file the officer's browser holds between one screen and the next.
-SCREENS = ["/", "/js/app.js", "/js/ui.js", "/js/api.js", "/js/pure.js", "/styles.css"]
+SCRIPTS = ["/js/app.js", "/js/ui.js", "/js/api.js", "/js/pure.js"]
 
 
-@pytest.mark.parametrize("path", SCREENS)
-def test_the_browser_is_told_to_ask(path) -> None:
-    r = client.get(path)
-    assert r.status_code == 200, path
-    assert r.headers.get("cache-control") == "no-cache", path
+class TestThePageThatNamesTheRest:
+
+    def test_index_is_never_stored(self) -> None:
+        """Two kilobytes, fetched every time. Telling a browser to revalidate only binds it
+        once it asks, and a browser holding a copy it believes is fresh does not ask -- which
+        is how a header set in the morning fixed every load after the next one, and not the
+        next one."""
+        r = client.get("/")
+        assert r.status_code == 200
+        assert r.headers["cache-control"] == "no-store"
+
+    def test_everything_it_names_carries_the_version(self) -> None:
+        from gpf.api import web_version
+        html = client.get("/").text
+        v = web_version()
+        assert f'href="./styles.css?v={v}"' in html
+        assert f'src="./js/app.js?v={v}"' in html
+
+    def test_an_address_a_browser_has_never_seen_cannot_be_served_from_its_cache(self) -> None:
+        """Which is the whole point: the fix must not depend on the officer clearing anything."""
+        import pathlib as _p
+        from gpf.api import WEB_DIR, web_version
+        before = web_version()
+        f = _p.Path(WEB_DIR) / "js" / "ui.js"
+        original = f.read_bytes()
+        try:
+            f.write_bytes(original + b"\n// a screen changed\n")
+            assert web_version() != before
+        finally:
+            f.write_bytes(original)
+        assert web_version() == before
 
 
-@pytest.mark.parametrize("path", SCREENS)
-def test_and_given_something_to_ask_with(path) -> None:
-    """Without a validator "no-cache" means the file is fetched whole every time."""
-    r = client.get(path)
-    assert r.headers.get("etag") or r.headers.get("last-modified"), path
+class TestTheWholeImportGraphMovesTogether:
+    """A fresh entry point that pulls in yesterday's ui.js is the same bug wearing a hat."""
+
+    @pytest.mark.parametrize("path", SCRIPTS)
+    def test_a_scripts_own_imports_are_stamped(self, path) -> None:
+        from gpf.api import web_version
+        body = client.get(path).text
+        for line in body.splitlines():
+            if line.startswith("import ") and "'./" in line:
+                assert f"?v={web_version()}'" in line, (path, line)
+
+    def test_app_js_pulls_in_the_versioned_modules(self) -> None:
+        from gpf.api import web_version
+        body = client.get("/js/app.js").text
+        v = web_version()
+        for mod in ("api.js", "ui.js", "pure.js"):
+            assert f"./{mod}?v={v}" in body, mod
+
+    @pytest.mark.parametrize("path", SCRIPTS)
+    def test_and_may_then_be_kept_for_ever(self, path) -> None:
+        """The address can never name the wrong file, so there is nothing to revalidate."""
+        r = client.get(path)
+        assert r.status_code == 200
+        assert "immutable" in r.headers["cache-control"]
+
+    def test_a_script_that_does_not_exist_is_a_404_not_a_traversal(self) -> None:
+        assert client.get("/js/nope.js").status_code == 404
+        assert client.get("/js/..%2F..%2Fapi.js").status_code in (404, 400)
 
 
-def test_asking_costs_nothing_when_nothing_changed(self=None) -> None:
-    first = client.get("/js/app.js")
-    again = client.get("/js/app.js", headers={"If-None-Match": first.headers["etag"]})
-    assert again.status_code == 304
-    assert not again.content
+class TestTheRestOfTheScreens:
 
+    def test_the_stylesheet_is_asked_about(self) -> None:
+        """It is named with a version too, so this is belt and braces."""
+        assert client.get("/styles.css").headers.get("cache-control") == "no-cache"
 
-def test_the_page_that_names_the_others_is_covered(self=None) -> None:
-    """index.html was the one served by its own route rather than the static mount, so it
-    was the file the fix would most easily have missed -- and the oldest, so the one a
-    browser held longest."""
-    assert client.get("/").headers.get("cache-control") == "no-cache"
-
-
-def test_it_is_not_no_store(self=None) -> None:
-    """The officer should not re-download every screen on every navigation: they may keep
-    them, they must just ask."""
-    for path in SCREENS:
-        assert "no-store" not in (client.get(path).headers.get("cache-control") or ""), path
+    def test_nothing_is_served_without_a_cache_instruction(self) -> None:
+        """A browser given no instruction guesses, and the usual guess is a tenth of the
+        file's age -- which is what served an officer the morning's screens."""
+        for path in ["/", "/styles.css", *SCRIPTS]:
+            assert client.get(path).headers.get("cache-control"), path

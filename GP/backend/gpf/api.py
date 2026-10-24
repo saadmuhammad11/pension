@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -737,14 +738,59 @@ if (PROTO / "sap-samples").exists():
 
 
 # ── frontend (must be mounted LAST so /api and /assets win) ────────────────────
+#: Rewritten in a served script so its own imports carry the version too.
+_IMPORT = re.compile(r"""(from\s+['"]\./[\w./-]+\.js)(['"])""")
+
+
+def web_version() -> str:
+    """A hash of the screens as they stand on disk, for their addresses to carry.
+
+    Added 24 Oct 2026, after a day of officers working on screens that had been replaced.
+    Telling a browser to revalidate (Cache-Control) only binds it once it asks, and a browser
+    holding a copy it believes is fresh does not ask -- so the header fixed every load after
+    the next one and not the next one. An address that changes with the file leaves nothing
+    to believe: a browser cannot serve from cache a URL it has never seen.
+
+    This is what the portal gets from its bundler, which puts a hash of the contents into
+    every file name. This module is buildless and its files keep their names, so the hash
+    goes in the query instead, and the import graph is rewritten as it is served so that
+    app.js, ui.js, api.js and pure.js all move together -- a fresh entry point that pulls in
+    yesterday's ui.js is the same bug wearing a hat.
+    """
+    import hashlib
+    h = hashlib.sha256()
+    for f in sorted(WEB_DIR.rglob("*")):
+        if f.is_file() and f.suffix in (".js", ".css", ".html"):
+            h.update(str(f.relative_to(WEB_DIR)).encode())
+            h.update(f.read_bytes())
+    return h.hexdigest()[:12]
+
+
+@app.get("/js/{name}.js", include_in_schema=False)
+def web_script(name: str):
+    """A screen's script, with its own imports stamped with the same version."""
+    f = (WEB_DIR / "js" / f"{name}.js").resolve()
+    if not f.is_file() or WEB_DIR.resolve() not in f.parents:
+        raise HTTPException(status_code=404, detail="no such script")
+    body = _IMPORT.sub(rf"\1?v={web_version()}\2", f.read_text(encoding="utf-8"))
+    # The address carries the version, so the file at it can never be the wrong one and may
+    # be kept as long as the browser likes.
+    return Response(body, media_type="text/javascript",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @app.get("/")
 def index():
     idx = WEB_DIR / "index.html"
     if idx.exists():
-        # The page that names every other file, so the one that must never be stale: served
-        # with no Cache-Control it was the file a browser held longest, being the oldest.
-        # See RevalidatedStatic below for why "no-cache" and not "no-store".
-        return FileResponse(idx, headers={"Cache-Control": "no-cache"})
+        # Never stored: it is two kilobytes and it is the page that names every other file,
+        # so it is the one thing that must always be fetched. Everything it names carries the
+        # version, so everything else may be kept for ever.
+        v = web_version()
+        html = (idx.read_text(encoding="utf-8")
+                .replace('href="./styles.css"', f'href="./styles.css?v={v}"')
+                .replace('src="./js/app.js"', f'src="./js/app.js?v={v}"'))
+        return Response(html, media_type="text/html", headers={"Cache-Control": "no-store"})
     return JSONResponse({"detail": "Frontend not built yet. API is live at /api/health."})
 
 
