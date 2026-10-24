@@ -8,11 +8,9 @@
  *  them both rather than trusting that the next one will be remembered.
  */
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-
-// From the project root: vitest runs with portals/ as its working directory, and
-// import.meta.url is not a file URL under the jsdom transform.
-const SHELL = readFileSync('src/shared/PortalShell.tsx', 'utf8')
+// The shell's own source, as text. Vite's ?raw rather than node:fs: this project has no
+// node types, and the bundler already knows how to hand a file over as a string.
+import SHELL from '../PortalShell.tsx?raw'
 
 /** The fixed paths the renderer branches on: `cleanPath === '/x'` below the guard. */
 const drawn = () => {
