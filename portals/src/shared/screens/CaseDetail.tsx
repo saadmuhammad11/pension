@@ -161,7 +161,16 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
 
   const [holdRun, setHoldRun] = useState<string | null>(null)
   const latestRunId = c?.latest_run?.run_id ?? null
-  useEffect(() => { if (c?.status === 'AI_CHECKING' && latestRunId) setHoldRun(latestRunId) }, [c?.status, latestRunId])
+  // Only a pension run is held: holdRun exists to keep AnalysisLive on screen until its bar
+  // has visibly finished, and AnalysisLive is drawn for a pension case alone. A GP Fund run
+  // was held too and nothing could let go of it -- the component that calls analysisDone is
+  // never rendered for GPF, and its run id 404s on the pension run endpoints by design
+  // (api/v2._run_for: "a GP Fund examination has no pension artefacts"). So after examining a
+  // claim the actions never came back, and a reload -- which starts holdRun at null -- was the
+  // only way to see them again (23 Oct 2026).
+  useEffect(() => {
+    if (c?.status === 'AI_CHECKING' && latestRunId && c.product !== 'GPF') setHoldRun(latestRunId)
+  }, [c?.status, c?.product, latestRunId])
   const analysisDone = useCallback(() => { setHoldRun(null); load() }, [load])
 
   const step = useMemo(() => c ? nextStep(c, role) : null, [c, role])
@@ -204,7 +213,8 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
   const findingsHot = !!report?.flags.some(f => f.severity === 'HIGH')
   // The analysis stays on screen until it has shown its own finish (the bar at 100%, then on
   // to the findings), not cut off the moment the poll sees the case move on.
-  const verifying = c.status === 'AI_CHECKING' || (!!run && holdRun === run.run_id && c.status !== 'AI_FAILED')
+  const verifying = c.status === 'AI_CHECKING'
+    || (c.product !== 'GPF' && !!run && holdRun === run.run_id && c.status !== 'AI_FAILED')
   const remarks = c.events.filter(e => e.remark && e.actor_role !== 'SYSTEM').length
 
   // Left/Right on the tab strip move between the tabs (F15); a department has no AI tab.

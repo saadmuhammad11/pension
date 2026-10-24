@@ -116,8 +116,17 @@ def request_items(action: str, payload: dict) -> list[dict]:
 
 # -- a verification in a round ------------------------------------------------------------------
 #: Whether a resubmission may reuse the earlier round's reading of the papers it has not
-#: changed. OFF, by the office's decision of 23 Oct 2026: every verify reads every page of
-#: the bundle again.
+#: changed. ON since 24 Oct 2026, which reverses the decision of 23 Oct only because the
+#: reason for it has been answered.
+#:
+#: That decision -- every verify reads every page again -- was taken because a carried page
+#: keeps the reading it was given the FIRST time, right or wrong, so a fix to the reader
+#: reached an old page only on a run that re-read it. A GP Fund page reading is now cached
+#: against a hash of the code that produced it (gpf.reading.page_cache), so a page is reused
+#: only while the reader that read it is unchanged, and a reader fix invalidates every page
+#: it could have touched without anyone remembering to say so. The saving comes back and the
+#: trap does not: re-examining an unchanged claim is seconds again rather than a minute or
+#: two, and the first run after a reader changes reads everything.
 #:
 #: Both products answer to this one switch, by two different mechanisms. A pension run reuses
 #: the earlier round's report (pipeline.carryover, reached through base_run_for below). A GP

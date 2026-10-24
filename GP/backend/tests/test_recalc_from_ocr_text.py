@@ -236,3 +236,51 @@ class TestWhichReadIsTaken:
     def test_neither_reader_getting_anything_is_no_rows(self) -> None:
         client = self._client("Subject: a covering letter.", [])
         assert client._extract_recalc_rows("p.png") == ([], 0.0)
+
+
+class TestWhenTheSecondReadIsSkipped:
+    """The ledger is read by both readers and the better taken, which costs the examination
+    the vision read -- forty seconds on PC-2026-000070's page 6, against the OCR read's
+    sixty-one. Where the OCR read is already complete and every year adds up, the vision read
+    can only return the same ledger or a worse one, so it is not made (24 Oct 2026).
+
+    "Complete" is the whole difficulty. Untruncated is not enough: PC-2026-000048's OCR read
+    stopped after one year of thirty-nine and that one year added up. The page itself says
+    how far the ledger should run -- the report is struck on a date and its last row is the
+    year that date falls in -- and that is what is checked.
+    """
+
+    def test_a_ledger_that_runs_up_to_its_report_date_is_complete(self) -> None:
+        from gpf.reading.recalc_text import parse_recalc, reaches_the_report_date
+        assert reaches_the_report_date(parse_recalc(OCR)) is True
+
+    def test_one_that_stops_sixteen_years_short_is_not(self) -> None:
+        from gpf.reading.recalc_text import parse_recalc, reaches_the_report_date
+        cut = "\n".join(OCR.splitlines()[:12])
+        parsed = parse_recalc(cut)
+        assert parsed["reportDate"] == "07.09.2026"
+        assert int(parsed["rows"][-1]["end"].split(".")[-1]) < 2026
+        assert reaches_the_report_date(parsed) is False
+
+    def test_a_page_that_gives_no_date_is_never_called_complete(self) -> None:
+        """Not knowing is not the same as knowing. Without the stamp the second read is made."""
+        from gpf.reading.recalc_text import parse_recalc, reaches_the_report_date
+        parsed = parse_recalc("01.07.2000 30.06.2001 0.00 1000.00 1000.00")
+        assert parsed and not parsed.get("reportDate")
+        assert reaches_the_report_date(parsed) is False
+
+    def test_the_short_read_that_started_this_is_still_not_short_circuited(self) -> None:
+        """PC-2026-000048: one year, adds up, and the vision read must still be made."""
+        from unittest import mock
+        from gpf.clients.model_client import VllmModelClient
+        c = VllmModelClient.__new__(VllmModelClient)
+        c.ocr_table_text = lambda _r: (setattr(c, "_ocr_table_truncated", False)
+                                       or "01.07.2000 30.06.2001 0.00 1000.00 1000.00")
+        called = mock.Mock(return_value=([{"start": "01.07.2000", "end": "30.06.2001",
+                                           "opening": 0.0, "subscription": 1000.0,
+                                           "adjustments": 0.0, "tempAdvance": 0.0,
+                                           "recTempAdvance": 0.0, "permanentAdvance": 0.0,
+                                           "interest": 0.0, "closing": 1000.0}] * 39, 0.95))
+        c._recalc_rows_from_vision = called
+        c._extract_recalc_rows("p.png")
+        assert called.called, "a short OCR read must never skip the second opinion"

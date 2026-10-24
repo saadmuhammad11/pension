@@ -368,7 +368,7 @@ class VllmModelClient:
         fewer years. A ledger nobody can make add up still reaches the officer as a hard stop
         (rules_common.RECALC-ADDS-UP), which is where that decision belongs.
         """
-        from ..reading.recalc_text import parse_recalc_rows
+        from ..reading.recalc_text import parse_recalc, reaches_the_report_date
         from ..sap import recalc_discrepancies
 
         def misread(rows) -> int:
@@ -376,8 +376,10 @@ class VllmModelClient:
 
         candidates = []
         self._ocr_table_truncated = False
+        parsed = None
         try:
-            rows = parse_recalc_rows(self.ocr_table_text(image_ref))
+            parsed = parse_recalc(self.ocr_table_text(image_ref))
+            rows = (parsed or {}).get("rows") or []
         except Exception:                                  # noqa: BLE001 -- the vision read stands
             rows = []
         # The OCR model can fall into a loop and repeat one nil cell for its whole budget. On
@@ -385,7 +387,19 @@ class VllmModelClient:
         # thirty-nine year ledger -- and one year adds up, which is exactly how a wrecked read
         # could look like a perfect one. A cut-off read of a single row is not a ledger.
         if rows and not (self._ocr_table_truncated and len(rows) <= 1):
-            candidates.append((rows, 0.97 if not misread(rows) else 0.6))
+            clean = not misread(rows)
+            candidates.append((rows, 0.97 if clean else 0.6))
+            # A read whose every year adds up AND chains, and which runs to the year the
+            # report was struck in, is the whole ledger: a year dropped in the middle breaks
+            # the chain, and one dropped at the end leaves it short of the report's own date.
+            # Nothing a second reader returns can improve on that, and it costs forty seconds
+            # of the examination (24 Oct 2026; PC-2026-000070's page 6 reads OCR 61s + vision
+            # 40s). Truncation is not part of this test: that page's OCR read IS cut off --
+            # the model loops on a nil cell after the last row and runs out its budget on it --
+            # and the ledger above the loop is complete. What the cut-off read must not do is
+            # stand alone when it is SHORT, and reaching the report date is what says it isn't.
+            if clean and reaches_the_report_date(parsed):
+                return rows, 0.97
         rows, conf = self._recalc_rows_from_vision(image_ref)
         if rows:
             candidates.append((rows, conf))

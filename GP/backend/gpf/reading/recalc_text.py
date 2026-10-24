@@ -191,6 +191,29 @@ def parse_recalc_rows(text: str) -> list[dict]:
     return rows
 
 
+def reaches_the_report_date(parsed: Optional[dict]) -> bool:
+    """Whether the ledger runs up to the report that printed it.
+
+    The only evidence on the page that a read got ALL of the years: the report is struck on a
+    date and its last row is the year that date falls in. A read that stops at 30.06.2010 on a
+    report dated 07.09.2026 is missing sixteen years, however neatly the years it did get add
+    up -- and a short ledger that reconciles is the one shape a wrecked read can hide in
+    (PC-2026-000048, where the OCR model looped on the first row and returned one year).
+
+    False where the page gives no date to check against: not knowing is not the same as knowing.
+    """
+    rows = (parsed or {}).get("rows") or []
+    stamped = (parsed or {}).get("reportDate") or ""
+    if not rows or not stamped:
+        return False
+    try:
+        struck = int(stamped.split(".")[-1])
+        ends = int(str(rows[-1].get("end") or "").split(".")[-1])
+    except ValueError:
+        return False
+    return ends >= struck
+
+
 def parse_recalc(text: str) -> Optional[dict]:
     """The report as the case holds it, or None where the page carries no ledger."""
     rows = parse_recalc_rows(text)

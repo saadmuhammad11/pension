@@ -23,8 +23,33 @@ from typing import Optional
 from ..clients.model_client import ExtractedField
 from .barcodes import DecodedCode
 
-#: Bumped whenever what a page reading contains changes, so an old entry is read afresh.
-VERSION = 1
+def _reader_fingerprint() -> str:
+    """A hash of the code that decides what a page reading contains.
+
+    This was a hand-kept integer "bumped whenever what a page reading contains changes", with
+    a second one beside it for pay slips. Both depend on somebody remembering, and a forgotten
+    bump does not fail loudly -- it serves an old reading of a page for as long as the case
+    lives, so a fix to the reader never reaches the claims that needed it. That is the whole
+    reason reuse was switched off across the office on 23 Oct 2026, and with the version
+    answering for itself it can be switched back on (24 Oct 2026).
+
+    Err toward re-reading: a comment changed in any of these files costs one more read of the
+    pages of one case, and a reading served from before a reader was fixed costs a claim.
+    """
+    import hashlib
+    here = Path(__file__).resolve().parent
+    reads_a_page = [here / "pipeline.py", here / "payslip_text.py", here / "recalc_text.py",
+                    here / "schemas.py", here / "artefacts.py", here / "barcodes.py",
+                    here.parent / "clients" / "model_client.py"]
+    h = hashlib.sha256()
+    for f in sorted(reads_a_page):
+        h.update(f.name.encode())
+        h.update(f.read_bytes() if f.is_file() else b"")
+    return h.hexdigest()[:16]
+
+
+#: What read the page. An entry read by any other version of the reader is read again.
+VERSION = _reader_fingerprint()
 _SAFE = re.compile(r"[^A-Za-z0-9_.:-]")
 
 
@@ -44,15 +69,15 @@ class PageCache:
             data = json.loads(p.read_text())
         except ValueError:
             return None
+        # The hand-kept payslip_v that stood here is subsumed: payslip_text.py is one of the
+        # files the fingerprint is taken over, so a pay slip read before its LOAN/FUND block
+        # was read has a different version by construction.
         if data.get("version") != VERSION:
-            return None
-        # A pay slip read before its LOAN/FUND block was read (30 Sep 2026) is read again.
-        if data.get("artefact") == "SAP_PAYSLIP" and data.get("payslip_v", 0) < 2:
             return None
         return data
 
     def put(self, key: str, *, artefact: str, confidence: float, fields: dict, codes: list) -> None:
-        entry = {"version": VERSION, "payslip_v": 2, "artefact": artefact, "classify_confidence": confidence,
+        entry = {"version": VERSION, "artefact": artefact, "classify_confidence": confidence,
                  "fields": {k: asdict(v) for k, v in fields.items()},
                  "codes": [asdict(c) for c in codes]}
         tmp = self._path(key).with_suffix(".tmp")
