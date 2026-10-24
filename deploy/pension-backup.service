@@ -1,0 +1,13 @@
+[Unit]
+Description=SERVE PUNJAB database backup
+Documentation=file:/opt/pension/current/deploy/backup-db.sh
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/pension/current/deploy/backup-db.sh
+User=root
+# A failed backup must be visible, not silent: the unit goes failed and
+# `systemctl list-units --failed` shows it.
+SuccessExitStatus=0

@@ -17,6 +17,7 @@
 !*.sh
 !*.sql
 !*.service
+!*.timer
 !*.conf
 !*.toml
 !*.yml

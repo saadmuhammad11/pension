@@ -1,0 +1,14 @@
+[Unit]
+Description=Nightly SERVE PUNJAB database backup
+Documentation=file:/opt/pension/current/deploy/backup-db.sh
+
+[Timer]
+# Half past two in Karachi, where the office is -- the host clock is America/New_York, so the
+# zone is named rather than assumed (systemd 252 understands a zone in OnCalendar).
+OnCalendar=*-*-* 02:30:00 Asia/Karachi
+# A box that was off at half past two backs up when it comes back, rather than skipping a day.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
