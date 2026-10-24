@@ -30,8 +30,11 @@ API_PY = (pathlib.Path(__file__).resolve().parent.parent / "gpf" / "api.py").rea
 SUBNAV = APP[APP.index('<div class="subnav"'):APP.index('<div id="tabc">')]
 
 
-def test_the_screen_has_three_tabs() -> None:
-    assert re.findall(r"tabBtn\('(\w+)'", SUBNAV) == ["overview", "sap", "exam"]
+def test_the_screen_has_the_four_tabs_it_should() -> None:
+    """Checklist joined them on 23 Oct 2026: the module showed its findings grouped by
+    severity and nowhere showed which papers were looked for, so a paper that had simply not
+    been found had to be inferred from the gaps."""
+    assert re.findall(r"tabBtn\('(\w+)'", SUBNAV) == ["overview", "sap", "checklist", "exam"]
 
 
 def test_neither_removed_tab_can_be_reached() -> None:

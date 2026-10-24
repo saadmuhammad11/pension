@@ -259,6 +259,8 @@ class CaseService:
             "lists": {name: [self._result_view(r, s, viewer) for r in L[name]]
                       for name in ("hard", "adv", "conf", "sap", "ok")},
             "position": position(s),
+            # The papers this kind of claim is checked for, and what was made of each.
+            "checklist": self._checklist_view(s),
             "sap": sap_view or {"present": False, "personnelNo": c.get("personnelNo")},
             # The fund and advance position the rules compute from (rules_family.fund_position).
             "balances": fund_position(s.F),
@@ -267,6 +269,54 @@ class CaseService:
             "dispositions": s.disp,
             "disposalOptions": self._disposal_options(s, viewer),
         }
+
+    #: What a checklist item's results make of it. The engine answers in finding statuses; a
+    #: checklist answers in whether the paper is there, which is a different question asked of
+    #: the same result. Ordered worst-first: an item with several results takes the worst.
+    _CHECKLIST_WORD = {"hard": "Not satisfied", "sap": "Awaiting the SAP extract",
+                       "conf": "To verify", "adv": "Present", "sub": "Present", "ok": "Present"}
+
+    def _checklist_view(self, s: CaseState) -> list[dict]:
+        """The papers this kind of claim is checked for, and what the examination made of each.
+
+        23 Oct 2026. The module showed its findings grouped by severity and never showed a
+        checklist, so there was nowhere to see that a paper had simply not been found -- the
+        officer read a list of what was WRONG and had to infer what was MISSING from the gaps
+        in it. A pension case has had this since the checklist was built.
+
+        The expected papers are gpf.intake's, which reads them off the checks themselves, so
+        this list and the one the department is shown at filing are the same list.
+
+        A paper is not called "not found" here. The engine's hard stop on a checklist item is
+        usually a paper that is absent but is sometimes one that is present and wrong, and
+        saying "not found" of a paper that is in the bundle is the error the office most wants
+        to avoid (the pension side's ChecklistPanel says so in as many words). The word is
+        "Not satisfied" and the finding beneath it says which.
+        """
+        from .intake import checklist_for
+        meta = self._meta(s)
+        expected = checklist_for(str(meta.get("kind") or ""),
+                                 str((s.F or {}).get("gazetted") or "unknown"))
+        by_check: dict[str, list] = {}
+        for r in (s.results or []):
+            by_check.setdefault(str(r.get("id") or "").split(":")[0], []).append(r)
+        order = list(self._CHECKLIST_WORD)
+        out = []
+        for e in expected:
+            got = by_check.get(e["id"]) or []
+            if got:
+                worst = min(got, key=lambda r: order.index(r["status"]) if r["status"] in order else 99)
+                status, word = worst["status"], self._CHECKLIST_WORD.get(worst["status"], worst["status"])
+            else:
+                # The check did not run. For a paper wanted only when it applies that is the
+                # answer; for one every claim needs it means the facts never reached the rule,
+                # which the officer should see rather than read as satisfied.
+                status = "na" if not e["always"] else "unseen"
+                word = "Not required for this claim" if not e["always"] else "Not reached"
+            out.append({"id": e["id"], "item": e["item"], "requirement": e["requirement"],
+                        "always": e["always"], "status": status, "word": word,
+                        "findings": [r.get("finding") for r in got if r.get("finding")]})
+        return out
 
     def _diff_view(self, diff: Optional[dict]) -> dict:
         """Compact 'what changed' banner for the UI after a re-evaluation (§7.1)."""

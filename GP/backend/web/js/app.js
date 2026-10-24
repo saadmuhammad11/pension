@@ -322,7 +322,7 @@ async function renderCase(app, id, seq = ROUTE.current) {
     </div>
     <div class="subnav" id="subnav">
       ${tabBtn('overview', 'Overview')}${tabBtn('sap', 'SAP extracts')}
-      ${tabBtn('exam', 'Examination')}
+      ${tabBtn('checklist', 'Checklist')}${tabBtn('exam', 'Examination')}
     </div>
     <div id="tabc"></div>`;
   $$('#subnav button').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; renderTab(id, c); });
@@ -338,6 +338,7 @@ function renderTab(id, c) {
   const el = $('#tabc');
   if (state.tab === 'overview') el.innerHTML = viewOverview(c);
   else if (state.tab === 'sap') { el.innerHTML = viewSap(c); wireSap(id); }
+  else if (state.tab === 'checklist') el.innerHTML = viewChecklist(c);
   else if (state.tab === 'exam') { el.innerHTML = viewExam(c); wireExam(id, c); }
 }
 
@@ -394,6 +395,46 @@ function viewOverview(c) {
       <div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th><th>Source</th><th class="num">Conf.</th></tr></thead>
         <tbody>${rec || '<tr><td colspan=4 class="muted">No reading record.</td></tr>'}</tbody></table></div>
     </div>`;
+}
+
+// ── checklist ─────────────────────────────────────────────────────────────────
+/** The tone a checklist word is drawn in: the same classes the finding badges use. */
+const CHECKLIST_TONE = { ok: 'ok', sub: 'ok', adv: 'ok', conf: 'conf', sap: 'sap',
+                         hard: 'hard', na: 'na', unseen: 'conf' };
+
+/**
+ * The papers this kind of claim is checked for, and what the examination made of each
+ * (23 Oct 2026).
+ *
+ * The module showed its findings grouped by severity and never showed a checklist, so there
+ * was nowhere to see that a paper had simply not been found: the officer read a list of what
+ * was WRONG and had to infer what was MISSING from the gaps in it. A pension case has had
+ * this since its checklist was built.
+ *
+ * The expected papers come from the service, which reads them off the checks themselves, so
+ * this is the same list the department is shown when it files.
+ */
+function viewChecklist(c) {
+  const rows = c.checklist || [];
+  if (!rows.length) {
+    return `<div class="panel"><h2>Checklist</h2>
+      <p class="muted">The office keeps no list of papers for this kind of claim.</p></div>`;
+  }
+  const line = (r) => `<tr>
+    <td class="mono small muted" style="width:72px">${esc(r.item)}</td>
+    <td>${esc(r.requirement)}${r.always ? '' : ' <span class="muted small">(where it applies)</span>'}
+      ${(r.findings || []).map(f => `<div class="muted small" style="margin-top:3px">${esc(f)}</div>`).join('')}</td>
+    <td style="width:190px">${badge(CHECKLIST_TONE[r.status] || 'conf', r.word)}</td>
+  </tr>`;
+  const present = rows.filter(r => r.status === 'ok' || r.status === 'sub' || r.status === 'adv').length;
+  return `<div class="panel">
+    <div class="spread"><h2>Checklist</h2>
+      <span class="muted small">${present} of ${rows.length} satisfied</span></div>
+    <p class="muted small">The papers the office checks a ${esc((c.meta.kind || 'GP Fund').toString())} claim for.
+      A paper is not called "not found" here: a hard stop on one of these is usually a paper
+      that is absent and sometimes one that is present and wrong, and the finding says which.</p>
+    <div class="table-wrap"><table><tbody>${rows.map(line).join('')}</tbody></table></div>
+  </div>`;
 }
 
 // ── SAP tab ───────────────────────────────────────────────────────────────────
