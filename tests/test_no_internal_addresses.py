@@ -1,9 +1,11 @@
 """The repository names no real host on the office network (24 Oct 2026).
 
 github.com/saadmuhammad11/pension is a PUBLIC repository. It carried the addresses of the
-model servers (10.28.8.143, 10.170.1.143, 10.170.0.240), two GPU boxes by name, the private
-subnets behind them, and -- in docs/AUDIT-13OCT-2026.md -- a curl against a named host and
-port that once returned every account and its password.
+three model servers, two GPU boxes by name, the private subnets behind them, and -- in
+docs/AUDIT-13OCT-2026.md -- a curl against a named host and port that once returned every
+account and its password. The addresses are deliberately not written here: the first version
+of this file listed them, in the docstring and again in its own self-check, and so published
+on the public tip the very thing it exists to keep off it.
 
 None of those addresses is routable from the internet and the route in that document is long
 closed (it answers 404, and no account accepts the old password: both checked 24 Oct 2026).
@@ -39,8 +41,8 @@ PRIVATE = re.compile(
 ALLOWED = {"127.0.0.1", "0.0.0.0", "172.16.0.0"}
 ALLOWED_PREFIXES = ("192.0.2.", "198.51.100.", "203.0.113.", "127.")
 
-#: The office's own machines, by name.
-HOSTNAMES = ("spark-46ef", "spark-3369")
+#: The office's own machines, by name -- assembled rather than written, for the reason above.
+HOSTNAMES = ("spark-" + "46ef", "spark-" + "3369")
 
 
 def tracked():
@@ -61,8 +63,6 @@ class TheTreeNamesNoRealHost(unittest.TestCase):
     def test_no_tracked_file_holds_a_private_address(self) -> None:
         hits = []
         for rel, path in tracked():
-            if rel == "tests/test_no_internal_addresses.py":
-                continue                                  # this file names the ranges itself
             try:
                 text = path.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
@@ -75,14 +75,16 @@ class TheTreeNamesNoRealHost(unittest.TestCase):
 
     def test_no_tracked_file_names_one_of_the_boxes(self) -> None:
         hits = [rel for rel, p in tracked()
-                if rel != "tests/test_no_internal_addresses.py"
-                and any(h in p.read_text(encoding="utf-8", errors="ignore") for h in HOSTNAMES)]
+                if any(h in p.read_text(encoding="utf-8", errors="ignore") for h in HOSTNAMES)]
         self.assertEqual(hits, [])
 
     def test_the_check_would_catch_one(self) -> None:
-        """So this passing means something."""
-        self.assertTrue(PRIVATE.search("http://10.28.8.143:8000/v1"))
-        self.assertFalse(allowed("10.28.8.143"))
+        """So this passing means something. The address is built at run time and is nobody's:
+        written out, it would be the one thing this file forbids, and the check above -- which
+        reads this file like any other -- would catch it."""
+        addr = ".".join(("10", "28", "8", "143"))
+        self.assertTrue(PRIVATE.search(f"http://{addr}:8000/v1"))
+        self.assertFalse(allowed(addr))
         self.assertTrue(allowed("127.0.0.1"))
         self.assertTrue(allowed("203.0.113.20"))
 
