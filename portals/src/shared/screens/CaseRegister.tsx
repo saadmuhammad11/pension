@@ -51,9 +51,13 @@ const SHORT: Record<CaseStatus, string> = {
 
 /** The status chips: one colour, one meaning, the same as the badges. */
 type Group = '' | 'awaiting' | 'pending' | 'returned' | 'approved' | 'rejected'
-const GROUPS: { key: Group; dept: string; ag: string; statuses: CaseStatus[] }[] = [
+//: `ag: null` means the chip is a department's own and is not drawn on this side. A case not
+//: yet submitted is the department's to finish and the AG has nothing to do with it; offering
+//: the Office a filter for it was offering a filter on somebody else's work (24 Oct 2026).
+//: Such a case is still counted and still listed under All -- only the chip has gone.
+const GROUPS: { key: Group; dept: string; ag: string | null; statuses: CaseStatus[] }[] = [
   { key: 'awaiting', dept: 'With the AG', ag: 'Awaiting decision', statuses: ['FORWARDED', 'AI_CHECKING', 'AI_FAILED', 'UNDER_REVIEW'] },
-  { key: 'pending', dept: 'Not yet submitted', ag: 'Not yet submitted', statuses: ['DRAFT', 'AI_CHECKED'] },
+  { key: 'pending', dept: 'Not yet submitted', ag: null, statuses: ['DRAFT', 'AI_CHECKED'] },
   { key: 'returned', dept: 'Returned', ag: 'Returned', statuses: ['RETURNED', 'DOCS_REQUESTED'] },
   { key: 'approved', dept: 'Approved', ag: 'Approved', statuses: ['APPROVED'] },
   { key: 'rejected', dept: 'Rejected', ag: 'Rejected', statuses: ['REJECTED'] },
@@ -185,7 +189,8 @@ export function CaseRegister(
   const showAi = !isDept                                   // the AI's reading is the Office of the Accountant General's
   const showTimeline = isDept                              // where every case stands, on its row
   const cols = 5 + (showDepartment ? 1 : 0) + (showAi ? 1 : 0) + (showTimeline ? 1 : 0)
-  const filterWords = [group ? GROUPS.find(g => g.key === group)![isDept ? 'dept' : 'ag'] : null, section || null, dept || null, kind ? (kinds.find(k => k[0] === kind)?.[1] ?? kind) : null].filter(Boolean).join(' · ')
+  const chips = GROUPS.filter(g => isDept || g.ag)
+  const filterWords = [group ? GROUPS.find(g => g.key === group)?.[isDept ? 'dept' : 'ag'] : null, section || null, dept || null, kind ? (kinds.find(k => k[0] === kind)?.[1] ?? kind) : null].filter(Boolean).join(' · ')
 
   return (
     <div className="screen container" style={{ paddingTop: 22 }}>
@@ -243,7 +248,7 @@ export function CaseRegister(
       <div className="filter-bar">
         <div className="chips" role="group" aria-label="Filter by status">
           <button type="button" className={`chip-btn${group === '' ? ' is-on' : ''}`} aria-pressed={group === ''} onClick={() => { setGroup(''); setPage(1) }}>All</button>
-          {GROUPS.map(g => (
+          {chips.map(g => (
             <button key={g.key} type="button" className={`chip-btn${group === g.key ? ' is-on' : ''}`} aria-pressed={group === g.key}
                     onClick={() => narrowTo(() => setGroup(g.key))}>
               {isDept ? g.dept : g.ag}

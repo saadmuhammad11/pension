@@ -117,3 +117,20 @@ describe('the cases tab is the whole register (24 Oct 2026)', () => {
     expect(listed()).toBe(20)
   })
 })
+
+describe('whose filters the chips are (24 Oct 2026)', () => {
+  const chip = (name: RegExp) => screen.queryByRole('button', { name })
+
+  it("the Office is not offered a filter for a case the department has not sent", () => {
+    render(<CaseRegister product="PENSION" rows={[]} title="Cases" lead="lead" waitingOn={[]}
+                         onOpen={() => {}} role="AG_AO" view="cases" charts={null} />)
+    expect(chip(/^Not yet submitted$/)).toBeNull()
+    expect(chip(/^Awaiting decision$/)).toBeTruthy()   // the rest of the row is untouched
+  })
+
+  it('but the department, whose case it is, still is', () => {
+    render(<CaseRegister product="PENSION" rows={[]} title="Cases" lead="lead" waitingOn={[]}
+                         onOpen={() => {}} role="DEPT_OFFICER" view="cases" charts={null} />)
+    expect(chip(/^Not yet submitted$/)).toBeTruthy()
+  })
+})
