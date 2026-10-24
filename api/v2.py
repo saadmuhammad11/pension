@@ -1733,7 +1733,7 @@ def download_document(case_id: str, doc_id: str, user: User = Depends(current_us
 @router.post("/cases/{case_id}/check", status_code=202)
 def run_check(case_id: str, user: User = Depends(require_roles("AG_SENIOR_AUDITOR", *workflow.ANY_TIER)),
               conn: db.Connection = Depends(get_conn)) -> dict:
-    """"Verify case with AI": the Accountant General's button. The outcome moves the case by
+    """"Examine with AI": the Accountant General's button. The outcome moves the case by
     itself (api.case_runs): returned with the missing documents, approved, or under review."""
     case_runs.sync_run_states(conn)
     row = _case_or_404(conn, case_id, user)
@@ -1770,7 +1770,7 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
         if len(remark) < workflow.MIN_OVERRIDE_REMARK:
             raise HTTPException(422, f"an override needs a reason of at least {workflow.MIN_OVERRIDE_REMARK} characters")
         if body.get("to_status") == workflow.APPROVED and not _verified(conn, row):
-            raise HTTPException(409, "verify the case with AI before overriding it to approved: an approval rests on a "
+            raise HTTPException(409, "examine the case with AI before overriding it to approved: an approval rests on a "
                                      "completed examination of the papers")
     payload: dict = {}
     mirror: str | None = None
@@ -1787,7 +1787,7 @@ def _act(conn: db.Connection, user: User, case_id: str, action: str, body: dict,
     else:
         run_id = row["current_run_id"]
         if action in DECISIONS_NEED_VERIFICATION and not _verified(conn, row):
-            raise HTTPException(409, "verify the case with AI first: every action on the case rests on a completed "
+            raise HTTPException(409, "examine the case with AI first: every action on the case rests on a completed "
                                      "examination of the papers as submitted")
         if action == "APPROVE":
             # Against the engine's reading, an approval is an override and needs a real reason.

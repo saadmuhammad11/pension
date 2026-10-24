@@ -56,7 +56,7 @@ class DecisionsRestOnTheCurrentRun(unittest.TestCase):
             conn.close()
         r = self.client.post(f"/api/v2/cases/{case_id}/return", headers=sa, json={"remark": "x" * 40})
         self.assertEqual(r.status_code, 409, r.text)
-        self.assertIn("verify the case with AI first", r.json()["detail"])
+        self.assertIn("examine the case with AI first", r.json()["detail"])
 
     def test_a_completed_current_run_still_lets_the_case_move(self) -> None:
         case_id, sa, ctx = self._under_review()

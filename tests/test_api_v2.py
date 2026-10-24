@@ -798,7 +798,7 @@ class V2Test(unittest.TestCase):
         for action in ("approve", "reject", "return", "request-docs"):
             r = self.client.post(f"/api/v2/cases/{case_id}/{action}", headers=reviewer, json={"remark": "Verified by hand; in order."})
             self.assertEqual(r.status_code, 409, r.text)
-            self.assertIn("verify the case with AI", r.json()["detail"])
+            self.assertIn("examine the case with AI", r.json()["detail"])
         # A verification that did not complete does not count.
         self.fail_runs = True
         self.verify(reviewer, case_id)

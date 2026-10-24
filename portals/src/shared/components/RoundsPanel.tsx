@@ -42,7 +42,7 @@ function Round({ r, agView, latest }: { r: CaseRound; agView: boolean; latest: b
           <span className="muted" style={{ fontSize: 'var(--t-small)', marginLeft: 'auto' }}>
             {check.mode === 'INCREMENTAL'
               ? `Read ${check.steps.pages_read ?? '?'} new page(s), reused ${check.steps.pages_reused ?? '?'} from submission ${check.base_submission_no ?? '?'}`
-              : 'Full verification'}
+              : 'Full examination'}
             {check.duration_s != null ? ` · ${secs(check.duration_s)}` : ''}
           </span>
         )}
@@ -53,7 +53,7 @@ function Round({ r, agView, latest }: { r: CaseRound; agView: boolean; latest: b
           <div className="label">Asked for</div>
           {req.map((q, i) => (
             <div key={i} style={{ fontSize: 'var(--t-small)', marginTop: 4 }}>
-              <span className="muted">{q.action === 'AUTO_RETURN' ? 'Returned by the verification' : q.action === 'REQUEST_DOCS' ? 'Documents requested' : 'Returned'}{q.by ? ` by ${q.by}` : ''}, {q.at.replace('T', ' ').slice(0, 16)}</span>
+              <span className="muted">{q.action === 'AUTO_RETURN' ? 'Returned by the examination' : q.action === 'REQUEST_DOCS' ? 'Documents requested' : 'Returned'}{q.by ? ` by ${q.by}` : ''}, {q.at.replace('T', ' ').slice(0, 16)}</span>
               {q.remark && <div>“{q.remark}”</div>}
             </div>
           ))}

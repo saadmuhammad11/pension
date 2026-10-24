@@ -35,7 +35,7 @@ type Bucket = 'mine' | 'theirs' | 'done' | 'all'
 
 /** The verb on the row's button: what pressing it lets the officer do. */
 const VERBS: Record<string, string> = {
-  TAKE_UP: 'Take up', FORWARD: 'Submit', ADD_DOCS: 'Attach', RUN_CHECK: 'Verify',
+  TAKE_UP: 'Take up', FORWARD: 'Submit', ADD_DOCS: 'Attach', RUN_CHECK: 'Examine',
 }
 
 /** The kind of case on a row: the declared (or detected) pension case type, or the GP Fund claim's kind. */
@@ -44,7 +44,7 @@ const kindKey = (r: CaseSummary) => r.product === 'GPF' ? String(r.intake?.gpf_k
 
 /** Short status words for the row badge; the full wording is the badge's tooltip. */
 const SHORT: Record<CaseStatus, string> = {
-  DRAFT: 'Not yet submitted', AI_CHECKING: 'Verifying', AI_FAILED: 'Verification incomplete', AI_CHECKED: 'Not yet submitted',
+  DRAFT: 'Not yet submitted', AI_CHECKING: 'Examining', AI_FAILED: 'Examination incomplete', AI_CHECKED: 'Not yet submitted',
   FORWARDED: 'Submitted', UNDER_REVIEW: 'Under review', APPROVED: 'Approved', REJECTED: 'Rejected',
   RETURNED: 'Returned', DOCS_REQUESTED: 'Documents requested',
 }
@@ -208,7 +208,7 @@ export function CaseRegister(
         <button role="tab" data-bucket="mine" tabIndex={bucket === 'mine' ? 0 : -1} aria-selected={bucket === 'mine'} className={`tile hot${bucket === 'mine' ? ' is-on' : ''}`} onClick={() => pickBucket('mine')}>
           <div className="t">{bucketLabel.mine}</div>
           <div className="n">{tile.mine}</div>
-          <div className="d">{isDept ? 'Cases to verify, submit or correct.' : 'Submitted by departments; decision pending.'}</div>
+          <div className="d">{isDept ? 'Cases to examine, submit or correct.' : 'Submitted by departments; decision pending.'}</div>
         </button>
         <button role="tab" data-bucket="theirs" tabIndex={bucket === 'theirs' ? 0 : -1} aria-selected={bucket === 'theirs'} className={`tile wait${bucket === 'theirs' ? ' is-on' : ''}`} onClick={() => pickBucket('theirs')}>
           <div className="t">{theirsLabel}</div>
@@ -331,16 +331,16 @@ export function CaseRegister(
               // findings and missing papers are amber -- something to correct, not an alarm.
               const incomplete = run?.state === 'done' && !run.high_flags && (run.verdict !== 'FORWARD' || run.checklist_result === 'INCOMPLETE')
               const cleared = run?.state === 'done' && r.status === 'APPROVED'
-              const ai = !run ? { text: 'Not run', pill: 'neutral', title: 'The verification has not been run on this case.' }
+              const ai = !run ? { text: 'Not run', pill: 'neutral', title: 'The examination has not been run on this case.' }
                 : run.state === 'done' ? (cleared
                     ? { text: 'Cleared', pill: 'low', title: 'Every finding was cleared and every required document present; the case was approved by an officer.' }
                   : run.high_flags
-                    ? { text: `${run.high_flags} finding${run.high_flags === 1 ? '' : 's'}`, pill: 'medium', title: `The verification found ${run.high_flags} finding${run.high_flags === 1 ? '' : 's'} for the Office of the Accountant General to clear.` }
+                    ? { text: `${run.high_flags} finding${run.high_flags === 1 ? '' : 's'}`, pill: 'medium', title: `The examination found ${run.high_flags} finding${run.high_flags === 1 ? '' : 's'} for the Office of the Accountant General to clear.` }
                     : incomplete
                       ? { text: 'Documents missing', pill: 'medium', title: 'No deficiencies in the papers read, but required documents are missing; the engine advises return for correction.' }
-                      : { text: 'No deficiencies', pill: 'low', title: 'The latest verification found no deficiencies and every required document.' })
-                : run.state === 'failed' ? { text: 'Incomplete', pill: 'medium', title: 'The verification did not complete.' }
-                : { text: 'In progress', pill: 'medium', title: 'The verification is running.' }
+                      : { text: 'No deficiencies', pill: 'low', title: 'The latest examination found no deficiencies and every required document.' })
+                : run.state === 'failed' ? { text: 'Incomplete', pill: 'medium', title: 'The examination did not complete.' }
+                : { text: 'In progress', pill: 'medium', title: 'The examination is running.' }
               const days = daysWaiting(r)
               const kindWord = kindOf(r)
               return (
@@ -358,7 +358,7 @@ export function CaseRegister(
                     )}
                   </td>
                   <td data-col="Claimant" className="cell-ellipsis" title={r.claimant_name ?? undefined} style={{ fontSize: 15 }}>
-                    {r.claimant_name ?? <span className="muted" title="The claimant's name is read from the documents by the verification">—</span>}
+                    {r.claimant_name ?? <span className="muted" title="The claimant's name is read from the documents by the examination">—</span>}
                   </td>
                   {showDepartment && <td data-col="Department" className="cell-ellipsis" title={r.department_name ?? undefined}>
                     {r.department_name}

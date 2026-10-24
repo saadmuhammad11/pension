@@ -267,7 +267,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           )}
           {missingDocs.length > 0 && (
             <div style={{ marginTop: 8, color: 'var(--ink)' }}>
-              <strong>Documents to attach{sentBack?.action === 'AUTO_RETURN' ? ' (found missing by the verification)' : ''}:</strong>
+              <strong>Documents to attach{sentBack?.action === 'AUTO_RETURN' ? ' (found missing by the examination)' : ''}:</strong>
               <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
                 {missingDocs.map((d, i) => (
                   <li key={`${d.id ?? d.label ?? ''}${i}`}>
@@ -377,7 +377,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
                       : <strong>The case has not yet been verified with AI.</strong>}
                     {/* The banner above already carries the button when verifying is the next step; one button per screen. */}
                     {c.allowed_actions.includes('RUN_CHECK') && step.action !== 'RUN_CHECK' && (
-                      <div style={{ marginTop: 'var(--s3)' }}><button className="primary big" onClick={doCheck} disabled={busy}>Verify case with AI</button></div>
+                      <div style={{ marginTop: 'var(--s3)' }}><button className="primary big" onClick={doCheck} disabled={busy}>Examine with AI</button></div>
                     )}
                     {c.allowed_actions.includes('RUN_CHECK') && step.action === 'RUN_CHECK' && (
                       <div className="help" style={{ marginTop: 6 }}>Use <em>{PRODUCT_WORDS[c.product].verify}</em> above.</div>
@@ -423,11 +423,15 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           </>}
           {c.allowed_actions.includes('RUN_CHECK') && !verifying && step.action !== 'RUN_CHECK' && (
             <div className="card">
-              <div className="label" style={{ marginBottom: 8 }}>Verification</div>
-              {/* One wording for both products (24 Oct 2026): the officer does the same thing on the
-                  same button, and "examine" against "verify" only invited the question of how
-                  they differ. */}
-              <button onClick={doCheck} disabled={busy} style={{ width: '100%' }}>Verify the case again</button>
+              <div className="label" style={{ marginBottom: 8 }}>Examination</div>
+              {/* One wording for both products, and that wording is "examine" (24 Oct 2026).
+                  Pension said "verify" and GP Fund said "examine" for the identical act, which
+                  invited the question of how they differ. They were first made to agree on
+                  "verify" -- wrongly: inside the GP Fund frame "Verify" is already the
+                  officer's own act, the button on a finding that records having checked it
+                  against the paper. One word was doing two jobs on one screen. So the machine
+                  examines and the officer verifies. */}
+              <button onClick={doCheck} disabled={busy} style={{ width: '100%' }}>Examine the case again</button>
               <div className="help" style={{ marginTop: 8 }}>Reads the documents afresh; the outcome moves the case again.</div>
             </div>
           )}

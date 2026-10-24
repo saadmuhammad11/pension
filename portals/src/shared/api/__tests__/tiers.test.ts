@@ -28,14 +28,14 @@ describe('tier moves', () => {
     expect(step.action).toBeNull()
   })
   it('the examination draws no banner over itself', () => {
-    // "Verification in progress / Verification takes 10 to 20 minutes..." sat above a live
+    // "Examination in progress / The examination takes 10 to 20 minutes..." sat above a live
     // bar, a running clock and the page being read, all of which say it as it happens.
     const ag = nextStep({ status: 'AI_CHECKING', allowed_actions: [] }, 'AG_SENIOR_AUDITOR')
     expect(ag.quiet).toBe(true)
     // The department has no analysis screen, only the fact that the office is on it.
     const dept = nextStep({ status: 'AI_CHECKING', allowed_actions: [] }, 'DEPT_OFFICER')
     expect(dept.quiet).toBeUndefined()
-    expect(dept.text).toMatch(/Office of the Accountant General is verifying/)
+    expect(dept.text).toMatch(/Office of the Accountant General is examining/)
   })
   it('and no banner over the findings either', () => {
     // This one was kept on 22 Oct 2026 -- "it says what no button says" -- and the office
@@ -60,7 +60,7 @@ describe('tier moves', () => {
     // "It takes 10 to 20 minutes; the outcome brings the case to you for a decision" went
     // on 24 Oct 2026: how long it takes is on the screen the officer is then looking at --
     // a bar, a page count and a running clock -- and for most claims it is not ten minutes.
-    expect(ACTION_META.RUN_CHECK.done).toBe('Verification started.')
+    expect(ACTION_META.RUN_CHECK.done).toBe('Examination started.')
   })
 })
 

@@ -1,7 +1,7 @@
 """The case lifecycle: statuses, who may move a case between them, and the history it leaves.
 
 Decision of 28 Sep 2026: the AI verification belongs to the Accountant General. A department
-files the papers and the case goes straight to the AG; the AG presses "Verify case with AI";
+files the papers and the case goes straight to the AG; the AG presses "Examine with AI";
 the outcome moves the case by itself.
 
     DRAFT --submit--> FORWARDED --verify (AG)--> AI_CHECKING --.

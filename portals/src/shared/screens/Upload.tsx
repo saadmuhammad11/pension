@@ -154,7 +154,7 @@ export function Upload({ product, onCreated, onCancel }: { product: Product; onC
       <h1 style={{ marginTop: 8 }}>{PRODUCT_WORDS[product].file}</h1>
       <p className="lead">
         {gpf ? 'Choose the kind of claim, then attach every page of it: the application or sanction, the pay slip, the CNIC, the nomination or death papers as that kind requires. Filing submits the claim to the Office of the Accountant General, where the GP Fund module examines it and the reviewer decides; a missing document is asked for by the reviewer.'
-             : 'Choose the case type, then attach every document in the pension file. Filing submits the case to the Office of the Accountant General, where it is verified with AI against the checklist for that type and the reviewer decides; a missing document is asked for by the reviewer.'}
+             : 'Choose the case type, then attach every document in the pension file. Filing submits the case to the Office of the Accountant General, where it is examined with AI against the checklist for that type and the reviewer decides; a missing document is asked for by the reviewer.'}
       </p>
       {loadError && (
         <div className="banner bad" role="alert"><span className="mark">!</span>

@@ -99,7 +99,7 @@ export const PRODUCT_OF_SLUG: Record<string, Product> = { pension: 'PENSION', gp
 export const caseHref = (product: Product, id: string, analysis = false) =>
   `/${PRODUCT_SLUG[product]}/cases/${encodeURIComponent(id)}${analysis ? '/analysis' : ''}`
 export const PRODUCT_WORDS: Record<Product, { name: string; cases: string; file: string; verify: string }> = {
-  PENSION: { name: 'Pension', cases: 'Pension cases', file: 'File a pension case', verify: 'Verify case with AI' },
+  PENSION: { name: 'Pension', cases: 'Pension cases', file: 'File a pension case', verify: 'Examine with AI' },
   GPF: { name: 'GP Fund', cases: 'GP Fund cases', file: 'File a GP Fund case', verify: 'Examine with AI' },
 }
 /** The kinds of GP Fund claim the module's reader accepts. */
@@ -390,19 +390,19 @@ export const STATUS_META: Record<CaseStatus, {
 }> = {
   DRAFT: { label: 'Not yet submitted', pill: 'neutral', side: 'department', step: 0,
     dept: 'Attach the documents, then submit the case to the Office of the Accountant General.', ag: 'The department has not yet submitted this case.' },
-  AI_CHECKING: { label: 'Verification in progress', pill: 'info', side: 'ag', step: 2,
-    dept: 'The Office of the Accountant General is verifying the case.', ag: 'Verification takes 10 to 20 minutes. You may leave this page and return; the outcome brings the case to you for a decision. Nothing is approved or returned automatically.' },
-  AI_FAILED: { label: 'Verification incomplete', pill: 'medium', side: 'ag', step: 2,
-    dept: 'The Office of the Accountant General is verifying the case.', ag: 'The verification did not complete. Verify the case again.' },
-  AI_CHECKED: { label: 'Verified, not yet submitted', pill: 'neutral', side: 'department', step: 0,
-    dept: 'Submit the case to the Office of the Accountant General.', ag: 'Verified by the department; not yet submitted.' },
+  AI_CHECKING: { label: 'Examination in progress', pill: 'info', side: 'ag', step: 2,
+    dept: 'The Office of the Accountant General is examining the case.', ag: 'The examination takes 10 to 20 minutes. You may leave this page and return; the outcome brings the case to you for a decision. Nothing is approved or returned automatically.' },
+  AI_FAILED: { label: 'Examination incomplete', pill: 'medium', side: 'ag', step: 2,
+    dept: 'The Office of the Accountant General is examining the case.', ag: 'The examination did not complete. Examine the case again.' },
+  AI_CHECKED: { label: 'Examined, not yet submitted', pill: 'neutral', side: 'department', step: 0,
+    dept: 'Submit the case to the Office of the Accountant General.', ag: 'Examined by the department; not yet submitted.' },
   FORWARDED: { label: "Submitted to Accountant General's Office", pill: 'info', side: 'ag', step: 1,
-    dept: 'Received by the Pension Wing, Office of the Accountant General; awaiting verification.', ag: 'Newly received. Verify the case with AI: the findings and any missing documents are brought to you for a decision.' },
+    dept: 'Received by the Pension Wing, Office of the Accountant General; awaiting examination.', ag: 'Newly received. Examine the case with AI: the findings and any missing documents are brought to you for a decision.' },
   // "AG Office", not the full title: this label is printed under the active step of the
   // progress bar and inside the status pill, where the full name crowded both (22 Oct 2026).
   // FORWARDED keeps the full name -- it is read once, when the case arrives.
   UNDER_REVIEW: { label: 'Under review at AG Office', pill: 'info', side: 'ag', step: 2,
-    dept: 'The Pension Wing is reviewing the case.', ag: 'Verified: the case awaits your decision. Clear each finding, then approve, return (naming the missing documents) or reject the case with a remark. Nothing is approved or returned automatically.' },
+    dept: 'The Pension Wing is reviewing the case.', ag: 'Examined: the case awaits your decision. Clear each finding, then approve, return (naming the missing documents) or reject the case with a remark. Nothing is approved or returned automatically.' },
   APPROVED: { label: 'Approved', pill: 'low', side: 'closed', step: 3,
     dept: 'The Office of the Accountant General has approved the case. No further action is required.', ag: 'Approved. The decision is on record.' },
   REJECTED: { label: 'Rejected', pill: 'high', side: 'closed', step: 3,
@@ -454,13 +454,13 @@ export const ACTION_META: Record<CaseAction, { label: string; tone: 'primary' | 
   // the toast on 24 Oct 2026. How long it takes is on the screen the officer is looking at --
   // a bar, a page count and a running clock -- and it is not ten to twenty minutes any more
   // for most claims; what happens afterwards is the case moving, which they will see.
-  RUN_CHECK: { label: 'Verify case with AI', tone: 'primary', needsRemark: 'never', prompt: '', done: 'Verification started.' },
+  RUN_CHECK: { label: 'Examine with AI', tone: 'primary', needsRemark: 'never', prompt: '', done: 'Examination started.' },
   FORWARD: { label: "Submit to Accountant General's Office", tone: 'gold', needsRemark: 'never',
              prompt: 'Your remarks accompany the case and are read by the Pension Wing: say what was corrected or attached.',
              done: 'Case submitted to the Office of the Accountant General.' },
   TAKE_UP: { label: 'Take up for review', tone: 'primary', needsRemark: 'never', prompt: '', done: 'Case taken up for review.' },
   APPROVE: { label: 'Approve', tone: 'primary', needsRemark: 'always',
-             prompt: 'Your remarks are recorded with the decision and communicated to the department. Where findings are not cleared, or the case was not verified, state why approval is nonetheless in order (at least 15 characters).',
+             prompt: 'Your remarks are recorded with the decision and communicated to the department. Where findings are not cleared, or the case was not examined, state why approval is nonetheless in order (at least 15 characters).',
              done: 'Case approved and recorded.' },
   REJECT: { label: 'Reject', tone: 'danger', needsRemark: 'always', prompt: 'State the grounds for rejection. They are communicated to the department.', done: 'Case rejected and recorded.' },
   RETURN: { label: 'Return to department', tone: 'danger', needsRemark: 'always',
@@ -495,11 +495,11 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
   const m = STATUS_META[c.status]
   const dept = role === 'DEPT_OFFICER'
   if (dept) {
-    if ((c.status === 'DRAFT' || c.status === 'AI_CHECKED') && a.has('FORWARD')) return { action: 'FORWARD', title: 'Not yet submitted', text: 'The documents are attached. Submit the case to the Office of the Accountant General, where it is verified with AI.' }
+    if ((c.status === 'DRAFT' || c.status === 'AI_CHECKED') && a.has('FORWARD')) return { action: 'FORWARD', title: 'Not yet submitted', text: 'The documents are attached. Submit the case to the Office of the Accountant General, where it is examined with AI.' }
     if ((c.status === 'RETURNED' || c.status === 'DOCS_REQUESTED') && a.has('ADD_DOCS')) return { action: 'ADD_DOCS', title: m.label, text: m.dept }
     return { action: null, title: m.label, text: m.dept }
   }
-  if (c.status === 'FORWARDED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: 'Received: verify the case with AI', text: 'The verification reads every document. Its findings, and any missing documents, come to you for a decision; nothing is approved or returned automatically.' }
+  if (c.status === 'FORWARDED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: 'Received: examine the case with AI', text: 'The examination reads every document. Its findings, and any missing documents, come to you for a decision; nothing is approved or returned automatically.' }
   if (c.status === 'AI_FAILED' && a.has('RUN_CHECK')) return { action: 'RUN_CHECK', title: m.label, text: m.ag }
   // No banner while the examination is on the screen (23 Oct 2026). It read "Verification in
   // progress / Verification takes 10 to 20 minutes. You may leave this page and return; the
