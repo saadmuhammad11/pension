@@ -1,37 +1,41 @@
-/* The design tokens, and the only place they are written down (24 Oct 2026).
+/* The design tokens. GENERATED -- do not edit; run deploy/make-tokens.py.
  *
- * There used to be two sets: this one, and a second kept by hand in GP/backend/web/styles.css
- * for the GP Fund module. They were copied from the same mock-up and then drifted -- the
- * module held the skin of the 29 Sep mock-up while the portal moved to the office's sign-in
- * mock-up of 22 Oct. Thirteen of thirty-nine shared tokens disagreed, six of them plainly to
- * the eye (dE > 3): all three greens, the body ink, the muted grey and the gold. An officer
- * opening a GP Fund claim inside a pension case met a second product.
+ * Written from api/themes.py, which is where the palette is decided and where the server
+ * reads it to send to the browser. One file, two readers: the portal imports it from
+ * styles/base.css, the GP Fund module links GP/backend/web/tokens.css, and the two copies are
+ * required by test to be the same bytes. A copy rather than a link because the module must
+ * stand up on its own port, air-gapped, with no build step.
  *
- * So: one file, two readers. The portal imports it from base.css; the module's index.html
- * links GP/backend/web/tokens.css, which is a copy and is required by test to be the same
- * bytes (GP/backend/tests/test_the_module_wears_the_portals_type.py). A copy rather than a
- * link because the module must stand up on its own port, air-gapped, with no build step.
+ * These are the "ag" palette's values, which is what both the AG portal and the module wear:
+ * the module is framed only by the Accountant General's desks and the administrator. On a
+ * department's portal theme/apply.ts overwrites the themed ones below with that department's
+ * at run time, into these same variable names -- on the Police portal --green is navy. The
+ * names are historical; the values are whoever's portal it is.
  *
- * What is NOT here is what belongs to one of them: the module's seven examination states
+ * What is NOT here is what belongs to one side: the module's seven examination states
  * (--conf, --sap, --na) and its fill ramp stay in its own stylesheet, below its link to this.
- *
- * BUILD §9.1 -- these exact values, not approximations. The AG office has seen and approved
- * the screens these build; §9 makes reproducing them a binding requirement, so the palette is
- * transcribed rather than re-derived.
  */
 :root {
-  /* The office's greens, off its sign-in mock-up of 22 Oct 2026 -- brand-900/700/600 there.
-     apply.ts overwrites these three from the theme the server sends, so what is written here
-     is the Accountant General's ramp and the value every other portal is measured against. */
+  /* ---- from api/themes.py THEMES["ag"] -- the office's own, off its sign-in mock-up of
+     22 Oct 2026. Overwritten per department at run time by theme/apply.ts. ---- */
   --green: #0E3527;  --green2: #18573F; --green3: #1F6B4D;
   --sage:  #EDF4EE;  --sage2:  #E2EEE8; --gold:   #C9A227; --gold2: #E7C55B;
-  /* --muted darkened from #6B7280 on 21 Oct 2026: it measured 4.48:1 on --bg and 4.32:1
-     on --sage, both under the 4.5 WCAG AA needs for 14px text. #656D76 is 4.86 on --bg,
-     5.25 on white and 4.69 on --sage. */
-  --ink:   #1F2937;  --muted:  #656D76; --line:   #E2E8E3;
+  --ink:   #17211C;  --muted:  #5F6B64; --line:   #E3E7E4;
+  --bg:    #F5F6F4;
+
+  /* ---- derived from the palette, exactly as theme/apply.ts derives them ---- */
+  --ring: rgba(31, 107, 77, 0.28);
+  --accent-a18: rgba(201, 162, 39, 0.18);
+  --accent-a55: rgba(201, 162, 39, 0.55);
+  --overlay: rgba(14, 53, 39, 0.72);
+  /* Flat surfaces (28 Sep 2026): a hairline instead of a shadow; one soft shadow for what floats. */
+  --shadow-1: none;
+  --shadow-2: 0 8px 24px -12px rgba(23,33,28,.18);
+
+  /* ---- not themed: the same on every portal ---- */
+  /* The severity ramp. A finding is red, amber or green whoever is looking at it. */
   --red:   #B42318;  --redbg:  #FEF0EE; --amber:  #B54708; --amberbg: #FFF6E6;
   --ok:    #1E7B4F;  --okbg:   #E9F6EF;
-  --bg:    #F4F7F4;
 
   /* IBM Plex Sans is shipped with both (styles/fonts.css, GP/backend/web/fonts). The rest is
      what a Windows desktop in the office falls back to if the face has not loaded yet. */
@@ -49,11 +53,6 @@
   --t-h3: 16px;    --t-h2: 19px;    --t-h1: 26px;     --t-figure: 30px;
 
   /* The technical log on the analysis screen: a dark panel, so its own small palette.
-     Were hardcoded in AnalysisLive.tsx, which put two colours outside the token system
-     and out of reach of any later theme. All three clear AA on --log-bg (11.8, 8.4, 9.9). */
+     All three clear AA on --log-bg (11.8, 8.4, 9.9). */
   --log-bg: #18201C; --log-fg: #D5DBD7; --log-err: #FF9E93; --log-warn: #E7C55B;
-
-  --shadow-1: 0 1px 2px rgba(27, 67, 50, .05);
-  --shadow-2: 0 4px 14px rgba(27, 67, 50, .09);
-  --ring: 0 0 0 3px rgba(64, 145, 108, .35);
 }
