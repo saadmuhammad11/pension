@@ -51,6 +51,11 @@ class NoRealCaseMaterialIsTracked(unittest.TestCase):
         self.assertEqual(hits, [], "a CNIC that does not announce itself as synthetic is tracked")
 
     def test_the_checker_still_refuses_a_real_one(self) -> None:
-        """So this passing means something."""
+        """So this passing means something.
+
+        The refused number is nobody's and is assembled at run time. Written out it would be
+        a real-looking CNIC in a tracked file, which is the one thing this file forbids --
+        and the check above, which reads this file like any other, would catch it.
+        """
         self.assertFalse(pii.synthetic("-".join(("42101", "7483921", "5"))))
         self.assertTrue(pii.synthetic("00001-0000001-1"))
