@@ -463,11 +463,7 @@ button.btn-primary:disabled { background: #E4EBE5; border-color: var(--line); co
 
    IBM Plex Sans takes its place, chosen by the office and SHIPPED -- see styles/fonts.css,
    and note the ../fonts/ there, which is the mistake these two lines made. */
-:root {
-  --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  --font-mono: Consolas, Menlo, ui-monospace, monospace;
-  --t-body: 14.5px; --t-h1: 26px; --t-h2: 19px; --t-h3: 16px; --t-lead: 14.5px;
-}
+/* The face and the scale this layer asks for are in styles/tokens.css, with the rest. */
 html, body { font-family: var(--font); font-feature-settings: "cv11", "ss01"; }
 body { letter-spacing: -.003em; }
 button, input, select, textarea, .btn { font-family: var(--font); }

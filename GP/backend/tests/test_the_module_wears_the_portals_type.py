@@ -1,4 +1,4 @@
-"""The module and the portal are one product, so they are set in one typeface (24 Oct 2026).
+"""The module and the portal are one product, so they wear one skin (24 Oct 2026).
 
 styles.css declared ``@font-face { font-family: "Geist"; src: url("./fonts/Geist.woff2") }``
 and there was no ``web/fonts`` directory at all. Every load asked for the face, got 404 and
@@ -57,3 +57,58 @@ def test_no_face_is_fetched_from_the_internet() -> None:
     """A government box with restricted egress would fall back silently, and the page would
     look different for some officers and not others (the portal's fonts.css says the same)."""
     assert "fonts.googleapis.com" not in TEXT and "fonts.gstatic.com" not in TEXT
+
+
+class TestTheTokensAreOneFileAndNotTwo:
+    """Thirteen of thirty-nine shared tokens had drifted apart, six of them plainly to the eye
+    (dE > 3): all three greens, the body ink, the muted grey, the gold. The module held the
+    skin of the 29 Sep mock-up; the portal had moved to the office's sign-in mock-up of
+    22 Oct. Neither was wrong on its own, which is how it survived so long.
+
+    So there is one file now. It is copied rather than linked -- the module must stand up on
+    its own port with no build step -- and a copy drifts unless something checks it.
+    """
+
+    PORTAL_TOKENS = Path(__file__).resolve().parents[3] / "portals" / "src" / "shared" / "styles" / "tokens.css"
+    MODULE_TOKENS = WEB / "tokens.css"
+
+    def test_the_module_has_the_portals_token_file_to_the_byte(self) -> None:
+        assert self.MODULE_TOKENS.read_bytes() == self.PORTAL_TOKENS.read_bytes()
+
+    def test_the_page_reads_it_before_its_own_stylesheet(self) -> None:
+        """Order is the whole mechanism: tokens first, then the module's own on top.
+
+        The link tags, not the first mention: the comment above them names styles.css."""
+        html = (WEB / "index.html").read_text(encoding="utf-8")
+        sheets = re.findall(r'<link[^>]+href="\./([^"]+\.css)"', html)
+        assert sheets[:2] == ["tokens.css", "styles.css"], sheets
+
+    def test_the_module_does_not_redeclare_a_shared_token(self) -> None:
+        """What put the two skins out of step: a second copy, edited on one side only."""
+        shared = self._declared(self.PORTAL_TOKENS)
+        own = self._declared(WEB / "styles.css")
+        assert not (shared & own), f"redeclared on both sides: {sorted(shared & own)}"
+
+    def test_what_is_the_modules_own_stays_its_own(self) -> None:
+        """The seven examination states and the fill ramp are not the portal's business."""
+        own = self._declared(WEB / "styles.css")
+        for t in ("--conf", "--sap", "--na", "--f1", "--good-bg"):
+            assert t in own, t
+
+    def test_the_fill_ramp_follows_the_brand_rather_than_a_mockup(self) -> None:
+        """So a retint of the greens carries to the bars instead of leaving them behind."""
+        css = (WEB / "styles.css").read_text(encoding="utf-8")
+        assert "--f1: var(--green)" in css and "--f2: var(--green2)" in css
+
+    def test_nothing_asks_for_a_token_that_no_longer_exists(self) -> None:
+        have = self._declared(self.MODULE_TOKENS) | self._declared(WEB / "styles.css")
+        used = set(re.findall(r"var\(\s*(--[a-z0-9-]+)", (WEB / "styles.css").read_text(encoding="utf-8")))
+        assert not (used - have), f"undefined: {sorted(used - have)}"
+
+    @staticmethod
+    def _declared(path: Path) -> set[str]:
+        css = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S)
+        out: set[str] = set()
+        for block in re.findall(r":root\s*\{(.*?)\}", css, re.S):
+            out |= set(re.findall(r"(--[a-z0-9-]+)\s*:", block))
+        return out

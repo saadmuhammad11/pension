@@ -9,37 +9,21 @@
 
    Class names are exactly those js/app.js renders. Nothing here renames anything. */
 :root {
-  /* --- the approved skin, verbatim ---------------------------------------------------- */
-  --green: #1B4332;  --green2: #2D6A4F; --green3: #40916C;
-  --sage:  #EDF4EE;  --sage2:  #DCEADF; --gold:   #C9A227; --gold2: #E7C55B;
-  --ink:   #1F2937;  --muted:  #6B7280; --line:   #E2E8E3;
-  --red:   #B42318;  --redbg:  #FEF0EE; --amber:  #B54708; --amberbg: #FFF6E6;
-  --ok:    #1E7B4F;  --okbg:   #E9F6EF;
-  --bg:    #F4F7F4;
+  /* The shared tokens are in tokens.css, linked ahead of this file by index.html: one file
+     for the portal and the module, so the colour, type and spacing of a GP Fund claim is the
+     colour, type and spacing of the pension case that frames it. Until 24 Oct 2026 this block
+     held its own copy of all of them, taken from the 29 Sep mock-up, and six were plainly a
+     different colour from the portal's by then. What stays here is what is the module's
+     alone. */
 
-  --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  --font-ur: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", "Urdu Typesetting", serif;
-  --font-mono: Consolas, Menlo, monospace;
-
-  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
-  --s5: 22px; --s6: 30px; --s7: 40px; --s8: 56px;
-
-  --t-micro: 11px; --t-small: 12px; --t-body: 14px; --t-lead: 15px;
-  --t-h3: 17px;    --t-h2: 22px;    --t-h1: 27px;   --t-figure: 30px;
-
-  --shadow-1: 0 1px 2px rgba(27, 67, 50, .05);
-  --shadow-2: 0 4px 14px rgba(27, 67, 50, .09);
-  --ring: 0 0 0 3px rgba(64, 145, 108, .35);
-
-  /* --- GP Fund's own additions ---------------------------------------------------------
-     Seven examination outcomes need seven readable states, and the portal's three-severity
+  /* Seven examination outcomes need seven readable states, and the portal's three-severity
      palette only supplies red / amber / green. "Verify" and "Awaiting SAP" are not severities
      at all -- they are "someone must look" and "we are waiting on another system" -- so they
      get hues outside the severity ramp, desaturated to the same weight as the approved three
      so no single row shouts louder than its actual importance. */
   --conf: #2F4FB0;  --confbg: #EDF1FC; --confline: #C9D4F0;
   --sap:  #0F6E7B;  --sapbg:  #E4F2F4; --sapline:  #BEDDE1;
-  --na:   var(--muted); --nabg: #F1F4F1;
+  --na:   var(--muted); --nabg: #EEF1EF;
 
   /* Aliases kept so any stray older rule or inline style still resolves. */
   --panel: #fff; --brand: var(--green); --brand-ink: #fff; --accent: var(--gold);
@@ -544,20 +528,15 @@ html.embed .app { padding-top: 0; }
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 :root {
-  --ink: #17211C; --muted: #5F6B64; --line: #E3E7E4; --bg: #F5F6F4;
-  --sage: #EEF3EF; --sage2: #DDE7E0; --gold2: #D8B444;
-  --shadow-1: none; --shadow-2: 0 8px 24px -12px rgba(23,33,28,.18);
-  --ring: 0 0 0 3px rgba(45,106,79,.28);
-  --nabg: #EEF1EF;
-  /* The green ramp for anything that fills: bars, progress, the active mark. */
-  --f1: #1B4332; --f2: #2D6A4F; --f3: #6FA487; --f4: #C9DDD0;
+  /* The green ramp for anything that fills: bars, progress, the active mark. The first two
+     steps ARE the shared greens -- when the office retints the brand, the bars follow rather
+     than staying the shade of a mock-up (24 Oct 2026). The two tints above them have no
+     counterpart in the portal and are kept. */
+  --f1: var(--green); --f2: var(--green2); --f3: #6FA487; --f4: #C9DDD0;
   /* The portal's banner tints: a shade lighter than the severity backgrounds above. */
   --good-bg: #F1F7F3; --good-line: #D2E6D9;
   --warn-bg: #FBF6EA; --warn-line: #EEDFB8;
   --bad-bg:  #FBF1EF; --bad-line:  #F0D4CE;
-  --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  --font-mono: Consolas, Menlo, ui-monospace, monospace;
-  --t-body: 14.5px; --t-h1: 26px; --t-h2: 19px; --t-h3: 16px; --t-lead: 14.5px;
 }
 html, body { font-family: var(--font); font-feature-settings: "cv11", "ss01"; }
 body { letter-spacing: -.003em; }
