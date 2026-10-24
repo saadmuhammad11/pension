@@ -1,6 +1,6 @@
 /** The register shows one face at a time (12 Oct 2026): the dashboard on its tab, the cases on
  *  theirs, never the dashboard appended below the cases. */
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { CaseRegister } from './CaseRegister'
 import { registerView } from './registerView'
@@ -132,5 +132,82 @@ describe('whose filters the chips are (24 Oct 2026)', () => {
     render(<CaseRegister product="PENSION" rows={[]} title="Cases" lead="lead" waitingOn={[]}
                          onOpen={() => {}} role="DEPT_OFFICER" view="cases" charts={null} />)
     expect(chip(/^Not yet submitted$/)).toBeTruthy()
+  })
+})
+
+describe('a dashboard tile opens that list of cases (24 Oct 2026)', () => {
+  const rows = [
+    { id: 'a', case_no: 'PC-2026-000001', status: 'UNDER_REVIEW' },
+    { id: 'b', case_no: 'PC-2026-000002', status: 'UNDER_REVIEW' },
+    { id: 'c', case_no: 'PC-2026-000003', status: 'RETURNED' },
+    { id: 'd', case_no: 'PC-2026-000004', status: 'APPROVED' },
+  ].map(r => ({ ...r, department_code: 'sgad', department_name: 'S&GAD', pension_section: 'Pension-I',
+                created_via: 'DEPARTMENT', product: 'PENSION', submission_no: 1,
+                created_at: '2026-10-01T00:00:00', updated_at: '2026-10-01T00:00:00' })
+  ) as unknown as Parameters<typeof CaseRegister>[0]['rows']
+
+  /** Both faces at once, which is what lets one test press a tile and read the table. */
+  const draw = () => render(
+    <CaseRegister product="PENSION" rows={rows} title="Register" lead="lead"
+                  waitingOn={['FORWARDED', 'AI_FAILED', 'UNDER_REVIEW']} onOpen={() => {}}
+                  role="AG_AO" charts={null} />,
+  )
+  const listed = () => screen.getAllByRole('row').slice(1).map(r => r.textContent!.slice(0, 14))
+  const tile = (name: RegExp) => screen.getByRole('tab', { name })
+
+  it('opens on the whole register, pressing nothing', () => {
+    draw()
+    expect(listed()).toHaveLength(4)
+  })
+
+  it('"Awaiting decision" shows the cases awaiting a decision', () => {
+    draw()
+    fireEvent.click(tile(/Awaiting decision/))
+    expect(listed()).toEqual(['PC-2026-000001', 'PC-2026-000002'])
+  })
+
+  it('"With the departments" shows the cases that are with them', () => {
+    draw()
+    fireEvent.click(tile(/With the departments/))
+    expect(listed()).toEqual(['PC-2026-000003'])
+  })
+
+  it('and says which tile it is showing, where the other filters say so', () => {
+    draw()
+    fireEvent.click(tile(/With the departments/))
+    expect(screen.getByRole('status').textContent).toBe('Showing 1 case · With the departments')
+  })
+
+  it('and the tile is cleared with the filters, not by small print of its own', () => {
+    draw()
+    fireEvent.click(tile(/Disposed/))
+    expect(listed()).toEqual(['PC-2026-000004'])
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(listed()).toHaveLength(4)
+  })
+})
+
+describe('the tile survives the move to the cases tab', () => {
+  /** What the portal does: the same element, with `view` changed under it (PortalShell keys the
+   *  register by product, so changing tab re-renders it rather than mounting a new one). If it
+   *  ever remounts, the tile an officer pressed on the dashboard is forgotten on arrival. */
+  it('a tile pressed on the dashboard is still the filter on the cases tab', () => {
+    const rows = [
+      { id: 'a', case_no: 'PC-2026-000001', status: 'UNDER_REVIEW' },
+      { id: 'b', case_no: 'PC-2026-000002', status: 'RETURNED' },
+    ].map(r => ({ ...r, department_code: 'sgad', department_name: 'S&GAD', pension_section: 'Pension-I',
+                  created_via: 'DEPARTMENT', product: 'PENSION', submission_no: 1,
+                  created_at: '2026-10-01T00:00:00', updated_at: '2026-10-01T00:00:00' })
+    ) as unknown as Parameters<typeof CaseRegister>[0]['rows']
+    const el = (view: 'dashboard' | 'cases') => (
+      <CaseRegister product="PENSION" rows={rows} title="Register" lead="lead"
+                    waitingOn={['FORWARDED', 'AI_FAILED', 'UNDER_REVIEW']} onOpen={() => {}}
+                    role="AG_AO" charts={null} view={view} />
+    )
+    const { rerender } = render(el('dashboard'))
+    fireEvent.click(screen.getByRole('tab', { name: /With the departments/ }))
+    rerender(el('cases'))
+    expect(screen.getAllByRole('row').slice(1).map(r => r.textContent!.slice(0, 14))).toEqual(['PC-2026-000002'])
+    expect(screen.getByRole('status').textContent).toBe('Showing 1 case · With the departments')
   })
 })

@@ -114,9 +114,11 @@ export function CaseRegister(
     role: string
     charts?: ReactNode },
 ) {
-  // A department's register opens on every case it has filed (30 Sep 2026): opening on "action
-  // required" hid a case the moment it was filed -- it is with the AG, not the department.
-  const [bucket, setBucket] = useState<Bucket>(role === 'DEPT_OFFICER' ? 'all' : 'mine')
+  // Every register opens on every case (30 Sep 2026 for a department, 24 Oct 2026 for the
+  // Office): opening on a tile hid a case the moment it was filed, and on the AG's side it
+  // opened an empty table whenever nothing happened to await a decision. A tile narrows the
+  // register when the officer presses one, and says so while it does.
+  const [bucket, setBucket] = useState<Bucket>('all')
   const [q, setQ] = useState('')
   const [group, setGroup] = useState<Group>('')
   const [kind, setKind] = useState('')
@@ -148,28 +150,25 @@ export function CaseRegister(
   }, [rows])
   const depts = useMemo(() => [...new Set(rows.map(r => r.department_name).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows])
   const sections = useMemo(() => [...new Set(rows.map(r => r.pension_section ?? 'Legacy'))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })), [rows])
-  const filtered = !!(group || kind || dept || section)
-  // A tile narrows the table only where the two are on one screen. On its own tab the table is
-  // the register entire (24 Oct 2026): a tile chosen on the dashboard left the cases tab
-  // showing a slice of itself, and the only word for it was a line of small print above the
-  // table -- "Awaiting decision · 27 of 46 · show all". The search box and the chips below are
-  // what narrows the register now, and both say so where they stand.
-  const listBucket: Bucket = view ? 'all' : bucket
+  // A tile is one of the filters, and is shown and cleared with them (24 Oct 2026). It used
+  // to be neither: it narrowed the table from the other tab, and all the table said for
+  // itself was "Awaiting decision · 27 of 46 · show all" in small print above it.
+  const filtered = !!(group || kind || dept || section) || bucket !== 'all'
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const statuses = group ? GROUPS.find(g => g.key === group)!.statuses : null
-    return buckets[listBucket].filter(r =>
+    return buckets[bucket].filter(r =>
       (!statuses || statuses.includes(r.status))
       && (!kind || kindKey(r) === kind)
       && (!dept || r.department_name === dept)
       && (!section || (r.pension_section ?? 'Legacy') === section)
       && (!needle || [r.case_no, r.claimant_name, r.department_name, r.pension_section, STATUS_META[r.status].label, kindOf(r) ?? '', r.case_type ?? '']
                        .some(v => (v ?? '').toLowerCase().includes(needle))))
-  }, [buckets, listBucket, q, group, kind, dept, section])
+  }, [buckets, bucket, q, group, kind, dept, section])
 
   // A filter runs over the whole register, not the tile's slice, so the count it shows is true.
   const narrowTo = (set: () => void) => { set(); setBucket('all'); setPage(1) }
-  const clear = () => { setGroup(''); setKind(''); setDept(''); setSection(''); setPage(1) }
+  const clear = () => { setGroup(''); setKind(''); setDept(''); setSection(''); setBucket('all'); setPage(1) }
   const pickBucket = (b: Bucket) => { setBucket(b); setPage(1); if (view) navigate(`/${PRODUCT_SLUG[product]}/cases`) }
   // One face or the other (screens/registerView.ts): the dashboard, or the cases. Until 12 Oct
   // 2026 a department's home drew the cases and then the dashboard below them.
@@ -190,7 +189,8 @@ export function CaseRegister(
   const showTimeline = isDept                              // where every case stands, on its row
   const cols = 5 + (showDepartment ? 1 : 0) + (showAi ? 1 : 0) + (showTimeline ? 1 : 0)
   const chips = GROUPS.filter(g => isDept || g.ag)
-  const filterWords = [group ? GROUPS.find(g => g.key === group)?.[isDept ? 'dept' : 'ag'] : null, section || null, dept || null, kind ? (kinds.find(k => k[0] === kind)?.[1] ?? kind) : null].filter(Boolean).join(' · ')
+  const filterWords = [bucket === 'all' ? null : bucketLabel[bucket],
+                       group ? GROUPS.find(g => g.key === group)?.[isDept ? 'dept' : 'ag'] : null, section || null, dept || null, kind ? (kinds.find(k => k[0] === kind)?.[1] ?? kind) : null].filter(Boolean).join(' · ')
 
   return (
     <div className="screen container" style={{ paddingTop: 22 }}>
@@ -313,9 +313,11 @@ export function CaseRegister(
             {!loading && !error && shown.length === 0 && (
               <tr><td colSpan={cols}>
                 <div className="empty">
-                  <strong>{filtered ? 'No case matches the filters.' : bucket === 'mine' ? 'No case requires your action.' : q.trim() ? 'No case matches the search.' : 'No cases in this list.'}</strong>
+                  {/* A tile is one of the filters now, so "no case requires your action" is
+                      what the filters say: the empty register is the register being empty. */}
+                  <strong>{filtered ? 'No case matches the filters.' : q.trim() ? 'No case matches the search.' : 'No cases in this list.'}</strong>
                   {filtered && <div style={{ marginTop: 8 }}><button type="button" className="ghost" onClick={clear}>Clear filters</button></div>}
-                  {onNew && bucket === 'mine' && !filtered && <div style={{ marginTop: 8 }}>Use <em>{newLabel ?? 'New case'}</em> above to file a case.</div>}
+                  {onNew && !filtered && !q.trim() && <div style={{ marginTop: 8 }}>Use <em>{newLabel ?? 'New case'}</em> above to file a case.</div>}
                 </div>
               </td></tr>
             )}
