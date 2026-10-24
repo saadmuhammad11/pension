@@ -17,7 +17,7 @@
   --ok:    #1E7B4F;  --okbg:   #E9F6EF;
   --bg:    #F4F7F4;
 
-  --font: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   --font-ur: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", "Urdu Typesetting", serif;
   --font-mono: Consolas, Menlo, monospace;
 
@@ -519,12 +519,30 @@ html.embed .app { padding-top: 0; }
    the same colour pattern the portal wears since 28 Sep, so a GP Fund case embedded in the
    portal reads as the same product. Concretely: green-tinted greys instead of the blue-grey
    text and hairlines above (#1F2937 / #6B7280 are blue greys; #17211C / #5F6B64 sit on the
-   green); flat surfaces with a hairline and no shadow; navigation as underlined tabs; Geist
-   type with sentence-case labels; the portal's softer banner and tile tints. Everything above
-   this line is the approved skin and stays; this layer only re-tints and flattens it.
+   green); flat surfaces with a hairline and no shadow; navigation as underlined tabs; the
+   portal's own type with sentence-case labels, and its softer banner and tile tints.
+   Everything above this line is the approved skin and stays; this layer only re-tints and
+   flattens it.
    ========================================================================================== */
-@font-face { font-family: "Geist"; src: url("./fonts/Geist.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
-@font-face { font-family: "Geist Mono"; src: url("./fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+/* IBM Plex Sans, the same two files the portal ships (portals/src/shared/styles/fonts.css),
+ * copied here so the module stands up on its own port as well as inside the frame.
+ *
+ * Until 24 Oct 2026 these two rules named Geist and pointed at ./fonts/Geist.woff2, and there
+ * was no fonts/ directory: the module asked for the face on every load, got 404, and fell back
+ * to Segoe UI. The portal beside it was rendering IBM Plex Sans. That one missing file is most
+ * of what made the frame read as a second product. SIL Open Font License 1.1. */
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal; font-weight: 100 700; font-stretch: 100%; font-display: swap;
+  src: url("./fonts/IBMPlexSans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal; font-weight: 100 700; font-stretch: 100%; font-display: swap;
+  src: url("./fonts/IBMPlexSans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 :root {
   --ink: #17211C; --muted: #5F6B64; --line: #E3E7E4; --bg: #F5F6F4;
   --sage: #EEF3EF; --sage2: #DDE7E0; --gold2: #D8B444;
@@ -537,8 +555,8 @@ html.embed .app { padding-top: 0; }
   --good-bg: #F1F7F3; --good-line: #D2E6D9;
   --warn-bg: #FBF6EA; --warn-line: #EEDFB8;
   --bad-bg:  #FBF1EF; --bad-line:  #F0D4CE;
-  --font: "Geist", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  --font-mono: "Geist Mono", Consolas, Menlo, ui-monospace, monospace;
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-mono: Consolas, Menlo, ui-monospace, monospace;
   --t-body: 14.5px; --t-h1: 26px; --t-h2: 19px; --t-h3: 16px; --t-lead: 14.5px;
 }
 html, body { font-family: var(--font); font-feature-settings: "cv11", "ss01"; }

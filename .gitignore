@@ -132,3 +132,8 @@ portals/dist-demo/
 # ignored. Self-hosted type would have reached the clone as a declaration with nothing behind
 # it -- which is precisely the failure the paragraph above is about.
 !portals/public/**
+# Same reasoning, same failure, the other side of the house (24 Oct 2026): GP/backend/web is
+# served verbatim, and its stylesheet declared a @font-face pointing at a fonts/ directory that
+# was not in the tree. The module asked for the face on every load, got 404, and fell back to
+# Segoe UI beside a portal set in IBM Plex Sans.
+!GP/backend/web/fonts/**
