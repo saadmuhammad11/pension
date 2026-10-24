@@ -17,7 +17,7 @@ const ACTION_WORDS: Record<string, string> = {
 }
 
 const ROLE_WORDS: Record<string, string> = {
-  DEPT_OFFICER: 'DDO', AG_REVIEWER: 'AG / senior officers', AG_DAG: 'Deputy AG (Pension)',
+  DEPT_OFFICER: 'DDO', AG_REVIEWER: 'AG / senior officers', AG_DAG: 'Deputy AG',
   AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant Accounts Officer (AAO)',
   AG_AO: 'Accounts Officer (AO)',
   ADMIN: 'Administrator', SYSTEM: 'System',

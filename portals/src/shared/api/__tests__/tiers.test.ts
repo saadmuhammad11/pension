@@ -37,11 +37,30 @@ describe('tier moves', () => {
     expect(dept.quiet).toBeUndefined()
     expect(dept.text).toMatch(/Office of the Accountant General is verifying/)
   })
-  it('the Accounts Officer keeps a banner: it says what no button says', () => {
-    const ao = nextStep({ status: 'UNDER_REVIEW', allowed_actions: ['APPROVE', 'REJECT', 'RETURN_TIER'] }, 'AG_AO')
-    expect(ao.title).toBe('Findings await your decision')
-    expect(ao.quiet).toBeUndefined()
-    expect(ao.text).toMatch(/Nothing is approved or returned automatically/)
+  it('and no banner over the findings either', () => {
+    // This one was kept on 22 Oct 2026 -- "it says what no button says" -- and the office
+    // took it away on 24 Oct 2026. What it said was "Clear each finding, then approve,
+    // return (naming the missing documents) or reject the case with a remark. Nothing is
+    // approved or returned automatically": a band across the top of the screen telling an
+    // officer to read the findings underneath it and press the buttons beside it.
+    for (const role of ['AG_AO', 'AG_DAG', 'AG_REVIEWER']) {
+      const step = nextStep({ status: 'UNDER_REVIEW', allowed_actions: ['APPROVE', 'REJECT', 'RETURN_TIER'] }, role)
+      expect(step.quiet).toBe(true)
+      expect(step.action).toBeNull()
+    }
+  })
+  it('the department still hears what is happening to its case', () => {
+    // The banners that went are the ones over a screen that already says it. A DDO has no
+    // findings screen and no buttons, so the line is all they get.
+    const dept = nextStep({ status: 'UNDER_REVIEW', allowed_actions: [] }, 'DEPT_OFFICER')
+    expect(dept.quiet).toBeUndefined()
+    expect(dept.text).toMatch(/Pension Wing is reviewing the case/)
+  })
+  it('starting a verification says that it started, and no more', () => {
+    // "It takes 10 to 20 minutes; the outcome brings the case to you for a decision" went
+    // on 24 Oct 2026: how long it takes is on the screen the officer is then looking at --
+    // a bar, a page count and a running clock -- and for most claims it is not ten minutes.
+    expect(ACTION_META.RUN_CHECK.done).toBe('Verification started.')
   })
 })
 

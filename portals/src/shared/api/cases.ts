@@ -450,7 +450,11 @@ export function progressStep(status: CaseStatus, holderTier?: HolderTier | null)
 
 export const ACTION_META: Record<CaseAction, { label: string; tone: 'primary' | 'gold' | 'danger' | 'plain'; needsRemark: 'always' | 'issues' | 'never'; prompt: string; done: string }> = {
   ADD_DOCS: { label: 'Attach documents', tone: 'plain', needsRemark: 'never', prompt: '', done: 'Documents attached to the case.' },
-  RUN_CHECK: { label: 'Verify case with AI', tone: 'primary', needsRemark: 'never', prompt: '', done: 'Verification started. It takes 10 to 20 minutes; the outcome brings the case to you for a decision.' },
+  // "It takes 10 to 20 minutes; the outcome brings the case to you for a decision" went with
+  // the toast on 24 Oct 2026. How long it takes is on the screen the officer is looking at --
+  // a bar, a page count and a running clock -- and it is not ten to twenty minutes any more
+  // for most claims; what happens afterwards is the case moving, which they will see.
+  RUN_CHECK: { label: 'Verify case with AI', tone: 'primary', needsRemark: 'never', prompt: '', done: 'Verification started.' },
   FORWARD: { label: "Submit to Accountant General's Office", tone: 'gold', needsRemark: 'never',
              prompt: 'Your remarks accompany the case and are read by the Pension Wing: say what was corrected or attached.',
              done: 'Case submitted to the Office of the Accountant General.' },
@@ -504,7 +508,14 @@ export function nextStep(c: { status: CaseStatus; allowed_actions: CaseAction[] 
   // being worked, all of which say it better and say it as it happens. The department keeps
   // its own line above: a DDO has no analysis screen, only the fact that the office is on it.
   if (c.status === 'AI_CHECKING') return { action: null, quiet: true, title: m.label, text: m.ag }
-  if (c.status === 'UNDER_REVIEW' && a.has('APPROVE')) return { action: null, title: 'Findings await your decision', text: m.ag }
+  // No banner over the findings either (24 Oct 2026), for the same reason as the desk below
+  // and the examination above. It read "Findings await your decision / Verified: the case
+  // awaits your decision. Clear each finding, then approve, return (naming the missing
+  // documents) or reject the case with a remark. Nothing is approved or returned
+  // automatically." -- a band across the top of the screen telling an officer to read the
+  // findings that are underneath it and press the buttons that are beside it, and the last
+  // sentence of it is said again on every one of those buttons.
+  if (c.status === 'UNDER_REVIEW' && a.has('APPROVE')) return { action: null, quiet: true, title: 'Findings await your decision', text: m.ag }
   // No banner at a desk inside the office (22 Oct 2026). It read "Review the findings, then
   // forward or return / Clear each finding and check the documents. Forward the case to the
   // next tier when every required document is present, or return it with the list of what is

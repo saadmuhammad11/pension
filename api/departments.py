@@ -237,7 +237,11 @@ CREATABLE_ROLES = ROLES
 #: The AG's side of a case: the tiers, the Deputy AG and the AG's desk. The administrator manages users, not cases (G6).
 AG_ROLES = TIER_ROLES + ("AG_DAG", "AG_REVIEWER")
 ROLE_LABELS = {"DEPT_OFFICER": "DDO", "AG_SENIOR_AUDITOR": "Senior Auditor", "AG_ASSISTANT_AO": "Assistant Accounts Officer",
-               "AG_AO": "Accounts Officer", "AG_DAG": "Deputy Accountant General (Pension)", "ADMIN": "Administrator",
+               # Not "(Pension)": the role is bound to no wing (workflow.ANY_TIER), so the
+               # parenthesis said something untrue as well as something long (24 Oct 2026).
+               # MIRROR_ROLE_LABELS in api/v2 keeps the longer form: that one is not this
+               # label but the deciding desk the rules record, which has its own vocabulary.
+               "AG_AO": "Accounts Officer", "AG_DAG": "Deputy Accountant General", "ADMIN": "Administrator",
                "AG_REVIEWER": "AG / Additional AG and senior officers (all wings, every tier)"}
 
 

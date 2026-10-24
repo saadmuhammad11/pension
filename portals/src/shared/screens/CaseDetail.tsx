@@ -424,7 +424,10 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
           {c.allowed_actions.includes('RUN_CHECK') && !verifying && step.action !== 'RUN_CHECK' && (
             <div className="card">
               <div className="label" style={{ marginBottom: 8 }}>Verification</div>
-              <button onClick={doCheck} disabled={busy} style={{ width: '100%' }}>{c.product === 'GPF' ? 'Examine the claim again' : 'Verify the case again'}</button>
+              {/* One wording for both products (24 Oct 2026): the officer does the same thing on the
+                  same button, and "examine" against "verify" only invited the question of how
+                  they differ. */}
+              <button onClick={doCheck} disabled={busy} style={{ width: '100%' }}>Verify the case again</button>
               <div className="help" style={{ marginTop: 8 }}>Reads the documents afresh; the outcome moves the case again.</div>
             </div>
           )}
