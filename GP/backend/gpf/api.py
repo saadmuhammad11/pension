@@ -384,7 +384,15 @@ def _read_scans(refs: list[str], kind: str, gazetted: str, officer: str,
 
     ``reuse_scope`` and ``page_keys`` (from the portal, 30 Sep 2026): a page read in an earlier
     submission of the same case is taken from the page cache (reading.page_cache). Without
-    them every page is read, as it always was."""
+    them every page is read, as it always was.
+
+    Whether they are sent is not this module's to decide and nothing here switches it: the
+    case system sends them only while its own PENSION_CARRYOVER is on, which has been off
+    since the office decided on 23 Oct 2026 that every verify reads every page again
+    (api/rounds.carryover_allowed, api/case_runs._start_gpf). "PENSION" there is the system
+    that hosts this module and not the pension product -- its settings are PENSION_*, this
+    module's own are GPF_* -- and the switch governs both products, by this mechanism for a
+    GP Fund claim and by the earlier round's report for a pension case."""
     cache = None
     if reuse_scope and page_keys:
         from .reading.page_cache import PageCache
