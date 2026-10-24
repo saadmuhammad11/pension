@@ -2052,9 +2052,10 @@ def case_gpf(case_id: str, user: User = Depends(require_roles(*workflow.AG_READE
         raise HTTPException(404, "not a GP Fund case")
     if case_runs.sync_gpf_case(conn, row):
         row = _case_or_404(conn, case_id, user)
+    well = gpf_bridge.health()
     out: dict[str, Any] = {"status": row["status"], "gpf_case_id": row["gpf_case_id"], "job": None, "case": None,
                            "officer": gpf_bridge.OFFICER_FOR_ROLE.get(user.role, "ao"),
-                           "module_up": gpf_bridge.health() is not None}
+                           "module_up": well is not None}
     run_id = row["current_run_id"] or ""
     if run_id.startswith(case_runs.GPF_RUN_PREFIX) and row["status"] == workflow.AI_CHECKING:
         try:
@@ -2067,7 +2068,18 @@ def case_gpf(case_id: str, user: User = Depends(require_roles(*workflow.AG_READE
             out["case"] = {"id": view.get("id"), "version": view.get("version"), "position": view.get("position"),
                            "caseDisp": view.get("caseDisp"), "meta": view.get("meta"),
                            "counts": {k: len(view.get("lists", {}).get(k) or []) for k in ("hard", "adv", "conf", "sap", "ok")}}
-            out["embed_url"] = f"/gpf/?embed=1&officer={out['officer']}#/case/{row['gpf_case_id']}"
+            # The frame's own address carries the version of the screens behind it (24 Oct
+            # 2026). The address already differed per officer band -- officer=da for a Senior
+            # Auditor, officer=dag for the AG's desk -- and a browser caches per address, so
+            # each band held its own copy of the module and aged it separately: one desk saw
+            # the screens of an hour ago and the next desk those of the day before, which
+            # read as the Checklist tab existing for one officer and not another. Changing
+            # the screens now changes this address, and a browser cannot serve from its cache
+            # an address it has never seen.
+            web = (well or {}).get("web") or ""
+            out["embed_url"] = (f"/gpf/?embed=1&officer={out['officer']}"
+                                + (f"&v={web}" if web else "")
+                                + f"#/case/{row['gpf_case_id']}")
             # The module's whole view, for the portal's own GP Fund examination screen (30 Sep 2026).
             out["view"] = view
         except gpf_bridge.GpfError as exc:

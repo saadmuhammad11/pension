@@ -245,7 +245,10 @@ def health():
     return {"ok": True, "connector": connector.health().__dict__,
             "model": {"mode": getattr(model_client, "name", "?")},
             "register": {"ok": problem is None, **({"problem": problem} if problem else {})},
-            "cases": len(service.repo.list_ids())}
+            "cases": len(service.repo.list_ids()),
+            # The screens as they stand, so the portal can put it in the address of the frame
+            # it opens. The portal calls this on every read of a GP Fund case already.
+            "web": web_version()}
 
 
 @app.get("/api/model")

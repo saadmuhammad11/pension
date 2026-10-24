@@ -106,3 +106,29 @@ class TestTheRestOfTheScreens:
         file's age -- which is what served an officer the morning's screens."""
         for path in ["/", "/styles.css", *SCRIPTS]:
             assert client.get(path).headers.get("cache-control"), path
+
+
+class TestThePortalIsToldWhichScreensTheseAre:
+    """So it can put the version in the address of the frame it opens.
+
+    That address carries the officer's band -- officer=da for a Senior Auditor, officer=dag
+    for the AG's desk -- and a browser caches per address, so each desk held its own copy of
+    the module and aged it separately. One desk saw the screens of an hour ago and the next
+    those of the day before, which reads exactly like a tab that exists for one officer and
+    not another (24 Oct 2026). The portal reads this from health, which it already calls on
+    every read of a GP Fund case.
+    """
+
+    def test_health_carries_the_version(self) -> None:
+        from gpf.api import web_version
+        assert client.get("/api/health").json()["web"] == web_version()
+
+    def test_it_is_the_version_the_pages_themselves_name(self) -> None:
+        from gpf.api import web_version
+        assert f"app.js?v={web_version()}" in client.get("/").text
+
+    def test_the_band_in_the_address_does_not_change_what_is_served(self) -> None:
+        """Two desks, one module. The address differs; the screens must not."""
+        a = client.get("/?embed=1&officer=da").text
+        b = client.get("/?embed=1&officer=dag").text
+        assert a == b
