@@ -11,7 +11,7 @@ import json
 import re
 from typing import Optional
 
-from .format import amount, digits, num
+from .format import amount, digits, fmt, num
 
 PAYSLIP_KEYS = {
     "personnel no": "persNo", "pers no": "persNo", "name": "name", "designation": "designation",
@@ -130,6 +130,96 @@ def row_should_close_at(row: dict) -> float:
             - _n(row, "permanentAdvance") + _n(row, "interest"))
 
 
+#: Each movement column's sign in the equation above. A year that does not close is out by
+#: some amount, and any one of these cells, read wrongly, would put it out by exactly that --
+#: which is what lets the arithmetic name the cell to look at.
+_MOVEMENTS = {"subscription": 1, "adjustments": 1, "tempAdvance": -1,
+              "recTempAdvance": 1, "permanentAdvance": -1, "interest": 1}
+
+#: What the columns are called on the page, for a finding an officer reads.
+COLUMN_WORDS = {"opening": "opening balance", "subscription": "subscription",
+                "adjustments": "adjustment", "tempAdvance": "temporary advance drawn",
+                "recTempAdvance": "temporary advance recovered",
+                "permanentAdvance": "permanent advance", "interest": "interest",
+                "closing": "closing balance"}
+
+
+def _one_digit_apart(a: float, b: float) -> bool:
+    """Same number of digits, differing in exactly one place: 426 and 826, 37 and 97.
+
+    This is what a misread does to a printed figure. A reader that loses a column or a row
+    produces something else entirely, and that is caught by the chain rather than here.
+    """
+    x, y = str(int(a)), str(int(b))
+    return len(x) == len(y) and sum(p != q for p, q in zip(x, y)) == 1
+
+
+def explain_row(rows: list[dict], i: int) -> dict:
+    """Which cell of a year that does not add up would account for it (24 Oct 2026).
+
+    A year is ten figures and an equation between them, and when it does not close the hard
+    stop could say only that the table had been read wrongly -- all thirty-one years of it,
+    for eight bad ones. But the equation knows more than that. Where the year opens exactly
+    where the one before it closed, and the one after opens exactly where it closes, those two
+    figures are each confirmed twice and the error is in a movement column. There is then an
+    amount the row is out by, and for each movement column one value that would close it.
+
+    Two kinds of candidate are worth putting to an officer:
+
+    * a figure ONE DIGIT from the one that was read -- 426 against 826 -- which is what a
+      misread looks like, and is strong enough to name;
+    * a column read as nil that would have to hold the amount. The report is mostly nil and
+      that is precisely what defeats the reader, so this is common; but several nil columns
+      are equally possible arithmetically and the check does not pretend to choose between
+      them. It says the amount and lists them.
+
+    Nothing is corrected. The page is the authority and the officer reads it; this only says
+    where to look, so a thirty-one year stop becomes four cells to glance at.
+    """
+    row = rows[i]
+    out: dict = {"delta": _n(row, "closing") - row_should_close_at(row), "chain": True,
+                 "oneDigit": [], "readAsNil": []}
+    opening_confirmed = i == 0 or abs(_n(row, "opening") - _n(rows[i - 1], "closing")) <= RECALC_TOLERANCE
+    closing_confirmed = (i == len(rows) - 1
+                         or abs(_n(rows[i + 1], "opening") - _n(row, "closing")) <= RECALC_TOLERANCE)
+    if not (opening_confirmed and closing_confirmed):
+        # The two balances do not agree with their neighbours, so they are in doubt too and
+        # there is no fixed amount to attribute to a movement column.
+        out["chain"] = False
+        return out
+    for col, sign in _MOVEMENTS.items():
+        read = _n(row, col)
+        needed = read + out["delta"] / sign
+        if needed < 0 or abs(needed - round(needed)) > 0.001:
+            continue                                   # no negative amounts, whole rupees only
+        needed = float(round(needed))
+        if read and _one_digit_apart(read, needed):
+            out["oneDigit"].append({"column": col, "read": read, "needed": needed})
+        elif not read and needed:
+            out["readAsNil"].append({"column": col, "needed": needed})
+    return out
+
+
+def explain_in_words(rows: list[dict], i: int) -> str:
+    """``explain_row`` as the sentence that goes under the finding, or "" if it has nothing."""
+    e = explain_row(rows, i)
+    if not e["chain"]:
+        return ""
+    if e["oneDigit"]:
+        parts = [COLUMN_WORDS[c["column"]] + " reads Rs " + fmt(c["read"])
+                 + " where Rs " + fmt(c["needed"]) + " would close the year" for c in e["oneDigit"]]
+        lead = ("One figure is a digit out: " if len(parts) == 1
+                else "One of these is a digit out: ")
+        return lead + "; ".join(parts) + "."
+    if e["readAsNil"]:
+        amount = fmt(abs(e["delta"]))
+        cols = ", ".join(COLUMN_WORDS[c["column"]] for c in e["readAsNil"])
+        return ("The year is out by Rs " + amount + " and its balances both agree with the years "
+                "either side, so a figure of Rs " + amount + " was read as nil in one of these "
+                "columns: " + cols + ".")
+    return ""
+
+
 def recalc_discrepancies(recalc: Optional[dict]) -> list[dict]:
     """The years of a re-calculation report that do not add up, and the breaks in its chain.
 
@@ -160,7 +250,9 @@ def recalc_discrepancies(recalc: Optional[dict]) -> list[dict]:
             i == len(rows) - 1 and abs(want - _n(row, "interest") - got) <= RECALC_TOLERANCE)
         if abs(want - got) > RECALC_TOLERANCE and not last_year_interest_not_credited:
             out.append({"row": i + 1, "kind": "does-not-add-up", "start": row.get("start"),
-                        "end": row.get("end"), "expected": want, "found": got})
+                        "end": row.get("end"), "expected": want, "found": got,
+                        # Which cell to look at, where the arithmetic can say (24 Oct 2026).
+                        "cell": explain_row(rows, i), "says": explain_in_words(rows, i)})
         # Each year opens where the year before it closed. A reader that drops a figure keeps
         # the chain intact while shifting every row after it, so this catches what the sum
         # above does not and the sum catches what this does not; both are cheap.

@@ -92,20 +92,35 @@ def _recalc_adds_up(F):
         return verified_result(
             v, "The re-calculation report was checked against the original and the figures stand.",
             "The re-calculation report does not reconcile and the figures on the case are not the report's.")
-    shown = "; ".join(
-        (d["start"] or "?") + " to " + (d["end"] or "?") +
-        (" should close at Rs " + fmt(d["expected"]) + " but reads Rs " + fmt(d["found"])
-         if d["kind"] == "does-not-add-up"
-         else " opens at Rs " + fmt(d["found"]) + " but the year before closed at Rs " + fmt(d["expected"]))
-        for d in bad[:3])
-    more = "" if len(bad) <= 3 else " and " + str(len(bad) - 3) + " more"
+    # Each year says what is wrong with it and, where the arithmetic can tell, which cell to
+    # look at (24 Oct 2026, sap.explain_row). Before this the stop could say only that the
+    # table had been read wrongly -- all thirty-one years of it, for eight bad ones -- and an
+    # officer had no way in but to re-read the whole page.
+    def _one(d: dict) -> str:
+        where = (d["start"] or "?") + " to " + (d["end"] or "?")
+        if d["kind"] != "does-not-add-up":
+            return (where + " opens at Rs " + fmt(d["found"]) + " but the year before closed at Rs "
+                    + fmt(d["expected"]))
+        said = d.get("says") or ""
+        line = (where + " should close at Rs " + fmt(d["expected"]) + " but reads Rs "
+                + fmt(d["found"]) + ((". " + said) if said else ""))
+        return line.rstrip(".")                      # the joiner puts the stop back
+
+    shown = " / ".join(_one(d) for d in bad[:3])
+    more = "" if len(bad) <= 3 else " And " + str(len(bad) - 3) + " more."
+    named = any(d.get("says") for d in bad)
     return {"status": "hard", "code": "R11",
             "finding": (str(len({d["row"] for d in bad})) + " of the " + str(len(rows))
-                        + " years on the re-calculation report do not reconcile: " + shown + more
-                        + ". The table has been read wrongly, so the balances on this case are not "
+                        + " years on the re-calculation report do not reconcile. " + shown + "."
+                        + more
+                        + " The table has been read wrongly, so the balances on this case are not "
                           "the report's and nothing computed from them can be relied on."),
-            "remedy": ("Read the report against the original page and correct the figures, or pull it "
-                       "from SAP again and upload it on the SAP extracts step."),
+            "remedy": (("Check the cells named above against the original page -- the arithmetic says "
+                        "what each should be, but the page is the authority. Correct the figures, or "
+                        "pull it from SAP again and upload it on the SAP extracts step.")
+                       if named else
+                       ("Read the report against the original page and correct the figures, or pull it "
+                        "from SAP again and upload it on the SAP extracts step.")),
             "cure": {"kind": "verify", "vid": "RECALC-ADDS-UP"},
             "evidence": [ev(page, "Re-calculation report")] if page else []}
 
