@@ -7,13 +7,15 @@ import { useSession } from '../../auth/AuthProvider'
 import { PasswordField } from '../../components/PasswordField'
 
 /** The roles in the order the office speaks of them. AG_REVIEWER is the Accountant General's own
- *  desk (9 Oct 2026): no wing, no tier, acts wherever a case is; its one login is shared by the
- *  office's senior officers. */
+ *  desk (9 Oct 2026): no wing, no tier, acts wherever a case is. It was one role for two
+ *  offices -- "AG / Additional AG and senior officers" -- so the register could not say which
+ *  of them had acted; AG and Additional AG are separate roles from 24 Oct 2026, separated by
+ *  name and not by power, since anything either may do both may do. */
 export const ROLE_WORDS: Record<string, string> = {
   AG_SENIOR_AUDITOR: 'Senior Auditor', AG_ASSISTANT_AO: 'Assistant Accounts Officer', AG_AO: 'Accounts Officer',
-  AG_DAG: 'Deputy AG', AG_REVIEWER: 'AG / Additional AG and senior officers (all wings, every tier)', DEPT_OFFICER: 'DDO', ADMIN: 'Administrator',
+  AG_DAG: 'Deputy AG', AG_REVIEWER: 'AG', AG_ADDL: 'Additional AG', DEPT_OFFICER: 'DDO', ADMIN: 'Administrator',
 }
-export const CREATABLE_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_REVIEWER', 'DEPT_OFFICER', 'ADMIN']
+export const CREATABLE_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_ADDL', 'AG_REVIEWER', 'DEPT_OFFICER', 'ADMIN']
 export const TIER_ROLES = ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO']
 export const WINGS = ['Pension-I', 'Pension-II', 'Pension-III', 'Pension-IV', 'Pension-V']
 /** A wing officer has a wing and no department; a DDO a department and no wing; the rest neither. */

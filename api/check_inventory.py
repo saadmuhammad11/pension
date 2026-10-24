@@ -24,7 +24,7 @@ PRODUCTS = ("PENSION", "GPF")
 def compare(get: Callable[[str], object], role: str) -> list[str]:
     """The disagreements between views, as lines. ``get(path)`` returns the parsed JSON."""
     problems: list[str] = []
-    ag = role in ("AG_REVIEWER", "ADMIN", "AG_DAG", "AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_AO")
+    ag = role in ("AG_REVIEWER", "AG_ADDL", "ADMIN", "AG_DAG", "AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_AO")
     for product in PRODUCTS:
         inv = get(f"/api/v2/inventory?product={product}")
         base = {
@@ -83,7 +83,7 @@ def main(argv: list[str]) -> int:
             base + path, headers={"Authorization": f"Bearer {token}"}), timeout=60))
 
     users = [tuple(part.split(":", 1)) for part in users_spec.split(",") if ":" in part]
-    reviewer = next((u for u, r in users if r in ("AG_REVIEWER", "AG_DAG", "ADMIN")), users[0][0])
+    reviewer = next((u for u, r in users if r in ("AG_REVIEWER", "AG_ADDL", "AG_DAG", "ADMIN")), users[0][0])
     ag = getter(login(reviewer))
     from api.departments import DEPARTMENTS
     slug = {d.code: d.slug for d in DEPARTMENTS}

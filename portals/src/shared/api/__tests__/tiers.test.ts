@@ -70,9 +70,18 @@ describe('user form rules (C4)', () => {
     expect(needsWing('DEPT_OFFICER')).toBe(false); expect(needsDepartment('DEPT_OFFICER')).toBe(true)
     for (const r of ['AG_DAG', 'ADMIN']) { expect(needsWing(r)).toBe(false); expect(needsDepartment(r)).toBe(false) }
   })
-  it("the AG's desk is a role of its own: every tier, every wing, no wing field", () => {
-    expect(ROLE_WORDS.AG_REVIEWER).toMatch(/every tier/)
-    expect(needsWing('AG_REVIEWER')).toBe(false); expect(needsDepartment('AG_REVIEWER')).toBe(false)
-    expect(CREATABLE_ROLES).toEqual(expect.arrayContaining(['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_REVIEWER']))
+  it("the AG's desk is two roles of its own: every tier, every wing, no wing field", () => {
+    // One role for two offices until 24 Oct 2026 -- "AG / Additional AG and senior officers
+    // (all wings, every tier)" -- so the register could not say which of them had acted.
+    // Separated by name and not by power: tests/test_the_two_ag_desks_are_equal.py holds the
+    // pair identical at every decision point, and the words here are just the two offices.
+    expect(ROLE_WORDS.AG_REVIEWER).toBe('AG')
+    expect(ROLE_WORDS.AG_ADDL).toBe('Additional AG')
+    for (const r of ['AG_REVIEWER', 'AG_ADDL']) {
+      expect(needsWing(r)).toBe(false)
+      expect(needsDepartment(r)).toBe(false)
+    }
+    expect(CREATABLE_ROLES).toEqual(expect.arrayContaining(
+      ['AG_SENIOR_AUDITOR', 'AG_ASSISTANT_AO', 'AG_AO', 'AG_DAG', 'AG_ADDL', 'AG_REVIEWER']))
   })
 })

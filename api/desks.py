@@ -87,7 +87,10 @@ PERMISSIONS: dict[str, dict[str, object]] = {
 #: Auditor, the Determining Officer and the DAG (Pension) -- one role in the case system; the
 #: administrator runs the deployment and maintains the reference data; a DDO submits.
 ACCOUNT_DESKS: dict[str, tuple[str, ...]] = {
+    # The portal role on the left, the old register's desks on the right -- the two namespaces
+    # share the spelling "AG_REVIEWER" and mean different things.
     "AG_REVIEWER": ("AG_REVIEWER", "AG_DETERMINING", "DAG_PENSION"),
+    "AG_ADDL": ("AG_REVIEWER", "AG_DETERMINING", "DAG_PENSION"),
     # The three tiers of a pension wing (C3, 9 Oct 2026) act at the Auditor's and the Determining
     # Officer's desks of the SOP; the Deputy AG keeps the DAG desk.
     "AG_SENIOR_AUDITOR": ("AG_REVIEWER", "AG_DETERMINING"),

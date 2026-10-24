@@ -922,7 +922,7 @@ async def _v1_requires_a_token(request: Request, call_next):
         # and page scans, and an AO could read a case not yet sent up to the AO (audit of 12 Oct
         # 2026). Their reads go through the case system, which scopes every run to its case.
         from api import workflow as _wf
-        allowed = user.role == "AG_DAG" or (user.role in ("AG_REVIEWER", "ADMIN") and request.method in ("GET", "HEAD"))
+        allowed = user.role == "AG_DAG" or (user.role in ("AG_REVIEWER", "AG_ADDL", "ADMIN") and request.method in ("GET", "HEAD"))
         if not allowed:
             detail = ("the old register is not for the wing's tiers; open the case in the case system"
                       if user.role in _wf.TIER_ROLES

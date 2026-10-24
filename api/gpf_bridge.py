@@ -46,7 +46,8 @@ GAZETTED = ("unknown", "gazetted", "non-gazetted")
 #: The module's officer band for each portal role (Q3 of 9 Oct 2026: Senior Auditor -> da,
 #: Assistant AO and AO -> ao, Deputy AG -> dag; the AG's desk acts as the DAG, so it may clear a
 #: hard stop like the Deputy AG).
-OFFICER_FOR_ROLE = {"AG_SENIOR_AUDITOR": "da", "AG_ASSISTANT_AO": "ao", "AG_AO": "ao", "AG_REVIEWER": "dag",
+OFFICER_FOR_ROLE = {"AG_SENIOR_AUDITOR": "da", "AG_ASSISTANT_AO": "ao", "AG_AO": "ao",
+                    "AG_REVIEWER": "dag", "AG_ADDL": "dag",
                     "AG_DAG": "dag", "DEPT_OFFICER": "da"}
 
 

@@ -94,7 +94,10 @@ TIER_RANK = {SENIOR_AUDITOR: 0, ASSISTANT_AO: 1, AO: 2}
 #: which may act at any tier in any wing (9 Oct 2026).
 DEPARTMENT_SIDE = ("DEPT_OFFICER",)
 #: The roles bound to no wing and no tier: they act wherever the case is.
-ANY_TIER = ("AG_DAG", "AG_REVIEWER")
+#: AG_ADDL joined on 24 Oct 2026: the Additional Accountant General, separated from the AG
+#: by name and not by power. Anything either of them may do, both may do -- the pair is
+#: asserted identical at every decision point by tests/test_the_two_ag_desks_are_equal.py.
+ANY_TIER = ("AG_DAG", "AG_REVIEWER", "AG_ADDL")
 AG_SIDE = TIER_ROLES + ANY_TIER
 #: Every role that reads AG-side material: the acting roles and the administrator.
 AG_READERS = AG_SIDE + ("ADMIN",)
@@ -215,7 +218,7 @@ def holder_label(case: db.Row | dict) -> str | None:
 def may_see(user_role: str, user_department: str | None, case: db.Row | dict, user_wing: str | None = None) -> bool:
     """Reads: the department's side sees its own; a tier officer their own wing's cases; the
     Deputy AG, the AG's desk and the administrator everything."""
-    if user_role in ("AG_REVIEWER", "AG_DAG", "ADMIN"):
+    if user_role in ("AG_REVIEWER", "AG_ADDL", "AG_DAG", "ADMIN"):
         return True
     if user_role in TIER_ROLES:
         wing = wing_of_case(case)

@@ -348,7 +348,7 @@ def capabilities(user: User) -> dict:
         "decide": user.role in ("AG_AO",) + workflow.ANY_TIER, "return_to_department": user.role in ("AG_SENIOR_AUDITOR",) + workflow.ANY_TIER,
         "tier": tier, "tier_label": workflow.TIER_LABELS.get(tier or "", None), "pension_wing": user.pension_wing,
         "manage_users": user.role == "ADMIN", "audit_log": user.role == "ADMIN",
-        "all_departments": user.role in ("AG_DAG", "ADMIN", "AG_REVIEWER"),
+        "all_departments": user.role in ("AG_DAG", "ADMIN", "AG_REVIEWER", "AG_ADDL"),
     }
 
 
@@ -418,7 +418,7 @@ AGE_BUCKETS = (("0-3", 3), ("4-7", 7), ("8-14", 14), ("15+", None))
 #: never which desk holds it (holder_tier is nulled for a DDO for the same reason).
 #:
 #: The same three roles as capabilities.all_departments: the ones that see across the office.
-OVERSIGHT_ROLES = ("AG_DAG", "AG_REVIEWER", "ADMIN")
+OVERSIGHT_ROLES = ("AG_DAG", "AG_REVIEWER", "AG_ADDL", "ADMIN")
 
 #: The desks a case stands on inside the office, in the order it passes them. "Received" is the
 #: case submitted and not yet taken up -- no tier holds it, which is a desk in its own right and
@@ -1360,7 +1360,8 @@ def _may_dispose(conn: db.Connection, user: User, row: db.Row) -> bool:
 
 #: What the old register (api.cases) records as the deciding desk for each portal role.
 MIRROR_ROLE_LABELS = {"AG_SENIOR_AUDITOR": "Senior Auditor, Pension wing (AG)", "AG_ASSISTANT_AO": "Assistant Accounts Officer, Pension wing (AG)",
-                      "AG_AO": "Accounts Officer, Pension wing (AG)", "AG_REVIEWER": "AG / Additional AG and senior officers (all wings)",
+                      "AG_AO": "Accounts Officer, Pension wing (AG)",
+                      "AG_REVIEWER": "Accountant General", "AG_ADDL": "Additional Accountant General",
                       "AG_DAG": "Deputy Accountant General (Pension)"}
 
 #: Acting on a case (29 Sep 2026) needs a completed AI examination of the papers as they stand:
@@ -2449,7 +2450,8 @@ def set_user_role(request: Request, user_id: str, body: dict = Body(...), user: 
     if row["role"] == "DEPT_OFFICER" or role == "DEPT_OFFICER":
         raise HTTPException(422, "a DDO account is a department's; create the officer an AG account instead")
     if role not in CREATABLE_ROLES or role == "ADMIN":
-        raise HTTPException(422, "role must be a tier (AG_SENIOR_AUDITOR, AG_ASSISTANT_AO, AG_AO), AG_DAG or AG_REVIEWER")
+        raise HTTPException(422, "role must be a tier (AG_SENIOR_AUDITOR, AG_ASSISTANT_AO, AG_AO), "
+                                 "AG_DAG, AG_REVIEWER or AG_ADDL")
     if row["id"] == user.id:
         raise HTTPException(409, "you cannot change your own role")
     reason = " ".join(str(body.get("reason") or "").split())

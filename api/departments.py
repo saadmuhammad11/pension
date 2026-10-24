@@ -231,18 +231,20 @@ DEPARTMENT_NAMES: dict[str, str] = {**{d.code: d.name for d in DEPARTMENTS}, LEG
 #: no wing and no tier, it acts wherever a case is and overrides like the Deputy AG; the office's
 #: senior officers share its one login, ag.reviewer.
 TIER_ROLES = ("AG_SENIOR_AUDITOR", "AG_ASSISTANT_AO", "AG_AO")
-ROLES = ("DEPT_OFFICER",) + TIER_ROLES + ("AG_DAG", "AG_REVIEWER", "ADMIN")
+ROLES = ("DEPT_OFFICER",) + TIER_ROLES + ("AG_DAG", "AG_REVIEWER", "AG_ADDL", "ADMIN")
 #: The roles the administrator may create.
 CREATABLE_ROLES = ROLES
 #: The AG's side of a case: the tiers, the Deputy AG and the AG's desk. The administrator manages users, not cases (G6).
-AG_ROLES = TIER_ROLES + ("AG_DAG", "AG_REVIEWER")
+AG_ROLES = TIER_ROLES + ("AG_DAG", "AG_REVIEWER", "AG_ADDL")
 ROLE_LABELS = {"DEPT_OFFICER": "DDO", "AG_SENIOR_AUDITOR": "Senior Auditor", "AG_ASSISTANT_AO": "Assistant Accounts Officer",
                # Not "(Pension)": the role is bound to no wing (workflow.ANY_TIER), so the
                # parenthesis said something untrue as well as something long (24 Oct 2026).
                # MIRROR_ROLE_LABELS in api/v2 keeps the longer form: that one is not this
                # label but the deciding desk the rules record, which has its own vocabulary.
                "AG_AO": "Accounts Officer", "AG_DAG": "Deputy Accountant General", "ADMIN": "Administrator",
-               "AG_REVIEWER": "AG / Additional AG and senior officers (all wings, every tier)"}
+               # One role for two offices until 24 Oct 2026, so the register could not say
+               # which of them had acted. Separated by name, not by power.
+               "AG_REVIEWER": "Accountant General", "AG_ADDL": "Additional Accountant General"}
 
 
 def portal_for(role: str, department_code: str | None) -> str | None:
