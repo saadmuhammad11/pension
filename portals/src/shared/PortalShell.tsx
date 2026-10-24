@@ -112,9 +112,11 @@ function Shell({ config }: { config: PortalConfig }) {
     // 2026): the bare one moves there. Replaced, not pushed, so Back is not trapped on it (F17).
     if (pr?.view === 'home' && homeFor(user) === 'register') { navigate(`/${PRODUCT_SLUG[pr.product]}/cases`, { replace: true }); return }
     const known = cleanPath === '/' || !!pr || cleanPath === '/users' || cleanPath === '/audit' || cleanPath === '/signatories'
+      || cleanPath === '/account'
       || !!match('/cases/:id', cleanPath) || !!match('/cases/:id/analysis', cleanPath)
     const allowed = (pr?.view !== 'new' || can.create_case) && (cleanPath !== '/users' || can.manage_users)
       && (cleanPath !== '/audit' || can.audit_log) && (cleanPath !== '/signatories' || can.manage_users)
+      && (cleanPath !== '/account' || MAY_MANAGE_OWN_PROFILE.includes(user.role))
     if (!known || !allowed) navigate('/', { replace: true })
   }, [cleanPath, user, can, pr])
 
