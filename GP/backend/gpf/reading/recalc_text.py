@@ -27,6 +27,27 @@ things go wrong on a real page, and the report's own arithmetic settles all thre
 
 Every repair is recorded on the row it was made to. A figure the office did not read is not
 the same as a figure the office read, and the officer is told which is which.
+
+WHAT THIS DOES NOT FIX, and what was measured before leaving it (24 Oct 2026). Over the
+sixteen ledgers on the deployment machine this reader wins on two -- the pages the OCR model
+transcribes whole -- and both of those now reconcile completely. On the rest the OCR model
+falls into its loop early, the read is short, and the vision read is taken instead on row
+count. Two things were tried and did not help:
+
+  * Reading the page in horizontal bands, as extraction/identify.py does for headings. Three
+    bands: the first gave twenty clean rows, the other two looped. Six narrow bands with a
+    1,500-token cap: three of the six looped. The loop is set off by the content -- long runs
+    of identical nil cells -- and not by how much of the page is in view.
+  * Nothing was tried on the vision side, because there is nothing to try. The same page read
+    three times running, temperature 0, gave four, one and seven years that did not add up.
+    It is not stable, so there is no "better single read" to reach for.
+
+What would work is reading two or three times and taking, year by year, only the version that
+balances and chains -- each read gets DIFFERENT years wrong, and the arithmetic makes it safe
+to choose between them rather than guess. It was costed at two to six more minutes an
+examination and the office chose not to spend it for now: a ledger that does not reconcile is
+a hard stop (rules_common.RECALC-ADDS-UP), so the figures reach nobody who could pay on them,
+and the section re-pulls the report from SAP instead.
 """
 from __future__ import annotations
 
