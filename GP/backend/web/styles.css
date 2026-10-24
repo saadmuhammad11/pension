@@ -257,6 +257,12 @@ textarea { min-height: 90px; resize: vertical; font-family: var(--font-mono); fo
   border-radius: 6px; padding: 1px 7px; font-size: var(--t-micro); color: var(--green2);
   margin-right: var(--s1); font-weight: 600; white-space: nowrap;
 }
+/* A chip that opens the page it names (23 Oct 2026). It is a <button>, so it must not look
+   like one: the user agent's own border and background would make a row of page numbers
+   read as a row of controls rather than as where the paper is. */
+button.chip { cursor: pointer; font-family: inherit; line-height: inherit; }
+button.chip:hover { background: var(--sage2); }
+button.chip:focus-visible { outline: 2px solid var(--green3); outline-offset: 1px; }
 
 /* --- status strip ----------------------------------------------------------------------
    These are the case's headline figures, so they are set as figures — the portal's KPI

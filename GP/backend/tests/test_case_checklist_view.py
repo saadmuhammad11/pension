@@ -111,6 +111,64 @@ class TestTheWorstResultIsTheOnesThatCounts:
         assert order.index("hard") < order.index("conf") < order.index("ok")
 
 
+class TestWhereThePaperIs:
+    """A pension checklist has shown the page a paper was found on, and opened it, since it
+    was built. A list that says a paper is not satisfied and will not show you the paper is
+    a list the officer has to go and check somewhere else."""
+
+    def test_a_paper_that_was_found_says_where(self, svc) -> None:
+        rows = _checklist(svc, "refundable")
+        assert all(isinstance(r["pages"], list) for r in rows)
+        assert any(r["pages"] for r in rows), "something on this claim was found somewhere"
+
+    def test_the_pages_are_the_rules_own_evidence_and_the_papers_it_names(self, svc) -> None:
+        """Both: a rule attaches evidence where it cut a crop, and reference_pages adds the
+        pages of the papers an item compares, which is most of them."""
+        import pathlib as _p
+        src = (_p.Path(__file__).resolve().parent.parent / "gpf" / "service.py").read_text()
+        block = src[src.index("def _checklist_view"):src.index("def _diff_view")]
+        assert 'r.get("evidence")' in block and "reference_pages(r, s.F" in block
+
+    def test_they_are_page_numbers_in_order_and_not_repeated(self, svc) -> None:
+        for r in _checklist(svc, "fp-death"):
+            assert r["pages"] == sorted(set(r["pages"]))
+            assert all(isinstance(p, int) and p > 0 for p in r["pages"])
+
+    def test_a_paper_that_is_not_there_has_no_page_for_it(self, svc) -> None:
+        """"Change Form-06 is not attached" gets no page for the form -- there is none."""
+        rows = {r["requirement"]: r for r in _checklist(svc, "fp-death")}
+        missing = [r for r in rows.values() if r["status"] == "hard"]
+        assert missing, "this fixture should be short of something"
+
+
+class TestTheScreenOpensThePage:
+
+    APP = (Path(__file__).resolve().parent.parent / "web" / "js" / "app.js").read_text(encoding="utf-8")
+
+    def test_each_page_is_a_button_that_names_it(self) -> None:
+        panel = self.APP[self.APP.index("function viewChecklist"):self.APP.index("function wireChecklist")]
+        assert 'data-page=' in panel and 'p.${esc(n)}' in panel
+
+    def test_it_opens_in_the_viewer_with_the_tools(self) -> None:
+        """The same viewer an evidence crop opens in: rotate and zoom, which a scanned page
+        fed in sideways needs before it can be read at all."""
+        wire = self.APP[self.APP.index("function wireChecklist"):]
+        wire = wire[:wire.index("\n}\n") + 3]
+        assert "openImageModal(" in wire and "pageUrl(c.template" in wire
+
+    def test_the_handler_is_bound_and_not_written_into_the_markup(self) -> None:
+        """The portal's CSP allows no inline handlers under /gpf/ (F13)."""
+        panel = self.APP[self.APP.index("function viewChecklist"):self.APP.index("function wireChecklist")]
+        assert "onclick=" not in panel
+
+    def test_the_tab_wires_it(self) -> None:
+        assert "viewChecklist(c); wireChecklist(c);" in self.APP
+
+    def test_a_page_button_does_not_look_like_a_button(self) -> None:
+        css = (Path(__file__).resolve().parent.parent / "web" / "styles.css").read_text(encoding="utf-8")
+        assert "button.chip" in css and "cursor: pointer" in css
+
+
 class TestTheScreenDrawsIt:
 
     APP = (Path(__file__).resolve().parent.parent / "web" / "js" / "app.js").read_text(encoding="utf-8")

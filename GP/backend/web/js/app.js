@@ -338,7 +338,7 @@ function renderTab(id, c) {
   const el = $('#tabc');
   if (state.tab === 'overview') el.innerHTML = viewOverview(c);
   else if (state.tab === 'sap') { el.innerHTML = viewSap(c); wireSap(id); }
-  else if (state.tab === 'checklist') el.innerHTML = viewChecklist(c);
+  else if (state.tab === 'checklist') { el.innerHTML = viewChecklist(c); wireChecklist(c); }
   else if (state.tab === 'exam') { el.innerHTML = viewExam(c); wireExam(id, c); }
 }
 
@@ -420,10 +420,16 @@ function viewChecklist(c) {
     return `<div class="panel"><h2>Checklist</h2>
       <p class="muted">The office keeps no list of papers for this kind of claim.</p></div>`;
   }
+  // Where the paper is, to be opened and looked at -- as a pension checklist has shown it
+  // since it was built (components/ChecklistPanel.tsx). A list that says a paper is not
+  // satisfied and will not show you the paper is a list you have to go and check elsewhere.
+  const at = (r) => (r.pages || []).map(n =>
+    `<button type="button" class="chip" data-page="${esc(n)}" title="Open page ${esc(n)}">p.${esc(n)}</button>`).join(' ');
   const line = (r) => `<tr>
     <td class="mono small muted" style="width:72px">${esc(r.item)}</td>
     <td>${esc(r.requirement)}${r.always ? '' : ' <span class="muted small">(where it applies)</span>'}
       ${(r.findings || []).map(f => `<div class="muted small" style="margin-top:3px">${esc(f)}</div>`).join('')}</td>
+    <td style="width:120px">${at(r) || '<span class="muted small">&mdash;</span>'}</td>
     <td style="width:190px">${badge(CHECKLIST_TONE[r.status] || 'conf', r.word)}</td>
   </tr>`;
   const present = rows.filter(r => r.status === 'ok' || r.status === 'sub' || r.status === 'adv').length;
@@ -433,8 +439,21 @@ function viewChecklist(c) {
     <p class="muted small">The papers the office checks a ${esc((c.meta.kind || 'GP Fund').toString())} claim for.
       A paper is not called "not found" here: a hard stop on one of these is usually a paper
       that is absent and sometimes one that is present and wrong, and the finding says which.</p>
-    <div class="table-wrap"><table><tbody>${rows.map(line).join('')}</tbody></table></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Item</th><th>Paper</th><th>Found on</th><th>Status</th></tr></thead>
+      <tbody>${rows.map(line).join('')}</tbody></table></div>
   </div>`;
+}
+
+/** The page buttons open the page, with the tools the evidence crops have. Bound here and
+ *  not inline: the portal's CSP allows no inline handlers under /gpf/ (F13). */
+function wireChecklist(c) {
+  $$('#tabc [data-page]').forEach(b => {
+    b.onclick = () => {
+      const n = b.dataset.page;
+      openImageModal(`Page ${n}`, pageUrl(c.template, n, c), `Page ${n} of the claim`);
+    };
+  });
 }
 
 // ── SAP tab ───────────────────────────────────────────────────────────────────

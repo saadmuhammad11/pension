@@ -294,6 +294,7 @@ class CaseService:
         "Not satisfied" and the finding beneath it says which.
         """
         from .intake import checklist_for
+        from .reference_pages import reference_pages
         meta = self._meta(s)
         expected = checklist_for(str(meta.get("kind") or ""),
                                  str((s.F or {}).get("gazetted") or "unknown"))
@@ -313,8 +314,20 @@ class CaseService:
                 # which the officer should see rather than read as satisfied.
                 status = "na" if not e["always"] else "unseen"
                 word = "Not required for this claim" if not e["always"] else "Not reached"
+            # Where the paper is, for the officer to open and look at it -- the pages the rule
+            # cut its evidence from, and the pages of the papers the item names
+            # (reference_pages, 30 Sep 2026). A pension checklist has carried this since it
+            # was built: a list that says a paper is not satisfied and will not show you the
+            # paper is a list you have to go and check somewhere else.
+            pages: list[int] = []
+            for r in got:
+                for ev in list(r.get("evidence") or []) + list(reference_pages(r, s.F or {})):
+                    page = isinstance(ev, dict) and ev.get("page")
+                    if isinstance(page, int) and page not in pages:
+                        pages.append(page)
             out.append({"id": e["id"], "item": e["item"], "requirement": e["requirement"],
                         "always": e["always"], "status": status, "word": word,
+                        "pages": sorted(pages),
                         "findings": [r.get("finding") for r in got if r.get("finding")]})
         return out
 
