@@ -741,9 +741,38 @@ if (PROTO / "sap-samples").exists():
 def index():
     idx = WEB_DIR / "index.html"
     if idx.exists():
-        return FileResponse(idx)
+        # The page that names every other file, so the one that must never be stale: served
+        # with no Cache-Control it was the file a browser held longest, being the oldest.
+        # See RevalidatedStatic below for why "no-cache" and not "no-store".
+        return FileResponse(idx, headers={"Cache-Control": "no-cache"})
     return JSONResponse({"detail": "Frontend not built yet. API is live at /api/health."})
 
 
+class RevalidatedStatic(StaticFiles):
+    """The module's own screens, served so a browser asks before it reuses them.
+
+    This is a buildless SPA: index.html, app.js and styles.css keep their names for ever, so
+    nothing in an address tells a browser that a file has changed -- unlike the portal, whose
+    bundler puts a hash of the contents in every file name. Served with an ETag and a
+    Last-Modified and NO Cache-Control, which is what this was, a browser is entitled to guess
+    how long the file stays fresh, and the usual guess is a tenth of its age: index.html last
+    written five days ago is held for half a day without so much as asking.
+
+    So an officer went on running the screens of some hours ago. On 24 Oct 2026 that showed as
+    a Checklist tab that was not there and a SAP panel drawing six blank rows for a pay slip
+    the office does not hold -- both of them fixed, neither of them delivered.
+
+    "no-cache" is not "no-store": the browser may keep the file, it must just ask first, and
+    with the ETag already on the response the answer is a 304 and no body. The cost is one
+    conditional request per file per load; the cost of the alternative is an officer deciding
+    a claim on a screen that was replaced.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
+
 if WEB_DIR.exists():
-    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+    app.mount("/", RevalidatedStatic(directory=WEB_DIR, html=True), name="web")
