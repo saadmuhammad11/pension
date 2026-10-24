@@ -323,7 +323,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5184/      # 200
 
 The API applies the migrations in `api/migrations/` on startup (0009 is the latest at v1.0.0; 0014,
 the pension wing tiers, since 9 Oct 2026). Before a release whose migrations touch the live database,
-take a dump with `deploy/pg-backup.sh` and confirm it restores into a scratch database (§7.2).
+take a dump with `deploy/backup-db.sh` and confirm it restores into a scratch database (§7.2).
 On first start it seeds the 88 accounts with generated passwords and writes them once to
 `/var/lib/pension/artifacts/credentials/credentials.csv` (readable by the service account only).
 
@@ -523,11 +523,27 @@ reference and training.
 
 ### 7.2 Nightly backup
 
-`deploy/pg-backup.sh` takes one consistent dump (`pg_dump -Fc`), reads it back with `pg_restore --list`, and keeps
-the newest 30 (`PENSION_BACKUP_KEEP`) under `PENSION_BACKUP_DIR` (default `artifacts/backups/pg`). On the trial box
-`deploy/pg-backup.sh install-cron` put it in the user's crontab at 02:30 (installed 9 Oct 2026); on production run it
-from a systemd timer or root's crontab with `/etc/pension/pension.env` sourced, writing to `/var/backups/pension/pg`.
-The files below (uploads, run outputs, GP Fund data) still need the rsync in the sketch.
+`deploy/backup-db.sh`, run by `pension-backup.timer` at 02:30 Asia/Karachi (the host clock is not the office's, so
+the zone is named). It dumps with `pg_dump -Fc` as the `postgres` system user over the local socket -- no password in
+the script, the unit or the environment -- reads the dump back with `pg_restore --list`, refuses it if it holds no
+table data, and deletes a dump that failed rather than leaving half a one beside the good ones. It keeps 14 nightly
+dumps under `/var/backups/pension` plus the first of each month for a year, and then copies them to `BACKUP_OFFSITE`
+by rsync. Settings are in `/etc/pension/backup.conf`; while `BACKUP_OFFSITE` is unset it says so in the journal every
+night, because a backup on the same disk as the database is not a backup of the disk.
+
+    sudo cp deploy/pension-backup.{service,timer} /etc/systemd/system/
+    sudo systemctl daemon-reload && sudo systemctl enable --now pension-backup.timer
+    sudo systemctl start pension-backup.service      # one now, to prove it
+
+This replaced `deploy/pg-backup.sh` on 24 Oct 2026. That script did the same job and did it well, but it was written
+for the trial box: its fast path dumps through the `pension-postgres` container, which production does not run, it
+reads the password out of `PENSION_DATABASE_URL`, it wrote inside the artefact tree, and `install-cron` put it in a
+user crontab where a failure is silent. A systemd unit that fails shows in `systemctl --failed`. **If the trial box
+still has the 02:30 crontab line, remove it** (`crontab -l | grep -v pg-backup.sh | crontab -`).
+
+The files below (uploads, run outputs, GP Fund data) still need the rsync in the sketch -- in particular the original
+scans under `/var/lib/pension/artifacts/cases`, which the database alone does not replace: restore without them and
+the register points at documents that are gone.
 
 ### 7.2a Nightly backup script (sketch, files)
 
