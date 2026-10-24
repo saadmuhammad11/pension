@@ -86,10 +86,17 @@ class TheScreenAgreesWithTheServer(unittest.TestCase):
         self.assertIn("#/account", header)
 
     def test_the_screen_is_for_those_three_desks_and_nobody_else(self) -> None:
-        """Every other account stays the administrator's to manage, which is what it was."""
+        """Every other account stays the administrator's to manage, which is what it was.
+
+        Two gates carry the list: the guard that sends an officer away from an address they
+        may not open, and the branch that draws the screen. The shell's third mention of the
+        address -- `known`, which only says the portal has such a path -- is roleless on
+        purpose: without it an officer without the right fell through to the dashboard
+        instead of being sent there (24 Oct 2026).
+        """
         shell = (ROOT / "portals" / "src" / "shared" / "PortalShell.tsx").read_text(encoding="utf-8")
-        line = next(ln for ln in shell.splitlines() if "cleanPath === '/account'" in ln)
-        self.assertIn("MAY_MANAGE_OWN_PROFILE.includes(user.role)", line)
+        self.assertIn("(cleanPath !== '/account' || MAY_MANAGE_OWN_PROFILE.includes(user.role))", shell)
+        self.assertIn("cleanPath === '/account' && MAY_MANAGE_OWN_PROFILE.includes(user.role)", shell)
 
     def test_and_the_way_in_is_not_drawn_for_anyone_else(self) -> None:
         header = (ROOT / "portals" / "src" / "shared" / "components" / "Header.tsx").read_text(encoding="utf-8")
