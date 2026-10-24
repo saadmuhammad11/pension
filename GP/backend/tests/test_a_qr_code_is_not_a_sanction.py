@@ -13,7 +13,7 @@ two are not close -- the real sanction is page 3 of the same claim:
 
     page 3   GOVERNMENT OF THE PUNJAB ... Sanction is hereby accorded to the grant of
              G.P. Fund advance amounting to Rs.850,000/- ... NO.SO(S-II)PF/558/M/2026
-    page 8   35202-0000001-1 ... 500000000001 ... 270-00-000001, and Urdu
+    page 8   00001-0000001-1 ... 500000000001 ... 270-00-000001, and Urdu
 
     python3 -m pytest tests/test_a_qr_code_is_not_a_sanction.py -q
 """
@@ -35,7 +35,7 @@ an officer of the Government of the Punjab"""
 
 #: Page 8 of the same claim. Almost no Latin letters: the page is Urdu and numbers, and it
 #: reads perfectly well -- which is why "was this page read?" cannot be asked of Latin.
-CNIC_BACK = """35202-0000001-1
+CNIC_BACK = """00001-0000001-1
 مکان نمبر ۱، محلہ نمونہ
 5
 500000000001
@@ -72,7 +72,7 @@ class TestTheBackOfACnicIsNot:
 
     def test_a_page_of_prose_with_a_cnic_in_it_is_not_a_cnic_back(self) -> None:
         """A sanction names the subscriber and may quote their CNIC."""
-        assert not looks_like_a_cnic_back(SANCTION + "\nCNIC 35202-0000001-1")
+        assert not looks_like_a_cnic_back(SANCTION + "\nCNIC 00001-0000001-1")
 
 
 class TestWhatIsNotTouched:

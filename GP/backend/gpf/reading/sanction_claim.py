@@ -14,7 +14,7 @@ page's own text, and the two are not close:
 
     page 3   GOVERNMENT OF THE PUNJAB ... Sanction is hereby accorded to the grant of
              G.P. Fund advance amounting to Rs.850,000/- ... NO.SO(S-II)PF/558/M/2026
-    page 8   35202-0000001-1 ... 500000000001 ... 270-00-000001 (and Urdu)
+    page 8   00001-0000001-1 ... 500000000001 ... 270-00-000001 (and Urdu)
 
 So a page claimed as the sanction is asked to show that it is one. This is the rule the
 pension side arrived at for the same class of error (extraction.identify, 22 Oct 2026): a

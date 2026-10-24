@@ -25,7 +25,7 @@ from pathlib import Path
 #: examples the prompts quote, and the zero-padded misreads the extraction code guards against.
 ALLOWED = {
     "00000-0000000-0", "12345-1234567-1", "35201-1111111-1", "35201-1234567-1",
-    "35202-0000000-0", "35203-0000000-0",
+    "35202-0000000-0", "35202-1234567-1", "35203-0000000-0",
 }
 
 DASHED = re.compile(r"(?<!\d)(\d{5})-(\d{7})-(\d)(?!\d)")
