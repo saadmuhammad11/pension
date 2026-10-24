@@ -76,16 +76,13 @@ describe('the new-case button belongs to the cases (22 Oct 2026)', () => {
 })
 
 
-describe('the register opens on something to look at', () => {
-  const rows = (n: number, status: CaseStatus) => Array.from({ length: n }, (_, i) => ({
-    id: `c${i}`, case_no: `PC-2026-${String(i).padStart(6, '0')}`, status,
+describe('the cases tab is the whole register (24 Oct 2026)', () => {
+  const rows = (n: number, status: CaseStatus, from = 0) => Array.from({ length: n }, (_, i) => ({
+    id: `c${from + i}`, case_no: `PC-2026-${String(from + i).padStart(6, '0')}`, status,
     department_code: 'sgad', department_name: 'S&GAD', pension_section: 'Pension-I',
     created_via: 'DEPARTMENT', product: 'PENSION', submission_no: 1,
     created_at: '2026-10-01T00:00:00', updated_at: '2026-10-01T00:00:00',
   })) as unknown as Parameters<typeof CaseRegister>[0]['rows']
-
-  /** The line beside the search box: which bucket is open, and how much of the register it is. */
-  const counted = (container: HTMLElement) => container.querySelector('.register-count')!.textContent
 
   const draw = (list: ReturnType<typeof rows>) => render(
     <CaseRegister product="PENSION" rows={list} title="Cases" lead="lead"
@@ -93,21 +90,30 @@ describe('the register opens on something to look at', () => {
                   role="AG_AO" view="cases" charts={null} />,
   )
 
-  it('shows the cases when nothing awaits a decision, instead of an empty table', () => {
-    // 24 Oct 2026: it opened on "Awaiting decision · 0 of 17" with no rows under it, and the
-    // only way through was the small "show all" beside the count.
-    const { container } = draw(rows(17, 'APPROVED'))
-    expect(counted(container)).toMatch(/^All cases · 17 of 17/)
-    expect(screen.getAllByRole('row').length).toBeGreaterThan(1)
+  /** One row is the header. */
+  const listed = () => screen.getAllByRole('row').length - 1
+
+  it('shows every case, whatever is awaiting a decision', () => {
+    // It opened on the AG's own tile and drew that slice: with nothing awaiting a decision
+    // the table was empty, and the only word for it -- or for a slice of any other size --
+    // was "Awaiting decision · 0 of 17 · show all" in small print above it.
+    draw(rows(17, 'APPROVED'))
+    expect(listed()).toBe(17)
   })
 
-  it('but still opens on the decisions when there are some', () => {
-    const { container } = draw(rows(5, 'UNDER_REVIEW'))
-    expect(counted(container)).toMatch(/^Awaiting decision · 5 of 5/)
+  it('and still every case when some do await one', () => {
+    draw([...rows(5, 'UNDER_REVIEW'), ...rows(12, 'APPROVED', 5)] as ReturnType<typeof rows>)
+    expect(listed()).toBe(17)
+  })
+
+  it('says neither which slice is shown nor how to escape it, because there is none', () => {
+    const { container } = draw(rows(17, 'APPROVED'))
+    expect(container.querySelector('.register-count')).toBeNull()
   })
 
   it('shows twenty on a page', () => {
     draw(rows(25, 'UNDER_REVIEW'))
-    expect(screen.getByRole('status').textContent).toMatch(/1–20 of 25/)
+    expect(screen.getByText(/1–20 of 25/)).toBeTruthy()
+    expect(listed()).toBe(20)
   })
 })

@@ -113,9 +113,6 @@ export function CaseRegister(
   // A department's register opens on every case it has filed (30 Sep 2026): opening on "action
   // required" hid a case the moment it was filed -- it is with the AG, not the department.
   const [bucket, setBucket] = useState<Bucket>(role === 'DEPT_OFFICER' ? 'all' : 'mine')
-  //: Whether the officer has pressed a tile themselves. Until they have, an empty opening
-  //: bucket gives way to the cases (see below).
-  const [pickedBucket, setPickedBucket] = useState(false)
   const [q, setQ] = useState('')
   const [group, setGroup] = useState<Group>('')
   const [kind, setKind] = useState('')
@@ -140,15 +137,6 @@ export function CaseRegister(
     const all = total ?? sum(() => true)
     return { mine, done, theirs: all - mine - done, all }
   }, [statusCounts, total, buckets, rows.length, waitingOn])
-  // An AG officer opens on what awaits their decision, which is right when something does and
-  // is an empty table when nothing does -- the register then looked broken, and the only way
-  // to the cases was to notice the small "show all" beside the count (24 Oct 2026). Where the
-  // opening tile is empty and there are cases behind it, the cases are shown. Only until the
-  // officer presses a tile themselves: after that the empty tile they chose stays chosen.
-  useEffect(() => {
-    if (pickedBucket || isDept) return
-    if (bucket === 'mine' && tile.mine === 0 && tile.all > 0) setBucket('all')
-  }, [pickedBucket, isDept, bucket, tile.mine, tile.all])
   const kinds = useMemo(() => {
     const seen = new Map<string, string>()
     rows.forEach(r => { const k = kindKey(r); if (k && !seen.has(k)) seen.set(k, kindOf(r) ?? k) })
@@ -157,22 +145,28 @@ export function CaseRegister(
   const depts = useMemo(() => [...new Set(rows.map(r => r.department_name).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows])
   const sections = useMemo(() => [...new Set(rows.map(r => r.pension_section ?? 'Legacy'))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })), [rows])
   const filtered = !!(group || kind || dept || section)
+  // A tile narrows the table only where the two are on one screen. On its own tab the table is
+  // the register entire (24 Oct 2026): a tile chosen on the dashboard left the cases tab
+  // showing a slice of itself, and the only word for it was a line of small print above the
+  // table -- "Awaiting decision · 27 of 46 · show all". The search box and the chips below are
+  // what narrows the register now, and both say so where they stand.
+  const listBucket: Bucket = view ? 'all' : bucket
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const statuses = group ? GROUPS.find(g => g.key === group)!.statuses : null
-    return buckets[bucket].filter(r =>
+    return buckets[listBucket].filter(r =>
       (!statuses || statuses.includes(r.status))
       && (!kind || kindKey(r) === kind)
       && (!dept || r.department_name === dept)
       && (!section || (r.pension_section ?? 'Legacy') === section)
       && (!needle || [r.case_no, r.claimant_name, r.department_name, r.pension_section, STATUS_META[r.status].label, kindOf(r) ?? '', r.case_type ?? '']
                        .some(v => (v ?? '').toLowerCase().includes(needle))))
-  }, [buckets, bucket, q, group, kind, dept, section])
+  }, [buckets, listBucket, q, group, kind, dept, section])
 
   // A filter runs over the whole register, not the tile's slice, so the count it shows is true.
   const narrowTo = (set: () => void) => { set(); setBucket('all'); setPage(1) }
   const clear = () => { setGroup(''); setKind(''); setDept(''); setSection(''); setPage(1) }
-  const pickBucket = (b: Bucket) => { setPickedBucket(true); setBucket(b); setPage(1); if (view) navigate(`/${PRODUCT_SLUG[product]}/cases`) }
+  const pickBucket = (b: Bucket) => { setBucket(b); setPage(1); if (view) navigate(`/${PRODUCT_SLUG[product]}/cases`) }
   // One face or the other (screens/registerView.ts): the dashboard, or the cases. Until 12 Oct
   // 2026 a department's home drew the cases and then the dashboard below them.
   const showDash = view !== 'cases'
@@ -244,10 +238,6 @@ export function CaseRegister(
       <div className="row" style={{ marginTop: 'var(--s3)', gap: 'var(--s3)', alignItems: 'center' }}>
         <input placeholder={product === 'GPF' ? 'Search by case number, name or department' : 'Search by case number, name, department or case type'} value={q} onChange={e => { setQ(e.target.value); setPage(1) }}
                style={{ maxWidth: 420 }} aria-label="Search the cases" />
-        <span className="register-count" aria-live="polite">
-          <strong>{bucketLabel[bucket]}</strong> · {shown.length} of {tile.all}{q.trim() ? ` matching “${q.trim()}”` : ''}
-          {bucket !== 'all' && <> · <a href="#/" onClick={e => { e.preventDefault(); pickBucket('all') }}>show all</a></>}
-        </span>
       </div>
 
       <div className="filter-bar">
