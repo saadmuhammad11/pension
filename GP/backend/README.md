@@ -165,10 +165,10 @@ The models run across the two Sparks exactly as the spec's §1 split intends, an
 
 | Role | Model | Endpoint |
 |---|---|---|
-| Vision (classify + extract) | `qwen3-vl-30b-a3b-fp8` | `10.170.1.143:8011` |
-| OCR | `paddleocr-vl-1.6` | `10.170.1.143:8012` |
-| Embedding (citations) | `qwen3-embedding-4b` | `10.170.1.143:8093` |
-| Reasoning (wording) | `qwen3.8-27b-fp8` | `10.170.0.240:8001` |
+| Vision (classify + extract) | `qwen3-vl-30b-a3b-fp8` | `vision-host.internal:8011` |
+| OCR | `paddleocr-vl-1.6` | `vision-host.internal:8012` |
+| Embedding (citations) | `qwen3-embedding-4b` | `vision-host.internal:8093` |
+| Reasoning (wording) | `qwen3.8-27b-fp8` | `reasoning-host.internal:8001` |
 
 Launch wired to all four (roles are auto-discovered by `/v1/models`):
 
@@ -176,7 +176,7 @@ Launch wired to all four (roles are auto-discovered by `/v1/models`):
 ./run.sh                       # sets GPF_VLLM_URLS to the four endpoints
 ./run.sh status                # the resolved role board, before you open the UI
 # or, by hand:
-GPF_VLLM_URLS="http://10.170.1.143:8011,http://10.170.1.143:8012,http://10.170.1.143:8093,http://10.170.0.240:8001" \
+GPF_VLLM_URLS="http://vision-host.internal:8011,http://vision-host.internal:8012,http://vision-host.internal:8093,http://reasoning-host.internal:8001" \
   /home/tmc/vllm_env/bin/python3 -m uvicorn gpf.api:app --port 8200
 ```
 

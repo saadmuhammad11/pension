@@ -81,7 +81,7 @@ and the model ports, stay closed to everyone else.
 | Plain HTTP on high ports | HTTPS on 443 behind nginx |
 | No version control | Git repository, tagged releases, rollback |
 | Manual DB copies | Nightly automated off-box backups |
-| Model addresses hard-coded to `192.168.1.1` | Configurable per environment (see §3.1) |
+| Model addresses hard-coded to `model-host.internal` | Configurable per environment (see §3.1) |
 
 ---
 
@@ -105,7 +105,7 @@ and the model ports, stay closed to everyone else.
 | Role | Minimum | What we run today | Notes |
 |---|---|---|---|
 | **GPU / model server** | NVIDIA GPU with ≥ 96 GB memory (unified or VRAM), 16+ cores, 128 GB RAM | NVIDIA GB10 (DGX Spark class), 121 GB unified memory, 20 cores | Vision (~0.35 of memory) + OCR + embedding must fit together. Do **not** co-host other large models (an OOM freeze happened on 15 Jul 2026). |
-| **Second GPU box** (optional) | as above | Spark-1, 192.168.101.10 (reranker) | Can be folded into the main box if memory allows |
+| **Second GPU box** (optional) | as above | Spark-1, reasoning-host.internal (reranker) | Can be folded into the main box if memory allows |
 | **App server** | 8 cores, 16 GB RAM, 1 TB SSD | Same GPU box today | Can be the GPU box (simplest) or a separate VM that calls the GPU box over the LAN |
 | **Storage** | 1 TB+ for case files, growing | `artifacts/` is ~6.2 GB on the trial data | Plan ~50–100 MB per case (scans + page images) |
 | **Backup storage** | 2× the data size | — | Separate machine |
@@ -281,7 +281,7 @@ sudo chown root:pension /etc/pension/pension.env && sudo chmod 640 /etc/pension/
 On the GPU box (the same machine or a separate one):
 
 1. **Copy the weights locally** (e.g. `/srv/models/…`), so the services don't depend on the NFS
-   mount from `spark-46ef`. Check them against the fingerprints in `infra/models/`.
+   mount from `reasoning-host`. Check them against the fingerprints in `infra/models/`.
 2. **The model key** (audit 6 Oct 2026, item 7). Create `/etc/pension/models.env` from
    `deploy/models.env.example` (`VLLM_API_KEY=` 48+ random characters, `root:tmc`, mode 640) and
    put the **same value** in `/etc/pension/pension.env` as `PENSION_MODEL_API_KEY`. The vision,
@@ -681,7 +681,7 @@ These come from running the trial. Each one has already caused a problem.
 | **Process manager kills jobs under memory pressure** | Long jobs started from a shell die when memory runs low | Run everything under systemd, never from a terminal session |
 | **Co-hosting other GPU models** | Unified memory OOM froze the box on 15 Jul 2026 | Model server runs this system's models only; `qwen3guard` stays disabled |
 | **Copying database files** | Copying PostgreSQL's data directory (or, before 9 Oct 2026, a live SQLite file) while it is written gives a corrupt backup | Always `pg_dump` (§7.2) |
-| **Weights on NFS** | Model services fail at boot if the NFS mount from `spark-46ef` isn't ready | Local copy of weights on the GPU box |
+| **Weights on NFS** | Model services fail at boot if the NFS mount from `reasoning-host` isn't ready | Local copy of weights on the GPU box |
 | **Hard-coded model IPs** | Moving the GPU box breaks reading silently | Fix F4 before moving any machine |
 | **Other projects on the same box** | `pkill`-style commands have taken down a colleague's service (:5173, :8100, :8200) | On a dedicated production server this goes away; until then, only stop services by systemd unit name |
 

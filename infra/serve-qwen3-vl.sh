@@ -5,8 +5,8 @@
 # Serves Qwen3-VL-30B-A3B (FP8) as an OpenAI-compatible endpoint. This is pipeline stage 2/3/4
 # (OCR & layout parsing, document classification, field extraction) per AGPB-BUILD §5.
 #
-# WHERE IT RUNS: spark-3369 (192.168.100.11). The reasoning model (qwen3.6-35b-a3b-fp8) stays on
-# spark-46ef (192.168.100.10:8001) — AGPB-BUILD §3.1 topology: Spark-1 reasoning, Spark-2 vision.
+# WHERE IT RUNS: vision-host (vision-host.internal). The reasoning model (qwen3.6-35b-a3b-fp8) stays on
+# reasoning-host (reasoning-host.internal:8001) — AGPB-BUILD §3.1 topology: Spark-1 reasoning, Spark-2 vision.
 #
 # WHY THE CONSERVATIVE FOOTPRINT: this box co-hosts the voice services (~0.55 of unified memory
 # reserved across omnivoice/qwen3-asr/whisper-urdu). The 2026-07-15 unified-memory OOM freeze is
@@ -79,7 +79,7 @@ EAGER="${EAGER:-0}"
 # Safetensors load strategy. Left unset (vLLM default) the engine memory-maps lazily and
 # auto-prefetches only when it recognises a network FS. It never does here: /models appears in
 # /proc/mounts twice with the same mount point ("systemd-1 /models autofs" before
-# "192.168.100.10:/models /models nfs4"), and vLLM's _get_fs_type keeps the FIRST longest-prefix
+# "reasoning-host.internal:/models /models nfs4"), and vLLM's _get_fs_type keeps the FIRST longest-prefix
 # match, so the checkpoint filesystem is reported as AUTOFS and auto-prefetch is skipped even
 # though the mount really is nfs4. Set LOAD_STRATEGY=prefetch (page-cache warm before load) or
 # =eager (whole shard read upfront, uses more CPU RAM) to override.
@@ -227,7 +227,7 @@ cat <<EOF
   load strategy    ${LOAD_STRATEGY:-<vllm default: lazy mmap, auto-prefetch on NFS>}
   structured out   backend=$SO_BACKEND  disable_any_whitespace=$SO_DISABLE_WS
   offline          HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 (telemetry off)
-  reasoning model  http://192.168.100.10:8001/v1  (separate box, untouched)
+  reasoning model  http://reasoning-host.internal:8001/v1  (separate box, untouched)
   ------------------------------------------------------------------
 
 EOF

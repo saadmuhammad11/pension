@@ -7,7 +7,7 @@ not secret. Both halves of that stopped being true.
 The models moved to a separate NPU server on 18 October 2026, and on 20 October the route was
 widened to read those servers' own /metrics. It now answers, to anyone who asks:
 
-  * the model servers' addresses on the private network (10.28.8.143, three ports),
+  * the model servers' addresses on the private network (model-host.internal, three ports),
   * which models and versions are being served,
   * KV-cache occupancy, queue depth, and cumulative prompt/generation token counts.
 

@@ -35,9 +35,9 @@ class LoadsOnlyEndpoints(unittest.TestCase):
         "PENSION_JWT_SECRET=not-a-real-secret\n"
         "PENSION_SEED_PASSWORD=1234\n"
         "GPF_DB=postgresql://pension:secret@127.0.0.1:5432/pension\n"
-        "PENSION_VISION_URL=http://10.28.8.143:8000/v1/chat/completions\n"
-        "PENSION_OCR_URL=http://10.28.8.143:8001/v1/chat/completions\n"
-        "PENSION_EMBED_URL=http://10.28.8.143:8093/v1/embeddings\n"
+        "PENSION_VISION_URL=http://model-host.internal:8000/v1/chat/completions\n"
+        "PENSION_OCR_URL=http://model-host.internal:8001/v1/chat/completions\n"
+        "PENSION_EMBED_URL=http://model-host.internal:8093/v1/embeddings\n"
         "PENSION_MODEL_API_KEY=not-a-real-key\n"
         "# a comment, and a blank line follow\n"
         "\n"
@@ -57,9 +57,9 @@ class LoadsOnlyEndpoints(unittest.TestCase):
     def test_the_endpoints_are_taken(self) -> None:
         self.assertEqual(envfile.load(self.path), 4)
         self.assertEqual(os.environ["PENSION_VISION_URL"],
-                         "http://10.28.8.143:8000/v1/chat/completions")
+                         "http://model-host.internal:8000/v1/chat/completions")
         self.assertEqual(os.environ["PENSION_EMBED_URL"],
-                         "http://10.28.8.143:8093/v1/embeddings")
+                         "http://model-host.internal:8093/v1/embeddings")
         # The key travels with the addresses: without it the servers reset the connection,
         # and endpoints nobody may call are no use to a module run by hand.
         self.assertEqual(os.environ["PENSION_MODEL_API_KEY"], "not-a-real-key")

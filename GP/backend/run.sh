@@ -28,13 +28,13 @@
 # ours() below keys on the working directory, so stopping this never touches :8200.
 #
 # Model services (roles are auto-discovered from /v1/models at each endpoint):
-#   Spark-2 (this host, 192.168.1.1):   vision qwen3-vl-30b :8011, OCR paddleocr-vl :8012,
+#   Spark-2 (this host, model-host.internal):   vision qwen3-vl-30b :8011, OCR paddleocr-vl :8012,
 #                                      embedding qwen3-embedding-4b :8093
 #   Spark-1 ($SPARK1):                 reasoning qwen3.8-27b-fp8 :8001
-# These were 10.170.1.143 / 10.170.0.240 until 1 Oct 2026. Off that network every discovery call
+# These were vision-host.internal / reasoning-host.internal until 1 Oct 2026. Off that network every discovery call
 # waited out a TCP timeout before uvicorn would bind, so the module looked dead. This host's own
-# models are reached on this host's LAN address 192.168.1.1, and Spark-1 over the direct cable
-# (192.168.101.10).
+# models are reached on this host's LAN address model-host.internal, and Spark-1 over the direct cable
+# (reasoning-host.internal).
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,9 +48,9 @@ GPF_BIND="${GPF_BIND:-127.0.0.1}"
 LOGS="$ROOT/logs"
 APP_LOG="$LOGS/gpf.log"
 
-# This host's own models, on loopback since 5 Oct 2026 (the box lost 192.168.1.1 that day).
+# This host's own models, on loopback since 5 Oct 2026 (the box lost model-host.internal that day).
 LOCAL="${GPF_LOCAL_HOST:-127.0.0.1}"
-SPARK1="${GPF_SPARK1_HOST:-192.168.101.10}"
+SPARK1="${GPF_SPARK1_HOST:-reasoning-host.internal}"
 export GPF_VLLM_URLS="${GPF_VLLM_URLS:-http://$LOCAL:8011,http://$LOCAL:8012,http://$LOCAL:8093,http://$SPARK1:8001}"
 export GPF_VLLM_TIMEOUT="${GPF_VLLM_TIMEOUT:-180}"
 # The model servers' key (audit 6 Oct 2026, item 7): once the keyed units are installed every /v1

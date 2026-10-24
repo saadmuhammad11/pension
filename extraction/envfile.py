@@ -1,7 +1,7 @@
 """The deployment's own settings, for code not started by systemd.
 
 The services get ``/etc/pension/pension.env`` from their unit files. A shell does not, and the
-model endpoints used to fall back to the DGX Spark's address -- ``192.168.1.1`` -- which stopped
+model endpoints used to fall back to the DGX Spark's address -- ``model-host.internal`` -- which stopped
 existing when the models moved to the Ascend NPU server. Nothing said so: the fallback is a host
 on a private range, so a call to it sits in SYN-SENT until the connect times out, and
 ``vision_judge`` allows 120s per call. An equivalence run spent eighteen minutes against that

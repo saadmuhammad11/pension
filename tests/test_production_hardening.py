@@ -225,12 +225,12 @@ class F5AndF6Logins(_Fixture):
         from api.departments import DEPARTMENTS
         names = [d.slug for d in DEPARTMENTS]
         for i in range(auth.ADDRESS_MAX_FAILURES):
-            self.assertEqual(self._fail(names[i % len(names)], "10.9.9.9").status_code, 401)
-        self.assertEqual(self._fail(names[0], "10.9.9.9").status_code, 429)
-        self.assertEqual(self._fail(names[0], "10.9.9.10").status_code, 401)      # another address is not locked
+            self.assertEqual(self._fail(names[i % len(names)], "203.0.113.9").status_code, 401)
+        self.assertEqual(self._fail(names[0], "203.0.113.9").status_code, 429)
+        self.assertEqual(self._fail(names[0], "203.0.113.10").status_code, 401)      # another address is not locked
 
     def test_sign_ins_and_refusals_are_on_the_audit_trail(self) -> None:
-        self._fail("agriculture", "10.1.1.1")
+        self._fail("agriculture", "203.0.113.1")
         self.login("admin", "ag")
         conn = db.connect()
         rows = conn.execute("SELECT action, entity_id, ip FROM audit_log WHERE action LIKE 'LOGIN%' ORDER BY at").fetchall()
@@ -238,7 +238,7 @@ class F5AndF6Logins(_Fixture):
         actions = {(r["action"], r["entity_id"] if r["action"] != "LOGIN" else "") for r in rows}
         self.assertIn(("LOGIN_FAILED", "agriculture"), actions)
         self.assertIn(("LOGIN", ""), actions)
-        self.assertIn("10.1.1.1", {r["ip"] for r in rows})
+        self.assertIn("203.0.113.1", {r["ip"] for r in rows})
 
 
 class F7SheetNotServedInProduction(_Fixture):

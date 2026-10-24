@@ -11,7 +11,7 @@
 Description=Qwen3-Embedding-4B (vLLM, OpenAI API) on :8093
 After=network-online.target remote-fs.target
 Wants=network-online.target
-# /models is an NFS export from spark-46ef reached through x-systemd.automount.
+# /models is an NFS export from reasoning-host reached through x-systemd.automount.
 #
 # Deliberately NOT a hard mount requirement. That is a Requires= on models.mount, and on
 # 2026-09-04 the boot-time mount lost its race with 46ef/the network and exited 32; systemd then

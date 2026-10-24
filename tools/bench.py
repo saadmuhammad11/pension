@@ -330,7 +330,7 @@ def main(argv: list[str]) -> int:
     os.environ.setdefault("PENSION_VISION_URL", MODELS["vision"] + "/v1/chat/completions")
     os.environ.setdefault("PENSION_OCR_URL", MODELS["ocr"] + "/v1/chat/completions")
     os.environ.setdefault("PENSION_EMBED_URL", MODELS["embed"] + "/v1/embeddings")
-    os.environ.setdefault("GPF_VLLM_URLS", ",".join(MODELS.values()) + ",http://192.168.101.10:8001")
+    os.environ.setdefault("GPF_VLLM_URLS", ",".join(MODELS.values()) + ",http://reasoning-host.internal:8001")
     from api import db, runs
     db.migrate()
     runs.ARTIFACTS = bench_dir / "artifacts"; runs.UPLOADS = runs.ARTIFACTS / "uploads"

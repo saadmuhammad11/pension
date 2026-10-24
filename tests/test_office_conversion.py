@@ -149,7 +149,7 @@ class RefusedAtUpload(unittest.TestCase):
         self.assertIn("is not really a .doc file",
                       _document_problem("notice.doc", b"\xd0\xcf\x11\xe0 not really OLE <html>"[:4] + b"<html>"))
         self.assertIn("links to files", _document_problem(
-            "letter.docx", _docx(_PICTURE, (_IMAGE_TYPE, "http://10.0.0.1/x.png"))))
+            "letter.docx", _docx(_PICTURE, (_IMAGE_TYPE, "http://203.0.113.1/x.png"))))
         self.assertIn("not a PDF, image", _document_problem("notice.html", b"<html><img src=x></html>"))
         self.assertIsNone(_document_problem("letter.docx", _docx()))
 

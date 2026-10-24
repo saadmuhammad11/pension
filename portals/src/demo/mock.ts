@@ -106,9 +106,9 @@ export function fresh(): DemoState {
   const users = makeUsers()
   const cases = seedCases(users)
   const audit = [
-    { id: newId(), at: new Date(Date.now() - 12 * 86_400_000).toISOString().slice(0, 19), actor_id: 'u-admin', actor_name: 'System Administrator', actor_role: 'ADMIN', action: 'CASE_OVERRIDE', entity_type: 'case', entity_id: cases[6].id, before: { status: 'APPROVED' }, after: { status: 'REJECTED' }, reason: 'Approval recorded on the wrong file; corrected on the DAO\'s note.', ip: '10.170.1.20' },
-    { id: newId(), at: new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 19), actor_id: 'u-admin', actor_name: 'System Administrator', actor_role: 'ADMIN', action: 'USER_CREATE', entity_type: 'user', entity_id: 'u-higher-education', before: null, after: { username: 'higher-education', role: 'DEPT_OFFICER', department_code: 'HIGHER_EDUCATION' }, reason: '', ip: '10.170.1.20' },
-    { id: newId(), at: new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 19), actor_id: 'u-admin', actor_name: 'System Administrator', actor_role: 'ADMIN', action: 'USER_RESET_PASSWORD', entity_type: 'user', entity_id: 'u-irrigation', before: null, after: null, reason: 'Officer transferred; new incumbent.', ip: '10.170.1.20' },
+    { id: newId(), at: new Date(Date.now() - 12 * 86_400_000).toISOString().slice(0, 19), actor_id: 'u-admin', actor_name: 'System Administrator', actor_role: 'ADMIN', action: 'CASE_OVERRIDE', entity_type: 'case', entity_id: cases[6].id, before: { status: 'APPROVED' }, after: { status: 'REJECTED' }, reason: 'Approval recorded on the wrong file; corrected on the DAO\'s note.', ip: '203.0.113.20' },
+    { id: newId(), at: new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 19), actor_id: 'u-admin', actor_name: 'System Administrator', actor_role: 'ADMIN', action: 'USER_CREATE', entity_type: 'user', entity_id: 'u-higher-education', before: null, after: { username: 'higher-education', role: 'DEPT_OFFICER', department_code: 'HIGHER_EDUCATION' }, reason: '', ip: '203.0.113.20' },
+    { id: newId(), at: new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 19), actor_id: 'u-admin', actor_name: 'System Administrator', actor_role: 'ADMIN', action: 'USER_RESET_PASSWORD', entity_type: 'user', entity_id: 'u-irrigation', before: null, after: null, reason: 'Officer transferred; new incumbent.', ip: '203.0.113.20' },
   ]
   return { users, cases, tokens: {}, audit, liveRun: null, speed: 1 }
 }
@@ -334,7 +334,7 @@ async function handle(req: Request): Promise<Response> {
       const to = { approve: 'APPROVED', reject: 'REJECTED', return: 'RETURNED', 'request-docs': 'DOCS_REQUESTED' }[rest]!
       return act(rest.toUpperCase().replace('-', '_') === 'REQUEST_DOCS' ? 'REQUEST_DOCS' : rest.toUpperCase(), to)
     }
-    if (rest === 'override') { if (!remark) return fail(422, 'a reason is required'); const to = body.to_status ?? c.status; state.audit.unshift({ id: newId(), at: now(), actor_id: u.id, actor_name: u.display_name, actor_role: u.role, action: 'CASE_OVERRIDE', entity_type: 'case', entity_id: c.id, before: { status: c.status }, after: { status: to }, reason: remark, ip: '10.170.1.20' }); return act('OVERRIDE', to) }
+    if (rest === 'override') { if (!remark) return fail(422, 'a reason is required'); const to = body.to_status ?? c.status; state.audit.unshift({ id: newId(), at: now(), actor_id: u.id, actor_name: u.display_name, actor_role: u.role, action: 'CASE_OVERRIDE', entity_type: 'case', entity_id: c.id, before: { status: c.status }, after: { status: to }, reason: remark, ip: '203.0.113.20' }); return act('OVERRIDE', to) }
     mm = rest.match(/^runs\/([^/]+)\/(.*)$/)
     if (mm) return runRoute(mm[1], mm[2])
     return fail(404, 'no such route')

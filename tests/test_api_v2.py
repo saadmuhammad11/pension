@@ -207,7 +207,7 @@ class V2Test(unittest.TestCase):
         # Punjab Police's officer at the School Education portal, and at the AG portal: refused,
         # told where to go. At their own portal: admitted, with the department's name.
         r = self.client.post("/api/v2/auth/login", json={"username": "punjab-police", "password": db.SEED_PASSWORD},
-                             headers={"X-Portal": "school-education", "Host": "10.0.0.5:5181"})
+                             headers={"X-Portal": "school-education", "Host": "203.0.113.5:5181"})
         self.assertEqual(r.status_code, 403)
         self.assertIn(":5184/", r.json()["detail"])
         r = self.client.post("/api/v2/auth/login", json={"username": "punjab-police", "password": db.SEED_PASSWORD},
@@ -567,12 +567,12 @@ class V2Test(unittest.TestCase):
         minute; the officer signing in from their own machine is unaffected."""
         for _ in range(5):
             self.client.post("/api/v2/auth/login", json={"username": "admin", "password": "nope"},
-                             headers={"X-Portal": "ag", "X-Forwarded-For": "10.9.9.9"})
+                             headers={"X-Portal": "ag", "X-Forwarded-For": "203.0.113.9"})
         r = self.client.post("/api/v2/auth/login", json={"username": "admin", "password": db.SEED_PASSWORD},
-                             headers={"X-Portal": "ag", "X-Forwarded-For": "10.9.9.9"})
+                             headers={"X-Portal": "ag", "X-Forwarded-For": "203.0.113.9"})
         self.assertEqual(r.status_code, 429)
         r = self.client.post("/api/v2/auth/login", json={"username": "admin", "password": db.SEED_PASSWORD},
-                             headers={"X-Portal": "ag", "X-Forwarded-For": "10.1.1.1"})
+                             headers={"X-Portal": "ag", "X-Forwarded-For": "203.0.113.1"})
         self.assertEqual(r.status_code, 200)
 
     def test_a_department_token_opens_no_other_department_run(self) -> None:

@@ -29,7 +29,7 @@ import unittest
 import urllib.error
 import urllib.request
 
-VISION_HEALTH = "http://192.168.1.1:8011/health"
+VISION_HEALTH = "http://model-host.internal:8011/health"
 # Rendered into a temporary folder, never into the tree: a stale render under tests/fixtures/
 # kept a real claimant's name after the code was scrubbed (found 7 Oct 2026, N12).
 

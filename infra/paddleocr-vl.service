@@ -9,7 +9,7 @@ Documentation=file:/opt/pension/current/infra/serve-paddleocr-vl.sh
 After=network-online.target remote-fs.target
 Wants=network-online.target
 
-# /models is an x-systemd.automount NFS export from spark-46ef (192.168.100.10).
+# /models is an x-systemd.automount NFS export from reasoning-host (reasoning-host.internal).
 # Without this the boot-time start races the automount and the script's preflight
 # dies with "model path not found".
 # 2026-09-30: was RequiresMountsFor=/models. That is a HARD dependency: on the 27 Sep
@@ -61,7 +61,7 @@ Environment=GPU_MEM_UTIL=0.08
 # NOTE: invoked WITHOUT --detach, so it stays in the foreground under systemd.
 # Wait up to 300 s for the weights to be readable (ls triggers the automount), then start.
 # If they never appear the start fails and Restart= retries it -- no more silent 'dead'.
-ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do ls /models/ >/dev/null 2>&1; [ -r /models/paddleocr-vl-1.6/config.json ] && exit 0; sleep 2; done; echo "/models not readable after 300s - is spark-46ef up and exporting?" >&2; exit 1'
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do ls /models/ >/dev/null 2>&1; [ -r /models/paddleocr-vl-1.6/config.json ] && exit 0; sleep 2; done; echo "/models not readable after 300s - is reasoning-host up and exporting?" >&2; exit 1'
 ExecStart=/opt/pension/current/infra/serve-paddleocr-vl.sh
 
 # Health gate, inlined. The "-" prefix makes a non-zero exit non-fatal, so a slow

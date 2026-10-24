@@ -12,7 +12,7 @@
 #   BACKUP_DIR=/tmp/t deploy/backup-db.sh             # somewhere else, to try it
 #
 # Settings live in /etc/pension/backup.conf, which is optional:
-#   BACKUP_OFFSITE        rsync destination, e.g. agbackup@10.28.8.9:/srv/backups/pension/
+#   BACKUP_OFFSITE        rsync destination, e.g. agbackup@backup-host.internal:/srv/backups/pension/
 #                         Unset means local only, and the script says so every night.
 #   BACKUP_SSH_KEY        private key for that destination (default /root/.ssh/id_ed25519)
 #   BACKUP_INCLUDE_ENV    1 to include /etc/pension/pension.env, which holds the database

@@ -56,7 +56,7 @@ from extraction import envfile as _envfile
 
 EMBED_ENDPOINT = _envfile.endpoint("PENSION_EMBED_URL", "embedding")
 EMBED_MODEL = "qwen3-embedding-4b"
-#: Spark-1, over the direct cable (was 10.170.0.240, then 192.168.100.10, until 1 Oct 2026).
+#: Spark-1, over the direct cable (was reasoning-host.internal, then reasoning-host.internal, until 1 Oct 2026).
 RERANK_ENDPOINT = (_envfile.endpoint("PENSION_RERANK_URL", "rerank")
                    or os.environ.get("AGPB_RERANK_ENDPOINT") or "")
 RERANK_MODEL = "qwen3-reranker-4b"

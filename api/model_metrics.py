@@ -1,7 +1,7 @@
 """What the model servers are doing, read from their own ``/metrics``.
 
 Until 18 Oct 2026 the models ran on the same box as the pipeline (``infra/serve-qwen3-vl.sh``:
-"WHERE IT RUNS: spark-3369"), so ``nvidia-smi`` on this host measured the thing doing the work.
+"WHERE IT RUNS: vision-host"), so ``nvidia-smi`` on this host measured the thing doing the work.
 Since the move to the Ascend NPU server the models are reached over the network, and a device
 query here measures the wrong machine -- it reports nothing at all, which is worse than a wrong
 number because it looks like an idle GPU rather than a missing one.

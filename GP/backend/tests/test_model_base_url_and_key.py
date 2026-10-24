@@ -26,13 +26,13 @@ from gpf.clients.model_client import VllmModelClient, _server_root
 
 class TestTheBaseUrlIsAccepptedEitherWay:
     @pytest.mark.parametrize("given", [
-        "http://10.28.8.143:8000",
-        "http://10.28.8.143:8000/",
-        "http://10.28.8.143:8000/v1",
-        "http://10.28.8.143:8000/v1/",
+        "http://model-host.internal:8000",
+        "http://model-host.internal:8000/",
+        "http://model-host.internal:8000/v1",
+        "http://model-host.internal:8000/v1/",
     ])
     def test_every_spelling_resolves_to_the_server_root(self, given):
-        assert _server_root(given) == "http://10.28.8.143:8000"
+        assert _server_root(given) == "http://model-host.internal:8000"
 
     def test_the_client_holds_the_root_whatever_it_was_given(self):
         c = VllmModelClient("http://h:8000/v1", api_key="k")

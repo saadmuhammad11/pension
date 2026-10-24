@@ -1,4 +1,4 @@
-# /etc/systemd/system/qwen3-reranker.service   -- DEPLOYS TO spark-46ef (10.170.0.240)
+# /etc/systemd/system/qwen3-reranker.service   -- DEPLOYS TO reasoning-host (reasoning-host.internal)
 #
 # Qwen3-Reranker-4B — cross-encoder rescoring of embedding-retrieved candidates.
 # Endpoints: POST /v1/rerank, /v2/rerank, /rerank, /v1/score, /score

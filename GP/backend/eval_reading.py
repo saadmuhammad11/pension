@@ -18,8 +18,8 @@ from gpf.clients import VllmModelClient
 from gpf.fixtures import CASES, load_case
 from gpf.reading import Page, ReadingPipeline
 
-ENDPOINTS = ["http://10.170.1.143:8011", "http://10.170.1.143:8012",
-             "http://10.170.1.143:8093", "http://10.170.0.240:8001"]
+ENDPOINTS = ["http://vision-host.internal:8011", "http://vision-host.internal:8012",
+             "http://vision-host.internal:8093", "http://reasoning-host.internal:8001"]
 
 
 def status_map(results):

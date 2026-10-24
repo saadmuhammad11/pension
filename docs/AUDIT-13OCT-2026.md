@@ -72,10 +72,10 @@ cannot have yet (it keeps the shared passwords and the sign-in sheet — C-01, C
 
 **Reproduce.**
 ```
-curl -s http://10.170.1.143:5184/start.html | head -40
+curl -s http://vision-host.internal:5184/start.html | head -40
 ```
 
-**Evidence (measured today).** The page returns HTTP 200 from all three of this box's addresses — `10.170.1.143`, `192.168.100.11`, `192.168.101.11`. It lists **105 accounts** and the string `1234` appears **103 times**. The accounts include `admin` (Administrator), `ag.reviewer` (the AG desk), all fifteen tier accounts and every department DDO. The file on disk is correctly `0600`; this route is what defeats that.
+**Evidence (measured today).** The page returns HTTP 200 from all three of this box's addresses — `vision-host.internal`, `vision-host.internal`, `vision-host.internal`. It lists **105 accounts** and the string `1234` appears **103 times**. The accounts include `admin` (Administrator), `ag.reviewer` (the AG desk), all fifteen tier accounts and every department DDO. The file on disk is correctly `0600`; this route is what defeats that.
 
 **Suggested fix.** Delete the route, or put it behind the same check `/api/v2/admin/credentials` already uses (`require_roles("ADMIN")`, with each read audited). This was item 1 of the 12 October audit and is still open.
 
