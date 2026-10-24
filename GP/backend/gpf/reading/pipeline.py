@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from ..clients.model_client import ExtractedField, ModelClient
+from . import sanction_claim
 from .artefacts import Artefact
 from .barcodes import BarcodeDecoder, DecodedCode, NullBarcodeDecoder
 
@@ -208,6 +209,21 @@ class ReadingPipeline:
                 with timing.stage("classify", page=pg.number):
                     cls = self.model.classify_document(pg.image_ref)
                 artefact = str(cls.value)
+                # A page claimed as the sanction is asked to show that it is one. Two classes
+                # describe a page with a QR code and only one is the sanction, so the back of
+                # a smart CNIC was read as SANCTION_ORDER_QR at 0.95 and the case recorded its
+                # sanction there (PC-2026-000070 page 8, 24 Oct 2026). See reading.sanction_claim
+                # for what settles it and why a page that did not read keeps its classification.
+                if sanction_claim.is_a_sanction_claim(artefact):
+                    try:
+                        settled, why = sanction_claim.settle(artefact, self.model.ocr_text(pg.image_ref))
+                    except Exception:                      # noqa: BLE001 -- the reading stands
+                        settled, why = artefact, ""
+                    if settled != artefact:
+                        out["needs_human"].append({"page": pg.number, "artefact": artefact,
+                                                   "field": "document type", "confidence": cls.confidence,
+                                                   "threshold": cls.confidence, "why": why})
+                        artefact = settled
                 # stage 4: extract fields for this artefact type
                 try:
                     art_enum = Artefact(artefact)
