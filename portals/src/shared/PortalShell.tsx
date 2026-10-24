@@ -15,10 +15,12 @@
  *                  #/pension/new    #/gpf/new      a new case (where the role may create one)
  *                  #/pension/cases/:id  ·  #/gpf/cases/:id   one case, under its product (…/analysis: on the findings)
  *                  #/cases/:id            the older address; opens, then moves to the product's own
+ *                  #/account              the senior desks' own password and login name
  *                  #/users  #/audit       administration
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { AuthProvider, useSession } from './auth/AuthProvider'
+import { MyAccount, MAY_MANAGE_OWN_PROFILE } from './screens/MyAccount'
 import { Header } from './components/Header'
 import { Footer } from './components/Footer'
 import { ToastProvider } from './components/Toast'
@@ -207,6 +209,8 @@ function Shell({ config }: { config: PortalConfig }) {
     const id = m.id, analysis = cleanPath.endsWith('/analysis')
     body = <CaseDetail key={id} caseId={id} onBack={back} initialTab={analysis ? 'AI findings' : undefined}
                        onProduct={p => navigate(caseHref(p, id, analysis), { replace: true })} />
+  } else if (cleanPath === '/account' && MAY_MANAGE_OWN_PROFILE.includes(user.role)) {
+    body = <MyAccount />
   } else if (cleanPath === '/users' && can.manage_users) {
     body = <Users />
   } else if (cleanPath === '/audit' && can.audit_log) {

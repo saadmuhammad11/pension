@@ -167,6 +167,54 @@ def change_password(body: dict = Body(...), request: Request = None, user: User 
     return {"token": issue_token(changed), "user": changed.to_dict(), "capabilities": capabilities(changed)}
 
 
+#: Who may change their own username. The senior officers hold a login in their own name and
+#: no administrator sits above them in the office, so asking one to correct their own spelling
+#: is a detour through a junior desk (24 Oct 2026). A DDO's login is its department's slug and
+#: the department is what it identifies, so that one stays the administrator's.
+MAY_RENAME_SELF = ("AG_DAG", "AG_REVIEWER", "AG_ADDL")
+
+
+@router.post("/auth/username")
+def change_own_username(body: dict = Body(...), request: Request = None, user: User = Depends(current_user),
+                        conn: db.Connection = Depends(get_conn)) -> dict:
+    """Change your own login name.
+
+    The same rules the administrator's rename follows (admin/users/{id}/username), and the
+    current password besides: a username is how the officer is known, and a session left
+    unattended must not be able to rename the account it is signed in to.
+
+    Every session ends, this one included, so the officer signs in again under the name they
+    just chose -- the token names the account as it was. The audit entry is the officer's own.
+    """
+    from api.auth import _attempt_key, _locked, _note_failure, verify_password
+    if user.role not in MAY_RENAME_SELF:
+        raise HTTPException(403, "the administrator changes a login name for this desk")
+    key = _attempt_key(f"rename:{user.username}", _client_address(request))
+    if _locked(conn, key):
+        raise HTTPException(429, "too many wrong attempts; try again in a minute")
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (user.id,)).fetchone()
+    if not verify_password(str(body.get("password", "")), row["password_hash"]):
+        _note_failure(conn, key); conn.commit()
+        raise HTTPException(403, "the password is wrong")
+    username = str(body.get("username", "")).strip().lower()
+    was = row["username"]
+    if not re.fullmatch(r"[a-z0-9._-]{3,40}", username):
+        raise HTTPException(422, "username: 3-40 characters, letters, digits, . _ -")
+    if username == was:
+        raise HTTPException(422, "that is the username the account already has")
+    if username in SHARED_LOGINS and settings.production():
+        raise HTTPException(422, "a login carries the officer's own name (decision C1)")
+    if conn.execute("SELECT 1 FROM users WHERE username = ? AND id <> ?", (username, user.id)).fetchone():
+        raise HTTPException(409, "that username is taken")
+    with db.transaction(conn):
+        conn.execute("UPDATE users SET username = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?",
+                     (username, db.now(), user.id))
+        workflow.audit(conn, actor=user, action="USER_RENAME", entity_type="user", entity_id=user.id,
+                       ip=_client_address(request), before={"username": was}, after={"username": username},
+                       reason="changed by the officer")
+    return {"username": username}
+
+
 #: The cookie the GP Fund frame signs in with. Path /gpf only, so it travels with the frame's
 #: requests and with nothing else; HttpOnly, so the module's page cannot read it; SameSite=Strict,
 #: so another site cannot make a browser send it.

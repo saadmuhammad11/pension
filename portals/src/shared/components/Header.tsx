@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react'
 import type { Theme } from '../theme/types'
 import type { SessionUser } from '../auth/session'
+import { MAY_MANAGE_OWN_PROFILE } from '../screens/MyAccount'
 
 export const Crest = ({ size = 48 }: { size?: number }) => (
   // The State Emblem of Pakistan, supplied by the office 22 Oct 2026, replacing the drawn
@@ -51,6 +52,11 @@ export function Header(
               <div className="whoami-name">{user.display_name}</div>
               {roleLine !== user.display_name && <div className="whoami-role">{roleLine}</div>}
             </div>
+            {/* The senior desks manage their own password and login name; every other
+                account stays the administrator's (MyAccount.MAY_MANAGE_OWN_PROFILE). */}
+            {onLogout && MAY_MANAGE_OWN_PROFILE.includes(user.role) && (
+              <a href="#/account" title="My account" className="header-cta ghost-cta"
+                 style={{ textDecoration: 'none' }}>My account</a>)}
             {onLogout && <button onClick={onLogout} title="Sign out" className="header-cta ghost-cta">Sign out</button>}
           </div>
         )}
