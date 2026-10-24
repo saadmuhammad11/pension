@@ -100,3 +100,35 @@ class Dedupe(unittest.TestCase):
         self.write("run-aaaaaaaaaaaa/pages/p001.png")
         self.write("run-bbbbbbbbbbbb/pages/p001.png")
         self.assertEqual(runs.link_duplicates()["linked"], 0)
+
+
+class RefusalIsCountedNotSwallowed(Dedupe):
+    """fs.protected_hardlinks (on by default) refuses a link to a file the caller neither owns
+    nor may write. The service runs as `pension`; if part of the tree ever drifted out of that
+    ownership the pass would do nothing, for ever, in silence. So a refusal is counted and the
+    housekeeping line says so.
+    """
+
+    def test_a_file_that_cannot_be_linked_is_reported(self) -> None:
+        import os
+        self.write("cases/PC-1/a.pdf")
+        other = self.write("run-aaaaaaaaaaaa/bundle/case.pdf")
+        real = os.link
+
+        def refuse(src, dst):
+            raise PermissionError(1, "Operation not permitted")
+
+        os.link = refuse
+        try:
+            done = runs.link_duplicates()
+        finally:
+            os.link = real
+        self.assertEqual(done["linked"], 0)
+        self.assertEqual(done["refused"], 1)
+        self.assertTrue(other.is_file(), "and the file it could not link is left as it was")
+        self.assertFalse(other.with_name(other.name + ".linking").exists(), "no half-made link")
+
+    def test_a_clean_run_reports_no_refusals(self) -> None:
+        self.write("cases/PC-1/a.pdf")
+        self.write("run-aaaaaaaaaaaa/bundle/case.pdf")
+        self.assertEqual(runs.link_duplicates()["refused"], 0)

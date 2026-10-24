@@ -672,9 +672,10 @@ def start_reconciler(interval_s: float = 3.0) -> None:
                         # four or five names (api.runs.link_duplicates, 24 Oct 2026). Nothing
                         # is removed; the copies become one file.
                         linked = link_duplicates()
-                        if linked["linked"]:
+                        if linked["linked"] or linked["refused"]:
                             print(f"[case_runs] linked {linked['linked']} duplicate artefact(s) "
-                                  f"in {linked['groups']} group(s), {linked['bytes'] >> 20} MB")
+                                  f"in {linked['groups']} group(s), {linked['bytes'] >> 20} MB"
+                                  + (f"; {linked['refused']} refused (ownership?)" if linked["refused"] else ""))
                 finally:
                     conn.close()
             except Exception as exc:                        # noqa: BLE001

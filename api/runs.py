@@ -248,7 +248,7 @@ def link_duplicates(now: datetime | None = None) -> dict[str, int]:
     """
     now = now or datetime.now()
     settled = (now - timedelta(hours=1)).timestamp()
-    done = {"groups": 0, "linked": 0, "bytes": 0}
+    done = {"groups": 0, "linked": 0, "bytes": 0, "refused": 0}
     if not ARTIFACTS.is_dir():
         return done
 
@@ -301,6 +301,10 @@ def link_duplicates(now: datetime | None = None) -> dict[str, int]:
                     group_linked += 1
                     done["bytes"] += size
                 except OSError:
+                    # Counted, not swallowed. fs.protected_hardlinks refuses a link to a file
+                    # the caller does not own and cannot write, so a tree that drifted out of
+                    # the service account's ownership would otherwise fail silently for ever.
+                    done["refused"] += 1
                     with contextlib.suppress(OSError):
                         other.with_name(other.name + ".linking").unlink()
                     continue
