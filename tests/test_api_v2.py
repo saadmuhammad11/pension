@@ -367,6 +367,46 @@ class V2Test(unittest.TestCase):
             stats = self.client.get("/api/v2/stats?product=PENSION", headers=self.login(who, "ag")).json()
             self.assertIn("by_desk", stats, who)
 
+    def test_the_filings_come_by_day_as_well_as_by_week(self) -> None:
+        """"Cases filed over time" was ten weeks and nothing else, which is the wrong grain at
+        both ends: a week hides the day a batch arrived, and ten of them is too short a run to
+        show a season. The office asked for a picker (25 Oct 2026), so the screen is sent DAYS
+        and buckets them itself -- a change of period then costs no request. Only days that
+        saw something are sent, so a register of any size adds a handful of rows, not four
+        hundred mostly-nil ones.
+        """
+        from datetime import date, timedelta
+        admin = self.login("admin", "ag")
+        dept = self.login("punjab-police", "punjab-police")
+        self.create(dept)
+        s = self.client.get("/api/v2/stats?product=PENSION", headers=admin).json()
+
+        self.assertIn("days", s)
+        self.assertEqual(len(s["weeks"]), 12, "the weekly series stays for what already reads it")
+        for d in s["days"]:
+            self.assertEqual(set(d), {"day", "filed", "decided"})
+            date.fromisoformat(d["day"])                     # a real date, not a week label
+            self.assertTrue(d["filed"] or d["decided"], f"an empty day was sent: {d}")
+
+        days = [d["day"] for d in s["days"]]
+        self.assertEqual(days, sorted(days), "oldest first")
+        self.assertGreaterEqual(date.fromisoformat(days[0]), date.today() - timedelta(days=400))
+        self.assertEqual(days[-1], date.today().isoformat(), "the case just filed is today's")
+
+        # Two code paths over one table. If they ever disagree, the same card shows one number
+        # weekly and another daily.
+        first_week = date.fromisoformat(s["weeks"][0]["week"])
+        self.assertEqual(sum(w["filed"] for w in s["weeks"]),
+                         sum(d["filed"] for d in s["days"]
+                             if date.fromisoformat(d["day"]) >= first_week))
+
+    def test_a_department_sees_its_own_days_and_no_one_else_s(self) -> None:
+        """The new series is scoped exactly as every other figure on the dashboard is."""
+        self.create(self.login("punjab-police", "punjab-police"))
+        other = self.client.get("/api/v2/stats?product=PENSION",
+                                headers=self.login("school-education", "school-education")).json()
+        self.assertEqual(sum(d["filed"] for d in other["days"]), 0)
+
     # -- scoping ----------------------------------------------------------------------------
 
     def test_a_department_sees_only_its_own_cases(self) -> None:

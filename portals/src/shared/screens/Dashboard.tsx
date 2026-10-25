@@ -13,7 +13,7 @@
  *  Colour means one thing everywhere: blue = with the Accountant General, green = approved,
  *  red = rejected, amber = sent back, slate = still with the department.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { downloadMonthlyRegister, fetchStats, recentMonths, type Ageing, type Product, type Stats } from '../api/cases'
 import { useInventoryTick } from '../data/inventory'
 import { Bars, ChartCard, Columns, Donut, Gauge, SplitBars } from '../charts/Charts'
@@ -37,22 +37,78 @@ export function useStats(department?: string | null, product?: Product, pensionS
 }
 
 const fmtN = (n: number) => n.toLocaleString('en-PK')
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const plural = (n: number, w: string) => `${fmtN(n)} ${w}${n === 1 ? '' : 's'}`
 
-/** Cases filed each week, the last ten weeks, newest on the right. */
+/** How many periods each frequency shows, and what a column of it is called. */
+const PERIODS = {
+  daily: { label: 'Daily', columns: 30, word: 'days', now: 'today' },
+  weekly: { label: 'Weekly', columns: 10, word: 'weeks', now: 'this week' },
+  monthly: { label: 'Monthly', columns: 12, word: 'months', now: 'this month' },
+} as const
+type Period = keyof typeof PERIODS
+
+/** The first day of the period a date falls in. */
+function bucketOf(d: Date, period: Period): Date {
+  const b = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  if (period === 'weekly') b.setDate(b.getDate() - ((b.getDay() + 6) % 7))   // Monday
+  if (period === 'monthly') b.setDate(1)
+  return b
+}
+
+function stepBack(d: Date, period: Period, n: number): Date {
+  const b = new Date(d)
+  if (period === 'daily') b.setDate(b.getDate() - n)
+  if (period === 'weekly') b.setDate(b.getDate() - 7 * n)
+  if (period === 'monthly') b.setMonth(b.getMonth() - n)
+  return b
+}
+
+/** Cases filed over time, newest on the right, at whichever frequency the officer picks.
+ *
+ *  Weekly only until 25 Oct 2026, which is the wrong grain at both ends: a week hides the
+ *  day a batch arrived, and ten of them is too short a run to show a season. The server
+ *  sends every day that saw something over thirteen months (api/v2 stats "days") and the
+ *  bucketing is done here, so changing the period costs no request.
+ */
 function FiledCard({ stats }: { stats: Stats }) {
-  const weeks = stats.weeks.slice(-10)
-  const total = weeks.reduce((n, w) => n + w.filed, 0)
-  const data = weeks.map((w, i) => {
-    const d = new Date(w.week + 'T00:00:00')
-    const short = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-    // Every other week is labelled; ten labels in a card's width would clip into fragments.
-    const last = i === weeks.length - 1
-    return { label: last ? 'this week' : (weeks.length - 1 - i) % 2 === 0 ? short : '', value: w.filed, color: 'var(--ramp-2)', title: `Week of ${short}` }
+  const [period, setPeriod] = useState<Period>('weekly')
+  const { columns, word, now } = PERIODS[period]
+  const buckets = useMemo(() => {
+    const end = bucketOf(new Date(), period)
+    const keys: string[] = []
+    for (let i = columns - 1; i >= 0; i--) keys.push(iso(stepBack(end, period, i)))
+    const filed = new Map(keys.map(k => [k, 0]))
+    for (const d of stats.days ?? []) {
+      const k = iso(bucketOf(new Date(d.day + 'T00:00:00'), period))
+      if (filed.has(k)) filed.set(k, filed.get(k)! + d.filed)
+    }
+    return keys.map(k => ({ key: k, filed: filed.get(k)! }))
+  }, [stats.days, period, columns])
+
+  const total = buckets.reduce((n, b) => n + b.filed, 0)
+  // Labels thin out as the columns multiply: thirty of them in a card's width would clip
+  // into fragments, so every other week is named and only every fifth day.
+  const every = period === 'daily' ? 5 : period === 'weekly' ? 2 : 1
+  const data = buckets.map((b, i) => {
+    const d = new Date(b.key + 'T00:00:00')
+    const short = period === 'monthly'
+      ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+      : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    const last = i === buckets.length - 1
+    return { label: last ? now : (buckets.length - 1 - i) % every === 0 ? short : '',
+             value: b.filed, color: 'var(--ramp-2)',
+             title: period === 'weekly' ? `Week of ${short}` : short }
   })
+  const picker = (
+    <select className="chart-period" aria-label="How often to group the cases"
+            value={period} onChange={e => setPeriod(e.target.value as Period)}>
+      {(Object.keys(PERIODS) as Period[]).map(k => <option key={k} value={k}>{PERIODS[k].label}</option>)}
+    </select>
+  )
   return (
-    <ChartCard title="Cases filed over time" sub={`last ${weeks.length} weeks · ${plural(total, 'case')}`}
-               table={{ head: ['Week beginning', 'Filed', 'Decided'], rows: weeks.map(w => [w.week, w.filed, w.decided]) }}>
+    <ChartCard title="Cases filed over time" sub={`last ${columns} ${word} · ${plural(total, 'case')}`}
+               control={picker}>
       {total ? <Columns data={data} height={168} unit="filed" /> : <div className="empty">No case filed in this period.</div>}
     </ChartCard>
   )
@@ -63,8 +119,7 @@ function DepartmentsCard({ stats }: { stats: Stats }) {
   const byTotal = [...stats.by_department].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
   const rows = byTotal.map(d => ({ label: d.name, values: [d.awaiting, d.total - d.awaiting], sub: d.awaiting ? `${d.awaiting} awaiting` : undefined }))
   return (
-    <ChartCard title="Department caseload" sub={`${plural(byTotal.length, 'department')} · ${plural(stats.total, 'case')} · dark = awaiting your decision`} className="span-2"
-               table={{ head: ['Department', 'Cases', 'Approved', 'Rejected', 'Awaiting decision'], rows: byTotal.map(d => [d.name, d.total, d.approved, d.rejected ?? 0, d.awaiting]) }}>
+    <ChartCard title="Department caseload" sub={`${plural(byTotal.length, 'department')} · ${plural(stats.total, 'case')} · dark = awaiting your decision`} className="span-2">
       {rows.length
         ? <div className="dept-bars"><SplitBars rows={rows} series={[{ name: 'Awaiting decision', color: 'var(--ramp-1)' }, { name: 'Other', color: 'var(--ramp-4)' }]} height={30} /></div>
         : <div className="empty">No case filed yet.</div>}
@@ -85,8 +140,7 @@ function AgeCard({ ageing, title, waitingWord }: { ageing: Ageing | undefined; t
   const data = AGE_BUCKETS.map(b => ({ label: b.label, value: ageing.buckets[b.key], color: b.color }))
   return (
     <ChartCard title={title} sub={ageing.total ? `${fmtN(ageing.total)} ${waitingWord} · oldest ${plural(ageing.oldest_days, 'day')}` : `Nothing ${waitingWord}`}
-               footer={ageing.oldest_case && ageing.oldest_days > 7 ? `Longest waiting: ${ageing.oldest_case}.` : undefined}
-               table={{ head: ['Waiting', 'Cases'], rows: data.map(d => [d.label, d.value]) }}>
+               footer={ageing.oldest_case && ageing.oldest_days > 7 ? `Longest waiting: ${ageing.oldest_case}.` : undefined}>
       {ageing.total ? <div className="age-bars"><Bars data={data} height={34} /></div> : <div className="empty">No case is waiting.</div>}
     </ChartCard>
   )
@@ -100,8 +154,7 @@ function TimeToDecisionCard({ stats }: { stats: Stats }) {
   const pct = stats.decided_total && within != null ? Math.round(within / stats.decided_total * 100) : null
   const color = avg == null ? 'var(--viz-neutral)' : avg <= target ? 'var(--viz-good)' : avg <= target * 1.5 ? 'var(--viz-warn)' : 'var(--viz-bad)'
   return (
-    <ChartCard title="Time to decision" sub={`average against the ${target}-day target`}
-               table={{ head: ['Measure', 'Value'], rows: [['Average days, filing to decision', avg ?? '—'], ['Cases decided', stats.decided_total], [`Decided within ${target} days`, within ?? '—']] }}>
+    <ChartCard title="Time to decision" sub={`average against the ${target}-day target`}>
       {avg == null
         ? <div className="empty">The Office of the Accountant General has not decided a case yet.</div>
         : <Gauge value={avg} max={target} unit="days avg" color={color} label={`Average ${avg} days to decision against a ${target}-day target`}
@@ -167,10 +220,7 @@ function DesksCard({ stats }: { stats: Stats }) {
   return (
     <ChartCard title="Where cases are waiting" className="span-2"
                sub={waiting ? `${plural(waiting, 'case')} with the office · ${stuck} waiting over a week` : 'No case is with the office'}
-               footer={worst?.oldest_case ? `Longest wait: ${worst.oldest_case}, ${plural(worst.oldest_days, 'day')} at the ${worst.label}.` : undefined}
-               table={{ head: ['Desk', 'Cases', 'Over a week', 'Oldest'],
-                        rows: desks.map(d => [d.label, d.total, d.waiting_over_a_week,
-                                              d.oldest_case ? `${d.oldest_case} (${d.oldest_days}d)` : '—']) }}>
+               footer={worst?.oldest_case ? `Longest wait: ${worst.oldest_case}, ${plural(worst.oldest_days, 'day')} at the ${worst.label}.` : undefined}>
       {waiting
         ? <SplitBars series={[{ name: 'Waiting over a week', color: 'var(--viz-warn)' },
                               { name: 'Waiting up to a week', color: 'var(--viz-await)' }]}
@@ -214,8 +264,7 @@ export function Dashboard(
     : 'The Office of the Accountant General has not decided a case yet.'
   const decisions = (
     <ChartCard title={variant === 'department' ? 'Your cases and the Office of the Accountant General\'s decisions' : department ? 'This department\'s cases' : 'Decisions of the Office of the Accountant General'}
-               sub={`${plural(s.total, 'case')} in all`} footer={s.total ? decisionsFooter : undefined}
-               table={{ head: ['Standing', 'Cases'], rows: decisionParts.map(p => [p.label, p.value]) }}>
+               sub={`${plural(s.total, 'case')} in all`} footer={s.total ? decisionsFooter : undefined}>
       {s.total ? <Donut parts={decisionParts} centreLabel="cases" countUp /> : <div className="empty">No case filed yet.</div>}
     </ChartCard>
   )

@@ -674,6 +674,19 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
     filed = {w.isoformat(): 0 for w in weeks}
     decided = {w.isoformat(): 0 for w in weeks}
     since = weeks[0].isoformat()
+    # And the same thing by DAY, over thirteen months, so the screen can offer the figures
+    # daily and monthly as well as weekly (25 Oct 2026) without asking the server again each
+    # time the officer changes the period. Only days that saw something are sent -- the screen
+    # fills the gaps -- so this is a handful of rows on a register of any size, not 400.
+    day_since = (today - timedelta(days=396)).isoformat()
+    by_day: dict[str, dict[str, int]] = {}
+
+    def _day(key: str, which: str) -> None:
+        by_day.setdefault(key, {"filed": 0, "decided": 0})[which] += 1
+
+    for r in conn.execute(f"SELECT c.created_at FROM cases c WHERE {where} AND c.created_at >= ?",
+                          args + [day_since]):
+        _day(r["created_at"][:10], "filed")
     for r in conn.execute(f"SELECT c.created_at FROM cases c WHERE {where} AND c.created_at >= ?", args + [since]):
         d = date.fromisoformat(r["created_at"][:10]); k = (d - timedelta(days=d.weekday())).isoformat()
         if k in filed: filed[k] += 1
@@ -685,7 +698,8 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
                    "(x.action IN ('APPROVE', 'REJECT') OR (x.action = 'OVERRIDE' AND x.to_status IN ('APPROVED', 'REJECTED'))))")
     for r in conn.execute(
             f"SELECT e.at FROM case_events e JOIN cases c ON c.id = e.case_id WHERE {where} "
-            f"AND {decided_sql} AND e.at >= ?", args + [since]):
+            f"AND {decided_sql} AND e.at >= ?", args + [day_since]):
+        _day(r["at"][:10], "decided")
         d = date.fromisoformat(r["at"][:10]); k = (d - timedelta(days=d.weekday())).isoformat()
         if k in decided: decided[k] += 1
 
@@ -742,6 +756,7 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
         "total": sum(by_status.values()),
         "by_status": by_status,
         "weeks": [{"week": w.isoformat(), "filed": filed[w.isoformat()], "decided": decided[w.isoformat()]} for w in weeks],
+        "days": [{"day": k, "filed": v["filed"], "decided": v["decided"]} for k, v in sorted(by_day.items())],
         "by_department": by_department,
         "verdicts": verdicts,
         "high_flags": high_hist,

@@ -29,7 +29,11 @@
 .chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
 .chart-title { font-size: 15px; font-weight: 700; }
 .chart-sub { font-size: var(--t-small); color: var(--muted); }
-.chart-toggle { padding: 3px 10px; font-size: 11px; min-height: 0; border-radius: 999px; color: var(--muted); }
+/* The control slot at a card's top right: the period picker on "Cases filed over time".
+   A "Table" button stood here on every card until 25 Oct 2026. */
+.chart-period { padding: 3px 26px 3px 10px; font-size: var(--t-small); min-height: 0; border-radius: 999px;
+                color: var(--muted); border: 1px solid var(--line); background-color: #fff; }
+.chart-period:hover { color: var(--ink); border-color: var(--green3); }
 .chart-foot { margin-top: 8px; font-size: var(--t-small); color: var(--muted); }
 .chart-plot { position: relative; }
 
@@ -45,8 +49,6 @@
 .donut-legend .num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 480px) { .donut { justify-content: center; } .donut-legend { flex-basis: 100%; } }
 
-.chart-table { width: 100%; margin: 0; font-size: var(--t-small); }
-.chart-table th { font-size: 11px; }
 
 .chart-tip { position: absolute; z-index: 5; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12px; pointer-events: none; box-shadow: var(--shadow-2); white-space: nowrap; }
 .chart-tip-title { font-weight: 700; margin-bottom: 3px; }

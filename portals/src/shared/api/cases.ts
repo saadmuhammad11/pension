@@ -532,6 +532,9 @@ export interface Stats {
   total: number
   by_status: Record<CaseStatus, number>
   weeks: { week: string; filed: number; decided: number }[]
+  /** Every day that saw a filing or a decision, over thirteen months, oldest first.
+   *  The gaps are the days nothing happened; the screen fills them (25 Oct 2026). */
+  days: { day: string; filed: number; decided: number }[]
   by_department: { code: string; name: string; total: number; awaiting: number; approved: number; rejected?: number; sent_back: number }[]
   verdicts?: { FORWARD: number; RETURN_FOR_CORRECTION: number; HOLD: number; NONE: number }   // AG and admin only
   high_flags?: { '0': number; '1': number; '2': number; '3+': number }   // AG and admin only

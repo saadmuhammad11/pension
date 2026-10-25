@@ -206,6 +206,10 @@ function stats(u: User, department: string | null) {
   const decidedCases = cs.filter(c => ['APPROVED', 'REJECTED'].includes(c.status))
   return { scope: { role: u.role, department: u.role === 'DEPT_OFFICER' ? u.department_code : department }, total: cs.length, by_status,
     weeks: weeks.map((w, i) => ({ week: w.toISOString().slice(0, 10), filed: filed[i], decided: decided[i] })),
+    days: (() => { const by: Record<string, { filed: number; decided: number }> = {}
+      cs.forEach(c => { const k = c.created_at.slice(0, 10); (by[k] ??= { filed: 0, decided: 0 }).filed++ })
+      decidedCases.forEach(c => { const k = c.updated_at.slice(0, 10); (by[k] ??= { filed: 0, decided: 0 }).decided++ })
+      return Object.entries(by).sort().map(([day, v]) => ({ day, ...v })) })(),
     by_department: Object.values(deptMap).sort((a, b) => b.total - a.total), verdicts, high_flags, checks_total: cs.filter(c => c.runs.length).length,
     avg_verification_minutes: 9.4, avg_days_to_decision: decidedCases.length ? 2.6 : null, decided_total: decidedCases.length,
     ageing: { with_department: ageing(['DRAFT', 'AI_CHECKING', 'AI_FAILED', 'AI_CHECKED', 'RETURNED', 'DOCS_REQUESTED']), with_ag: ageing(AG_HOLDS) },

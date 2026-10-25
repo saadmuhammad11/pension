@@ -33,12 +33,17 @@ export function useCountUp(target: number | null, ms = 1800): number | null {
 /* -- container ------------------------------------------------------------------------- */
 
 export function ChartCard(
-  { title, sub, children, table, footer, accent, className }:
-  { title: string; sub?: string; children: ReactNode; table?: { head: string[]; rows: (string | number)[][] }; footer?: ReactNode
+  { title, sub, children, control, footer, accent, className }:
+  { title: string; sub?: string; children: ReactNode
+    /** A control that belongs to this card, drawn at the top right -- the period picker on
+     *  "Cases filed over time" is the one that uses it. A "Table" button stood here on every
+     *  card and swapped the chart for its figures (25 Oct 2026: the office asked for it off).
+     *  Each chart carries its own figures now -- the columns are labelled and the tooltip
+     *  gives the number -- so what went is the second way of reading the same card. */
+    control?: ReactNode; footer?: ReactNode
     /** A colour along the top edge, so a row of cards is scannable. */
     accent?: string; className?: string },
 ) {
-  const [showTable, setShowTable] = useState(false)
   return (
     <figure className={`chart-card${accent ? ' accent' : ''}${className ? ' ' + className : ''}`}
             style={accent ? { '--card-accent': accent } as CSSProperties : undefined}>
@@ -47,18 +52,9 @@ export function ChartCard(
           <div className="chart-title">{title}</div>
           {sub && <div className="chart-sub">{sub}</div>}
         </div>
-        {table && (
-          <button type="button" className="chart-toggle" onClick={() => setShowTable(!showTable)}>
-            {showTable ? 'Chart' : 'Table'}
-          </button>
-        )}
+        {control}
       </figcaption>
-      {showTable && table ? (
-        <table className="chart-table">
-          <thead><tr>{table.head.map(h => <th key={h}>{h}</th>)}</tr></thead>
-          <tbody>{table.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={j ? 'num' : ''}>{c}</td>)}</tr>)}</tbody>
-        </table>
-      ) : children}
+      {children}
       {footer && <div className="chart-foot">{footer}</div>}
     </figure>
   )
