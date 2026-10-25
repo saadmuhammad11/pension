@@ -244,7 +244,7 @@ function DesksCard({ stats }: { stats: Stats }) {
 
 export function Dashboard(
   { stats, error, variant, department, product = 'PENSION' }:
-  { stats: Stats | null; error?: string | null; variant: 'department' | 'review'
+  { stats: Stats | null; error?: string | null; variant: 'department' | 'review' | 'admin'
     department?: string | null
     /** Which register the monthly download is of; the charts themselves are already scoped. */
     product?: Product },

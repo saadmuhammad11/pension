@@ -535,20 +535,6 @@ export interface Stats {
   /** Every day that saw a filing or a decision, over thirteen months, oldest first.
    *  The gaps are the days nothing happened; the screen fills them (25 Oct 2026). */
   days: { day: string; filed: number; decided: number }[]
-  /** Administrator only: the figures belonging to their own office rather than the AG's
-   *  caseload (25 Oct 2026). users_by_role and audit_by_day below have been sent since the
-   *  beginning and were never drawn by anything. */
-  admin?: {
-    users_total: number; users_inactive: number; must_change_password: number
-    locked_out: number
-    departments_without_user: number; departments_total: number
-    /** How many of the accounts issued have ever done anything at all. */
-    people_ever: number
-    actors_by_day: { day: string; people: number }[]
-    sign_ins_by_day: { day: string; ok: number; refused: number }[]
-    runs_by_day: { day: string; done: number; failed: number }[]
-    changes_by_action: { action: string; n: number }[]
-  }
   by_department: { code: string; name: string; total: number; awaiting: number; approved: number; rejected?: number; sent_back: number }[]
   verdicts?: { FORWARD: number; RETURN_FOR_CORRECTION: number; HOLD: number; NONE: number }   // AG and admin only
   high_flags?: { '0': number; '1': number; '2': number; '3+': number }   // AG and admin only
