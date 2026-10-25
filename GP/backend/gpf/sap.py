@@ -154,6 +154,12 @@ def _one_digit_apart(a: float, b: float) -> bool:
     return len(x) == len(y) and sum(p != q for p, q in zip(x, y)) == 1
 
 
+def _adds_up(rows: list[dict], i: int) -> bool:
+    if not 0 <= i < len(rows):
+        return True
+    return abs(_n(rows[i], "closing") - row_should_close_at(rows[i])) <= RECALC_TOLERANCE
+
+
 def explain_row(rows: list[dict], i: int) -> dict:
     """Which cell of a year that does not add up would account for it (24 Oct 2026).
 
@@ -178,6 +184,13 @@ def explain_row(rows: list[dict], i: int) -> dict:
     """
     row = rows[i]
     out: dict = {"delta": _n(row, "closing") - row_should_close_at(row), "chain": True,
+                 # Whether the year before or after fails too. One cell read wrongly is one
+                 # year wrong; a run of them is a reader that has lost its place in a column,
+                 # and then the figures in those years are the wrong YEARS' figures and no
+                 # single cell accounts for any of them (PC-2026-000053, 25 Oct 2026: the
+                 # four consecutive years were each told a figure had been read as nil, and
+                 # against the page every one of them was the next year's number).
+                 "run": not (_adds_up(rows, i - 1) and _adds_up(rows, i + 1)),
                  "oneDigit": [], "readAsNil": []}
     opening_confirmed = i == 0 or abs(_n(row, "opening") - _n(rows[i - 1], "closing")) <= RECALC_TOLERANCE
     closing_confirmed = (i == len(rows) - 1
@@ -202,6 +215,10 @@ def explain_row(rows: list[dict], i: int) -> dict:
 
 def explain_in_words(rows: list[dict], i: int) -> str:
     """``explain_row`` as the sentence that goes under the finding, or "" if it has nothing."""
+    # A year that closes has nothing wrong with it, whatever its neighbours are doing. Without
+    # this the run of a neighbouring slip reached a year that was perfectly read.
+    if _adds_up(rows, i):
+        return ""
     e = explain_row(rows, i)
     if not e["chain"]:
         return ""
@@ -211,6 +228,14 @@ def explain_in_words(rows: list[dict], i: int) -> str:
         lead = ("One figure is a digit out: " if len(parts) == 1
                 else "One of these is a digit out: ")
         return lead + "; ".join(parts) + "."
+    if e["run"]:
+        # A nil column could account for this year on its own, and saying so would send the
+        # officer to a cell that is not the fault. Neighbouring years failing together is a
+        # column the reader has slipped in, and the whole run has to be read off the page.
+        return ("The years either side of this one do not add up either. A reader loses one "
+                "figure at a time; a run of them is a column it has slipped in, so these "
+                "years are likely carrying the wrong year's figures and no single cell "
+                "accounts for them. Read the run against the page.")
     if e["readAsNil"]:
         amount = fmt(abs(e["delta"]))
         cols = ", ".join(COLUMN_WORDS[c["column"]] for c in e["readAsNil"])
