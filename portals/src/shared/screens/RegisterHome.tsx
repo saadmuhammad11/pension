@@ -12,7 +12,7 @@ export function RegisterHome(
     onNew?: () => void; department?: string | null
     /** A Pension section (Pension-I .. V, or LEGACY): the cases of all its departments. */
     section?: string | null
-    charts?: 'department' | 'review' | 'admin' | null; view?: 'dashboard' | 'cases' },
+    charts?: 'department' | 'review' | null; view?: 'dashboard' | 'cases' },
 ) {
   const { user } = useSession()
   // The shared inventory (shared/data/inventory.ts): the same rows and server-side counts every

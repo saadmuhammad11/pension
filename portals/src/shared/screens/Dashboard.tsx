@@ -72,40 +72,48 @@ function stepBack(d: Date, period: Period, n: number): Date {
  *  bucketing is done here, so changing the period costs no request.
  */
 function FiledCard({ stats }: { stats: Stats }) {
+  // An API that predates the day series (25 Oct 2026) sends weeks and nothing else. The card
+  // then shows exactly what it always showed and offers no period it cannot honour, rather
+  // than drawing an empty chart -- which is what a portal deployed ahead of its API did.
+  const daily = (stats.days?.length ?? 0) > 0
   const [period, setPeriod] = useState<Period>('weekly')
-  const { columns, word, now } = PERIODS[period]
+  const shown: Period = daily ? period : 'weekly'
+  const { columns, word, now } = PERIODS[shown]
   const buckets = useMemo(() => {
-    const end = bucketOf(new Date(), period)
+    if (!daily) {
+      return stats.weeks.slice(-columns).map(w => ({ key: w.week, filed: w.filed }))
+    }
+    const end = bucketOf(new Date(), shown)
     const keys: string[] = []
-    for (let i = columns - 1; i >= 0; i--) keys.push(iso(stepBack(end, period, i)))
+    for (let i = columns - 1; i >= 0; i--) keys.push(iso(stepBack(end, shown, i)))
     const filed = new Map(keys.map(k => [k, 0]))
-    for (const d of stats.days ?? []) {
-      const k = iso(bucketOf(new Date(d.day + 'T00:00:00'), period))
+    for (const d of stats.days) {
+      const k = iso(bucketOf(new Date(d.day + 'T00:00:00'), shown))
       if (filed.has(k)) filed.set(k, filed.get(k)! + d.filed)
     }
     return keys.map(k => ({ key: k, filed: filed.get(k)! }))
-  }, [stats.days, period, columns])
+  }, [stats.days, stats.weeks, daily, shown, columns])
 
   const total = buckets.reduce((n, b) => n + b.filed, 0)
   // Labels thin out as the columns multiply: thirty of them in a card's width would clip
   // into fragments, so every other week is named and only every fifth day.
-  const every = period === 'daily' ? 5 : period === 'weekly' ? 2 : 1
+  const every = shown === 'daily' ? 5 : shown === 'weekly' ? 2 : 1
   const data = buckets.map((b, i) => {
     const d = new Date(b.key + 'T00:00:00')
-    const short = period === 'monthly'
+    const short = shown === 'monthly'
       ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
       : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     const last = i === buckets.length - 1
     return { label: last ? now : (buckets.length - 1 - i) % every === 0 ? short : '',
              value: b.filed, color: 'var(--ramp-2)',
-             title: period === 'weekly' ? `Week of ${short}` : short }
+             title: shown === 'weekly' ? `Week of ${short}` : short }
   })
-  const picker = (
+  const picker = daily ? (
     <select className="chart-period" aria-label="How often to group the cases"
             value={period} onChange={e => setPeriod(e.target.value as Period)}>
       {(Object.keys(PERIODS) as Period[]).map(k => <option key={k} value={k}>{PERIODS[k].label}</option>)}
     </select>
-  )
+  ) : undefined
   return (
     <ChartCard title="Cases filed over time" sub={`last ${columns} ${word} · ${plural(total, 'case')}`}
                control={picker}>
@@ -236,7 +244,7 @@ function DesksCard({ stats }: { stats: Stats }) {
 
 export function Dashboard(
   { stats, error, variant, department, product = 'PENSION' }:
-  { stats: Stats | null; error?: string | null; variant: 'department' | 'review' | 'admin'
+  { stats: Stats | null; error?: string | null; variant: 'department' | 'review'
     department?: string | null
     /** Which register the monthly download is of; the charts themselves are already scoped. */
     product?: Product },

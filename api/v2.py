@@ -780,6 +780,37 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
         out["audit_by_day"] = [dict(r) for r in conn.execute(
             "SELECT substr(at, 1, 10) AS day, COUNT(*) n FROM audit_log WHERE at >= ? GROUP BY day ORDER BY day",
             ((today - timedelta(days=13)).isoformat(),))]
+        # What the administrator can actually act on (25 Oct 2026). Their screen showed the
+        # Accountant General's caseload -- the same six charts the review desk sees, which
+        # they do not decide -- while the figures belonging to their own office were nowhere:
+        # on the day this was written, 108 of 133 accounts had never changed the password they
+        # were issued with, and 17 departments of 103 had no account that could file at all.
+        out["admin"] = {
+            "users_total": conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+            "users_inactive": conn.execute("SELECT COUNT(*) FROM users WHERE active = 0").fetchone()[0],
+            "must_change_password": conn.execute(
+                "SELECT COUNT(*) FROM users WHERE active = 1 AND must_change_password = 1").fetchone()[0],
+            "locked_out": conn.execute(
+                "SELECT COUNT(*) FROM login_attempts WHERE locked_until > ?", (db.now(),)).fetchone()[0],
+            "sign_in_failures": conn.execute(
+                "SELECT COALESCE(SUM(failures), 0) FROM login_attempts WHERE updated_at >= ?",
+                ((today - timedelta(days=13)).isoformat(),)).fetchone()[0],
+            # A department with no account cannot file, and nothing else on any screen says so.
+            "departments_without_user": [
+                dict(r) for r in conn.execute(
+                    "SELECT d.code, d.name FROM departments d WHERE d.active = 1 AND NOT EXISTS "
+                    "(SELECT 1 FROM users u WHERE u.department_code = d.code AND u.active = 1) "
+                    "ORDER BY d.name")],
+            "departments_total": conn.execute(
+                "SELECT COUNT(*) FROM departments WHERE active = 1").fetchone()[0],
+            # The examination failing is the administrator's errand, not the reviewing desk's.
+            "runs_failed": conn.execute(
+                "SELECT COUNT(*) FROM case_runs WHERE state = 'failed' AND started_at >= ?",
+                ((today - timedelta(days=13)).isoformat(),)).fetchone()[0],
+            "runs_done": conn.execute(
+                "SELECT COUNT(*) FROM case_runs WHERE state = 'done' AND started_at >= ?",
+                ((today - timedelta(days=13)).isoformat(),)).fetchone()[0],
+        }
     return out
 
 

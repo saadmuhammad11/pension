@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { overview } from '../../api/admin'
 import { PRODUCT_WORDS, type Product } from '../../api/cases'
-import { Dashboard, useStats } from '../Dashboard'
+import { useStats } from '../Dashboard'
+import { AdminCharts } from './AdminCharts'
 
 export function AdminHome({ product }: { product: Product }) {
   const [o, setO] = useState<Awaited<ReturnType<typeof overview>> | null>(null)
@@ -25,7 +26,14 @@ export function AdminHome({ product }: { product: Product }) {
             <div className="kpi card"><div className="label">Users</div><div style={{ fontSize: 'var(--t-figure)', fontWeight: 700 }}>{o.users}</div></div>
             <div className="kpi card"><div className="label">Audit entries</div><div style={{ fontSize: 'var(--t-figure)', fontWeight: 700 }}>{o.audit_entries}</div></div>
           </div>
-          <Dashboard stats={stats} error={statsError} variant="admin" product={product} />
+          {/* The Accountant General's caseload used to stand here -- the review desk's six
+              charts, about decisions the administrator does not take, while nothing on the
+              screen said that 108 of 133 accounts had never changed their password or that
+              17 departments had no account at all (25 Oct 2026). The caseload is still a
+              press away on the cases tab, and these are the administrator's own figures. */}
+          {statsError && <div className="banner bad" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">The figures could not be loaded: {statsError}</div></div>}
+          {!stats && !statsError && <div className="skeleton" style={{ height: 120, marginTop: 'var(--s4)' }} />}
+          {stats && <AdminCharts stats={stats} />}
           {/* A row of links to the cases, Users, the Audit log and Signing authorities stood
               here (23 Oct 2026). The header carries all four, on this screen and on every
               other, which is where the administrator reaches them from the rest of the time;

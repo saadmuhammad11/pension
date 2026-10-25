@@ -34,7 +34,7 @@ const STATS = {
   avg_verification_minutes: null, avg_days_to_decision: null, decided_total: 0,
 } as unknown as Stats
 
-const draw = () => render(<Dashboard stats={STATS} variant="admin" />)
+const draw = () => render(<Dashboard stats={STATS} variant="review" />)
 
 describe('no chart offers a table of itself any more', () => {
   it('not one card draws the button', () => {
@@ -78,5 +78,23 @@ describe('cases filed over time, at the frequency the officer picks', () => {
     expect(screen.getByText('today')).toBeTruthy()
     fireEvent.change(picker(), { target: { value: 'monthly' } })
     expect(screen.getByText('this month')).toBeTruthy()
+  })
+})
+
+describe('a screen newer than its API still draws the card', () => {
+  /** The day series arrived on 25 Oct 2026. Between deploying the portal and restarting the
+   *  API, stats carried weeks and no days -- and the card drew an empty chart where the
+   *  figures had been. It falls back to the weekly series it always had. */
+  const WITHOUT_DAYS = { ...STATS, days: undefined } as unknown as Stats
+
+  it('shows the weekly figures rather than nothing', () => {
+    render(<Dashboard stats={WITHOUT_DAYS} variant="review" />)
+    expect(screen.getByText(/last 10 weeks · 3 cases/)).toBeTruthy()
+    expect(screen.queryByText('No case filed in this period.')).toBeNull()
+  })
+
+  it('and offers no period it cannot honour', () => {
+    render(<Dashboard stats={WITHOUT_DAYS} variant="review" />)
+    expect(screen.queryByRole('combobox', { name: /how often/i })).toBeNull()
   })
 })
