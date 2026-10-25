@@ -33,7 +33,9 @@ class OverrideGuard(unittest.TestCase):
         r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag,
                              json={"to_status": "APPROVED", "reason": "Approved on the AG's direction of today."})
         self.assertEqual(r.status_code, 409, r.text)
-        self.assertIn("verify the case", r.json()["detail"])
+        # "examine", not "verify", since 24 Oct 2026: the machine examines a case and an
+        # officer verifies a finding (tests/test_one_word_per_act.py).
+        self.assertIn("examine the case", r.json()["detail"])
         # A return by override needs no examination, but it does need a real reason.
         r = self.client.post(f"/api/v2/cases/{case_id}/override", headers=dag, json={"to_status": "RETURNED", "reason": "x"})
         self.assertEqual(r.status_code, 422, r.text)
