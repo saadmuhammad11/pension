@@ -540,10 +540,14 @@ export interface Stats {
    *  beginning and were never drawn by anything. */
   admin?: {
     users_total: number; users_inactive: number; must_change_password: number
-    locked_out: number; sign_in_failures: number
-    departments_without_user: { code: string; name: string }[]
-    departments_total: number
-    runs_failed: number; runs_done: number
+    locked_out: number
+    departments_without_user: number; departments_total: number
+    /** How many of the accounts issued have ever done anything at all. */
+    people_ever: number
+    actors_by_day: { day: string; people: number }[]
+    sign_ins_by_day: { day: string; ok: number; refused: number }[]
+    runs_by_day: { day: string; done: number; failed: number }[]
+    changes_by_action: { action: string; n: number }[]
   }
   by_department: { code: string; name: string; total: number; awaiting: number; approved: number; rejected?: number; sent_back: number }[]
   verdicts?: { FORWARD: number; RETURN_FOR_CORRECTION: number; HOLD: number; NONE: number }   // AG and admin only

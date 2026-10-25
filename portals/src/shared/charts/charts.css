@@ -92,10 +92,3 @@
 .col-fill { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; transition: height .4s ease; }
 .col:hover .col-fill, .col:focus-visible .col-fill { filter: brightness(1.12); }
 .col-label { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-
-/* The administrator's cards (25 Oct 2026): a short list, and a pair of plain figures where a
-   chart of two numbers would be a chart of two numbers. */
-.plain-list { margin: 0; padding-left: 18px; font-size: var(--t-body); line-height: 1.75; }
-.plain-list li.muted { list-style: none; margin-left: -18px; font-size: var(--t-small); }
-.kpi-pair { display: flex; gap: var(--s6); padding: var(--s3) 0 var(--s2); }
-.kpi-pair .figure { font-size: var(--t-figure); font-weight: 700; font-variant-numeric: tabular-nums; }

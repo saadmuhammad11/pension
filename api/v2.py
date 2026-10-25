@@ -785,6 +785,7 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
         # they do not decide -- while the figures belonging to their own office were nowhere:
         # on the day this was written, 108 of 133 accounts had never changed the password they
         # were issued with, and 17 departments of 103 had no account that could file at all.
+        fortnight = (today - timedelta(days=13)).isoformat()
         out["admin"] = {
             "users_total": conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
             "users_inactive": conn.execute("SELECT COUNT(*) FROM users WHERE active = 0").fetchone()[0],
@@ -792,24 +793,43 @@ def stats(department: str | None = None, product: str | None = None, pension_sec
                 "SELECT COUNT(*) FROM users WHERE active = 1 AND must_change_password = 1").fetchone()[0],
             "locked_out": conn.execute(
                 "SELECT COUNT(*) FROM login_attempts WHERE locked_until > ?", (db.now(),)).fetchone()[0],
-            "sign_in_failures": conn.execute(
-                "SELECT COALESCE(SUM(failures), 0) FROM login_attempts WHERE updated_at >= ?",
-                ((today - timedelta(days=13)).isoformat(),)).fetchone()[0],
-            # A department with no account cannot file, and nothing else on any screen says so.
-            "departments_without_user": [
-                dict(r) for r in conn.execute(
-                    "SELECT d.code, d.name FROM departments d WHERE d.active = 1 AND NOT EXISTS "
-                    "(SELECT 1 FROM users u WHERE u.department_code = d.code AND u.active = 1) "
-                    "ORDER BY d.name")],
+            # A department with no account cannot file. One figure, not the list it was at
+            # first: on a register of 87 active departments it is one of them, which is a
+            # sentence under the accounts chart rather than a chart of its own.
+            "departments_without_user": conn.execute(
+                "SELECT COUNT(*) FROM departments d WHERE d.active = 1 AND NOT EXISTS "
+                "(SELECT 1 FROM users u WHERE u.department_code = d.code AND u.active = 1)").fetchone()[0],
             "departments_total": conn.execute(
                 "SELECT COUNT(*) FROM departments WHERE active = 1").fetchone()[0],
-            # The examination failing is the administrator's errand, not the reviewing desk's.
-            "runs_failed": conn.execute(
-                "SELECT COUNT(*) FROM case_runs WHERE state = 'failed' AND started_at >= ?",
-                ((today - timedelta(days=13)).isoformat(),)).fetchone()[0],
-            "runs_done": conn.execute(
-                "SELECT COUNT(*) FROM case_runs WHERE state = 'done' AND started_at >= ?",
-                ((today - timedelta(days=13)).isoformat(),)).fetchone()[0],
+            # How many of the accounts issued have ever done anything at all. 25 of 133 on the
+            # day this was written: the gap between a system installed and a system in use,
+            # which is the administrator's question and was on no screen.
+            "people_ever": conn.execute("SELECT COUNT(DISTINCT actor_id) FROM audit_log").fetchone()[0],
+            "actors_by_day": [dict(r) for r in conn.execute(
+                "SELECT substr(at, 1, 10) AS day, COUNT(DISTINCT actor_id) AS people FROM audit_log "
+                "WHERE at >= ? GROUP BY day ORDER BY day", (fortnight,))],
+            # Accepted against refused, day by day. A share worth seeing: 19 Oct was eleven in
+            # and eleven refused, which a running total of failures does not show.
+            "sign_ins_by_day": [dict(r) for r in conn.execute(
+                "SELECT substr(at, 1, 10) AS day, "
+                "SUM(CASE WHEN action = 'LOGIN' THEN 1 ELSE 0 END) AS ok, "
+                "SUM(CASE WHEN action = 'LOGIN_FAILED' THEN 1 ELSE 0 END) AS refused "
+                "FROM audit_log WHERE at >= ? AND action IN ('LOGIN', 'LOGIN_FAILED') "
+                "GROUP BY day ORDER BY day", (fortnight,))],
+            # The examination failing is the administrator's errand, not the reviewing desk's,
+            # and when it failed matters: six of 20 October's runs went at once on a model key.
+            "runs_by_day": [dict(r) for r in conn.execute(
+                "SELECT substr(started_at, 1, 10) AS day, "
+                "SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS done, "
+                "SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) AS failed "
+                "FROM case_runs WHERE started_at >= ? GROUP BY day ORDER BY day", (fortnight,))],
+            # What the audit log is actually recording, with the sign-in traffic taken out:
+            # that is three quarters of the rows and tells an administrator nothing they do
+            # not already see on the sign-in chart.
+            "changes_by_action": [dict(r) for r in conn.execute(
+                "SELECT action, COUNT(*) AS n FROM audit_log WHERE at >= ? "
+                "AND action NOT IN ('LOGIN', 'LOGIN_FAILED', 'SIGN_OUT') "
+                "GROUP BY action ORDER BY n DESC LIMIT 8", (fortnight,))],
         }
     return out
 
