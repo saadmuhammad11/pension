@@ -469,6 +469,26 @@ const GPF_STAGE: Record<string, string> = {
   assemble: 'Assembling the case facts', done: 'Read',
 }
 
+/** The run's shape, as the pension analysis shows it (screens/analysisBar STAGES): what has
+ *  been done, what is being done, what is still to come. The claim's own screen inside the
+ *  frame has had this list since the beginning; the portal's panel showed only the live line,
+ *  so an officer watching a two-minute read could not tell a slow stage from a stuck one
+ *  (26 Oct 2026).
+ *
+ *  Each row names the module's own stage keys. "page-done" is the end of a page, not a stage
+ *  of its own, so it marks extraction reached rather than a step of its own. */
+export const GPF_STAGES: [string, string, string[]][] = [
+  ['Receiving the pages', 'Separating and checking the scanned pages', ['queued', 'ingest']],
+  ['Identifying each document', 'Deciding what every page is', ['classify']],
+  ['Reading the fields', 'Lifting the details off each document', ['extract', 'page-done', 'illegible']],
+  ['Assembling the claim', 'Putting the pages together into one case', ['assemble']],
+  ['Checks and findings', 'Every rule against the facts, and what they come to', ['done']],
+]
+export const gpfStageAt = (key: string): number => {
+  const i = GPF_STAGES.findIndex(([, , keys]) => keys.includes(key))
+  return i < 0 ? 0 : i
+}
+
 function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { c: CaseFull; busy: boolean; onVerify: () => void; onChanged: () => void; offerVerify?: boolean }) {
   const [state, setState] = useState<GpfState | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -550,6 +570,23 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
         <div className="muted">{j?.detail ?? j?.message ?? 'The module classifies each page and extracts its fields; a page takes 5 to 15 seconds.'}</div>
         <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <span style={{ width: `${pct}%` }} />
+        </div>
+        <div className="gpf-stages">
+          {GPF_STAGES.map(([name, sub], i) => {
+            const at = gpfStageAt(j?.stage ?? 'queued')
+            const finished = j?.state === 'done'
+            const done = finished || i < at
+            const running = !finished && i === at
+            return (
+              <div key={name} className={`an-stage${running ? ' is-running' : ''}${done ? ' is-done' : ''}`}>
+                <div className={`an-mark${running ? ' working' : ''}`}>{done ? '\u2713' : ''}</div>
+                <div>
+                  <div className="an-stage-name">{name}</div>
+                  {running && <div className="an-stage-sub">{sub}</div>}
+                </div>
+              </div>
+            )
+          })}
         </div>
         {j && j.total ? (
           <div className="muted gpf-progress-line" style={{ fontSize: 'var(--t-small)' }}>

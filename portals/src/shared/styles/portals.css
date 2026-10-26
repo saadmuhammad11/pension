@@ -685,3 +685,8 @@ button.btn-primary:not(:disabled):hover { box-shadow: none; transform: none; }
    default blue (frontend review F17). */
 .doc-link { color: var(--green2); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .doc-link:hover { color: var(--green); }
+
+/* The GP Fund reading's stage list (26 Oct 2026). The rows themselves are the pension
+   analysis's (.an-stage in base.css), so the two readings look like one system; this only
+   gives them their column inside the progress card. */
+.gpf-stages { display: grid; gap: 2px; margin-top: var(--s2); }
