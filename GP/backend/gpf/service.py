@@ -220,7 +220,14 @@ class CaseService:
             viewer = _officer(officer_id) if officer_id else s.officer
         except ServiceError:
             viewer = s.officer
-        L = lists(s.results)
+        # "Signatories and delegation of authority" is off at the office's asking (26 Oct 2026;
+        # the check itself is parked in rules_common.py, which stops it being raised again).
+        # Filtered HERE as well, and not by re-evaluating the claims that already carry it,
+        # because a re-evaluation would apply every other rule written since each claim was
+        # last examined -- the ledger-arithmetic check among them -- and change findings the
+        # office has not asked to change. The stored record is left exactly as it was; this
+        # only stops the item being shown. Remove both when the DOA list arrives.
+        L = lists([r for r in (s.results or []) if not str(r.get("id", "")).startswith("DOA:")])
         sap = s.F.get("sap")
         sap_view = None
         if sap:

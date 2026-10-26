@@ -163,3 +163,35 @@ def test_the_doa_check_raises_nothing_while_it_is_off():
     assert doa == []
     titles = [i.get("title", "") for k in view["lists"] for i in view["lists"][k]]
     assert not [t for t in titles if "delegation of authority" in t]
+
+
+def test_a_claim_already_examined_stops_showing_the_doa_task_without_being_re_examined():
+    """The office asked for that one verification off and for nothing else to move
+    (26 Oct 2026).
+
+    Parking the check stops it being RAISED, which covers claims examined from now on. The
+    twenty-eight already on the register carry their results as examined, so the task would
+    have stayed on screen until each was re-examined -- and re-examining them would apply
+    every rule written since, the ledger-arithmetic check included, adding hard stops to
+    twelve claims the office has not asked to change. So the view filters it instead: the
+    stored record is untouched and only the screen is quieter.
+    """
+    from gpf import api
+    r = client.post("/api/cases", json={"templateKey": "refundable"})
+    cid = r.json()["id"]
+    s = api.service.repo.get(cid)
+    before = len(s.results or [])
+    # A claim as it was examined when the check still ran.
+    s.results = list(s.results or []) + [
+        {"id": "DOA:form05-ddo", "status": "conf", "title": "Signatories and delegation of authority",
+         "finding": "Signed by a post that is not yet on the DOA register.", "sub": "form05-ddo"}]
+    api.service.repo.save(cid, s)
+
+    view = client.get(f"/api/cases/{cid}").json()
+    shown = [i for k in view["lists"] for i in view["lists"][k]]
+    assert not [i for i in shown if str(i.get("id", "")).startswith("DOA:")]
+    assert not [i for i in shown if "delegation of authority" in (i.get("title") or "")]
+
+    kept = api.service.repo.get(cid).results
+    assert any(str(r.get("id", "")).startswith("DOA:") for r in kept), "the record is not rewritten"
+    assert len(kept) == before + 1
