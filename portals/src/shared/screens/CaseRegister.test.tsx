@@ -311,6 +311,15 @@ describe('the dashboard counts the whole desk in one tile (26 Oct 2026)', () => 
     expect(n(/Action required/) + n(/With the Office/) + n(/Disposed/)).toBe(n(/All cases/))
   })
 
+  it('the departments tile names one thing, not two', () => {
+    // It read "Not yet submitted, or returned for correction", which an officer had to take
+    // apart before the number under it meant anything.
+    draw('AG_AO')
+    const t = tileOf(/With the departments/)!.textContent ?? ''
+    expect(t).toContain('Returned for correction.')
+    expect(t).not.toMatch(/not yet submitted/i)
+  })
+
   it('but the register still offers the split as a chip', () => {
     // Removing the tile was a change to the FIGURES, not to the officer's working list.
     draw('AG_AO')

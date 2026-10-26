@@ -205,7 +205,10 @@ export function CaseRegister(
   const tileKeys = (e: React.KeyboardEvent) => { const n = nextTabFor(BUCKETS, bucket, e.key); if (n) { e.preventDefault(); pickBucket(n); (e.currentTarget.querySelector(`[data-bucket="${n}"]`) as HTMLElement | null)?.focus() } }
 
   const theirsLabel = isDept ? 'With the Office of the Accountant General' : 'With the departments'
-  const theirsDesc = isDept ? 'Submitted; awaiting the Pension Wing.' : 'Not yet submitted, or returned for correction.'
+  // "Returned for correction", not "Not yet submitted, or returned for correction" (26 Oct
+  // 2026, the office's reading): the two readings were taken for two different things and the
+  // tile was read twice over. It is the same simplification the decisions chart just made.
+  const theirsDesc = isDept ? 'Submitted; awaiting the Pension Wing.' : 'Returned for correction.'
   const bucketLabel: Record<Bucket, string> = { mine: isDept ? 'Action required' : 'Awaiting decision', theirs: theirsLabel, done: 'Disposed', all: 'All cases' }
   const showAi = !isDept                                   // the AI's reading is the Office of the Accountant General's
   const showTimeline = isDept                              // where every case stands, on its row
