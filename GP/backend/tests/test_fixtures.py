@@ -28,15 +28,22 @@ GROUND_TRUTH = json.loads((Path(__file__).parent / "ground_truth.json").read_tex
 # So the corpus has been asserting advisories that no deployed build has ever raised, and this
 # amendment makes the acceptance suite describe the engine that actually runs. If the decoder
 # is ever wired, these rows and these counts come back with it.
+# One verification fewer on every fixture from 26 Oct 2026: the DOA check is off at the
+# office's asking (gpf/rules_common.py). It raised one task per signature reading saying the
+# authority was not yet on the DOA register and no specimen was on file -- true, and not
+# clearable by an officer, because the register waits on a list the office has not supplied.
+# It produced no hard stop on any fixture: checked fixture by fixture, the third figure is
+# the only one that moves, and it moves by exactly the number of signatures that fixture
+# carries -- one on most, two on the advances and the balance transfer.
 SPEC_16_2 = {
-    "fp-non-gazetted": (0, 3, 5, 0),
-    "fp-death": (4, 1, 7, 0),
-    "fp-dismissal": (0, 2, 6, 0),
-    "missing-credits": (1, 1, 1, 4),
-    "residual": (1, 0, 2, 0),
-    "refundable": (0, 2, 4, 0),
-    "non-refundable": (0, 2, 4, 0),
-    "balance-transfer": (0, 0, 2, 5),
+    "fp-non-gazetted": (0, 3, 4, 0),
+    "fp-death": (4, 1, 6, 0),
+    "fp-dismissal": (0, 2, 5, 0),
+    "missing-credits": (1, 1, 0, 4),
+    "residual": (1, 0, 1, 0),
+    "refundable": (0, 2, 2, 0),
+    "non-refundable": (0, 2, 2, 0),
+    "balance-transfer": (0, 0, 0, 5),
 }
 
 

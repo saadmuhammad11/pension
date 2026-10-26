@@ -382,10 +382,24 @@ def _doa(F):
     return out
 
 
-check(id="DOA", group="signature", ref="R4 · B1-ii · B1-vi · B2-iv",
-      title="Signatories and delegation of authority",
-      applies=lambda F: any(g["role"] in _SIG_ROLES for g in (F.get("signatures") or [])),
-      run=_doa)
+# Off at the office's asking, 26 Oct 2026. The check is sound and the code above stays, as
+# QR-SANCTION's does, so that turning it back on is one line.
+#
+# What it produced on every claim was a verification task per signature reading: "Signed by
+# Section Officer (Accounts-II / NG) ... The authority is not yet on the DOA register. The
+# register is provisional until the office supplies its DOA list. No specimen on file for
+# [that post]." That is the register reporting its own emptiness, once per signature, on
+# every case -- and an officer cannot clear it, because what it waits for is a list the
+# office has not sent. A task nobody can finish teaches officers to skip tasks.
+#
+# Put the line back the day the DOA list and the specimens arrive (gpf/doa.py sets
+# DOA["status"] to "final" then, and the check becomes a real hard stop on an unapproved
+# signatory rather than a note about a register that is not populated).
+#
+# check(id="DOA", group="signature", ref="R4 · B1-ii · B1-vi · B2-iv",
+#       title="Signatories and delegation of authority",
+#       applies=lambda F: any(g["role"] in _SIG_ROLES for g in (F.get("signatures") or [])),
+#       run=_doa)
 
 
 # ── R7: thumb impressions cannot be matched to a CNIC copy ────────────────────

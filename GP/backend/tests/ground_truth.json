@@ -10,10 +10,6 @@
         "ok"
       ],
       [
-        "DOA:gpf10-ddo",
-        "conf"
-      ],
-      [
         "FP-CNIC",
         "ok"
       ],
@@ -86,10 +82,6 @@
       [
         "COVER",
         "ok"
-      ],
-      [
-        "DOA:gpf10-ddo",
-        "conf"
       ],
       [
         "FP-CNIC",
@@ -172,10 +164,6 @@
         "ok"
       ],
       [
-        "DOA:gpf10-ddo",
-        "conf"
-      ],
-      [
         "FP-CNIC",
         "ok"
       ],
@@ -266,10 +254,6 @@
         "ok"
       ],
       [
-        "DOA:gpf10-ddo",
-        "conf"
-      ],
-      [
         "FP-CNIC",
         "ok"
       ],
@@ -331,10 +315,6 @@
       ],
       [
         "DIS-INTEREST",
-        "conf"
-      ],
-      [
-        "DOA:form06-ddo",
         "conf"
       ],
       [
@@ -404,10 +384,6 @@
         "conf"
       ],
       [
-        "DOA:form06-ddo",
-        "conf"
-      ],
-      [
         "FP-CNIC",
         "ok"
       ],
@@ -446,10 +422,6 @@
       [
         "COVER",
         "ok"
-      ],
-      [
-        "DOA:treasury",
-        "conf"
       ],
       [
         "MC-AG-CERT",
@@ -492,10 +464,6 @@
       [
         "COVER",
         "ok"
-      ],
-      [
-        "DOA:treasury",
-        "conf"
       ],
       [
         "MC-AG-CERT",
@@ -546,10 +514,6 @@
         "ok"
       ],
       [
-        "DOA:form06-ddo",
-        "conf"
-      ],
-      [
         "FP-CNIC",
         "ok"
       ],
@@ -598,10 +562,6 @@
       [
         "COVER",
         "ok"
-      ],
-      [
-        "DOA:form06-ddo",
-        "conf"
       ],
       [
         "FP-CNIC",
@@ -680,14 +640,6 @@
         "adv"
       ],
       [
-        "DOA:form05-ddo",
-        "conf"
-      ],
-      [
-        "DOA:sanction",
-        "conf"
-      ],
-      [
         "PAYSLIP-ATTEST",
         "adv"
       ],
@@ -758,14 +710,6 @@
         "adv"
       ],
       [
-        "DOA:form05-ddo",
-        "conf"
-      ],
-      [
-        "DOA:sanction",
-        "conf"
-      ],
-      [
         "SAP-PAYSLIP",
         "sap"
       ],
@@ -820,14 +764,6 @@
       [
         "CNIC-ATTEST",
         "ok"
-      ],
-      [
-        "DOA:form06-ddo",
-        "conf"
-      ],
-      [
-        "DOA:sanction",
-        "conf"
       ],
       [
         "NR-OFFICE-ANNOT",
@@ -900,14 +836,6 @@
         "ok"
       ],
       [
-        "DOA:form06-ddo",
-        "conf"
-      ],
-      [
-        "DOA:sanction",
-        "conf"
-      ],
-      [
         "NR-OFFICE-ANNOT",
         "conf"
       ],
@@ -956,14 +884,6 @@
         "ok"
       ],
       [
-        "DOA:dao",
-        "conf"
-      ],
-      [
-        "DOA:ddo",
-        "conf"
-      ],
-      [
         "SAP-PAYSLIP",
         "sap"
       ],
@@ -1000,14 +920,6 @@
       [
         "COVER",
         "ok"
-      ],
-      [
-        "DOA:dao",
-        "conf"
-      ],
-      [
-        "DOA:ddo",
-        "conf"
       ],
       [
         "SAP-PAYSLIP",

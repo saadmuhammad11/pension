@@ -131,9 +131,16 @@ def test_a_claim_read_from_scans_serves_its_own_evidence_pages(tmp_path):
     assert client.get("/api/cases/refundable-scan-evil/pages/1").status_code == 404
 
 
-def test_a_claims_specimen_is_shown_on_its_signature_checks():
-    """30 Sep 2026: the department's specimen, filed with the claim, sits beside the signature
-    the officer compares on 'Signatories and delegation of authority'. The officer decides."""
+def test_a_claims_specimen_is_kept_and_served():
+    """30 Sep 2026: the department's specimen, filed with the claim, sat beside the signature
+    the officer compares on "Signatories and delegation of authority".
+
+    That check is off at the office's asking (26 Oct 2026, gpf/rules_common.py), so there is
+    no item for the specimen to sit beside and nothing here asserts one. The specimen itself
+    is still taken, listed and served -- the claim carries it either way, and the check comes
+    back the day the office supplies its DOA list, with this plumbing already in place
+    (gpf/api.py attaches it to any item whose id begins "DOA:").
+    """
     from gpf import api
     r = client.post("/api/cases", json={"templateKey": "refundable"})
     cid = r.json()["id"]
@@ -142,11 +149,17 @@ def test_a_claims_specimen_is_shown_on_its_signature_checks():
     api.save_specimens(cid, [{"path": str(spec), "label": "S Signature (DIG Commandment)"}])
     view = client.get(f"/api/cases/{cid}").json()
     assert view["specimens"] == [{"n": 1, "label": "S Signature (DIG Commandment)"}]
-    doa = [i for k in ("hard", "adv", "conf", "ok") for i in view["lists"][k] if i["id"].startswith("DOA:")]
-    assert doa, "the demo case has signatures to check"
-    for item in doa:
-        shown = [e for e in item["evidence"] if e.get("specimen")]
-        assert shown and shown[0]["url"] == f"api/cases/{cid}/specimens/1"
-        assert "No specimen signature is on the register yet." not in (item.get("finding") or "")
     assert client.get(f"/api/cases/{cid}/specimens/1").content == b"\xff\xd8\xff spec"
     assert client.get(f"/api/cases/{cid}/specimens/2").status_code == 404
+
+
+def test_the_doa_check_raises_nothing_while_it_is_off():
+    """What the office asked for: no "Signatories and delegation of authority" task on a
+    claim, on any list."""
+    r = client.post("/api/cases", json={"templateKey": "refundable"})
+    view = client.get(f"/api/cases/{r.json()['id']}").json()
+    doa = [i for k in ("hard", "adv", "conf", "ok", "obs", "na")
+           for i in view["lists"].get(k, []) if str(i.get("id", "")).startswith("DOA:")]
+    assert doa == []
+    titles = [i.get("title", "") for k in view["lists"] for i in view["lists"][k]]
+    assert not [t for t in titles if "delegation of authority" in t]
