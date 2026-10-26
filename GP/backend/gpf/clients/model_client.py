@@ -388,9 +388,16 @@ class VllmModelClient:
         # read first and can still finish the page alone, below, without the vision read ever
         # being waited for -- so the fast path is as fast as it was, and the slow path is now
         # the length of one read instead of two.
+        from ..reading import timing
+
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="recalc-vision")
         try:
-            vision = pool.submit(self._recalc_rows_from_vision, image_ref)
+            # carry(), not the bare method: the job id is a threading.local and a pool worker
+            # does not inherit it, so an unwrapped submit costs the same model time and logs
+            # none of it. The first run after this read was made concurrent reported 157.6s
+            # of model time against a true 191s, with the recalc call missing from the job
+            # log entirely -- the measurement disappearing exactly where it was being read.
+            vision = pool.submit(timing.carry(lambda: self._recalc_rows_from_vision(image_ref)))
             try:
                 text, truncated = self.ocr_table_text(image_ref)
                 parsed = parse_recalc(text)
