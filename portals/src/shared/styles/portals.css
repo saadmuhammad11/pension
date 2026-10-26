@@ -313,7 +313,11 @@ button.filter-clear { padding: 8px 12px; min-height: 32px; font-size: 13px; }
 .pager button { padding: 11px 16px; font-size: 14px; font-weight: 700; }
 
 /* --- dashboard figures ------------------------------------------------------------------------ */
-.dept-bars { max-height: 296px; overflow-y: auto; padding-right: 8px; scrollbar-width: thin; }
+/* 520, not 296 (26 Oct 2026, the office's reading): the card sat short with room to spare
+   below it, and two departments at 30px a row filled a tenth of it. A row is 46px now and
+   the cap holds eleven of them, so the chart uses the page it is on and still scrolls
+   rather than pushing the cards beneath it off the screen as departments are added. */
+.dept-bars { max-height: 520px; overflow-y: auto; padding-right: 8px; scrollbar-width: thin; }
 .dept-bars .hbar-row { grid-template-columns: minmax(112px, 150px) 1fr 32px; }
 .dept-bars .hbar-track { height: 10px; border-radius: 999px; background: #EDF1EE; }
 .dept-bars .hbar-fill { border-radius: 0; }
@@ -568,7 +572,10 @@ button:focus-visible, .tile:focus-visible, a:focus-visible { outline: 2px solid 
 .progress-rail { height: 2px; margin-top: 12px; border-radius: 0; }
 
 /* Figures: one green ramp, square-cornered tracks, no motion. */
-.dept-bars .hbar-track, .age-bars .hbar-track { height: 8px; border-radius: 2px; background: #EEF1EF; }
+/* The department bars carry the taller row (46px), so the track is drawn to match: an 8px
+   rule in a 46px row reads as a hairline adrift in white. The ageing bars keep theirs. */
+.dept-bars .hbar-track { height: 14px; border-radius: 2px; background: #EEF1EF; }
+.age-bars .hbar-track { height: 8px; border-radius: 2px; background: #EEF1EF; }
 .dept-bars .hbar-track > .hbar-fill:first-child { border-radius: 2px 0 0 2px; }
 .dept-bars .hbar-track > .hbar-fill:last-child { border-radius: 0 2px 2px 0; }
 .dept-bars .hbar-track > .hbar-fill:only-child, .age-bars .hbar-fill { border-radius: 2px; }

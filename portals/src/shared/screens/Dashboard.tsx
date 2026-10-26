@@ -129,7 +129,7 @@ function DepartmentsCard({ stats }: { stats: Stats }) {
   return (
     <ChartCard title="Department caseload" sub={`${plural(byTotal.length, 'department')} · ${plural(stats.total, 'case')} · dark = awaiting your decision`} className="span-2">
       {rows.length
-        ? <div className="dept-bars"><SplitBars rows={rows} series={[{ name: 'Awaiting decision', color: 'var(--ramp-1)' }, { name: 'Other', color: 'var(--ramp-4)' }]} height={30} /></div>
+        ? <div className="dept-bars"><SplitBars rows={rows} series={[{ name: 'Awaiting decision', color: 'var(--ramp-1)' }, { name: 'Other', color: 'var(--ramp-4)' }]} height={46} /></div>
         : <div className="empty">No case filed yet.</div>}
     </ChartCard>
   )
