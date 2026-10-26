@@ -311,6 +311,13 @@ describe('the dashboard counts the whole desk in one tile (26 Oct 2026)', () => 
     expect(n(/Action required/) + n(/With the Office/) + n(/Disposed/)).toBe(n(/All cases/))
   })
 
+  it('the awaiting tile does not spend its line repeating its own name', () => {
+    draw('AG_AO')
+    const t = tileOf(/Awaiting decision/)!.textContent ?? ''
+    expect(t).toContain('Cases on your desk.')
+    expect(t.match(/awaiting/gi) ?? []).toHaveLength(1)   // the title, and not the line under it
+  })
+
   it('the departments tile names one thing, not two', () => {
     // It read "Not yet submitted, or returned for correction", which an officer had to take
     // apart before the number under it meant anything.

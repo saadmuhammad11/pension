@@ -233,7 +233,10 @@ export function CaseRegister(
         <button role="tab" data-bucket="mine" tabIndex={bucket === 'mine' ? 0 : -1} aria-selected={bucket === 'mine'} className={`tile hot${bucket === 'mine' ? ' is-on' : ''}`} onClick={() => pickBucket('mine')}>
           <div className="t">{bucketLabel.mine}</div>
           <div className="n">{tile.mine}</div>
-          <div className="d">{isDept ? 'Cases to examine, submit or correct.' : 'On your desk: received, examined or awaiting your decision.'}</div>
+          {/* "Cases on your desk.", not a list of the three ways a case gets there: the tile
+              is already called "Awaiting decision", and the line under it was spending its
+              words saying that again (26 Oct 2026). */}
+          <div className="d">{isDept ? 'Cases to examine, submit or correct.' : 'Cases on your desk.'}</div>
         </button>
         <button role="tab" data-bucket="theirs" tabIndex={bucket === 'theirs' ? 0 : -1} aria-selected={bucket === 'theirs'} className={`tile wait${bucket === 'theirs' ? ' is-on' : ''}`} onClick={() => pickBucket('theirs')}>
           <div className="t">{theirsLabel}</div>
