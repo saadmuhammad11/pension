@@ -259,3 +259,56 @@ describe('a case nobody has examined is not a case awaiting a decision (26 Oct 2
     expect(listed()).toBe(10)          // everything on the Office's desk, as before
   })
 })
+
+describe('the dashboard tiles say what the chips say (26 Oct 2026)', () => {
+  const mk = (n: number, status: CaseStatus, from = 0) => Array.from({ length: n }, (_, i) => ({
+    id: `t${from + i}`, case_no: `PC-2026-${String(from + i).padStart(6, '0')}`, status,
+    department_code: 'sgad', department_name: 'S&GAD', pension_section: 'Pension-I',
+    created_via: 'DEPARTMENT', product: 'PENSION', submission_no: 1,
+    created_at: '2026-10-01T00:00:00', updated_at: '2026-10-01T00:00:00',
+  })) as unknown as Parameters<typeof CaseRegister>[0]['rows']
+
+  const ROWS = [...mk(4, 'FORWARDED'), ...mk(6, 'UNDER_REVIEW', 4),
+                ...mk(2, 'APPROVED', 10), ...mk(1, 'RETURNED', 12)] as ReturnType<typeof mk>
+
+  /** Both faces, so a tile can be pressed and the table read. */
+  const draw = (role: string) => render(
+    <CaseRegister product="PENSION" rows={ROWS} title="Register" lead="lead"
+                  waitingOn={['FORWARDED', 'AI_FAILED', 'UNDER_REVIEW']} onOpen={() => {}}
+                  role={role} charts={null} />,
+  )
+  const tileOf = (name: RegExp) => screen.queryByRole('tab', { name })
+  const listed = () => screen.getAllByRole('row').length - 1
+
+  it('the Office gets a tile for the cases nobody has read', () => {
+    draw('AG_AO')
+    expect(tileOf(/Not yet examined/)).toBeTruthy()
+  })
+
+  it('and the counts on the two tiles no longer overlap', () => {
+    draw('AG_AO')
+    expect(tileOf(/Not yet examined/)!.textContent).toContain('4')
+    expect(tileOf(/Awaiting decision/)!.textContent).toContain('6')
+  })
+
+  it('pressing it narrows the register to those cases', () => {
+    draw('AG_AO')
+    fireEvent.click(tileOf(/Not yet examined/)!)
+    expect(listed()).toBe(4)
+    expect(screen.getByRole('status').textContent).toBe('Showing 4 cases · Not yet examined')
+  })
+
+  it('every case is still in exactly one tile', () => {
+    draw('AG_AO')
+    const n = (re: RegExp) => Number(tileOf(re)!.textContent!.match(/\d+/)![0])
+    expect(n(/Not yet examined/) + n(/Awaiting decision/) + n(/With the departments/) + n(/Disposed/))
+      .toBe(n(/All cases/))
+  })
+
+  it('a department is not shown the split, and its tiles still add up', () => {
+    draw('DEPT_OFFICER')
+    expect(tileOf(/Not yet examined/)).toBeNull()
+    const n = (re: RegExp) => Number(tileOf(re)!.textContent!.match(/\d+/)![0])
+    expect(n(/Action required/) + n(/With the Office/) + n(/Disposed/)).toBe(n(/All cases/))
+  })
+})
