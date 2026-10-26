@@ -334,7 +334,7 @@ class VllmModelClient:
         out = self._chat(self.ocr_url, self.ocr_model, msg, temperature=0, max_tokens=2048)
         return out["choices"][0]["message"]["content"] or ""
 
-    def ocr_table_text(self, image_ref: str) -> str:  # pragma: no cover - needs the OCR service
+    def ocr_table_text(self, image_ref: str) -> tuple[str, bool]:  # pragma: no cover - needs the OCR service
         """The page's text with its table rows kept one to a line.
 
         ocr_text asks for reading order and 2,048 tokens, which is right for a form and far
@@ -349,8 +349,10 @@ class VllmModelClient:
         out = self._chat(self.ocr_url, self.ocr_model, msg, temperature=0, max_tokens=8000)
         choice = (out.get("choices") or [{}])[0]
         text = (choice.get("message") or {}).get("content") or ""
-        self._ocr_table_truncated = choice.get("finish_reason") == "length"
-        return text
+        # Returned, not stored on self: this client is shared by every page being read, and
+        # with GPF_READ_CONCURRENCY above one two ledgers can be in it at once -- where an
+        # instance flag means the second read decides the first read's fate (26 Oct 2026).
+        return text, choice.get("finish_reason") == "length"
 
     def _extract_recalc_rows(self, image_ref: str):  # pragma: no cover - needs Spark
         """Read the GPF re-calculation ledger table as rows (spec §4.2, §12).
@@ -374,35 +376,56 @@ class VllmModelClient:
         def misread(rows) -> int:
             return len({d["row"] for d in recalc_discrepancies({"rows": rows})})
 
+        from concurrent.futures import ThreadPoolExecutor
+
         candidates = []
-        self._ocr_table_truncated = False
-        parsed = None
+        parsed, truncated = None, False
+        # Both reads start at once (26 Oct 2026). They used to run in sequence, and on a
+        # ledger that does not reconcile -- which is most of them -- the page paid for both
+        # one after the other: PC-2026-000055's page 6 was 104s of a 107s read, the whole
+        # claim waiting on one page. Started together the page costs the slower of the two
+        # rather than their sum. The ORDER of preference is unchanged: the OCR read is still
+        # read first and can still finish the page alone, below, without the vision read ever
+        # being waited for -- so the fast path is as fast as it was, and the slow path is now
+        # the length of one read instead of two.
+        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="recalc-vision")
         try:
-            parsed = parse_recalc(self.ocr_table_text(image_ref))
-            rows = (parsed or {}).get("rows") or []
-        except Exception:                                  # noqa: BLE001 -- the vision read stands
-            rows = []
-        # The OCR model can fall into a loop and repeat one nil cell for its whole budget. On
-        # PC-2026-000048's page 7 it did that on the FIRST row, so the read was one year of a
-        # thirty-nine year ledger -- and one year adds up, which is exactly how a wrecked read
-        # could look like a perfect one. A cut-off read of a single row is not a ledger.
-        if rows and not (self._ocr_table_truncated and len(rows) <= 1):
-            clean = not misread(rows)
-            candidates.append((rows, 0.97 if clean else 0.6))
-            # A read whose every year adds up AND chains, and which runs to the year the
-            # report was struck in, is the whole ledger: a year dropped in the middle breaks
-            # the chain, and one dropped at the end leaves it short of the report's own date.
-            # Nothing a second reader returns can improve on that, and it costs forty seconds
-            # of the examination (24 Oct 2026; PC-2026-000070's page 6 reads OCR 61s + vision
-            # 40s). Truncation is not part of this test: that page's OCR read IS cut off --
-            # the model loops on a nil cell after the last row and runs out its budget on it --
-            # and the ledger above the loop is complete. What the cut-off read must not do is
-            # stand alone when it is SHORT, and reaching the report date is what says it isn't.
-            if clean and reaches_the_report_date(parsed):
-                return rows, 0.97
-        rows, conf = self._recalc_rows_from_vision(image_ref)
-        if rows:
-            candidates.append((rows, conf))
+            vision = pool.submit(self._recalc_rows_from_vision, image_ref)
+            try:
+                text, truncated = self.ocr_table_text(image_ref)
+                parsed = parse_recalc(text)
+                rows = (parsed or {}).get("rows") or []
+            except Exception:                              # noqa: BLE001 -- the vision read stands
+                rows = []
+            # The OCR model can fall into a loop and repeat one nil cell for its whole budget.
+            # On PC-2026-000048's page 7 it did that on the FIRST row, so the read was one
+            # year of a thirty-nine year ledger -- and one year adds up, which is exactly how
+            # a wrecked read could look like a perfect one. A cut-off read of one row is not
+            # a ledger.
+            if rows and not (truncated and len(rows) <= 1):
+                clean = not misread(rows)
+                candidates.append((rows, 0.97 if clean else 0.6))
+                # A read whose every year adds up AND chains, and which runs to the year the
+                # report was struck in, is the whole ledger: a year dropped in the middle
+                # breaks the chain, and one dropped at the end leaves it short of the
+                # report's own date. Nothing a second reader returns can improve on that, so
+                # the page is finished here and the vision read is never waited for.
+                # Truncation is not part of this test: PC-2026-000070's page 6 OCR read IS
+                # cut off -- the model loops on a nil cell after the last row and runs out
+                # its budget on it -- and the ledger above the loop is complete. What a
+                # cut-off read must not do is stand alone when it is SHORT, and reaching the
+                # report date is what says it isn't.
+                if clean and reaches_the_report_date(parsed):
+                    return rows, 0.97
+            try:
+                vrows, conf = vision.result()
+            except Exception:                              # noqa: BLE001 -- the OCR read stands
+                vrows, conf = [], 0.0
+            if vrows:
+                candidates.append((vrows, conf))
+        finally:
+            # Never waited for on the fast path; the call finishes in its own time.
+            pool.shutdown(wait=False)
         if not candidates:
             return [], 0.0
         # YEARS FIRST, then arithmetic. A ledger missing a year is missing the money in it, so

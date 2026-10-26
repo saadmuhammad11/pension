@@ -183,11 +183,9 @@ class TestWhichReadIsTaken:
         from gpf.clients.model_client import VllmModelClient
         c = VllmModelClient.__new__(VllmModelClient)
 
-        def ocr(_ref):
-            c._ocr_table_truncated = truncated
-            return ocr_text
-
-        c.ocr_table_text = ocr
+        # ocr_table_text returns its own truncation flag from 26 Oct 2026: the client is
+        # shared by every page being read, so an instance flag let one ledger decide another's.
+        c.ocr_table_text = lambda _ref: (ocr_text, truncated)
         c._recalc_rows_from_vision = lambda _ref: (vision_rows, 0.95)
         return c
 
@@ -274,8 +272,7 @@ class TestWhenTheSecondReadIsSkipped:
         from unittest import mock
         from gpf.clients.model_client import VllmModelClient
         c = VllmModelClient.__new__(VllmModelClient)
-        c.ocr_table_text = lambda _r: (setattr(c, "_ocr_table_truncated", False)
-                                       or "01.07.2000 30.06.2001 0.00 1000.00 1000.00")
+        c.ocr_table_text = lambda _r: ("01.07.2000 30.06.2001 0.00 1000.00 1000.00", False)
         called = mock.Mock(return_value=([{"start": "01.07.2000", "end": "30.06.2001",
                                            "opening": 0.0, "subscription": 1000.0,
                                            "adjustments": 0.0, "tempAdvance": 0.0,
@@ -284,3 +281,87 @@ class TestWhenTheSecondReadIsSkipped:
         c._recalc_rows_from_vision = called
         c._extract_recalc_rows("p.png")
         assert called.called, "a short OCR read must never skip the second opinion"
+
+
+class TestTheTwoReadsRunTogether:
+    """The ledger page was the whole of a claim's read (26 Oct 2026).
+
+    PC-2026-000055: six pages, 107.1s, and page 6 alone was 104s of it -- the OCR
+    transcription and the vision read of the same table, one after the other, on a ledger that
+    does not reconcile and so pays for both. Five pages finished inside that one page's time.
+
+    They start together now. What must NOT change is which read is preferred, or that a clean
+    OCR read finishes the page without the vision read ever being waited for.
+    """
+
+    from unittest import mock
+
+    def _client(self, *, ocr_text, vision_rows, vision_delay=0.0, truncated=False):
+        import time
+        from gpf.clients.model_client import VllmModelClient
+        c = VllmModelClient.__new__(VllmModelClient)
+        c.started = []
+        c.ocr_table_text = lambda _r: (c.started.append("ocr"), (ocr_text, truncated))[1]
+
+        def vision(_r):
+            c.started.append("vision")
+            if vision_delay:
+                time.sleep(vision_delay)
+            return (vision_rows, 0.95)
+
+        c._recalc_rows_from_vision = vision
+        return c
+
+    def _good(self, n):
+        rows, opening = [], 0.0
+        for i in range(n):
+            rows.append({"start": f"01.07.{2000 + i}", "end": f"30.06.{2001 + i}",
+                         "opening": opening, "subscription": 1000.0, "adjustments": 0.0,
+                         "tempAdvance": 0.0, "recTempAdvance": 0.0, "permanentAdvance": 0.0,
+                         "interest": 0.0, "closing": opening + 1000.0})
+            opening += 1000.0
+        return rows
+
+    def test_the_vision_read_is_already_under_way_when_the_ocr_read_lands(self) -> None:
+        """Started, not merely available: that is the whole of the saving."""
+        c = self._client(ocr_text="not a ledger at all", vision_rows=self._good(3))
+        c._extract_recalc_rows("p.png")
+        assert c.started[0] == "vision", "the vision read starts first and runs alongside"
+        assert "ocr" in c.started
+
+    def test_a_clean_ocr_read_still_finishes_the_page_on_its_own(self) -> None:
+        """The fast path must stay fast: a ledger that adds up and runs to the report's date
+        is the whole ledger, and the page returns without waiting for the second opinion. The
+        vision read here sleeps far longer than the test would tolerate if it were waited on.
+        """
+        import time
+        text = "\n".join(
+            f"{r['start']} {r['end']} {r['opening']:.2f} 1000.00 0.00 0.00 0.00 0.00 0.00 {r['closing']:.2f}"
+            for r in self._good(3))
+        c = self._client(ocr_text=text, vision_rows=self._good(99), vision_delay=30.0)
+        from gpf.reading import recalc_text
+        with self.mock.patch.object(recalc_text, "reaches_the_report_date", return_value=True):
+            began = time.monotonic()
+            rows, conf = c._extract_recalc_rows("p.png")
+        assert time.monotonic() - began < 5, "the page did not wait for the vision read"
+        assert len(rows) == 3 and conf == 0.97
+
+    def test_and_where_the_ocr_read_is_no_good_the_vision_read_still_decides(self) -> None:
+        c = self._client(ocr_text="", vision_rows=self._good(12))
+        rows, _ = c._extract_recalc_rows("p.png")
+        assert len(rows) == 12
+
+    def test_a_vision_read_that_raises_leaves_the_ocr_read_standing(self) -> None:
+        from gpf.clients.model_client import VllmModelClient
+        c = VllmModelClient.__new__(VllmModelClient)
+        text = "\n".join(
+            f"{r['start']} {r['end']} {r['opening']:.2f} 1000.00 0.00 0.00 0.00 0.00 0.00 {r['closing']:.2f}"
+            for r in self._good(4))
+        c.ocr_table_text = lambda _r: (text, False)
+
+        def boom(_r):
+            raise RuntimeError("the vision server went away")
+
+        c._recalc_rows_from_vision = boom
+        rows, _ = c._extract_recalc_rows("p.png")
+        assert len(rows) == 4

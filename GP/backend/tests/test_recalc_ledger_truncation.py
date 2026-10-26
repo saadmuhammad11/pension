@@ -57,14 +57,24 @@ def test_a_whole_ledger_is_still_read() -> None:
 
 
 def test_the_ceiling_is_high_enough_for_a_long_service_history() -> None:
-    """Forty years at ten columns a row does not fit in four thousand tokens."""
-    seen: dict = {}
+    """Forty years at ten columns a row does not fit in four thousand tokens.
+
+    Captured per endpoint, not last-wins: the OCR and vision reads of the ledger have run
+    CONCURRENTLY since 26 Oct 2026, so which of them finished last was deciding what this
+    test looked at.
+    """
+    import threading
+    seen: dict[str, dict] = {}
+    lock = threading.Lock()
 
     def capture(self, url, model, messages, **kw):
-        seen.update(kw)
+        with lock:
+            seen[url] = dict(kw)
         return _reply(json.dumps({"rows": [], "confidence": 0.5}))
 
     with mock.patch.object(VllmModelClient, "_chat", capture), \
             mock.patch.object(VllmModelClient, "_image_url", return_value="data:,"):
-        _client()._extract_recalc_rows("p1.png")
-    assert seen["max_tokens"] >= 12000
+        c = _client()
+        c._extract_recalc_rows("p1.png")
+    assert seen[c.vision_url]["max_tokens"] >= 12000, "the ledger's own read"
+    assert seen[c.ocr_url]["max_tokens"] >= 8000, "and the OCR transcription beside it"
