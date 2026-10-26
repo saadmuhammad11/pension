@@ -484,6 +484,13 @@ export const GPF_STAGES: [string, string, string[]][] = [
   ['Assembling the claim', 'Putting the pages together into one case', ['assemble']],
   ['Checks and findings', 'Every rule against the facts, and what they come to', ['done']],
 ]
+/** How far the read has got, as one figure. See the note at its call site. */
+export const gpfPct = (j: { total?: number; done?: number; inFlight?: number; state?: string } | null | undefined): number => {
+  if (!j || !j.total) return 0
+  if (j.state === 'done') return 100
+  return Math.round((((j.done ?? 0) + (j.inFlight ?? 0) / 2) / j.total) * 100)
+}
+
 export const gpfStageAt = (key: string): number => {
   const i = GPF_STAGES.findIndex(([, , keys]) => keys.includes(key))
   return i < 0 ? 0 : i
@@ -566,11 +573,17 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
     // Monotonic, and reset by the effect above when a new run starts.
     const at = Math.max(reached.current, gpfStageAt(j?.stage ?? 'queued'))
     reached.current = at
-    // Two numbers, because pages are read four at a time (GPF_READ_CONCURRENCY): `done` is
-    // what is finished and `inFlight` what is with the model now. A bar drawn from `done`
-    // alone sits at nothing while four pages work and then jumps by four, which reads as
-    // stuck — so the solid part is what is finished and the pale part is what is under way.
-    const pct = j && j.total ? Math.round(((j.done ?? 0) / j.total) * 100) : 0
+    // Two numbers, because pages are read several at a time (GPF_READ_CONCURRENCY, 8 since
+    // 26 Oct 2026): `done` is what is finished and `inFlight` what is with the model now. A
+    // bar drawn from `done` alone sits at nothing while eight pages work and then jumps by
+    // eight, which reads as stuck -- and with the tick already on "Reading the fields" it
+    // read as broken. A page in the model's hands is genuinely part-read, so it counts half.
+    //
+    // This was two bars until 26 Oct 2026, a solid one for finished and a pale one for under
+    // way, and they read as two bars racing. One bar, and a page's progress counted once.
+    // It cannot go backwards: a page starting adds a half and a page finishing adds the
+    // other half. It cannot reach the end early either, since done + inFlight <= total.
+    const pct = gpfPct(j)
     // The same scanning view as the pension analysis (shared/scan/ScanViewer), in GP Fund's gold,
     // on the page the module is reading, under the module's own stage names.
     const pg = j?.page ?? (j && j.total ? Math.min(j.total, (j.done ?? 0) + 1) : null)

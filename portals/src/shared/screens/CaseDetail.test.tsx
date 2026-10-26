@@ -5,7 +5,7 @@
  *  could not tell a slow stage from a stuck one.
  */
 import { describe, expect, it } from 'vitest'
-import { GPF_STAGES, gpfStageAt } from './CaseDetail'
+import { GPF_STAGES, gpfPct, gpfStageAt } from './CaseDetail'
 
 describe('the GP Fund stage list', () => {
   it('names every stage the module emits', () => {
@@ -64,5 +64,36 @@ describe('the stage list describes the run, not the page under the model', () =>
     let reached = 0
     for (const st of [...BURST, 'assemble', 'done']) reached = Math.max(reached, gpfStageAt(st))
     expect(reached).toBe(gpfStageAt('done'))
+  })
+})
+
+describe('how far the read has got', () => {
+  /** PC-2026-000077, eight pages in the model's hands at once: the tick was already on
+   *  "Reading the fields" while the bar sat at 0%, because the figure counted only pages
+   *  FINISHED (26 Oct 2026). */
+  it('moves as soon as a page is in the model\'s hands', () => {
+    expect(gpfPct({ total: 6, done: 0, inFlight: 0, state: 'running' })).toBe(0)
+    expect(gpfPct({ total: 6, done: 0, inFlight: 6, state: 'running' })).toBe(50)
+  })
+
+  it('never goes backwards as a page finishes', () => {
+    // A page starting adds a half; the same page finishing adds the other half.
+    const starting = gpfPct({ total: 6, done: 0, inFlight: 1, state: 'running' })
+    const finished = gpfPct({ total: 6, done: 1, inFlight: 0, state: 'running' })
+    expect(finished).toBeGreaterThan(starting)
+  })
+
+  it('never reaches the end while work is still out', () => {
+    // done + inFlight <= total, so the most it can show mid-read is half the remainder.
+    expect(gpfPct({ total: 6, done: 5, inFlight: 1, state: 'running' })).toBeLessThan(100)
+  })
+
+  it('and is complete only when the read is', () => {
+    expect(gpfPct({ total: 6, done: 6, inFlight: 0, state: 'done' })).toBe(100)
+  })
+
+  it('says nothing before the module has counted the pages', () => {
+    expect(gpfPct(null)).toBe(0)
+    expect(gpfPct({ state: 'queued' })).toBe(0)
   })
 })
