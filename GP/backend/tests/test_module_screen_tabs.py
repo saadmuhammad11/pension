@@ -100,8 +100,25 @@ class TestTheOverviewReadsLikeAPensionSummary:
         """Rather than a blank line: the same answer the SAP tab gives."""
         assert "the section pulls it from SAP (R1)" in APP
 
-    def test_a_ledger_that_does_not_add_up_says_so_here_too(self) -> None:
-        assert "do not add up" in self.OVERVIEW or "doNotReconcile" in self.OVERVIEW
+    def test_a_ledger_that_does_not_add_up_is_the_examinations_to_report_not_this_tab_s(self) -> None:
+        """The Overview said it too from 23 Oct 2026, and the SAP extracts tab said it at length
+        in red. The office asked for both off on 25 Oct: an officer opening those tabs is asking
+        what the office HOLDS, and a finding repeated where nothing can be done about it reads as
+        the system complaining about itself. It is raised once, as a hard stop on the
+        examination, where it names the cell to look at and carries the way to clear it."""
+        assert "do not add up" not in self.OVERVIEW and "doNotReconcile" not in self.OVERVIEW
+        # The finding as an officer reads it, not the source that builds it: the sentence is
+        # split across lines there and a grep for it proves nothing.
+        from gpf import rules_common
+        ledger = {"rows": [
+            {"start": "01.07.2001", "end": "30.06.2002", "opening": 1000, "closing": 2000,
+             "subscription": 600, "adjustments": 0, "tempAdvance": 0, "recTempAdvance": 0,
+             "permanentAdvance": 0, "interest": 300}]}
+        r = rules_common._recalc_adds_up({"sap": {"recalc": ledger}})
+        assert r["status"] == "hard"
+        assert "do not reconcile with their own columns" in r["finding"]
+        assert "nothing computed from them can be relied on" in r["finding"]
+        assert "read wrongly" not in r["finding"], "it says what to do, not that it failed"
 
 
 class TestTheOfficerIsNotShownTheMachinesWorking:

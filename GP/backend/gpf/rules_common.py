@@ -111,10 +111,11 @@ def _recalc_adds_up(F):
     named = any(d.get("says") for d in bad)
     return {"status": "hard", "code": "R11",
             "finding": (str(len({d["row"] for d in bad})) + " of the " + str(len(rows))
-                        + " years on the re-calculation report do not reconcile. " + shown + "."
-                        + more
-                        + " The table has been read wrongly, so the balances on this case are not "
-                          "the report's and nothing computed from them can be relied on."),
+                        + " years on the re-calculation report do not reconcile with their own "
+                          "columns. " + shown + "." + more
+                        + " Until they are confirmed against the page the balances on this case are "
+                          "not the report's and nothing computed from them can be relied on, the "
+                          "advance limit included."),
             "remedy": (("Check the cells named above against the original page -- the arithmetic says "
                         "what each should be, but the page is the authority. Correct the figures, or "
                         "pull it from SAP again and upload it on the SAP extracts step.")

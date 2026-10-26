@@ -354,8 +354,9 @@ function sapLine(c) {
   if (s.payslip) parts.push('pay slip');
   if (s.recalc) parts.push(`re-calculation report, ${s.recalc.rows} year${s.recalc.rows === 1 ? '' : 's'}`);
   if (!parts.length) return '<span class="muted">Nothing readable on the case.</span>';
-  const bad = (s.recalc || {}).doNotReconcile;
-  return esc(parts.join(' · ')) + (bad ? ` <span class="note-error">— ${bad} year${bad === 1 ? '' : 's'} do not add up</span>` : '');
+  // What the office holds, and nothing about whether it reconciles: that is the examination's
+  // to say, on the item an officer can act on (25 Oct 2026).
+  return esc(parts.join(' · '));
 }
 
 /**
@@ -496,9 +497,11 @@ function viewSap(c) {
             <tr><td>Opening that period</td><td>${rupees(rc.lastOpening)}</td></tr>
             <tr><td>Closing that period</td><td>${rupees(rc.lastClosing)}</td></tr>
           </tbody></table>
-          ${rc.doNotReconcile ? `<p class="note-error small" role="alert">${rc.doNotReconcile} of these
-            ${rc.rows} years do not add up, so the table has been read wrongly and these figures are
-            not the report's. The examination says which years; the remedy is on the item.</p>` : ''}` 
+          ${''/* The years that do not reconcile are an EXAMINATION finding and are raised there,
+                   with the cell to look at and the officer's way of clearing it (RECALC-ADDS-UP).
+                   This tab answers a different question -- which extracts the office holds -- and
+                   repeating the finding here in red said the same thing twice, the second time
+                   with nothing to do about it (25 Oct 2026). */}` 
       : sapMissing('GPF final re-calculation report', persNo);
     const both = (s.payslipSource || 'case') === (s.recalcSource || 'case');
     return `<div class="panel">
