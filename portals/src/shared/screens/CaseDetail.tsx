@@ -571,7 +571,30 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
         <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <span style={{ width: `${pct}%` }} />
         </div>
-        <div className="gpf-stages">
+        {j && j.total ? (
+          <div className="muted gpf-progress-line" style={{ fontSize: 'var(--t-small)' }}>
+            <span>
+              {j.done ?? 0} of {j.total} read
+              {(j.inFlight ?? 0) > 0 ? ` · ${j.inFlight} under way` : ''}
+            </span>
+            {/* Served by the module rather than timed in the browser, so a clock skew between
+                machines cannot show a negative timer (reading/jobs.py Job.view). */}
+            {j.elapsed != null ? <span className="mono muted">{mmss(j.elapsed)} elapsed</span> : null}
+          </div>
+        ) : null}
+        <div className="an-grid">
+        <div className="gpf-scan an-viewer-slot">
+          <ScanViewer
+            src={pg ? withToken(`/api/v2/cases/${encodeURIComponent(c.id)}/gpf/pages/${pg}`) : null}
+            pageKey={pg}
+            state={j?.state === 'error' ? 'failed' : j?.state === 'done' ? 'done' : 'live'}
+            label={j?.artefact ? `${stageWord} · ${String(j.artefact).replace(/_/g, ' ').toLowerCase()}` : stageWord}
+            caption={[pg ? `Page ${pg}${j?.total ? ` of ${j.total}` : ''}` : 'Preparing the pages', stageWord]}
+            note={j && j.state === 'running' && (j.elapsed ?? 0) > 20 && (j.done ?? 0) === 0 ? 'The first page takes longest while the model warms up.' : null}
+            waiting="Preparing the pages…" />
+        </div>
+        {/* The stages, and which one is running. */}
+        <div className="an-stages">
           {GPF_STAGES.map(([name, sub], i) => {
             const at = gpfStageAt(j?.stage ?? 'queued')
             const finished = j?.state === 'done'
@@ -588,26 +611,6 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
             )
           })}
         </div>
-        {j && j.total ? (
-          <div className="muted gpf-progress-line" style={{ fontSize: 'var(--t-small)' }}>
-            <span>
-              {j.done ?? 0} of {j.total} read
-              {(j.inFlight ?? 0) > 0 ? ` · ${j.inFlight} under way` : ''}
-            </span>
-            {/* Served by the module rather than timed in the browser, so a clock skew between
-                machines cannot show a negative timer (reading/jobs.py Job.view). */}
-            {j.elapsed != null ? <span className="mono muted">{mmss(j.elapsed)} elapsed</span> : null}
-          </div>
-        ) : null}
-        <div className="gpf-scan" style={{ marginTop: 'var(--s4)' }}>
-          <ScanViewer
-            src={pg ? withToken(`/api/v2/cases/${encodeURIComponent(c.id)}/gpf/pages/${pg}`) : null}
-            pageKey={pg}
-            state={j?.state === 'error' ? 'failed' : j?.state === 'done' ? 'done' : 'live'}
-            label={j?.artefact ? `${stageWord} · ${String(j.artefact).replace(/_/g, ' ').toLowerCase()}` : stageWord}
-            caption={[pg ? `Page ${pg}${j?.total ? ` of ${j.total}` : ''}` : 'Preparing the pages', stageWord]}
-            note={j && j.state === 'running' && (j.elapsed ?? 0) > 20 && (j.done ?? 0) === 0 ? 'The first page takes longest while the model warms up.' : null}
-            waiting="Preparing the pages…" />
         </div>
       </div>
     )

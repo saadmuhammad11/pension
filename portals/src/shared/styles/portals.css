@@ -686,7 +686,8 @@ button.btn-primary:not(:disabled):hover { box-shadow: none; transform: none; }
 .doc-link { color: var(--green2); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .doc-link:hover { color: var(--green); }
 
-/* The GP Fund reading's stage list (26 Oct 2026). The rows themselves are the pension
-   analysis's (.an-stage in base.css), so the two readings look like one system; this only
-   gives them their column inside the progress card. */
-.gpf-stages { display: grid; gap: 2px; margin-top: var(--s2); }
+/* The GP Fund reading uses the pension analysis's own grid and stage rows (.an-grid,
+   .an-stages in base.css), so the page being read and the stage list sit exactly where an
+   officer has already learnt to find them (26 Oct 2026). Only the card's own top margin is
+   needed here. */
+.gpf-progress .an-grid { margin-top: var(--s4); }
