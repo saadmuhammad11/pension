@@ -93,8 +93,38 @@ def test_the_wording_for_a_refusal_no_longer_names_one_desk() -> None:
 
 
 def test_the_screen_draws_a_refusal_rather_than_hiding_the_button() -> None:
-    block = APP[APP.index("if (cure.kind === 'verify')"):APP.index("if (cure.kind === 'doc')")]
+    """`!decisionOnly &&` joined both conditions on 26 Oct 2026: a hard stop is answered by
+    approving or rejecting it, and offers neither of these."""
+    block = APP[APP.index("cure.kind === 'verify'"):APP.index("cure.kind === 'doc'")]
     assert "r.verifyOption" in block
     assert block.count("disabled title=") == 2          # both buttons, never removed
     assert "vo.allowed !== false" in block
     assert "esc(vwhy)" in block                          # and the reason is shown, not only hinted
+
+
+def test_a_hard_stop_offers_the_decision_and_nothing_else() -> None:
+    """Four buttons -- Record verified, Did not verify, Approve, Reject -- stood on a decision
+    that is binary, and on one claim a fifth (upload a document). The office asked for the two
+    (26 Oct 2026). Verifying and curing stay on advisories, where the point is to clear them."""
+    assert "const decisionOnly = r.status === 'hard'" in APP
+    for gated in ("!decisionOnly && cure.kind === 'verify'",
+                  "!decisionOnly && cure.kind === 'doc'",
+                  "!decisionOnly && (r.status === 'sap' || cure.kind === 'sap')"):
+        assert gated in APP, gated
+
+
+def test_a_decision_already_recorded_is_not_offered_again() -> None:
+    """An officer who had just approved a hard stop was shown Approve and Reject exactly as
+    before, with nothing to say the matter was closed."""
+    assert "r.disposition && !r.disposition.stale" in APP
+    assert "DISP_WORD[taken.action]" in APP
+    assert "waive: 'Approved', uphold: 'Rejected'" in APP
+
+
+def test_a_stale_disposition_opens_the_item_again() -> None:
+    """engine.disposition_in_force says a disposition whose finding changed under it is not in
+    force; the screen has to agree, or the item can never be decided a second time."""
+    from gpf.engine import disposition_in_force
+    assert disposition_in_force({"action": "waive"}) is not None
+    assert disposition_in_force({"action": "waive", "stale": True}) is None
+    assert "!r.disposition.stale" in APP

@@ -657,7 +657,7 @@ function itemHtml(c, r, collapsed) {
       <span class="item-title">${esc(heading.title)}${heading.sub ? `<span class="item-doc">${esc(heading.sub)}</span>` : ''}</span>
       ${r.code ? `<span class="pill">${esc(r.code)}</span>` : ''}
       <span class="item-id">${esc(r.id)}</span>
-      ${disp ? `<span class="disp-tag">${esc(disp.action)}${disp.cured ? ' · cured' : ''}</span>` : ''}
+      ${disp ? `<span class="disp-tag">${esc(DISP_WORD[disp.action] || disp.action)}${disp.cured ? ' · cured' : ''}</span>` : ''}
     </div>
     <div class="item-body">
       <div class="finding">${esc(r.finding || '')}</div>
@@ -669,13 +669,33 @@ function itemHtml(c, r, collapsed) {
   </div>`;
 }
 
+//: The officer's words for a disposition, for a decision already taken. The record keeps
+//: 'waive' and 'uphold', which is what the service and the audit trail call them.
+const DISP_WORD = { waive: 'Approved', uphold: 'Rejected', correct: 'Sent for correction', refer: 'Referred' };
+
 function actionsHtml(r) {
   const btns = [];
   const cure = r.cure || {};
-  if (r.status === 'sap' || cure.kind === 'sap') {
+  // A decision already recorded is not offered again (26 Oct 2026). It used to be: an officer
+  // who had just approved a hard stop was shown Approve and Reject exactly as before, with
+  // nothing on the buttons to say the matter was closed. A disposition that has gone stale --
+  // its finding changed under it -- is not in force, and that item is open again.
+  const taken = r.disposition && !r.disposition.stale ? r.disposition : null;
+  if (taken) {
+    const who = [taken.by, taken.desig].filter(Boolean).join(', ');
+    return `<span class="muted small">${esc(DISP_WORD[taken.action] || taken.action)}`
+      + (who ? ` by ${esc(who)}` : '') + (taken.at ? ` · ${esc(String(taken.at).slice(0, 10))}` : '')
+      + (taken.cured ? ' · cured' : '') + `</span>`;
+  }
+  // A hard stop is answered one way: the officer approves it or rejects it. Verifying it, or
+  // uploading a paper against it, stood beside those two and made four buttons out of a
+  // decision that is binary (26 Oct 2026). Those routes stay on advisories and on the items
+  // whose whole purpose is to be cured.
+  const decisionOnly = r.status === 'hard';
+  if (!decisionOnly && (r.status === 'sap' || cure.kind === 'sap')) {
     btns.push(`<button class="btn small" data-act="gosap">Go to SAP extracts</button>`);
   }
-  if (cure.kind === 'verify') {
+  if (!decisionOnly && cure.kind === 'verify') {
     // Shown disabled with the reason when this desk may not verify, the way a disposition the
     // officer may not record is shown (23 Oct 2026). Until now every desk was offered these,
     // and a Dealing Assistant -- who may not verify -- got a 403 for an answer each time.
@@ -691,7 +711,7 @@ function actionsHtml(r) {
       : `<button class="btn small" data-act="verify-no" disabled title="${esc(vwhy)}">Did not verify</button>`);
     if (!vok && vwhy) btns.push(`<span class="muted small">${esc(vwhy)}</span>`);
   }
-  if (cure.kind === 'doc') {
+  if (!decisionOnly && cure.kind === 'doc') {
     btns.push(`<button class="btn small primary" data-act="cure-doc">Upload document against this</button>`);
   }
   if (r.status === 'hard' || r.status === 'adv') {
