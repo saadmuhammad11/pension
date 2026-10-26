@@ -224,11 +224,16 @@ class ReadingPipeline:
                         settled, why = sanction_claim.settle(artefact, self.model.ocr_text(pg.image_ref))
                     except Exception:                      # noqa: BLE001 -- the reading stands
                         settled, why = artefact, ""
-                    if settled != artefact:
+                    if why:
+                        # Said whenever there is something to say -- a demotion, or a reading
+                        # kept without corroboration. Only a change used to be reported, so a
+                        # page kept on the classifier's word alone looked the same as a page
+                        # nothing had questioned (26 Oct 2026).
                         out["needs_human"].append({"page": pg.number, "artefact": artefact,
                                                    "field": "document type", "confidence": cls.confidence,
                                                    "threshold": cls.confidence, "why": why})
-                        artefact = settled
+                        why_not = f"{why_not}; {why}"
+                    artefact = settled
                 # And the same question the other way round (26 Oct 2026, PC-2026-000063): a
                 # page the classifier would not name, whose text says in terms that a GP Fund
                 # advance is sanctioned, is the sanction. UNKNOWN reaches no merger, so such a

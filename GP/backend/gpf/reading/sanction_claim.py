@@ -113,7 +113,24 @@ def settle(artefact: str, text: str) -> tuple[str, str]:
         return (Artefact.CNIC_SMART_BACK.value,
                 "classified as the sanction order, but the page carries a CNIC number and no "
                 "word of a sanction: it is the back of a CNIC")
-    # UNKNOWN is "cannot tell -- escalate to a person", which is what this is: the page is
-    # not the sanction and nothing here knows what it is instead.
-    return (Artefact.UNKNOWN.value,
-            "classified as the sanction order, but nothing on the page speaks of a sanction")
+    # Everything else KEEPS the classifier's reading, and says so to a person.
+    #
+    # It used to fall through to UNKNOWN -- "the page is not the sanction and nothing here
+    # knows what it is instead" -- and that was wrong in a way that took PC-2026-000063 to
+    # show (26 Oct 2026). Page 4 of that claim is an S&GAD ORDER reading "Sanction is hereby
+    # accorded to the grant of G.P Fund advance amounting to Rs.120,000/-". The classifier
+    # called it SANCTION_ORDER at 0.98. The OCR of that page came back without the words, so
+    # this demoted it to UNKNOWN -- and UNKNOWN reaches no merger, so the sanction vanished
+    # from the case entirely and the checklist reported none on file. Four re-readings said
+    # the same thing and nothing on the case could explain why.
+    #
+    # Absence of corroboration is not evidence. The classifier read the IMAGE, which carries
+    # the letterhead, the layout and the signature block; OCR reads characters and can fail on
+    # a page under a diary stamp and a page of red pen. So a demotion now needs POSITIVE
+    # evidence that the page is something else -- which is what the CNIC back above is, and
+    # what this guard was built for. Failing to corroborate is put to a person instead: being
+    # shown a page to confirm costs a glance, and a document deleted from a claim costs the
+    # claim.
+    return (artefact,
+            "classified as the sanction order; nothing in the page's text corroborates that. "
+            "Confirm the page is the sanction.")

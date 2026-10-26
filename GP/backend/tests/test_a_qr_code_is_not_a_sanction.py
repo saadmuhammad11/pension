@@ -97,13 +97,38 @@ class TestWhatIsNotTouched:
 
 
 class TestAPageThatIsNeither:
+    """It used to become UNKNOWN, and that was wrong (26 Oct 2026).
 
-    def test_it_goes_to_a_person_rather_than_to_the_sanction(self) -> None:
-        art, why = settle(Artefact.SANCTION_ORDER.value,
-                          "Office of the Accountant General, Punjab. Acknowledgement of receipt "
-                          "of the papers listed below, received in this office on 12.09.2026.")
-        assert art == Artefact.UNKNOWN.value
-        assert "nothing on the page speaks of a sanction" in why
+    PC-2026-000063 page 4 is an S&GAD ORDER reading "Sanction is hereby accorded to the grant
+    of G.P Fund advance amounting to Rs.120,000/-", under a diary stamp and a page of red pen.
+    The classifier called it SANCTION_ORDER at 0.98 and the OCR of it came back without the
+    words, so this demoted it to UNKNOWN -- which reaches no merger, so the sanction left the
+    case altogether and the checklist reported none on file. Four re-readings repeated it.
+
+    Absence of corroboration is not evidence. The classifier reads the IMAGE -- letterhead,
+    layout, signature block -- and OCR reads characters and can fail. A demotion needs
+    POSITIVE evidence that the page is something else; the CNIC back above is that, and is
+    what this guard was built for. Anything else keeps the reading and is put to a person.
+    """
+
+    NEITHER = ("Office of the Accountant General, Punjab. Acknowledgement of receipt "
+               "of the papers listed below, received in this office on 12.09.2026.")
+
+    def test_the_reading_is_kept(self) -> None:
+        art, _ = settle(Artefact.SANCTION_ORDER.value, self.NEITHER)
+        assert art == Artefact.SANCTION_ORDER.value
+
+    def test_but_a_person_is_asked_to_confirm_the_page(self) -> None:
+        _, why = settle(Artefact.SANCTION_ORDER.value, self.NEITHER)
+        assert "nothing in the page's text corroborates that" in why
+        assert "Confirm the page" in why
+
+    def test_the_cnic_back_is_still_taken_away(self) -> None:
+        """The failure this guard exists for is positive evidence and still demotes."""
+        art, why = settle(Artefact.SANCTION_ORDER_QR.value,
+                          "00001-0000001-1 500000000001 270-00-000001 Registrar General")
+        assert art == Artefact.CNIC_SMART_BACK.value
+        assert "it is the back of a CNIC" in why
 
 
 class TestThePipelineAsksTheQuestion:
