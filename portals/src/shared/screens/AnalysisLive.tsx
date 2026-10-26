@@ -49,7 +49,6 @@ const WORK_ON = /(?:stage \d+\s+(?:reading\s+)?|signature\s+|form text\s+)([A-Za
 const VERB: Record<number, string> = { 2: 'Second reading', 3: 'Reading the details', 4: 'Cross-checking', 5: 'Checking the signature' }
 
 /** How many log lines the screen keeps (F16). */
-const LOG_LINES = 300
 
 const shortName = (t: string) => documentLabel(t).split(' — ')[0]
 
@@ -63,7 +62,6 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
   const startedAt = useRef(Date.now())
   const [, setStartKnown] = useState(false)
   const mountedAt = useRef(Date.now())
-  const consoleRef = useRef<HTMLDivElement>(null)
   useMediaTokenVersion()                                  // page addresses carry the media token (F10)
 
   useEffect(() => {
@@ -106,10 +104,6 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
     const t = setTimeout(onDone, finished !== 'done' ? 1500 : barFull ? 900 : 12000)
     return () => clearTimeout(t)
   }, [finished, barFull, onDone])
-
-  useEffect(() => {
-    if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight
-  }, [events])
 
   // -- what the stream has said, as facts -----------------------------------------------------
   const facts = useMemo(() => {
@@ -179,7 +173,6 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
   }, [targetPage, page, working])
   const quiet = (now - facts.lastEventAt) / 1000
   // The log on screen is the last 300 lines (F16); the facts above are drawn from all of them.
-  const logLines = useMemo(() => events.slice(-LOG_LINES), [events])
   const workDoc = !working ? '' : /^[A-Z0-9_]+$/.test(working.doc) ? shortName(working.doc) : working.doc
   const slowLine = !finished && quiet > 45 && working
     ? `Still on ${workDoc} (p.${working.page}) — a dense page can take a minute or two. Last update ${mmss(quiet)} ago.`
@@ -253,18 +246,11 @@ export function AnalysisLive({ runId, onDone }: { runId: string; onDone: () => v
       </div>
       </div>
 
-      <div className="an-log-head">Technical log</div>
-      <div ref={consoleRef} className="mono an-log">
-        {events.length === 0 && <div style={{ opacity: .6 }}>waiting for the first stage…</div>}
-        {events.length > LOG_LINES && <div style={{ opacity: .6 }}>… {events.length - LOG_LINES} earlier lines not shown</div>}
-        {logLines.map(e => (
-          <div key={e.seq} style={{
-            color: e.level === 'error' ? 'var(--log-err)' : e.level === 'warn' ? 'var(--log-warn)' : undefined,
-          }}>
-            {e.at}  {e.stage.padEnd(10)}  {e.message}
-          </div>
-        ))}
-      </div>
+      {/* The technical log stood here: three hundred lines of stage, timestamp and message,
+          under a screen that already says which stage is running, which page is being read
+          and how far along it is. It was the engineer's view of a run on an officer's screen
+          (26 Oct 2026). The events still drive everything above -- the bar, the stage list
+          and the page -- they are no longer printed. */}
     </div>
   )
 }

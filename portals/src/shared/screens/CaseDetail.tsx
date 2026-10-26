@@ -564,24 +564,39 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
     // on the page the module is reading, under the module's own stage names.
     const pg = j?.page ?? (j && j.total ? Math.min(j.total, (j.done ?? 0) + 1) : null)
     const stageWord = GPF_STAGE[j?.stage ?? ''] ?? 'Reading the claim'
+    // The pension analysis's screen, for the other product (26 Oct 2026): the same head, the
+    // same bar and percentage, the same live line, the same page-and-stages grid. An officer
+    // moving between a pension case and a GP Fund claim should not have to learn a second
+    // screen for the same act.
     return (
       <div className="card gpf-progress" style={{ marginTop: 'var(--s4)' }}>
-        <div style={{ fontWeight: 600, fontSize: 16 }}>{j?.state === 'error' ? 'The examination could not read the pages' : 'Reading the claim…'}</div>
-        <div className="muted">{j?.detail ?? j?.message ?? 'The module classifies each page and extracts its fields; a page takes 5 to 15 seconds.'}</div>
-        <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-          <span style={{ width: `${pct}%` }} />
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: '0 0 4px' }}>AI Analysis</h2>
+          {j?.state === 'error' ? <span className="pill high">FAILED</span>
+            : j?.state === 'done' ? <span className="pill low">COMPLETE</span>
+            : <span className="pill medium an-live">LIVE</span>}
+          <span style={{ flex: 1 }} />
+          {/* Timed by the module, not in the browser, so a clock skew between machines cannot
+              show a negative timer (reading/jobs.py Job.view). */}
+          {j?.elapsed != null ? <span className="mono muted" style={{ fontSize: 12 }}>{mmss(j.elapsed)} elapsed</span> : null}
         </div>
-        {j && j.total ? (
-          <div className="muted gpf-progress-line" style={{ fontSize: 'var(--t-small)' }}>
-            <span>
-              {j.done ?? 0} of {j.total} read
-              {(j.inFlight ?? 0) > 0 ? ` · ${j.inFlight} under way` : ''}
-            </span>
-            {/* Served by the module rather than timed in the browser, so a clock skew between
-                machines cannot show a negative timer (reading/jobs.py Job.view). */}
-            {j.elapsed != null ? <span className="mono muted">{mmss(j.elapsed)} elapsed</span> : null}
+        <div className="an-bar-wrap">
+          <div className="an-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100}
+               aria-valuenow={pct} aria-label="Examination progress">
+            <div className={`an-fill${j?.state === 'done' || j?.state === 'error' ? '' : ' is-live'}`}
+                 style={{ width: `${pct}%`, transition: 'width 1s linear' }} />
           </div>
-        ) : null}
+          <span className="an-pct">{pct}%</span>
+        </div>
+        {/* The live region is the WRAPPER, not the line: `key` remounts the line to restart
+            its animation, and a live region replaced rather than changed is not announced. */}
+        <div aria-live="polite" aria-atomic="true">
+          <div className="an-now" key={j?.detail ?? j?.message ?? j?.stage ?? ''}>
+            <span className="an-dot" aria-hidden="true" />
+            {j?.state === 'error' ? 'The examination could not read the pages.'
+              : j?.detail ?? j?.message ?? 'The module identifies each page and reads its fields.'}
+          </div>
+        </div>
         <div className="an-grid">
         <div className="gpf-scan an-viewer-slot">
           <ScanViewer

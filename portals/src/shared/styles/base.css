@@ -382,6 +382,3 @@ tr.total td { background: var(--sage); font-weight: 700; border-bottom-color: va
 .an-tile.is-read:hover { transform: translateY(-2px); }
 .an-tile.is-current { outline: 3px solid var(--gold); outline-offset: 1px; }
 .an-follow { margin-left: 8px; padding: 5px 10px; font-size: 12px; }
-.an-log-head { margin-top: 18px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
-.an-log { margin-top: 6px; height: 240px; overflow-y: auto; background: #1F2328; color: #D1D5DB;
-  border-radius: 14px; padding: 14px 16px; line-height: 1.6; font-size: 12px; }
