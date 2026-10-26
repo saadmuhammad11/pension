@@ -156,18 +156,21 @@ function Shell({ config }: { config: PortalConfig }) {
       <a href={productHref('GPF', pr?.view, home)} className={product === 'GPF' ? 'is-active' : ''}>GP Fund</a>
       {product && <>
         <span className="nav-sep" aria-hidden="true" />
-        {/* Cases, then Dashboard, on every portal (22 Oct 2026). The two sides had opposite
-            orders, each listing the tab that role opens on first: a department opens on its
-            cases, the Office of the Accountant General's desk and the administrator on the dashboard. One
-            order is easier to learn than two, and the cases are the work.
+        {/* Dashboard, then Cases, on every portal (26 Oct 2026, the office's reading; it was
+            the other way round from 22 Oct). ONE order on both sides is the part that matters
+            and is unchanged -- the two sides used to list whichever tab that role opened on
+            first, and one order is easier to learn than two.
+            Order only. Where a role LANDS is registerView(home) below and is untouched by
+            this: a department still opens on its cases and sees the dashboard second, the
+            Office of the Accountant General and the administrator still open on the dashboard.
             The addresses are productSwitch's, so the tabs and the product links cannot drift:
             a department's dashboard has its own address because its bare one is its cases,
             and for every other role the bare address IS the dashboard. A bare #/{slug} counts
             as the tab it is about to become while it redirects (12 Oct 2026). */}
-        <a href={productHref(product, 'cases', home)}
-           className={pr?.view === 'cases' || (pr?.view === 'home' && home === 'register') ? 'is-active' : ''}>Cases</a>
         <a href={productHref(product, 'dashboard', home)}
            className={pr?.view === 'dashboard' || (pr?.view === 'home' && home !== 'register') ? 'is-active' : ''}>Dashboard</a>
+        <a href={productHref(product, 'cases', home)}
+           className={pr?.view === 'cases' || (pr?.view === 'home' && home === 'register') ? 'is-active' : ''}>Cases</a>
       </>}
       {home === 'admin' && <>
         <span className="nav-sep" aria-hidden="true" />
