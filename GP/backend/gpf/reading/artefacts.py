@@ -33,6 +33,7 @@ class Artefact(str, Enum):
     CNIC_OLD_FRONT = "CNIC_OLD_FRONT"
     CNIC_OLD_BACK = "CNIC_OLD_BACK"                # may carry a printed thumbprint + PDF417
     SERVICE_BOOK_PAGE = "SERVICE_BOOK_PAGE"
+    FP_PROFORMA = "FP_PROFORMA"                    # "Proforma for GP Fund final payment"
     SAP_PAYSLIP = "SAP_PAYSLIP"
     SAP_GPF_RECALC_REPORT = "SAP_GPF_RECALC_REPORT"
     BALANCE_TRANSFER_PROF = "BALANCE_TRANSFER_PROF"
@@ -51,6 +52,16 @@ CLASSIFY_HINTS = {
     Artefact.FORM_PAY_06: "Compendium Form P.F.6 (insurance assignment) is NOT FORM PAY 06.",
     Artefact.UNDERTAKING_STAMP_PAPER: "An undertaking on stamp paper is NOT an affidavit for lawful widow.",
     Artefact.SUCCESSION_PETITION: "A court application for a succession certificate is NOT a granted certificate.",
+    # 26 Oct 2026, PC-2026-000073: page 1 was the proforma and no class described it, so the
+    # classifier had nothing to call it and the claim reported no service book at all. The two
+    # are easy to confuse and the department sends the proforma INSTEAD of the book, so the
+    # legend separates them by what is actually on the page.
+    Artefact.FP_PROFORMA: "A typed office form headed PROFORMA FOR GP FUND FINAL PAYMENT, filled in by hand and "
+                          "signed by the Drawing and Disbursing Officer: PARTICULARS OF EMPLOYEE (name, CNIC, "
+                          "designation, personnel number, dates of birth / appointment / retirement, type of "
+                          "retirement) and SERVICE RECORD SUMMARY (suspension, EOL, study leave, deputation, "
+                          "penalties), mostly NIL. It is NOT a page of a Service Book, which is a bound register "
+                          "in columns with service entries signed over many years, and NOT the GPF Form 10.",
 }
 
 #: One-line description of each type, given to the classifier as a legend.
@@ -59,6 +70,8 @@ ARTEFACT_LEGEND = {
     Artefact.GPF_FORM_10: "the printed 'G.P.F. 10' / 'Revised GPF-10' final-payment application form",
     Artefact.FORM_PAY_05: "the 'FORM PAY 05' / 'Change Form-05' temporary loans & advances form",
     Artefact.FORM_PAY_06: "the 'FORM PAY 06' / 'Change Form-06' / 'Form 6-B' permanent loans & advances form",
+    Artefact.FP_PROFORMA: "the office's PROFORMA FOR GP FUND FINAL PAYMENT -- particulars of the employee and a "
+                          "service record summary, signed by the DDO; sent in place of the original Service Book",
     Artefact.SANCTION_ORDER: "an official sanction ORDER of an advance (letterhead, order/memo no., 'sanctioned', amount, rule), even if it carries office diary stamps",
     Artefact.SANCTION_ORDER_QR: "a sanction order that prints a QR code (Health/Education/Police)",
     Artefact.RETIREMENT_NOTIF: "a retirement/superannuation notification or office order",

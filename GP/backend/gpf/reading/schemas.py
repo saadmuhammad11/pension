@@ -173,6 +173,16 @@ SCHEMAS: dict[Artefact, list[FieldSpec]] = {
         _f("leave", SERVICE_BOOK, kind="bool", desc="leave account present"),
         _f("date_of_appointment", SERVICE_BOOK),
     ],
+    Artefact.FP_PROFORMA: [
+        _f("name", IDENTITY), _f("father", IDENTITY),
+        _f("cnic", IDENTITY, identifier=True), _f("personnel_no", IDENTITY, identifier=True),
+        _f("designation", NARRATIVE), _f("department", NARRATIVE),
+        _f("date_of_appointment", SERVICE_BOOK), _f("date_of_retirement", SERVICE_BOOK),
+        _f("type_of_retirement", SERVICE_BOOK, desc="superannuation / retiring / invalid / death / other"),
+        _f("leave_summary_filled", SERVICE_BOOK, kind="bool",
+           desc="the SERVICE RECORD SUMMARY section is filled in (EOL, study leave and the rest, NIL counting as filled)"),
+        _f("ddo_signed", SERVICE_BOOK, kind="bool", desc="signed and stamped by the Drawing and Disbursing Officer"),
+    ],
     Artefact.BALANCE_TRANSFER_PROF: [
         _f("name", IDENTITY), _f("father", IDENTITY), _f("designation", NARRATIVE),
         _f("old_ac", FINANCIAL, identifier=True), _f("new_ac", FINANCIAL, identifier=True),

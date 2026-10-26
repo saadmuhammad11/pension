@@ -629,15 +629,19 @@ def _fp_sb(F):
         return {"status": "hard", "finding": "No Proforma For Service is on file for a non-gazetted subscriber.",
                 "remedy": "Produce the Proforma For Service.", "cure": cure}
     e = sb.get("entries") or {}
+    # The department sends the proforma in the book's place (26 Oct 2026), and the officer
+    # reading the finding should be told which paper was found.
+    what = ("Proforma For Service at page " + str(sb.get("page")) if sb.get("proforma")
+            else "Service Book")
     miss = []
     if not e.get("dor"):
         miss.append("date of retirement")
     if not e.get("order"):
-        miss.append("order of retirement")
+        miss.append("type or order of retirement" if sb.get("proforma") else "order of retirement")
     if not e.get("leave"):
         miss.append("leave account")
     if not miss:
-        return {"status": "ok", "finding": "Service Book carries the requisite entries."}
+        return {"status": "ok", "finding": what + " carries the requisite entries."}
     v = verified(F, "FP-SB")
     if v:
         if v.get("ok"):
@@ -648,6 +652,15 @@ def _fp_sb(F):
                 "finding": "The original Service Book does not show: " + ", ".join(miss) + ". " + (v.get("note") or ""),
                 "remedy": "Department to complete the Service Book entries.", "cure": cure}
     note = sb.get("note") or ("pages " + ", ".join(str(x) for x in (sb.get("pages") or [])))
+    if sb.get("proforma"):
+        # The whole paper IS in the case, so nothing is out of sight: what it does not record,
+        # it does not record, and that is the department's to complete.
+        return {"status": "conf",
+                "finding": (what + " does not record the " + ", ".join(miss) + "."),
+                "remedy": ("Check the entry against the original record and complete the proforma where it is "
+                           "blank (B2-viii)."),
+                "evidence": [ev(sb.get("page"), "Proforma For Service")] if sb.get("page") else [],
+                "cure": {"kind": "verify", "vid": "FP-SB"}}
     return {"status": "conf",
             "finding": ("Only " + note + " of the Service Book are in the scanned case, so the " + ", ".join(miss)
                         + " cannot be seen. That does not show they are missing from the original."),

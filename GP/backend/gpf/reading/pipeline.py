@@ -310,6 +310,18 @@ def assemble_facts(page_results: list[PageResult], *, kind: Optional[str] = None
     F: dict = {"kind": kind, "gazetted": gazetted, "docs": {}, "qr": [], "signatures": [],
                "thumbs": [], "custom": [], "verifications": {}, "sap": None, "persNos": []}
 
+    # What every page was taken to be, kept on the case (26 Oct 2026). Only the pages that
+    # MERGED left a trace before this, so a page the classifier read as the wrong thing -- or
+    # as something with no merger at all -- vanished without one, and the claim simply said
+    # the document was not there. PC-2026-000063 carried its sanction order on page 4 and the
+    # checklist reported no sanction; nothing on the case could say what page 4 had been
+    # called instead, so the miss could not be diagnosed without reading the claim again.
+    # The rules do not read this. It is the reading's account of itself.
+    F["pages"] = [{"page": pr.page, "artefact": pr.artefact,
+                   "confidence": round(float(pr.classify_confidence or 0.0), 3),
+                   "merged": pr.artefact in _MERGERS,
+                   "fields": sorted(pr.fields)} for pr in page_results]
+
     for pr in page_results:
         merger = _MERGERS.get(pr.artefact)
         if merger:
@@ -440,6 +452,30 @@ def _merge_service_book(F, pr):
     sb["entries"] = {"dor": bool(_v(f, "dor")), "order": bool(_v(f, "order")), "leave": bool(_v(f, "leave"))}
 
 
+def _merge_fp_proforma(F, pr):
+    """The proforma stands where the Service Book would (A2-vii, 26 Oct 2026).
+
+    Named _merge_fp_proforma, not _merge_proforma: the balance transfer has a proforma of its
+    own and had the plain name first. Two functions of one name is how this merger was wired
+    and then silently replaced by the other (26 Oct 2026).
+
+    The department sends it INSTEAD of the original book, so it fills the same slot. Its
+    entries are read off the form itself and not assumed: the date of retirement and the type
+    of retirement are printed lines on it, and the SERVICE RECORD SUMMARY is the leave account
+    in summary. Where a line is blank the entry stays false and FP-SB asks for it, which is
+    the same answer it would give on a book missing that entry.
+    """
+    f = pr.fields
+    F["docs"]["serviceBook"] = {
+        "present": True, "proforma": True, "page": pr.page, "pages": [pr.page],
+        "label": "Proforma for GP Fund final payment",
+        "entries": {"dor": bool(_v(f, "date_of_retirement")),
+                    "order": bool(_v(f, "type_of_retirement")),
+                    "leave": bool(_v(f, "leave_summary_filled"))},
+        "ddoSigned": bool(_v(f, "ddo_signed")),
+    }
+
+
 def _merge_covering(F, pr):
     F["docs"]["covering"] = {"present": True, "page": pr.page, "nature": "Forwarding instrument"}
 
@@ -467,6 +503,7 @@ _MERGERS = {
     Artefact.PUNISHMENT_ORDER.value: _merge_notification("Punishment order, dismissal from service"),
     Artefact.OBITUARY_NOTIF.value: _merge_notification("Obituary notification"),
     Artefact.SERVICE_BOOK_PAGE.value: _merge_service_book,
+    Artefact.FP_PROFORMA.value: _merge_fp_proforma,
     Artefact.COVERING_LETTER.value: _merge_covering,
     Artefact.BALANCE_TRANSFER_PROF.value: _merge_proforma,
 }
