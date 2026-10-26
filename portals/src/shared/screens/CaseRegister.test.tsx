@@ -211,3 +211,51 @@ describe('the tile survives the move to the cases tab', () => {
     expect(screen.getByRole('status').textContent).toBe('Showing 1 case · With the departments')
   })
 })
+
+describe('a case nobody has examined is not a case awaiting a decision (26 Oct 2026)', () => {
+  const mk = (n: number, status: CaseStatus, from = 0) => Array.from({ length: n }, (_, i) => ({
+    id: `c${from + i}`, case_no: `PC-2026-${String(from + i).padStart(6, '0')}`, status,
+    department_code: 'sgad', department_name: 'S&GAD', pension_section: 'Pension-I',
+    created_via: 'DEPARTMENT', product: 'PENSION', submission_no: 1,
+    created_at: '2026-10-01T00:00:00', updated_at: '2026-10-01T00:00:00',
+  })) as unknown as Parameters<typeof CaseRegister>[0]['rows']
+
+  /** Four received and not yet read; six read and waiting on an officer. */
+  const ROWS = [...mk(4, 'FORWARDED'), ...mk(6, 'UNDER_REVIEW', 4)] as ReturnType<typeof mk>
+
+  const draw = (role: string) => render(
+    <CaseRegister product="PENSION" rows={ROWS} title="Cases" lead="lead"
+                  waitingOn={['FORWARDED', 'AI_FAILED', 'UNDER_REVIEW']} onOpen={() => {}}
+                  role={role} view="cases" charts={null} />,
+  )
+  const chip = (name: RegExp) => screen.queryByRole('button', { name })
+  const listed = () => screen.getAllByRole('row').length - 1
+
+  it('the Office is offered the two separately', () => {
+    draw('AG_AO')
+    expect(chip(/^Not yet examined$/)).toBeTruthy()
+    expect(chip(/^Awaiting decision$/)).toBeTruthy()
+  })
+
+  it('"Not yet examined" is only the cases nobody has read', () => {
+    draw('AG_AO')
+    fireEvent.click(chip(/^Not yet examined$/)!)
+    expect(listed()).toBe(4)
+  })
+
+  it('and "Awaiting decision" no longer sweeps them up', () => {
+    // All ten used to answer to this chip, which read as ten officers' decisions pending.
+    draw('AG_AO')
+    fireEvent.click(chip(/^Awaiting decision$/)!)
+    expect(listed()).toBe(6)
+  })
+
+  it('a department sees neither split: the case is simply with the Office', () => {
+    draw('DEPT_OFFICER')
+    expect(chip(/^Not yet examined$/)).toBeNull()
+    const withAg = chip(/^With the AG$/)
+    expect(withAg).toBeTruthy()
+    fireEvent.click(withAg!)
+    expect(listed()).toBe(10)          // everything on the Office's desk, as before
+  })
+})

@@ -50,13 +50,24 @@ const SHORT: Record<CaseStatus, string> = {
 }
 
 /** The status chips: one colour, one meaning, the same as the badges. */
-type Group = '' | 'awaiting' | 'pending' | 'returned' | 'approved' | 'rejected'
-//: `ag: null` means the chip is a department's own and is not drawn on this side. A case not
-//: yet submitted is the department's to finish and the AG has nothing to do with it; offering
-//: the Office a filter for it was offering a filter on somebody else's work (24 Oct 2026).
-//: Such a case is still counted and still listed under All -- only the chip has gone.
-const GROUPS: { key: Group; dept: string; ag: string | null; statuses: CaseStatus[] }[] = [
-  { key: 'awaiting', dept: 'With the AG', ag: 'Awaiting decision', statuses: ['FORWARDED', 'AI_CHECKING', 'AI_FAILED', 'UNDER_REVIEW'] },
+type Group = '' | 'received' | 'awaiting' | 'pending' | 'returned' | 'approved' | 'rejected'
+//: A chip with `ag: null` is a department's own and is not drawn on the Office's side, and one
+//: with `dept: null` the other way about. A case not yet submitted is the department's to
+//: finish and the Office has nothing to do with it (24 Oct 2026); a case not yet examined is
+//: the Office's errand and means nothing to a department, which is told only that the case is
+//: with the Office. Either way the case is still counted and still listed under All.
+//:
+//: `deptStatuses` is for the one chip whose meaning differs by side: "With the AG" is every
+//: case on the Office's desk, while the Office splits that desk into the cases it has yet to
+//: examine and the cases whose findings await a decision (26 Oct 2026).
+const GROUPS: { key: Group; dept: string | null; ag: string | null;
+                statuses: CaseStatus[]; deptStatuses?: CaseStatus[] }[] = [
+  // Received and not yet examined. These sat inside "Awaiting decision", which read as though
+  // an officer had findings to weigh when nothing had been read yet -- five of the forty-six
+  // cases on the register the day this was separated.
+  { key: 'received', dept: null, ag: 'Not yet examined', statuses: ['FORWARDED', 'AI_CHECKING', 'AI_FAILED'] },
+  { key: 'awaiting', dept: 'With the AG', ag: 'Awaiting decision', statuses: ['UNDER_REVIEW'],
+    deptStatuses: ['FORWARDED', 'AI_CHECKING', 'AI_FAILED', 'UNDER_REVIEW'] },
   { key: 'pending', dept: 'Not yet submitted', ag: null, statuses: ['DRAFT', 'AI_CHECKED'] },
   { key: 'returned', dept: 'Returned', ag: 'Returned', statuses: ['RETURNED', 'DOCS_REQUESTED'] },
   { key: 'approved', dept: 'Approved', ag: 'Approved', statuses: ['APPROVED'] },
@@ -156,7 +167,8 @@ export function CaseRegister(
   const filtered = !!(group || kind || dept || section) || bucket !== 'all'
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    const statuses = group ? GROUPS.find(g => g.key === group)!.statuses : null
+    const g = group ? GROUPS.find(x => x.key === group) : null
+    const statuses = g ? ((isDept && g.deptStatuses) || g.statuses) : null
     return buckets[bucket].filter(r =>
       (!statuses || statuses.includes(r.status))
       && (!kind || kindKey(r) === kind)
@@ -164,7 +176,7 @@ export function CaseRegister(
       && (!section || (r.pension_section ?? 'Legacy') === section)
       && (!needle || [r.case_no, r.claimant_name, r.department_name, r.pension_section, STATUS_META[r.status].label, kindOf(r) ?? '', r.case_type ?? '']
                        .some(v => (v ?? '').toLowerCase().includes(needle))))
-  }, [buckets, bucket, q, group, kind, dept, section])
+  }, [buckets, bucket, q, group, kind, dept, section, isDept])
 
   // A filter runs over the whole register, not the tile's slice, so the count it shows is true.
   const narrowTo = (set: () => void) => { set(); setBucket('all'); setPage(1) }
@@ -188,7 +200,7 @@ export function CaseRegister(
   const showAi = !isDept                                   // the AI's reading is the Office of the Accountant General's
   const showTimeline = isDept                              // where every case stands, on its row
   const cols = 5 + (showDepartment ? 1 : 0) + (showAi ? 1 : 0) + (showTimeline ? 1 : 0)
-  const chips = GROUPS.filter(g => isDept || g.ag)
+  const chips = GROUPS.filter(g => (isDept ? g.dept : g.ag))
   const filterWords = [bucket === 'all' ? null : bucketLabel[bucket],
                        group ? GROUPS.find(g => g.key === group)?.[isDept ? 'dept' : 'ag'] : null, section || null, dept || null, kind ? (kinds.find(k => k[0] === kind)?.[1] ?? kind) : null].filter(Boolean).join(' · ')
 
