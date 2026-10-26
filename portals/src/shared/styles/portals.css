@@ -656,8 +656,6 @@ button.btn-primary:not(:disabled):hover { box-shadow: none; transform: none; }
 /* Pages are read several at a time, so the bar has two parts: the solid one is what is
    finished, the pale one behind it what is with the model now. Without it the bar sits at
    nothing while four pages work and then jumps by four. */
-.gpf-progress .bar > span.ahead { position: absolute; inset: 0 auto 0 0; background: var(--green2); opacity: .33; }
-.gpf-progress .bar > span:not(.ahead) { position: relative; }
 .gpf-progress-line { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); flex-wrap: wrap; }
 
 /* --- the department's per-case timeline on the register (29 Sep 2026) ------------------------

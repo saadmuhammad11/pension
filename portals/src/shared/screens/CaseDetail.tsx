@@ -540,9 +540,6 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
     // alone sits at nothing while four pages work and then jumps by four, which reads as
     // stuck — so the solid part is what is finished and the pale part is what is under way.
     const pct = j && j.total ? Math.round(((j.done ?? 0) / j.total) * 100) : 0
-    const underway = j && j.total
-      ? Math.min(100, Math.round((((j.done ?? 0) + (j.inFlight ?? 0)) / j.total) * 100))
-      : 0
     // The same scanning view as the pension analysis (shared/scan/ScanViewer), in GP Fund's gold,
     // on the page the module is reading, under the module's own stage names.
     const pg = j?.page ?? (j && j.total ? Math.min(j.total, (j.done ?? 0) + 1) : null)
@@ -552,15 +549,13 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
         <div style={{ fontWeight: 600, fontSize: 16 }}>{j?.state === 'error' ? 'The examination could not read the pages' : 'Reading the claim…'}</div>
         <div className="muted">{j?.detail ?? j?.message ?? 'The module classifies each page and extracts its fields; a page takes 5 to 15 seconds.'}</div>
         <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-          <span className="ahead" style={{ width: `${underway}%` }} />
           <span style={{ width: `${pct}%` }} />
         </div>
         {j && j.total ? (
           <div className="muted gpf-progress-line" style={{ fontSize: 'var(--t-small)' }}>
             <span>
-              {j.done ?? 0} of {j.total} pages
-              {(j.inFlight ?? 0) > 0 ? ` · ${j.inFlight} being read` : ''}
-              {j.stage ? ` · ${stageWord}` : ''}
+              {j.done ?? 0} of {j.total} read
+              {(j.inFlight ?? 0) > 0 ? ` · ${j.inFlight} under way` : ''}
             </span>
             {/* Served by the module rather than timed in the browser, so a clock skew between
                 machines cannot show a negative timer (reading/jobs.py Job.view). */}

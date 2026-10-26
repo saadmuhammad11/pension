@@ -69,6 +69,8 @@ class PageResult:
     fields: dict[str, ExtractedField] = field(default_factory=dict)
     codes: list[DecodedCode] = field(default_factory=list)
     needs_human: list[str] = field(default_factory=list)
+    #: What the page's own text said when the classifier would not name it (26 Oct 2026).
+    text_check: str = ""
 
 
 @dataclass
@@ -209,6 +211,7 @@ class ReadingPipeline:
                 with timing.stage("classify", page=pg.number):
                     cls = self.model.classify_document(pg.image_ref)
                 artefact = str(cls.value)
+                why_not = ""
                 # A page claimed as the sanction is asked to show that it is one. Two classes
                 # describe a page with a QR code and only one is the sanction, so the back of
                 # a smart CNIC was read as SANCTION_ORDER_QR at 0.95 and the case recorded its
@@ -229,10 +232,16 @@ class ReadingPipeline:
                 # advance is sanctioned, is the sanction. UNKNOWN reaches no merger, so such a
                 # page left no mark at all and the claim reported no sanction on file.
                 elif artefact == Artefact.UNKNOWN.value:
+                    # Why, recorded on the page. A bare `except: promote = False` cannot be
+                    # told apart from "the text was read and says nothing of a sanction", and
+                    # on PC-2026-000063 the two looked identical from outside (26 Oct 2026).
                     try:
-                        promote = sanction_claim.reads_as_a_sanction(self.model.ocr_text(pg.image_ref))
-                    except Exception:                      # noqa: BLE001 -- the reading stands
-                        promote = False
+                        text = self.model.ocr_text(pg.image_ref)
+                        promote = sanction_claim.reads_as_a_sanction(text)
+                        why_not = ("promoted" if promote else
+                                   f"read {len(text or '')} chars, no sanction wording")
+                    except Exception as exc:               # noqa: BLE001 -- the reading stands
+                        promote, why_not = False, f"text not read: {type(exc).__name__}"
                     if promote:
                         out["needs_human"].append({
                             "page": pg.number, "artefact": artefact, "field": "document type",
@@ -262,7 +271,7 @@ class ReadingPipeline:
                     codes = self.barcodes.decode_page(pg.image_ref, pg.number)
                 out["result"] = PageResult(page=pg.number, artefact=artefact,
                                            classify_confidence=cls.confidence, fields=fields,
-                                           codes=codes, needs_human=gated)
+                                           codes=codes, needs_human=gated, text_check=why_not)
                 if keys:
                     cache.put(keys[i], artefact=artefact, confidence=cls.confidence, fields=fields, codes=codes)
             finally:
@@ -336,7 +345,9 @@ def assemble_facts(page_results: list[PageResult], *, kind: Optional[str] = None
     F["pages"] = [{"page": pr.page, "artefact": pr.artefact,
                    "confidence": round(float(pr.classify_confidence or 0.0), 3),
                    "merged": pr.artefact in _MERGERS,
-                   "fields": sorted(pr.fields)} for pr in page_results]
+                   "fields": sorted(pr.fields),
+                   **({"textCheck": pr.text_check} if pr.text_check else {})}
+                  for pr in page_results]
 
     for pr in page_results:
         merger = _MERGERS.get(pr.artefact)
