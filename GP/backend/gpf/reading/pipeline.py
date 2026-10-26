@@ -224,6 +224,22 @@ class ReadingPipeline:
                                                    "field": "document type", "confidence": cls.confidence,
                                                    "threshold": cls.confidence, "why": why})
                         artefact = settled
+                # And the same question the other way round (26 Oct 2026, PC-2026-000063): a
+                # page the classifier would not name, whose text says in terms that a GP Fund
+                # advance is sanctioned, is the sanction. UNKNOWN reaches no merger, so such a
+                # page left no mark at all and the claim reported no sanction on file.
+                elif artefact == Artefact.UNKNOWN.value:
+                    try:
+                        promote = sanction_claim.reads_as_a_sanction(self.model.ocr_text(pg.image_ref))
+                    except Exception:                      # noqa: BLE001 -- the reading stands
+                        promote = False
+                    if promote:
+                        out["needs_human"].append({
+                            "page": pg.number, "artefact": artefact, "field": "document type",
+                            "confidence": cls.confidence, "threshold": cls.confidence,
+                            "why": ("The classifier did not name this page, and it reads as a sanction "
+                                    "of a GP Fund advance. Taken as the sanction order; confirm the page.")})
+                        artefact = Artefact.SANCTION_ORDER.value
                 # stage 4: extract fields for this artefact type
                 try:
                     art_enum = Artefact(artefact)

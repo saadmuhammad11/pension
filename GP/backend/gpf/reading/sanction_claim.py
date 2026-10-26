@@ -49,6 +49,39 @@ READ_AT_ALL = re.compile(r"\S")
 UNREAD = 24
 
 
+#: The sentence a sanction order is built around. Narrow on purpose: a page that merely uses
+#: the word "sanction" is not promoted on the strength of it -- an office noting discussing a
+#: sanction, a covering letter forwarding one, a form with a "sanctioned amount" box.
+ACCORDED = re.compile(
+    r"sanction\w*\s+is\s+hereby\s+accord\w*"
+    r"|\bis\s+hereby\s+sanction\w*"
+    r"|\bsanction\w*\s+is\s+accord\w*"
+    r"|\bhereby\s+accord\w*\s+sanction", re.I)
+#: And that the thing sanctioned is this fund's money.
+GPF_ADVANCE = re.compile(r"\bg\.?\s?p\.?\s?\.?\s?fund\b|\bprovident\s+fund\b", re.I)
+
+
+def reads_as_a_sanction(text: str) -> bool:
+    """Does the page say, in terms, that a GP Fund advance is sanctioned?
+
+    26 Oct 2026, PC-2026-000063. Page 4 is an S&GAD ORDER -- "Sanction is hereby accorded to
+    the grant of G.P Fund advance amounting to Rs.120,000/- ... under the Rule 1.14(1)(a)(iv)"
+    -- over a diary stamp, a hand-written token and a page of red pen. The classifier returned
+    UNKNOWN at 0.98 and the claim reported no sanction on file. Nothing was wrong with the
+    page; the model simply would not name it, and a page it declines to name reaches no
+    merger and leaves no mark.
+
+    The demotion above already asks a page claiming to be the sanction to show that it is one.
+    This is the same question asked the other way round, and the same answer settles it: the
+    page carries its own proof. Both wordings must be there -- the formula and the fund -- so
+    a noting that mentions a sanction is not promoted into being one.
+    """
+    t = text or ""
+    if len(READ_AT_ALL.findall(t)) < UNREAD or len(LATIN.findall(t)) < 60:
+        return False                                   # the page did not read; silence proves nothing
+    return bool(ACCORDED.search(t) and GPF_ADVANCE.search(t))
+
+
 def is_a_sanction_claim(artefact: str) -> bool:
     return artefact in (Artefact.SANCTION_ORDER.value, Artefact.SANCTION_ORDER_QR.value)
 

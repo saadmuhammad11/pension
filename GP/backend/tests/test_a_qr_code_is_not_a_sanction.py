@@ -129,3 +129,65 @@ class TestThePipelineAsksTheQuestion:
         src = (pathlib.Path(__file__).resolve().parent.parent / "gpf" / "reading" / "pipeline.py").read_text()
         block = src[src.index("is_a_sanction_claim(artefact)"):src.index("# stage 4")]
         assert "except Exception" in block and "settled, why = artefact, \"\"" in block
+
+
+# ── and the same question asked the other way round ───────────────────────────
+class TestAPageTheClassifierWouldNotName:
+    """26 Oct 2026, PC-2026-000063. Page 4 is an S&GAD ORDER -- "Sanction is hereby accorded
+    to the grant of G.P Fund advance amounting to Rs.120,000/- ... under the Rule
+    1.14(1)(a)(iv)" -- over a diary stamp, a hand-written token and a page of red pen. The
+    classifier returned UNKNOWN at 0.98 confidence and the claim reported no sanction on file.
+
+    UNKNOWN reaches no merger, so the page left no mark anywhere: the checklist said the
+    sanction was absent and nothing on the case could say what page 4 had been called. The
+    demotion above asks a page claiming to be the sanction to show that it is one; this asks
+    a page nobody claimed whether it is one anyway. Same evidence, same answer.
+    """
+
+    ORDER = ("GOVERNMENT OF THE PUNJAB SERVICES & GENERAL ADMINISTRATION DEPARTMENT SECTION (P-III) "
+             "Dated Lahore, the 5th October, 2026. ORDER No.SOP-III(S&GAD)2-223/2007 (302). "
+             "Sanction is hereby accorded to the grant of G.P Fund advance amounting to Rs.120,000/- "
+             "in favour of a Naib Qasid on refundable basis, for repair / renovation of house, under "
+             "the Rule 1.14(1)(a)(iv) of the Punjab General Provident Fund Rules, 1978. "
+             "DEPUTY SECRETARY (PERSONNEL) SECTION OFFICER (P-III)")
+
+    def test_the_order_itself_is_recognised(self) -> None:
+        from gpf.reading.sanction_claim import reads_as_a_sanction
+        assert reads_as_a_sanction(self.ORDER)
+
+    def test_a_page_that_only_mentions_a_sanction_is_not_promoted(self) -> None:
+        """A noting and a covering letter both talk about the sanction. Neither is one, and
+        promoting either would hang the sanctioning officer's signature on the wrong page --
+        which is the mistake this whole file exists to stop."""
+        from gpf.reading.sanction_claim import reads_as_a_sanction
+        noting = ("Please put up the file. The sanction referred to above may be seen. G.P Fund case "
+                  "of the official concerned is submitted for the orders of the competent authority "
+                  "please. Noted and returned herewith for necessary action.")
+        letter = ("Subject: GP FUND ADVANCE CASE. Enclosed please find the G.P Fund case complete in "
+                  "all respects along with the sanction order for favour of necessary action at your "
+                  "end. Encl: as above. Section Officer.")
+        assert not reads_as_a_sanction(noting)
+        assert not reads_as_a_sanction(letter)
+
+    def test_a_page_that_did_not_read_is_left_alone(self) -> None:
+        from gpf.reading.sanction_claim import reads_as_a_sanction
+        assert not reads_as_a_sanction("")
+        assert not reads_as_a_sanction("   ")
+        assert not reads_as_a_sanction("00001-0000001-1 500000000001 270-00-000001")
+
+    def test_the_formula_alone_is_not_enough_without_the_fund(self) -> None:
+        """Departments sanction many things; only this fund's money is this module's."""
+        from gpf.reading.sanction_claim import reads_as_a_sanction
+        assert not reads_as_a_sanction(
+            "ORDER. Sanction is hereby accorded to the purchase of office furniture amounting to "
+            "Rs.120,000/- under the delegation of financial powers, in favour of the Section Officer "
+            "(Admn), Government of the Punjab, for the current financial year, chargeable to the "
+            "budget head concerned. DEPUTY SECRETARY (ADMN)")
+
+    def test_the_promotion_is_put_to_a_person(self) -> None:
+        """It is a reading the classifier did not make, so the officer is told it was made."""
+        import pathlib
+        src = (pathlib.Path(__file__).resolve().parent.parent / "gpf" / "reading" / "pipeline.py").read_text()
+        block = src[src.index("elif artefact == Artefact.UNKNOWN.value:"):src.index("# stage 4")]
+        assert 'out["needs_human"].append' in block
+        assert "confirm the page" in block.lower()
