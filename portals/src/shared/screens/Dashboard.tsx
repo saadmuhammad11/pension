@@ -256,8 +256,14 @@ export function Dashboard(
   const rejected = s.by_status.REJECTED
   // The verification runs on the AG's desk (28 Sep 2026): those cases are with the AG.
   const withAg = s.by_status.FORWARDED + s.by_status.AI_CHECKING + s.by_status.AI_FAILED + s.by_status.UNDER_REVIEW
+  // One slice, not two (26 Oct 2026, the office's reading). A case the Office returned and a
+  // case the department has not sent yet are the same fact on this chart -- the ball is with
+  // the department, and the Office is not waiting to decide anything -- so they are counted
+  // together rather than drawn as two shades of "not with us". Merged, not dropped: the
+  // centre of the donut says how many cases there are in all, and slices that do not add up
+  // to it would quietly lose the cases nobody has submitted.
   const sentBack = s.by_status.RETURNED + s.by_status.DOCS_REQUESTED
-  const withDept = s.by_status.DRAFT + s.by_status.AI_CHECKED
+                   + s.by_status.DRAFT + s.by_status.AI_CHECKED
 
   // The Accountant General's decisions, over whatever is in scope.
   const decisionParts = [
@@ -265,7 +271,6 @@ export function Dashboard(
     { label: 'Rejected', value: rejected, color: 'var(--viz-bad)' },
     { label: 'Awaiting decision', value: withAg, color: 'var(--viz-await)' },
     { label: 'Sent back for correction', value: sentBack, color: 'var(--viz-warn)' },
-    { label: 'With the department, not yet submitted', value: withDept, color: 'var(--viz-neutral)' },
   ]
   const decisionsFooter = approved + rejected
     ? `${approved} approved and ${rejected} rejected so far${s.avg_days_to_decision != null ? `; on average ${s.avg_days_to_decision} days from filing to decision` : ''}.`

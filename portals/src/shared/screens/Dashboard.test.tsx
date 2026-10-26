@@ -98,3 +98,34 @@ describe('a screen newer than its API still draws the card', () => {
     expect(screen.queryByRole('combobox', { name: /how often/i })).toBeNull()
   })
 })
+
+describe('the Office\'s decisions name one way for a case to be with the department', () => {
+  /** "Sent back for correction" and "With the department, not yet submitted" said the same
+   *  thing twice on the Accountant General's own chart (26 Oct 2026, the office's reading):
+   *  either way the ball is with the department and the Office has nothing to decide. One
+   *  slice now, counting both. */
+  const SPREAD = {
+    ...STATS, total: 10,
+    by_status: { DRAFT: 2, AI_CHECKING: 0, AI_FAILED: 0, AI_CHECKED: 1, FORWARDED: 0,
+                 UNDER_REVIEW: 2, APPROVED: 2, REJECTED: 1, RETURNED: 1, DOCS_REQUESTED: 1 },
+  } as unknown as Stats
+  const legend = () => [...document.querySelectorAll('.donut-legend li')]
+    .map(li => [li.querySelector('.donut-legend-name')!.textContent, li.querySelector('.num')!.textContent])
+
+  it('draws no slice for the cases not yet submitted', () => {
+    render(<Dashboard stats={SPREAD} variant="review" />)
+    expect(legend().some(([name]) => /not yet submitted/i.test(name ?? ''))).toBe(false)
+  })
+
+  it('counts them under "Sent back for correction" rather than losing them', () => {
+    render(<Dashboard stats={SPREAD} variant="review" />)
+    // RETURNED 1 + DOCS_REQUESTED 1 + DRAFT 2 + AI_CHECKED 1.
+    expect(legend().find(([name]) => name === 'Sent back for correction')![1]).toBe('5')
+  })
+
+  it('and the slices still account for every case on the register', () => {
+    render(<Dashboard stats={SPREAD} variant="review" />)
+    const sum = legend().reduce((n, [, v]) => n + Number(v), 0)
+    expect(sum).toBe(10)
+  })
+})
