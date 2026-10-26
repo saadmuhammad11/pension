@@ -211,7 +211,9 @@ class ReadingPipeline:
                 with timing.stage("classify", page=pg.number):
                     cls = self.model.classify_document(pg.image_ref)
                 artefact = str(cls.value)
-                why_not = ""
+                # Always recorded, so the page says what the branch below saw rather than
+                # leaving "nothing happened" and "nothing was asked" looking the same.
+                why_not = f"classified {artefact!r} @{cls.confidence}" 
                 # A page claimed as the sanction is asked to show that it is one. Two classes
                 # describe a page with a QR code and only one is the sanction, so the back of
                 # a smart CNIC was read as SANCTION_ORDER_QR at 0.95 and the case recorded its
@@ -238,10 +240,10 @@ class ReadingPipeline:
                     try:
                         text = self.model.ocr_text(pg.image_ref)
                         promote = sanction_claim.reads_as_a_sanction(text)
-                        why_not = ("promoted" if promote else
-                                   f"read {len(text or '')} chars, no sanction wording")
+                        why_not = (f"{why_not}; promoted" if promote else
+                                   f"{why_not}; read {len(text or '')} chars, no sanction wording")
                     except Exception as exc:               # noqa: BLE001 -- the reading stands
-                        promote, why_not = False, f"text not read: {type(exc).__name__}"
+                        promote, why_not = False, f"{why_not}; text not read: {type(exc).__name__}"
                     if promote:
                         out["needs_human"].append({
                             "page": pg.number, "artefact": artefact, "field": "document type",
