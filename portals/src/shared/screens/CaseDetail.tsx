@@ -320,7 +320,7 @@ export function CaseDetail({ caseId, onBack, initialTab, onProduct }:
             {!deptView && (
               <button className="tab" role="tab" id={tabId('case-tab', 'AI findings')} aria-controls={tabId('case-panel', 'AI findings')} tabIndex={tab === 'AI findings' ? 0 : -1}
                       aria-selected={tab === 'AI findings'} onClick={() => setTab('AI findings')}>
-                {c.product === 'GPF' ? 'GP Fund examination' : 'AI findings'} {report && <span className={`count${findingsHot ? ' hot' : ''}`}>{findings}</span>}
+                AI findings {report && <span className={`count${findingsHot ? ' hot' : ''}`}>{findings}</span>}
               </button>
             )}
             <button className="tab" role="tab" id={tabId('case-tab', 'Remarks & history')} aria-controls={tabId('case-panel', 'Remarks & history')} tabIndex={tab === 'Remarks & history' ? 0 : -1}
@@ -528,7 +528,7 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
     return () => { live = false; if (timer) clearTimeout(timer) }
   }, [c.id, c.status, reading])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error && !state) return <div className="banner bad" role="alert" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">Could not reach the GP Fund examination. {error} <span className="muted">Trying again…</span></div></div>
+  if (error && !state) return <div className="banner bad" role="alert" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">Could not reach the AI findings. {error} <span className="muted">Trying again…</span></div></div>
   if (!state) return <div className="skeleton" style={{ height: 120, marginTop: 'var(--s4)' }} />
   if (!state.module_up && !state.gpf_case_id) {
     return <div className="banner warn" style={{ marginTop: 'var(--s4)' }}><span className="mark">!</span><div className="sub">The GP Fund module is not running. Start it on the server (<code>./GP/run.sh</code>) and try again.</div></div>
@@ -611,7 +611,7 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
             case and its own intake, outside the portal's register and workflow. The frame is the way in. */}
       </div>
       {frameSigned
-        ? <iframe key={frameKey} ref={frame} className="gpf-frame" src={state.embed_url} title="GP Fund examination" style={{ height: frameHeight }} />
+        ? <iframe key={frameKey} ref={frame} className="gpf-frame" src={state.embed_url} title="AI findings" style={{ height: frameHeight }} />
         : signError
           ? <div className="banner bad" role="alert"><span className="mark">!</span>
               <div className="sub">Could not open the GP Fund module. {signError} <button type="button" style={{ marginLeft: 8 }} onClick={() => setSignTry(n => n + 1)}>Retry</button></div></div>

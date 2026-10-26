@@ -123,11 +123,15 @@ class TestTheSubscriberNarrowsTheList:
         got = _items(checklist_for("missing_credits", "non-gazetted"))
         assert self.DDO in got and self.AG not in got
 
-    def test_a_non_gazetted_final_payment_also_wants_the_service_book(self) -> None:
+    def test_a_non_gazetted_final_payment_also_wants_the_proforma(self) -> None:
         """A2-vii. The gazetted answer bears on more than the missing-credits certificates, and
-        this check wants "non-gazetted" exactly -- "Not stated" does not ask for the book. So a
-        department that says which it is gets told about a paper it would otherwise send late."""
-        book = "Original Service Book (non-gazetted)"
+        this check wants "non-gazetted" exactly -- "Not stated" does not ask for it. So a
+        department that says which it is gets told about a paper it would otherwise send late.
+
+        Named "Proforma For Service" from 26 Oct 2026: A2-vii says Original Service Book, and
+        what the office actually receives in its place is the proforma. The line an officer
+        reads should name the paper that is in the file."""
+        book = "Proforma For Service (non-gazetted)"
         assert book in _required("final", "non-gazetted")
         assert book not in _items(checklist_for("final", "gazetted"))
         assert book not in _items(checklist_for("final", "unknown"))

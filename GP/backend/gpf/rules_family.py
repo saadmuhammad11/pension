@@ -616,18 +616,18 @@ def _fp_sb(F):
             if v:
                 if v.get("ok"):
                     return {"status": "ok",
-                            "finding": ("Original Service Book received and entries checked by " + v["by"]
+                            "finding": ("Proforma For Service received and entries checked by " + v["by"]
                                         + (": " + v["note"] if v.get("note") else "."))}
                 return {"status": "hard",
-                        "finding": "Original Service Book not received, or entries missing. " + (v.get("note") or ""),
-                        "remedy": "Produce the original Service Book.", "cure": cure}
+                        "finding": "Proforma For Service not received, or entries missing. " + (v.get("note") or ""),
+                        "remedy": "Produce the Proforma For Service.", "cure": cure}
             return {"status": "conf",
                     "finding": (sb["reportedAttached"] + " It is not in the scanned case, so the entries (date of the "
                                 "event, the order, leave account) cannot be checked from the file."),
-                    "remedy": "Confirm the original Service Book is on hand and check the entries.",
+                    "remedy": "Confirm the Proforma For Service is on hand and check the entries.",
                     "cure": {"kind": "verify", "vid": "FP-SB"}}
-        return {"status": "hard", "finding": "No Service Book is on file for a non-gazetted subscriber.",
-                "remedy": "Produce the original Service Book.", "cure": cure}
+        return {"status": "hard", "finding": "No Proforma For Service is on file for a non-gazetted subscriber.",
+                "remedy": "Produce the Proforma For Service.", "cure": cure}
     e = sb.get("entries") or {}
     miss = []
     if not e.get("dor"):
@@ -658,7 +658,7 @@ def _fp_sb(F):
 
 
 check(id="FP-SB", group="checklist", checklist="A2-vii", ref="A2-vii · B2-viii", code="B2-viii",
-      title="Original Service Book (non-gazetted)",
+      title="Proforma For Service (non-gazetted)",
       applies=lambda F: KIND(F, "final", "death", "dismissal") and F.get("gazetted") == "non-gazetted",
       run=_fp_sb)
 
