@@ -490,7 +490,15 @@ export const gpfStageAt = (key: string): number => {
 }
 
 function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { c: CaseFull; busy: boolean; onVerify: () => void; onChanged: () => void; offerVerify?: boolean }) {
+  // The furthest stage this run has reached. The list describes the RUN, not the page under
+  // the model: every page cycles classify -> extract -> page-done, and eight pages are in the
+  // model's hands at once, so the raw stage jumps between the first three rows several times
+  // a second and the ticks walk backwards (26 Oct 2026). The module's own screen has kept a
+  // high-water mark since the beginning; the portal's list was drawing the bare stage.
+  const reached = useRef(0)
   const [state, setState] = useState<GpfState | null>(null)
+  const runKey = state?.job?.state === 'running' || state?.job?.state === 'queued' ? 'live' : 'idle'
+  useEffect(() => { if (runKey === 'idle') reached.current = 0 }, [runKey])
   const [error, setError] = useState<string | null>(null)
   const [frameHeight, setFrameHeight] = useState(1200)
   const [frameSigned, setFrameSigned] = useState(false)
@@ -555,6 +563,9 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
   }
   if (reading || (state.job && !state.gpf_case_id)) {
     const j = state.job
+    // Monotonic, and reset by the effect above when a new run starts.
+    const at = Math.max(reached.current, gpfStageAt(j?.stage ?? 'queued'))
+    reached.current = at
     // Two numbers, because pages are read four at a time (GPF_READ_CONCURRENCY): `done` is
     // what is finished and `inFlight` what is with the model now. A bar drawn from `done`
     // alone sits at nothing while four pages work and then jumps by four, which reads as
@@ -611,7 +622,6 @@ function GpfExamination({ c, busy, onVerify, onChanged, offerVerify = true }: { 
         {/* The stages, and which one is running. */}
         <div className="an-stages">
           {GPF_STAGES.map(([name, sub], i) => {
-            const at = gpfStageAt(j?.stage ?? 'queued')
             const finished = j?.state === 'done'
             const done = finished || i < at
             const running = !finished && i === at

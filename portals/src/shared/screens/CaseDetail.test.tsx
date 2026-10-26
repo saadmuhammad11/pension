@@ -40,3 +40,29 @@ describe('the GP Fund stage list', () => {
     }
   })
 })
+
+describe('the stage list describes the run, not the page under the model', () => {
+  /** What the module emits while eight pages are in its hands at once: page 3 is being
+   *  classified while page 1 is being extracted and page 2 has just finished. Following the
+   *  bare stage walks the ticks between the first three rows several times a second. */
+  const BURST = ['classify', 'extract', 'page-done', 'classify', 'extract', 'classify',
+                 'page-done', 'extract', 'classify']
+
+  it('the raw stage really does go backwards, which is the thing to defend against', () => {
+    const raw = BURST.map(gpfStageAt)
+    expect(raw.some((v, i) => i > 0 && v < raw[i - 1])).toBe(true)
+  })
+
+  it('a high-water mark over the same burst never goes backwards', () => {
+    let reached = 0
+    const shown = BURST.map(st => (reached = Math.max(reached, gpfStageAt(st))))
+    expect(shown.every((v, i) => i === 0 || v >= shown[i - 1])).toBe(true)
+    expect(shown[shown.length - 1]).toBe(gpfStageAt('extract'))
+  })
+
+  it('and it still advances when the run genuinely moves on', () => {
+    let reached = 0
+    for (const st of [...BURST, 'assemble', 'done']) reached = Math.max(reached, gpfStageAt(st))
+    expect(reached).toBe(gpfStageAt('done'))
+  })
+})
