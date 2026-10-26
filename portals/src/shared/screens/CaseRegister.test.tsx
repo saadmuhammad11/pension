@@ -260,7 +260,7 @@ describe('a case nobody has examined is not a case awaiting a decision (26 Oct 2
   })
 })
 
-describe('the dashboard tiles say what the chips say (26 Oct 2026)', () => {
+describe('the dashboard counts the whole desk in one tile (26 Oct 2026)', () => {
   const mk = (n: number, status: CaseStatus, from = 0) => Array.from({ length: n }, (_, i) => ({
     id: `t${from + i}`, case_no: `PC-2026-${String(from + i).padStart(6, '0')}`, status,
     department_code: 'sgad', department_name: 'S&GAD', pension_section: 'Pension-I',
@@ -280,35 +280,40 @@ describe('the dashboard tiles say what the chips say (26 Oct 2026)', () => {
   const tileOf = (name: RegExp) => screen.queryByRole('tab', { name })
   const listed = () => screen.getAllByRole('row').length - 1
 
-  it('the Office gets a tile for the cases nobody has read', () => {
+  it('the unread cases have no tile of their own', () => {
     draw('AG_AO')
-    expect(tileOf(/Not yet examined/)).toBeTruthy()
+    expect(tileOf(/Not yet examined/)).toBeNull()
   })
 
-  it('and the counts on the two tiles no longer overlap', () => {
+  it('they are counted inside "Awaiting decision" rather than dropped', () => {
+    // Four received and six examined: the tile is the ten cases on the desk, not six of them.
     draw('AG_AO')
-    expect(tileOf(/Not yet examined/)!.textContent).toContain('4')
-    expect(tileOf(/Awaiting decision/)!.textContent).toContain('6')
+    expect(tileOf(/Awaiting decision/)!.textContent).toContain('10')
   })
 
-  it('pressing it narrows the register to those cases', () => {
+  it('pressing it shows the whole desk', () => {
     draw('AG_AO')
-    fireEvent.click(tileOf(/Not yet examined/)!)
-    expect(listed()).toBe(4)
-    expect(screen.getByRole('status').textContent).toBe('Showing 4 cases · Not yet examined')
+    fireEvent.click(tileOf(/Awaiting decision/)!)
+    expect(listed()).toBe(10)
+    expect(screen.getByRole('status').textContent).toBe('Showing 10 cases · Awaiting decision')
   })
 
   it('every case is still in exactly one tile', () => {
     draw('AG_AO')
     const n = (re: RegExp) => Number(tileOf(re)!.textContent!.match(/\d+/)![0])
-    expect(n(/Not yet examined/) + n(/Awaiting decision/) + n(/With the departments/) + n(/Disposed/))
+    expect(n(/Awaiting decision/) + n(/With the departments/) + n(/Disposed/))
       .toBe(n(/All cases/))
   })
 
-  it('a department is not shown the split, and its tiles still add up', () => {
+  it('a department sees the same four, and they still add up', () => {
     draw('DEPT_OFFICER')
-    expect(tileOf(/Not yet examined/)).toBeNull()
     const n = (re: RegExp) => Number(tileOf(re)!.textContent!.match(/\d+/)![0])
     expect(n(/Action required/) + n(/With the Office/) + n(/Disposed/)).toBe(n(/All cases/))
+  })
+
+  it('but the register still offers the split as a chip', () => {
+    // Removing the tile was a change to the FIGURES, not to the officer's working list.
+    draw('AG_AO')
+    expect(screen.queryByRole('button', { name: /^Not yet examined/ })).toBeTruthy()
   })
 })

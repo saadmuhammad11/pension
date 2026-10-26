@@ -31,9 +31,12 @@ const ago = (iso: string) => {
   return `${Math.round(hours / 24)} d ago`
 }
 
-type Bucket = 'unexamined' | 'mine' | 'theirs' | 'done' | 'all'
+type Bucket = 'mine' | 'theirs' | 'done' | 'all'
 //: Received at the Office and not yet read: the next move is the machine's, not an
-//: officer's. Kept beside the chip group of the same name (GROUPS 'received').
+//: officer's. A chip of its own on the register (GROUPS 'received'); NOT a tile of its
+//: own on the dashboard, where it is counted inside "Awaiting decision" (26 Oct 2026,
+//: the office's reading: four tiles say what the desk holds, and the split between read
+//: and unread belongs to the officer working the list, not to the figures).
 const RECEIVED: CaseStatus[] = ['FORWARDED', 'AI_CHECKING', 'AI_FAILED']
 
 /** The verb on the row's button: what pressing it lets the officer do. */
@@ -68,9 +71,9 @@ const GROUPS: { key: Group; dept: string | null; ag: string | null;
   // Received and not yet examined. These sat inside "Awaiting decision", which read as though
   // an officer had findings to weigh when nothing had been read yet -- five of the forty-six
   // cases on the register the day this was separated.
-  { key: 'received', dept: null, ag: 'Not yet examined', statuses: ['FORWARDED', 'AI_CHECKING', 'AI_FAILED'] },
+  { key: 'received', dept: null, ag: 'Not yet examined', statuses: RECEIVED },
   { key: 'awaiting', dept: 'With the AG', ag: 'Awaiting decision', statuses: ['UNDER_REVIEW'],
-    deptStatuses: ['FORWARDED', 'AI_CHECKING', 'AI_FAILED', 'UNDER_REVIEW'] },
+    deptStatuses: [...RECEIVED, 'UNDER_REVIEW'] },
   { key: 'pending', dept: 'Not yet submitted', ag: null, statuses: ['DRAFT', 'AI_CHECKED'] },
   { key: 'returned', dept: 'Returned', ag: 'Returned', statuses: ['RETURNED', 'DOCS_REQUESTED'] },
   { key: 'approved', dept: 'Approved', ag: 'Approved', statuses: ['APPROVED'] },
@@ -141,29 +144,26 @@ export function CaseRegister(
   const [page, setPage] = useState(1)
   const narrow = useNarrow()
   const isDept = role === 'DEPT_OFFICER'
-  // The tiles say what the chips say (26 Oct 2026): a case the Office has not read is not a
-  // case awaiting an officer's decision. The split is the Office's only -- a department is
-  // told its case is with the Office, not which half of that desk it is on -- so on a
-  // department's register this bucket is empty and its tile is not drawn.
+  // Four tiles: everything on this desk is one of them, and together they are the register.
+  // "Awaiting decision" holds the cases not yet examined as well as the examined ones (26 Oct
+  // 2026); the register's chips still separate the two for the officer working the list.
   const buckets = useMemo(() => {
-    const unexamined = isDept ? [] : rows.filter(r => RECEIVED.includes(r.status))
-    const mine = rows.filter(r => waitingOn.includes(r.status) && !unexamined.includes(r))
+    const mine = rows.filter(r => waitingOn.includes(r.status))
     const done = rows.filter(r => STATUS_META[r.status].side === 'closed')
-    const theirs = rows.filter(r => !mine.includes(r) && !done.includes(r) && !unexamined.includes(r))
-    return { unexamined, mine, theirs, done, all: rows }
-  }, [rows, waitingOn, isDept])
+    const theirs = rows.filter(r => !mine.includes(r) && !done.includes(r))
+    return { mine, theirs, done, all: rows }
+  }, [rows, waitingOn])
   // The tiles' numbers: from the server's counts where it gave them, else from the rows (a
   // caller that has only a list). Same statuses per tile either way.
   const tile = useMemo(() => {
-    if (!statusCounts) return { unexamined: buckets.unexamined.length, mine: buckets.mine.length,
-                                theirs: buckets.theirs.length, done: buckets.done.length, all: rows.length }
+    if (!statusCounts) return { mine: buckets.mine.length, theirs: buckets.theirs.length,
+                                done: buckets.done.length, all: rows.length }
     const sum = (pred: (s: CaseStatus) => boolean) => Object.entries(statusCounts).reduce((n, [s, v]) => n + (pred(s as CaseStatus) ? (v ?? 0) : 0), 0)
-    const unexamined = isDept ? 0 : sum(s => RECEIVED.includes(s))
-    const mine = sum(s => waitingOn.includes(s)) - unexamined
+    const mine = sum(s => waitingOn.includes(s))
     const done = sum(s => !waitingOn.includes(s) && STATUS_META[s]?.side === 'closed')
     const all = total ?? sum(() => true)
-    return { unexamined, mine, done, theirs: all - unexamined - mine - done, all }
-  }, [statusCounts, total, buckets, rows.length, waitingOn, isDept])
+    return { mine, done, theirs: all - mine - done, all }
+  }, [statusCounts, total, buckets, rows.length, waitingOn])
   const kinds = useMemo(() => {
     const seen = new Map<string, string>()
     rows.forEach(r => { const k = kindKey(r); if (k && !seen.has(k)) seen.set(k, kindOf(r) ?? k) })
@@ -202,11 +202,11 @@ export function CaseRegister(
   const current = Math.min(page, pages)
   const visible = shown.slice((current - 1) * PAGE, current * PAGE)
   // Left/Right on the tiles move between them (F15).
-  const tileKeys = (e: React.KeyboardEvent) => { const n = nextTabFor(BUCKETS.filter(b => b !== 'unexamined' || !isDept), bucket, e.key); if (n) { e.preventDefault(); pickBucket(n); (e.currentTarget.querySelector(`[data-bucket="${n}"]`) as HTMLElement | null)?.focus() } }
+  const tileKeys = (e: React.KeyboardEvent) => { const n = nextTabFor(BUCKETS, bucket, e.key); if (n) { e.preventDefault(); pickBucket(n); (e.currentTarget.querySelector(`[data-bucket="${n}"]`) as HTMLElement | null)?.focus() } }
 
   const theirsLabel = isDept ? 'With the Office of the Accountant General' : 'With the departments'
   const theirsDesc = isDept ? 'Submitted; awaiting the Pension Wing.' : 'Not yet submitted, or returned for correction.'
-  const bucketLabel: Record<Bucket, string> = { unexamined: 'Not yet examined', mine: isDept ? 'Action required' : 'Awaiting decision', theirs: theirsLabel, done: 'Disposed', all: 'All cases' }
+  const bucketLabel: Record<Bucket, string> = { mine: isDept ? 'Action required' : 'Awaiting decision', theirs: theirsLabel, done: 'Disposed', all: 'All cases' }
   const showAi = !isDept                                   // the AI's reading is the Office of the Accountant General's
   const showTimeline = isDept                              // where every case stands, on its row
   const cols = 5 + (showDepartment ? 1 : 0) + (showAi ? 1 : 0) + (showTimeline ? 1 : 0)
@@ -227,22 +227,10 @@ export function CaseRegister(
       </div>
 
       <div className="tiles" role="tablist" aria-label="Filter the cases" onKeyDown={tileKeys}>
-        {/* The Office's only: a department is told its case is with the Office, not which
-            half of that desk it is on. Beside the chip of the same name (GROUPS 'received'). */}
-        {!isDept && (
-          <button role="tab" data-bucket="unexamined" tabIndex={bucket === 'unexamined' ? 0 : -1}
-                  aria-selected={bucket === 'unexamined'}
-                  className={`tile wait${bucket === 'unexamined' ? ' is-on' : ''}`}
-                  onClick={() => pickBucket('unexamined')}>
-            <div className="t">{bucketLabel.unexamined}</div>
-            <div className="n">{tile.unexamined}</div>
-            <div className="d">Received; the examination has not run or did not complete.</div>
-          </button>
-        )}
         <button role="tab" data-bucket="mine" tabIndex={bucket === 'mine' ? 0 : -1} aria-selected={bucket === 'mine'} className={`tile hot${bucket === 'mine' ? ' is-on' : ''}`} onClick={() => pickBucket('mine')}>
           <div className="t">{bucketLabel.mine}</div>
           <div className="n">{tile.mine}</div>
-          <div className="d">{isDept ? 'Cases to examine, submit or correct.' : 'Examined; the findings await your decision.'}</div>
+          <div className="d">{isDept ? 'Cases to examine, submit or correct.' : 'On your desk: received, examined or awaiting your decision.'}</div>
         </button>
         <button role="tab" data-bucket="theirs" tabIndex={bucket === 'theirs' ? 0 : -1} aria-selected={bucket === 'theirs'} className={`tile wait${bucket === 'theirs' ? ' is-on' : ''}`} onClick={() => pickBucket('theirs')}>
           <div className="t">{theirsLabel}</div>
