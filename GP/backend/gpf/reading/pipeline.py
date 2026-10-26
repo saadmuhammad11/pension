@@ -194,7 +194,7 @@ class ReadingPipeline:
                 out["result"] = PageResult(page=pg.number, artefact=artefact,
                                            classify_confidence=float(hit.get("classify_confidence") or 0.0),
                                            fields=fields, codes=codes_from(hit, pg.number),
-                                           needs_human=gated)
+                                           needs_human=gated, text_check=str(hit.get("text_check") or ""))
                 out["reused"] = True
                 emit_done(stage="page-done", page=pg.number, artefact=artefact, reused=True,
                           message=f"Page {pg.number} of {total} — {_label(artefact)}, unchanged since the last submission")
@@ -275,7 +275,8 @@ class ReadingPipeline:
                                            classify_confidence=cls.confidence, fields=fields,
                                            codes=codes, needs_human=gated, text_check=why_not)
                 if keys:
-                    cache.put(keys[i], artefact=artefact, confidence=cls.confidence, fields=fields, codes=codes)
+                    cache.put(keys[i], artefact=artefact, confidence=cls.confidence, fields=fields,
+                              codes=codes, text_check=why_not)
             finally:
                 ended()
             emit_done(stage="page-done", page=pg.number, artefact=artefact,

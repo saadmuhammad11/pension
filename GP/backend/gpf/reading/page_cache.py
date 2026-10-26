@@ -76,10 +76,15 @@ class PageCache:
             return None
         return data
 
-    def put(self, key: str, *, artefact: str, confidence: float, fields: dict, codes: list) -> None:
+    def put(self, key: str, *, artefact: str, confidence: float, fields: dict, codes: list,
+            text_check: str = "") -> None:
+        # text_check travels with the rest of the page's reading (26 Oct 2026). It is what the
+        # classifier said and what the page's own text answered, and a page served from here
+        # has to report the same things it reported when it was read -- a reused round and a
+        # full read assemble the same case (test_reading: r2.facts == full.facts).
         entry = {"version": VERSION, "artefact": artefact, "classify_confidence": confidence,
                  "fields": {k: asdict(v) for k, v in fields.items()},
-                 "codes": [asdict(c) for c in codes]}
+                 "codes": [asdict(c) for c in codes], "text_check": text_check}
         tmp = self._path(key).with_suffix(".tmp")
         tmp.write_text(json.dumps(entry, ensure_ascii=False, default=str))
         tmp.replace(self._path(key))
